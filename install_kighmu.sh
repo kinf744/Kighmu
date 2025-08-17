@@ -52,9 +52,15 @@ else
     echo "Alias kighmu déjà présent dans ~/.bashrc"
 fi
 
+echo
 echo "=============================================="
 echo " ✅ Installation terminée !"
 echo " Pour lancer Kighmu, utilisez la commande : kighmu"
 echo
-echo "⚠️ Attention : Ouvre un nouveau terminal ou exécutez 'source ~/.bashrc' pour prendre en compte l'alias."
+echo " ⚠️ Pour que l'alias soit pris en compte :"
+echo " - Ouvre un nouveau terminal, ou"
+echo " - Exécute manuellement : source ~/.bashrc"
+echo
+echo "Tentative de rechargement automatique de ~/.bashrc dans cette session..."
+source ~/.bashrc || echo "Le rechargement automatique a échoué, merci de le faire manuellement."
 echo "=============================================="
