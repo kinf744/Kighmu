@@ -6,44 +6,38 @@
 # See LICENSE file for details
 # ==============================================
 
-set -e
-
 echo "=============================================="
 echo " 🚀 Installation de Kighmu VPS Manager..."
 echo "=============================================="
 
-# Mise à jour des paquets
+# Mise à jour du système
 apt-get update -y && apt-get upgrade -y
 
-# Répertoire d'installation
-INSTALL_DIR="/opt"
-mkdir -p $INSTALL_DIR
+# Création du dossier d’installation
+mkdir -p /opt
 
-# Téléchargement des fichiers principaux
+# Téléchargement du script principal Kighmu.sh
 echo "➡ Téléchargement des fichiers depuis GitHub..."
-wget -q -O $INSTALL_DIR/Kighmu.sh https://raw.githubusercontent.com/kinf744/Kighmu/main/Kighmu.sh
-wget -q -O $INSTALL_DIR/menu1.sh https://raw.githubusercontent.com/kinf744/Kighmu/main/menu1.sh
-wget -q -O $INSTALL_DIR/menu2.sh https://raw.githubusercontent.com/kinf744/Kighmu/main/menu2.sh
-wget -q -O $INSTALL_DIR/menu3.sh https://raw.githubusercontent.com/kinf744/Kighmu/main/menu3.sh
-wget -q -O $INSTALL_DIR/menu4.sh https://raw.githubusercontent.com/kinf744/Kighmu/main/menu4.sh
-wget -q -O $INSTALL_DIR/menu5.sh https://raw.githubusercontent.com/kinf744/Kighmu/main/menu5.sh
-wget -q -O $INSTALL_DIR/menu6.sh https://raw.githubusercontent.com/kinf744/Kighmu/main/menu6.sh
-wget -q -O $INSTALL_DIR/menu7.sh https://raw.githubusercontent.com/kinf744/Kighmu/main/menu7.sh
+wget -q -O /opt/Kighmu.sh https://raw.githubusercontent.com/kinf744/Kighmu/main/Kighmu.sh
 
-# Permissions d'exécution
-chmod +x $INSTALL_DIR/Kighmu.sh
-chmod +x $INSTALL_DIR/menu*.sh
-
-# Création d'un alias pour exécuter facilement
-if ! grep -q "alias kighmu=" ~/.bashrc; then
-    echo "alias kighmu='/opt/Kighmu.sh'" >> ~/.bashrc
-    source ~/.bashrc
+# Vérifier si le fichier a bien été téléchargé
+if [ ! -s /opt/Kighmu.sh ]; then
+    echo "❌ Erreur : Impossible de télécharger Kighmu.sh"
+    exit 1
 fi
+
+chmod +x /opt/Kighmu.sh
+
+# Création du lanceur global
+echo "➡ Création du lanceur global..."
+cat > /usr/local/bin/kighmu <<EOL
+#!/bin/bash
+/opt/Kighmu.sh
+EOL
+
+chmod +x /usr/local/bin/kighmu
 
 echo "=============================================="
 echo " ✅ Installation terminée !"
-echo " Lancez le panneau de contrôle avec :"
-echo "   /opt/Kighmu.sh"
-echo " ou simplement :"
-echo "   kighmu"
+echo " Lancez le panneau de contrôle avec : kighmu"
 echo "=============================================="
