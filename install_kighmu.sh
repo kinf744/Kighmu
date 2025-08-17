@@ -2,44 +2,47 @@
 # ==============================================
 # Kighmu VPS Manager
 # Copyright (c) 2025 Kinf744
-# Licensed under the MIT License
+# Licence MIT (version française)
 # ==============================================
 
-clear
 echo "=============================================="
 echo " 🚀 Installation de Kighmu VPS Manager..."
 echo "=============================================="
 
-# Mettre à jour et upgrader le système
-apt-get update -y && apt-get upgrade -y
-
-# Installer wget et bash si nécessaire
-apt-get install -y wget bash
-
-# Répertoire d'installation
+# Crée le dossier d'installation
 INSTALL_DIR="$HOME/Kighmu"
 mkdir -p "$INSTALL_DIR"
 
-# Télécharger tous les scripts depuis GitHub
-echo "➡ Téléchargement des fichiers depuis GitHub..."
-wget -q -P "$INSTALL_DIR" https://raw.githubusercontent.com/kinf744/Kighmu/main/Kighmu.sh
-wget -q -P "$INSTALL_DIR" https://raw.githubusercontent.com/kinf744/Kighmu/main/menu_principal.sh
-wget -q -P "$INSTALL_DIR" https://raw.githubusercontent.com/kinf744/Kighmu/main/menu1.sh
-wget -q -P "$INSTALL_DIR" https://raw.githubusercontent.com/kinf744/Kighmu/main/menu2.sh
-wget -q -P "$INSTALL_DIR" https://raw.githubusercontent.com/kinf744/Kighmu/main/menu3.sh
-wget -q -P "$INSTALL_DIR" https://raw.githubusercontent.com/kinf744/Kighmu/main/menu4.sh
-wget -q -P "$INSTALL_DIR" https://raw.githubusercontent.com/kinf744/Kighmu/main/menu5.sh
-wget -q -P "$INSTALL_DIR" https://raw.githubusercontent.com/kinf744/Kighmu/main/menu6.sh
-wget -q -P "$INSTALL_DIR" https://raw.githubusercontent.com/kinf744/Kighmu/main/menu7.sh
+# Liste des fichiers à télécharger depuis GitHub
+FILES=(
+    "kighmu-manager.sh"
+    "kighmu.sh"
+    "menu1.sh"
+    "menu2.sh"
+    "menu3.sh"
+    "menu4.sh"
+    "menu5.sh"
+    "menu6.sh"
+    "menu7.sh"
+    "slowdns.sh"
+    "socks_python.sh"
+    "udp_custom.sh"
+)
 
-# Donner les droits d'exécution
-chmod +x "$INSTALL_DIR"/*.sh
+# Téléchargement de chaque fichier
+for file in "${FILES[@]}"; do
+    wget -q -O "$INSTALL_DIR/$file" "https://raw.githubusercontent.com/kinf744/Kighmu/main/$file"
+    chmod +x "$INSTALL_DIR/$file"
+done
 
-# Créer un alias pour lancer Kighmu facilement
-echo "alias kighmu='bash $INSTALL_DIR/Kighmu.sh'" >> ~/.bashrc
-source ~/.bashrc
+# Crée un alias dans ~/.bashrc pour lancer Kighmu facilement
+if ! grep -q "alias kighmu=" "$HOME/.bashrc"; then
+    echo "alias kighmu='$INSTALL_DIR/kighmu.sh'" >> "$HOME/.bashrc"
+fi
 
-clear
+# Recharge le bashrc pour prendre l'alias en compte
+source "$HOME/.bashrc"
+
 echo "=============================================="
 echo " ✅ Installation terminée !"
 echo " Pour lancer Kighmu, utilisez la commande : kighmu"
