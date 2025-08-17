@@ -1,27 +1,20 @@
 #!/bin/bash
+# ==============================================
+# Kighmu VPS Manager Installer
+# Copyright (c) 2025 Kinf744
+# Licence MIT (version française)
+# Voir le fichier LICENSE pour plus de détails
+# ==============================================
 
-# =========================================
-# Install Kighmu Manager
-# =========================================
-
-# Mettre à jour et upgrader le système
-echo "Mise à jour du système en cours..."
+echo "Mise à jour du serveur..."
 apt-get update -y && apt-get upgrade -y
 
-# Créer un dossier pour Kighmu si nécessaire
-INSTALL_DIR="/opt/Kighmu"
-if [ ! -d "$INSTALL_DIR" ]; then
-    mkdir -p "$INSTALL_DIR"
-fi
+echo "Installation des dépendances nécessaires..."
+apt-get install -y wget curl net-tools
 
-# Télécharger le script principal Kighmu
-echo "Téléchargement de Kighmu Manager..."
-wget -O "$INSTALL_DIR/Kighmu" https://raw.githubusercontent.com/kinf744/Kighmu/main/Kighmu.sh
+echo "Téléchargement et configuration du script Kighmu..."
+wget -O /opt/Kighmu.sh https://raw.githubusercontent.com/kinf744/Kighmu/main/Kighmu.sh
+chmod +x /opt/Kighmu.sh
 
-# Rendre le script exécutable
-chmod 777 "$INSTALL_DIR/Kighmu"
-
-# Lancer Kighmu
-echo "Lancement de Kighmu Manager..."
-cd "$INSTALL_DIR"
-./Kighmu
+echo "Installation terminée !"
+echo "Vous pouvez lancer le panneau de contrôle avec la commande : /opt/Kighmu.sh"
