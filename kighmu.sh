@@ -6,8 +6,8 @@
 # Voir le fichier LICENSE pour plus de détails
 # ==============================================
 
-# Exemple de contenu principal du script Kighmu
-# Vous pouvez remplacer ceci par le code réel de votre panneau de contrôle
+# Récupérer le répertoire du script
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "+--------------------------------------------+"
 echo "|         K I G H M U   M A N A G E R        |"
@@ -32,13 +32,13 @@ echo "8. Quitter"
 
 read -p "Entrez votre choix [1-8]: " choix
 case $choix in
-  1) bash menu1.sh ;;
-  2) bash menu2.sh ;;
-  3) bash menu3.sh ;;
-  4) bash menu4.sh ;;
-  5) bash menu5.sh ;;
-  6) bash menu6.sh ;;
-  7) bash menu7.sh ;;
+  1) bash "$SCRIPT_DIR/menu1.sh" ;;
+  2) bash "$SCRIPT_DIR/menu2.sh" ;;
+  3) bash "$SCRIPT_DIR/menu3.sh" ;;
+  4) bash "$SCRIPT_DIR/menu4.sh" ;;
+  5) bash "$SCRIPT_DIR/menu5.sh" ;;
+  6) bash "$SCRIPT_DIR/menu6.sh" ;;
+  7) bash "$SCRIPT_DIR/menu7.sh" ;;
   8) exit ;;
   *) echo "Choix invalide !" ;;
 esac
