@@ -3,20 +3,44 @@
 # Kighmu VPS Manager
 # Copyright (c) 2025 Kinf744
 # Licensed under the MIT License
-# See LICENSE file for details
 # ==============================================
 
 clear
 echo "=============================================="
-echo "      Bienvenue dans Kighmu VPS Manager"
+echo " 🚀 Installation de Kighmu VPS Manager..."
 echo "=============================================="
 
-# Appeler le menu principal depuis le même dossier que Kighmu.sh
-SCRIPT_DIR=$(dirname "$0")
+# Mettre à jour et upgrader le système
+apt-get update -y && apt-get upgrade -y
 
-if [ -f "$SCRIPT_DIR/menu_principal.sh" ]; then
-    bash "$SCRIPT_DIR/menu_principal.sh"
-else
-    echo "❌ Erreur : fichier menu_principal.sh introuvable"
-    exit 1
-fi
+# Installer wget et bash si nécessaire
+apt-get install -y wget bash
+
+# Répertoire d'installation
+INSTALL_DIR="$HOME/Kighmu"
+mkdir -p "$INSTALL_DIR"
+
+# Télécharger tous les scripts depuis GitHub
+echo "➡ Téléchargement des fichiers depuis GitHub..."
+wget -q -P "$INSTALL_DIR" https://raw.githubusercontent.com/kinf744/Kighmu/main/Kighmu.sh
+wget -q -P "$INSTALL_DIR" https://raw.githubusercontent.com/kinf744/Kighmu/main/menu_principal.sh
+wget -q -P "$INSTALL_DIR" https://raw.githubusercontent.com/kinf744/Kighmu/main/menu1.sh
+wget -q -P "$INSTALL_DIR" https://raw.githubusercontent.com/kinf744/Kighmu/main/menu2.sh
+wget -q -P "$INSTALL_DIR" https://raw.githubusercontent.com/kinf744/Kighmu/main/menu3.sh
+wget -q -P "$INSTALL_DIR" https://raw.githubusercontent.com/kinf744/Kighmu/main/menu4.sh
+wget -q -P "$INSTALL_DIR" https://raw.githubusercontent.com/kinf744/Kighmu/main/menu5.sh
+wget -q -P "$INSTALL_DIR" https://raw.githubusercontent.com/kinf744/Kighmu/main/menu6.sh
+wget -q -P "$INSTALL_DIR" https://raw.githubusercontent.com/kinf744/Kighmu/main/menu7.sh
+
+# Donner les droits d'exécution
+chmod +x "$INSTALL_DIR"/*.sh
+
+# Créer un alias pour lancer Kighmu facilement
+echo "alias kighmu='bash $INSTALL_DIR/Kighmu.sh'" >> ~/.bashrc
+source ~/.bashrc
+
+clear
+echo "=============================================="
+echo " ✅ Installation terminée !"
+echo " Pour lancer Kighmu, utilisez la commande : kighmu"
+echo "=============================================="
