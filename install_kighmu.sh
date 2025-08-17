@@ -6,38 +6,17 @@
 # See LICENSE file for details
 # ==============================================
 
+clear
 echo "=============================================="
-echo " 🚀 Installation de Kighmu VPS Manager..."
+echo "      Bienvenue dans Kighmu VPS Manager"
 echo "=============================================="
 
-# Mise à jour du système
-apt-get update -y && apt-get upgrade -y
+# Appeler le menu principal depuis le même dossier que Kighmu.sh
+SCRIPT_DIR=$(dirname "$0")
 
-# Création du dossier d’installation
-mkdir -p /opt
-
-# Téléchargement du script principal Kighmu.sh
-echo "➡ Téléchargement des fichiers depuis GitHub..."
-wget -q -O /opt/Kighmu.sh https://raw.githubusercontent.com/kinf744/Kighmu/main/Kighmu.sh
-
-# Vérifier si le fichier a bien été téléchargé
-if [ ! -s /opt/Kighmu.sh ]; then
-    echo "❌ Erreur : Impossible de télécharger Kighmu.sh"
+if [ -f "$SCRIPT_DIR/menu_principal.sh" ]; then
+    bash "$SCRIPT_DIR/menu_principal.sh"
+else
+    echo "❌ Erreur : fichier menu_principal.sh introuvable"
     exit 1
 fi
-
-chmod +x /opt/Kighmu.sh
-
-# Création du lanceur global
-echo "➡ Création du lanceur global..."
-cat > /usr/local/bin/kighmu <<EOL
-#!/bin/bash
-/opt/Kighmu.sh
-EOL
-
-chmod +x /usr/local/bin/kighmu
-
-echo "=============================================="
-echo " ✅ Installation terminée !"
-echo " Lancez le panneau de contrôle avec : kighmu"
-echo "=============================================="
