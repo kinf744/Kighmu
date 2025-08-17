@@ -12,15 +12,15 @@ echo "=============================================="
 echo " 🚀 Installation de Kighmu VPS Manager..."
 echo "=============================================="
 
-# Mettre à jour le serveur
+# Mise à jour des paquets
 apt-get update -y && apt-get upgrade -y
 
-# Créer le dossier d'installation
+# Répertoire d'installation
 INSTALL_DIR="/opt"
 mkdir -p $INSTALL_DIR
 
-# Télécharger le script principal et menus depuis GitHub
-echo "➡ Téléchargement des fichiers..."
+# Téléchargement des fichiers principaux
+echo "➡ Téléchargement des fichiers depuis GitHub..."
 wget -q -O $INSTALL_DIR/Kighmu.sh https://raw.githubusercontent.com/kinf744/Kighmu/main/Kighmu.sh
 wget -q -O $INSTALL_DIR/menu1.sh https://raw.githubusercontent.com/kinf744/Kighmu/main/menu1.sh
 wget -q -O $INSTALL_DIR/menu2.sh https://raw.githubusercontent.com/kinf744/Kighmu/main/menu2.sh
@@ -30,11 +30,11 @@ wget -q -O $INSTALL_DIR/menu5.sh https://raw.githubusercontent.com/kinf744/Kighm
 wget -q -O $INSTALL_DIR/menu6.sh https://raw.githubusercontent.com/kinf744/Kighmu/main/menu6.sh
 wget -q -O $INSTALL_DIR/menu7.sh https://raw.githubusercontent.com/kinf744/Kighmu/main/menu7.sh
 
-# Donner les permissions d'exécution
+# Permissions d'exécution
 chmod +x $INSTALL_DIR/Kighmu.sh
 chmod +x $INSTALL_DIR/menu*.sh
 
-# Ajouter un alias pour exécuter plus facilement
+# Création d'un alias pour exécuter facilement
 if ! grep -q "alias kighmu=" ~/.bashrc; then
     echo "alias kighmu='/opt/Kighmu.sh'" >> ~/.bashrc
     source ~/.bashrc
