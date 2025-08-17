@@ -12,7 +12,7 @@ Il offre une interface simple et des scripts automatisés pour créer, supprimer
 - Gestion des modules : OpenSSH, Dropbear, SOCKS/Python, SlowDNS, BadVPN, SSL/TLS, UDP-Custom
 - Statistiques du VPS : IP, RAM, CPU
 - Installation et désinstallation simplifiées
-- Affichage de configurations pour applications comme HTTP Injector, KPN Rev, etc.
+- Affichage de configurations pour applications comme HTTP Injector, SSH Custom, etc.
 
 ---
 
