@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==============================================
-# Kighmu VPS Manager
+# Kighmu VPS Manager - Script d'installation
 # Copyright (c) 2025 Kinf744
 # Licence MIT (version française)
 # ==============================================
@@ -9,12 +9,13 @@ echo "=============================================="
 echo " 🚀 Installation de Kighmu VPS Manager..."
 echo "=============================================="
 
-# Crée le dossier d'installation
+# Création du dossier d'installation
 INSTALL_DIR="$HOME/Kighmu"
-mkdir -p "$INSTALL_DIR"
+mkdir -p "$INSTALL_DIR" || { echo "Erreur : impossible de créer le dossier $INSTALL_DIR"; exit 1; }
 
-# Liste des fichiers à télécharger depuis GitHub
+# Liste des fichiers à télécharger
 FILES=(
+    "install_kighmu.sh"
     "kighmu-manager.sh"
     "kighmu.sh"
     "menu1.sh"
@@ -29,21 +30,31 @@ FILES=(
     "udp_custom.sh"
 )
 
-# Téléchargement de chaque fichier
+# URL de base du dépôt GitHub
+BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
+
+# Téléchargement et vérification de chaque fichier
 for file in "${FILES[@]}"; do
-    wget -q -O "$INSTALL_DIR/$file" "https://raw.githubusercontent.com/kinf744/Kighmu/main/$file"
+    echo "Téléchargement de $file ..."
+    wget -O "$INSTALL_DIR/$file" "$BASE_URL/$file"
+    if [ ! -s "$INSTALL_DIR/$file" ]; then
+        echo "Erreur : le fichier $file n'a pas été téléchargé correctement ou est vide !"
+        exit 1
+    fi
     chmod +x "$INSTALL_DIR/$file"
 done
 
-# Crée un alias dans ~/.bashrc pour lancer Kighmu facilement
+# Création de l'alias pour un lancement facile
 if ! grep -q "alias kighmu=" "$HOME/.bashrc"; then
+    echo "Ajout de l'alias kighmu dans ~/.bashrc"
     echo "alias kighmu='$INSTALL_DIR/kighmu.sh'" >> "$HOME/.bashrc"
+else
+    echo "Alias kighmu déjà présent dans ~/.bashrc"
 fi
-
-# Recharge le bashrc pour prendre l'alias en compte
-source "$HOME/.bashrc"
 
 echo "=============================================="
 echo " ✅ Installation terminée !"
 echo " Pour lancer Kighmu, utilisez la commande : kighmu"
+echo
+echo "⚠️ Attention : Ouvre un nouveau terminal ou exécutez 'source ~/.bashrc' pour prendre en compte l'alias."
 echo "=============================================="
