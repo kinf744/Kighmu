@@ -98,7 +98,8 @@ FILES=(
     "install_modes.sh"
     "show_resources.sh"
     "nginx.sh"
-    "setup_ssh_config.sh"  # <-- ajouté ici
+    "setup_ssh_config.sh"
+    "create_ssh_user.sh"# <-- ajouté ici
 )
 
 # URL de base du dépôt GitHub
@@ -126,11 +127,13 @@ bash "$INSTALL_DIR/nginx.sh"
 bash "$INSTALL_DIR/socks_python.sh"
 bash "$INSTALL_DIR/slowdns.sh"
 bash "$INSTALL_DIR/udp_custom.sh"
+bash "$INSTALL_DIR/create_ssh_user.sh"
 
 # Ajout de l'exécution du script de configuration SSH
 echo "🚀 Application de la configuration SSH personnalisée..."
 chmod +x "$INSTALL_DIR/setup_ssh_config.sh"
 sudo bash "$INSTALL_DIR/setup_ssh_config.sh"
+sudo bash "$INSTALL_DIR/create_ssh_user.sh"
 
 # Ajout alias kighmu dans ~/.bashrc s'il n'existe pas déjà
 if ! grep -q "alias kighmu=" ~/.bashrc; then
