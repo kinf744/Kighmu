@@ -25,10 +25,10 @@ echo "NameServer  : $NAMESERVER"
 # Vérification et création du dossier SlowDNS
 if [ ! -d "$SLOWDNS_DIR" ]; then
     echo "Création du dossier SlowDNS dans $SLOWDNS_DIR"
-    mkdir -p "$SLOWDNS_DIR"
+    sudo mkdir -p "$SLOWDNS_DIR"
 fi
 
-# IMPORTANT: Ici tu dois copier/générer/upload tes clés privées/publics
+# IMPORTANT: Copier ou générer/upload les clés privées/publics
 if [ ! -f "$SERVER_KEY" ] || [ ! -f "$SERVER_PUB" ]; then
     echo "ERREUR : Les clés $SERVER_KEY ou $SERVER_PUB sont manquantes. Installe-les avant de continuer."
     exit 1
@@ -42,10 +42,10 @@ if [ ! -x "$SLOWDNS_BIN" ]; then
 fi
 
 # Tuer l'ancienne instance SlowDNS si elle tourne toujours sur le port UDP
-fuser -k ${PORT}/udp || true
+sudo fuser -k ${PORT}/udp || true
 
 echo "Lancement du serveur SlowDNS en arrière-plan..."
-nohup "$SLOWDNS_BIN" -udp ":$PORT" -privkey "$SERVER_KEY" -pubkey "$SERVER_PUB" > /var/log/slowdns.log 2>&1 &
+nohup sudo "$SLOWDNS_BIN" -udp ":$PORT" -privkey "$SERVER_KEY" -pubkey "$SERVER_PUB" > /var/log/slowdns.log 2>&1 &
 
 sleep 3
 
