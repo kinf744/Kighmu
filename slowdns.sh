@@ -7,7 +7,6 @@
 PUB_KEY="7fbd1f8aa0abfe15a7903e837f78aba39cf61d36f183bd604daa2fe4ef3b7b59"
 SLOWDNS_DIR="/etc/slowdns"
 SERVER_KEY="$SLOWDNS_DIR/server.key"     # Clé privée serveur
-SERVER_PUB="$SLOWDNS_DIR/server.pub"     # Clé publique serveur
 SLOWDNS_BIN="/usr/local/bin/sldns-server" # Chemin du binaire SlowDNS
 PORT=5300
 
@@ -41,12 +40,10 @@ if [ ! -d "$SLOWDNS_DIR" ]; then
 fi
 
 # Génération automatique des clés si absentes
-if [ ! -f "$SERVER_KEY" ] || [ ! -f "$SERVER_PUB" ]; then
+if [ ! -f "$SERVER_KEY" ]; then
     echo "Clés SlowDNS manquantes, génération en cours..."
     sudo openssl genpkey -algorithm RSA -out "$SERVER_KEY" -pkeyopt rsa_keygen_bits:2048
-    sudo openssl rsa -pubout -in "$SERVER_KEY" -out "$SERVER_PUB"
     sudo chmod 600 "$SERVER_KEY"
-    sudo chmod 644 "$SERVER_PUB"
     echo "Clés SlowDNS générées avec succès."
 fi
 
@@ -54,7 +51,7 @@ fi
 sudo fuser -k ${PORT}/udp || true
 
 echo "Lancement du serveur SlowDNS en arrière-plan..."
-nohup sudo "$SLOWDNS_BIN" -udp ":$PORT" -privkey "$SERVER_KEY" -pubkey "$SERVER_PUB" > /var/log/slowdns.log 2>&1 &
+nohup sudo "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NAMESERVER" 8.8.8.8:53 > /var/log/slowdns.log 2>&1 &
 
 sleep 3
 
