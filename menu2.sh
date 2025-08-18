@@ -54,7 +54,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "DOMAIN  : $DOMAIN"
 echo "Host/IP-Address : $HOST_IP"
 echo "USUARIO : $username"
-echo "PASSWD  : [protégé]"
+echo "PASSWD  : $password"       # Mot de passe affiché en clair ici
 echo "LIMITE  : $limite"
 echo "VALIDEZ : $expire_date"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
