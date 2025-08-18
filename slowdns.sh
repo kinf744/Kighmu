@@ -7,6 +7,7 @@
 PUB_KEY="7fbd1f8aa0abfe15a7903e837f78aba39cf61d36f183bd604daa2fe4ef3b7b59"
 SLOWDNS_DIR="/etc/slowdns"
 SERVER_KEY="$SLOWDNS_DIR/server.key"     # Clé privée serveur
+SERVER_PUB="$SLOWDNS_DIR/server.pub"     # Clé publique serveur
 SLOWDNS_BIN="/usr/local/bin/sldns-server" # Chemin du binaire SlowDNS
 PORT=5300
 
@@ -39,12 +40,17 @@ if [ ! -d "$SLOWDNS_DIR" ]; then
     sudo mkdir -p "$SLOWDNS_DIR"
 fi
 
-# Génération automatique des clés si absentes
-if [ ! -f "$SERVER_KEY" ]; then
-    echo "Clés SlowDNS manquantes, génération en cours..."
-    sudo openssl genpkey -algorithm RSA -out "$SERVER_KEY" -pkeyopt rsa_keygen_bits:2048
+# Génération automatique des clés si absentes ou vides
+if [ ! -s "$SERVER_KEY" ] || [ ! -s "$SERVER_PUB" ]; then
+    echo "Clés SlowDNS manquantes ou vides, génération en cours..."
+    sudo $SLOWDNS_BIN -gen-key -privkey-file "$SERVER_KEY" -pubkey-file "$SERVER_PUB"
+    # Nettoyer les lignes vides éventuelles
+    sudo sed -i '/^\s*$/d' "$SERVER_KEY"
+    sudo sed -i '/^\s*$/d' "$SERVER_PUB"
+    # Mettre les bonnes permissions
     sudo chmod 600 "$SERVER_KEY"
-    echo "Clés SlowDNS générées avec succès."
+    sudo chmod 644 "$SERVER_PUB"
+    echo "Clés SlowDNS générées et nettoyées avec succès."
 fi
 
 # Tuer l'ancienne instance SlowDNS si elle tourne toujours sur le port UDP
@@ -74,7 +80,11 @@ fi
 
 # Ouvrir le port UDP dans le firewall
 echo "Ouverture du port UDP $PORT dans le firewall (ufw)..."
-sudo ufw allow "$PORT"/udp
-sudo ufw reload
+if command -v ufw >/dev/null 2>&1; then
+    sudo ufw allow "$PORT"/udp
+    sudo ufw reload
+else
+    echo "UFW non installé, vérifie manuellement l'ouverture du port UDP $PORT"
+fi
 
 echo "Configuration SlowDNS terminée."
