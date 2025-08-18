@@ -11,6 +11,30 @@ SLOWDNS_BIN="/usr/local/bin/sldns-server" # Chemin du binaire SlowDNS
 PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 
+# Installation automatique des dépendances iptables et screen
+install_dependencies() {
+    # Mise à jour des dépôts
+    sudo apt update
+
+    # Installation iptables si absent
+    if ! command -v iptables >/dev/null 2>&1; then
+        echo "iptables non trouvé. Installation en cours..."
+        sudo apt install -y iptables
+    else
+        echo "iptables est déjà installé."
+    fi
+
+    # Installation screen si absent
+    if ! command -v screen >/dev/null 2>&1; then
+        echo "screen non trouvé. Installation en cours..."
+        sudo apt install -y screen
+    else
+        echo "screen est déjà installé."
+    fi
+}
+
+install_dependencies
+
 # Création du dossier slowdns si absent
 if [ ! -d "$SLOWDNS_DIR" ]; then
     sudo mkdir -p "$SLOWDNS_DIR"
