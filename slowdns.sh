@@ -11,6 +11,18 @@ SERVER_PUB="$SLOWDNS_DIR/server.pub"     # Clé publique serveur
 SLOWDNS_BIN="/usr/local/bin/sldns-server" # Chemin du binaire SlowDNS
 PORT=53
 
+echo "Vérification et installation du binaire SlowDNS..."
+
+if [ ! -x "$SLOWDNS_BIN" ]; then
+    echo "Le binaire SlowDNS n'existe pas. Téléchargement en cours..."
+    sudo mkdir -p /usr/local/bin
+    sudo wget -q -O "$SLOWDNS_BIN" https://raw.githubusercontent.com/fisabiliyusri/SLDNS/main/slowdns/sldns-server
+    sudo chmod +x "$SLOWDNS_BIN"
+    echo "Installation du binaire SlowDNS terminée."
+else
+    echo "Le binaire SlowDNS est déjà installé."
+fi
+
 echo "+--------------------------------------------+"
 echo "|               CONFIG SLOWDNS               |"
 echo "+--------------------------------------------+"
@@ -36,13 +48,6 @@ if [ ! -f "$SERVER_KEY" ] || [ ! -f "$SERVER_PUB" ]; then
     sudo chmod 600 "$SERVER_KEY"
     sudo chmod 644 "$SERVER_PUB"
     echo "Clés SlowDNS générées avec succès."
-fi
-
-# Vérifier que le binaire SlowDNS existe
-if [ ! -x "$SLOWDNS_BIN" ]; then
-    echo "ERREUR : Le binaire SlowDNS $SLOWDNS_BIN n'existe pas ou n'est pas exécutable."
-    echo "Merci de l'installer ou corriger le chemin."
-    exit 1
 fi
 
 # Tuer l'ancienne instance SlowDNS si elle tourne toujours sur le port UDP
