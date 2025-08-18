@@ -44,16 +44,14 @@ fi
 if [ ! -s "$SERVER_KEY" ] || [ ! -s "$SERVER_PUB" ]; then
     echo "Clés SlowDNS manquantes ou vides, génération en cours..."
     sudo $SLOWDNS_BIN -gen-key -privkey-file "$SERVER_KEY" -pubkey-file "$SERVER_PUB"
-    # Nettoyer les lignes vides éventuelles
     sudo sed -i '/^\s*$/d' "$SERVER_KEY"
     sudo sed -i '/^\s*$/d' "$SERVER_PUB"
-    # Mettre les bonnes permissions
     sudo chmod 600 "$SERVER_KEY"
     sudo chmod 644 "$SERVER_PUB"
     echo "Clés SlowDNS générées et nettoyées avec succès."
 fi
 
-# Tuer l'ancienne instance SlowDNS si elle tourne toujours sur le port UDP
+# Arrêt de l'ancienne instance SlowDNS si existante
 sudo fuser -k ${PORT}/udp || true
 
 echo "Lancement du serveur SlowDNS en arrière-plan..."
@@ -61,7 +59,7 @@ nohup sudo "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NAMESERVER
 
 sleep 3
 
-# Vérifier si SlowDNS a démarré
+# Vérification du démarrage
 if pgrep -f "sldns-server" > /dev/null; then
     echo "Service SlowDNS démarré avec succès sur le port UDP $PORT."
     echo "Pour vérifier les logs, consulte : /var/log/slowdns.log"
@@ -71,14 +69,14 @@ else
     exit 1
 fi
 
-# Activer le forwarding IP si ce n'est pas déjà fait
+# Activation IP forwarding si nécessaire
 if [ "$(sysctl -n net.ipv4.ip_forward)" -ne 1 ]; then
     echo "Activation du routage IP..."
     sudo sysctl -w net.ipv4.ip_forward=1
     echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf
 fi
 
-# Ouvrir le port UDP dans le firewall
+# Ouverture du port UDP dans firewall ufw si présent
 echo "Ouverture du port UDP $PORT dans le firewall (ufw)..."
 if command -v ufw >/dev/null 2>&1; then
     sudo ufw allow "$PORT"/udp
