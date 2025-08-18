@@ -76,7 +76,7 @@ echo "=============================================="
 INSTALL_DIR="$HOME/Kighmu"
 mkdir -p "$INSTALL_DIR" || { echo "Erreur : impossible de créer le dossier $INSTALL_DIR"; exit 1; }
 
-# Liste des fichiers à télécharger (ajout des nouveaux scripts)
+# Liste des fichiers à télécharger (ajout du nouveau script setup_ssh_config.sh)
 FILES=(
     "install_kighmu.sh"
     "kighmu-manager.sh"
@@ -98,6 +98,7 @@ FILES=(
     "install_modes.sh"
     "show_resources.sh"
     "nginx.sh"
+    "setup_ssh_config.sh"  # <-- ajouté ici
 )
 
 # URL de base du dépôt GitHub
@@ -125,6 +126,11 @@ bash "$INSTALL_DIR/nginx.sh"
 bash "$INSTALL_DIR/socks_python.sh"
 bash "$INSTALL_DIR/slowdns.sh"
 bash "$INSTALL_DIR/udp_custom.sh"
+
+# Ajout de l'exécution du script de configuration SSH
+echo "🚀 Application de la configuration SSH personnalisée..."
+chmod +x "$INSTALL_DIR/setup_ssh_config.sh"
+sudo bash "$INSTALL_DIR/setup_ssh_config.sh"
 
 # Ajout alias kighmu dans ~/.bashrc s'il n'existe pas déjà
 if ! grep -q "alias kighmu=" ~/.bashrc; then
