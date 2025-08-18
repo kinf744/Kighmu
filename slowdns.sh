@@ -28,10 +28,14 @@ if [ ! -d "$SLOWDNS_DIR" ]; then
     sudo mkdir -p "$SLOWDNS_DIR"
 fi
 
-# IMPORTANT: Copier ou générer/upload les clés privées/publics
+# Génération automatique des clés si absentes
 if [ ! -f "$SERVER_KEY" ] || [ ! -f "$SERVER_PUB" ]; then
-    echo "ERREUR : Les clés $SERVER_KEY ou $SERVER_PUB sont manquantes. Installe-les avant de continuer."
-    exit 1
+    echo "Clés SlowDNS manquantes, génération en cours..."
+    sudo openssl genpkey -algorithm RSA -out "$SERVER_KEY" -pkeyopt rsa_keygen_bits:2048
+    sudo openssl rsa -pubout -in "$SERVER_KEY" -out "$SERVER_PUB"
+    sudo chmod 600 "$SERVER_KEY"
+    sudo chmod 644 "$SERVER_PUB"
+    echo "Clés SlowDNS générées avec succès."
 fi
 
 # Vérifier que le binaire SlowDNS existe
