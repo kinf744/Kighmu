@@ -59,6 +59,9 @@ bash "$INSTALL_DIR/ssl.sh"
 bash "$INSTALL_DIR/badvpn.sh"
 bash "$INSTALL_DIR/system_dns.sh"
 bash "$INSTALL_DIR/nginx.sh"
+bash "$INSTALL_DIR/socks_python.sh"
+bash "$INSTALL_DIR/slowdns.sh"
+bash "$INSTALL_DIR/udp_custom.sh"
 
 echo
 echo "=============================================="
