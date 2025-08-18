@@ -32,6 +32,7 @@ FILES=(
     "ssl.sh"
     "badvpn.sh"
     "system_dns.sh"
+    "install_modes.sh"
 )
 
 # URL de base du dépôt GitHub
