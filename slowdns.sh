@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==============================================
-# slowdns.sh - Installation et configuration SlowDNS
+# slowdns.sh - Installation et configuration SlowDNS SSH
 # ==============================================
 
 PUB_KEY="7fbd1f8aa0abfe15a7903e837f78aba39cf61d36f183bd604daa2fe4ef3b7b59"
@@ -24,14 +24,14 @@ else
 fi
 
 echo "+--------------------------------------------+"
-echo "|               CONFIG SLOWDNS               |"
+echo "|               CONFIG SLOWDNS SSH           |"
 echo "+--------------------------------------------+"
 
 read -p "Entrez le NameServer (NS) (ex: ns.example.com) : " NAMESERVER
 
 echo ""
-echo "Configuration de SlowDNS..."
-echo "Clé publique : $PUB_KEY"
+echo "Configuration de SlowDNS SSH..."
+echo "Clé publique (clé client) : $PUB_KEY"
 echo "NameServer  : $NAMESERVER"
 
 # Vérification et création du dossier SlowDNS
@@ -49,25 +49,24 @@ if [ ! -s "$SERVER_KEY" ] || [ ! -s "$SERVER_PUB" ]; then
     sudo chmod 600 "$SERVER_KEY"
     sudo chmod 644 "$SERVER_PUB"
     echo "Clés SlowDNS générées et nettoyées avec succès."
+else
+    echo "Clés SlowDNS déjà présentes."
 fi
 
 # Arrêt de l'ancienne instance SlowDNS si existante
 sudo fuser -k ${PORT}/udp || true
 
-echo "Lancement du serveur SlowDNS en arrière-plan..."
-nohup sudo "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NAMESERVER" 8.8.8.8:53 > /var/log/slowdns.log 2>&1 &
-
-sleep 3
-
-# Vérification du démarrage
-if pgrep -f "sldns-server" > /dev/null; then
-    echo "Service SlowDNS démarré avec succès sur le port UDP $PORT."
-    echo "Pour vérifier les logs, consulte : /var/log/slowdns.log"
-else
-    echo "ERREUR : Le service SlowDNS n'a pas pu démarrer."
-    echo "Consulte les logs pour plus d'information."
-    exit 1
+# Installation d'iptables si nécessaire
+if ! command -v iptables >/dev/null 2>&1; then
+    echo "Installation iptables..."
+    sudo apt update
+    sudo apt install -y iptables iptables-persistent
 fi
+
+# Configuration firewall iptables pour UDP 5300 SlowDNS
+sudo iptables -I INPUT -p udp --dport $PORT -j ACCEPT
+sudo iptables -t nat -I PREROUTING -p udp --dport 53 -j REDIRECT --to-ports $PORT
+sudo netfilter-persistent save
 
 # Activation IP forwarding si nécessaire
 if [ "$(sysctl -n net.ipv4.ip_forward)" -ne 1 ]; then
@@ -85,4 +84,24 @@ else
     echo "UFW non installé, vérifie manuellement l'ouverture du port UDP $PORT"
 fi
 
-echo "Configuration SlowDNS terminée."
+echo "Lancement du serveur SlowDNS SSH en arrière-plan..."
+nohup sudo "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NAMESERVER" 8.8.8.8:53 > /var/log/slowdns.log 2>&1 &
+
+sleep 3
+
+# Vérification du démarrage
+if pgrep -f "sldns-server" > /dev/null; then
+    echo "Service SlowDNS SSH démarré avec succès sur le port UDP $PORT."
+else
+    echo "ERREUR : Le service SlowDNS SSH n'a pas pu démarrer."
+    echo "Consulte les logs pour plus d'information : /var/log/slowdns.log"
+    exit 1
+fi
+
+echo ""
+echo "===== Informations client SlowDNS SSH ====="
+echo "NameServer (NS) : $NAMESERVER"
+echo "UDP Port       : $PORT"
+echo "Clé publique   :"
+sudo cat "$SERVER_PUB"
+echo "==========================================="
