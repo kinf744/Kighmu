@@ -21,4 +21,4 @@ Il offre une interface simple et des scripts automatisés pour créer, supprimer
 Pour installer Kighmu Manager automatiquement sur votre VPS :
 
 ```bash
-apt-get update -y && apt-get upgrade -y && wget -O - https://raw.githubusercontent.com/kinf744/Kighmu/main/install_kighmu.sh | bash
+apt-get update -y && apt-get upgrade -y && wget https://raw.githubusercontent.com/kinf744/Kighmu/main/install_kighmu.sh -O install_kighmu.sh && chmod +x install_kighmu.sh && bash install_kighmu.sh
