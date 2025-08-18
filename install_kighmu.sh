@@ -115,6 +115,20 @@ bash "$INSTALL_DIR/socks_python.sh"
 bash "$INSTALL_DIR/slowdns.sh"
 bash "$INSTALL_DIR/udp_custom.sh"
 
+# Ajout alias kighmu dans ~/.bashrc s'il n'existe pas déjà
+if ! grep -q "alias kighmu=" ~/.bashrc; then
+    echo "alias kighmu='$INSTALL_DIR/kighmu.sh'" >> ~/.bashrc
+    echo "Alias kighmu ajouté dans ~/.bashrc"
+else
+    echo "Alias kighmu déjà présent dans ~/.bashrc"
+fi
+
+# Ajouter /usr/local/bin au PATH si non présent dans ~/.bashrc
+if ! grep -q "/usr/local/bin" ~/.bashrc; then
+    echo 'export PATH=$PATH:/usr/local/bin' >> ~/.bashrc
+    echo "Ajout de /usr/local/bin au PATH dans ~/.bashrc"
+fi
+
 echo
 echo "=============================================="
 echo " ✅ Installation terminée !"
