@@ -58,6 +58,7 @@ bash "$INSTALL_DIR/dropbear.sh"
 bash "$INSTALL_DIR/ssl.sh"
 bash "$INSTALL_DIR/badvpn.sh"
 bash "$INSTALL_DIR/system_dns.sh"
+bash "$INSTALL_DIR/nginx.sh"
 
 echo
 echo "=============================================="
