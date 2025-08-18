@@ -1,6 +1,5 @@
 #!/bin/bash
-# menu4.sh
-# Supprimer un utilisateur
+# menu4.sh - Supprimer un utilisateur avec gestion robuste
 
 USER_FILE="/etc/kighmu/users.list"
 
@@ -13,41 +12,47 @@ if [ ! -f "$USER_FILE" ]; then
     exit 0
 fi
 
-# Afficher la liste des utilisateurs
 echo "Utilisateurs existants :"
 cut -d'|' -f1 "$USER_FILE"
 
-# Demander le nom de l'utilisateur à supprimer
 read -p "Nom de l'utilisateur à supprimer : " username
 
-# Vérifier si l'utilisateur est dans la liste users.list
+# Vérification dans users.list
 if ! grep -q "^$username|" "$USER_FILE"; then
-    echo "Utilisateur $username introuvable dans la liste des utilisateurs."
+    echo "Utilisateur $username introuvable dans la liste."
     exit 1
 fi
 
-# Vérifier que l'utilisateur système existe avant suppression
+# Vérification de l'existence système
 if id "$username" &>/dev/null; then
-    # Supprimer l'utilisateur système et son dossier home
+    # Suppression de l'utilisateur système et son home
     if sudo userdel -r "$username"; then
         echo "Utilisateur système $username supprimé avec succès."
+
+        # Suppression dans users.list
+        if grep -v "^$username|" "$USER_FILE" > "${USER_FILE}.tmp"; then
+            mv "${USER_FILE}.tmp" "$USER_FILE"
+            echo "Utilisateur $username supprimé de la liste utilisateurs."
+        else
+            echo "Erreur : impossible de mettre à jour la liste des utilisateurs."
+            exit 1
+        fi
     else
         echo "Erreur lors de la suppression de l'utilisateur système $username."
         exit 1
     fi
 else
     echo "Attention : utilisateur système $username non trouvé ou déjà supprimé."
+    # On peut quand même tenter de retirer de la liste users.list si présent
+    if grep -q "^$username|" "$USER_FILE"; then
+        if grep -v "^$username|" "$USER_FILE" > "${USER_FILE}.tmp"; then
+            mv "${USER_FILE}.tmp" "$USER_FILE"
+            echo "Utilisateur $username retiré de la liste utilisateurs."
+        else
+            echo "Erreur : impossible de mettre à jour la liste des utilisateurs."
+            exit 1
+        fi
+    fi
 fi
-
-# Mettre à jour le fichier users.list en supprimant l'utilisateur
-if grep -v "^$username|" "$USER_FILE" > "${USER_FILE}.tmp"; then
-    mv "${USER_FILE}.tmp" "$USER_FILE"
-    echo "Utilisateur $username supprimé de la liste utilisateurs."
-else
-    echo "Erreur lors de la mise à jour de la liste des utilisateurs."
-    exit 1
-fi
-
-echo "Suppression de l'utilisateur $username terminée."
 
 read -p "Appuyez sur Entrée pour revenir au menu..."
