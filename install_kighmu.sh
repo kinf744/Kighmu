@@ -5,6 +5,17 @@
 # Licence MIT (version française)
 # ==============================================
 
+# Vérification de la présence de curl et installation si manquant
+echo "Vérification de la présence de curl..."
+if ! command -v curl >/dev/null 2>&1; then
+    echo "curl non trouvé, installation en cours..."
+    apt update
+    apt install -y curl
+    echo "Installation de curl terminée."
+else
+    echo "curl est déjà installé."
+fi
+
 echo "+--------------------------------------------+"
 echo "|             INSTALLATION VPS               |"
 echo "+--------------------------------------------+"
@@ -41,7 +52,7 @@ echo "=============================================="
 apt update && apt upgrade -y
 
 apt install -y \
-curl dnsutils net-tools wget sudo iptables ufw \
+dnsutils net-tools wget sudo iptables ufw \
 openssl openssl-blacklist psmisc \
 nginx certbot python3-certbot-nginx \
 dropbear badvpn \
