@@ -39,7 +39,7 @@ UDP_CUSTOM="1-65535"
 DOMAIN="${DOMAIN:-myserver.example.com}"
 HOST_IP=$(curl -s https://api.ipify.org)
 SLOWDNS_KEY="7fbd1f8aa0abfe15a7903e837f78aba39cf61d36f183bd604daa2fe4ef3b7b59"
-SLOWDNS_NS=$(read -p "SlowDNS NameServer (NS) : " ns_input && echo "$ns_input")
+read -p "SlowDNS NameServer (NS) : " SLOWDNS_NS
 
 # Afficher résumé
 echo ""
@@ -54,7 +54,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "DOMAIN  : $DOMAIN"
 echo "Host/IP-Address : $HOST_IP"
 echo "USUARIO : $username"
-echo "PASSWD  : [protégé]"
+echo "PASSWD  : $password"       # Mot de passe affiché en clair ici
 echo "LIMITE  : $limite"
 echo "VALIDEZ : $expire_date"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
