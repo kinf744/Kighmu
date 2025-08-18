@@ -5,6 +5,35 @@
 # Licence MIT (version française)
 # ==============================================
 
+echo "+--------------------------------------------+"
+echo "|             INSTALLATION VPS               |"
+echo "+--------------------------------------------+"
+
+# Demander le nom de domaine qui pointe vers l’IP du serveur
+read -p "Veuillez entrer votre nom de domaine (doit pointer vers l'IP de ce serveur) : " DOMAIN
+
+if [ -z "$DOMAIN" ]; then
+  echo "Erreur : vous devez entrer un nom de domaine valide."
+  exit 1
+fi
+
+IP_PUBLIC=$(curl -s https://api.ipify.org)
+echo "Votre IP publique détectée est : $IP_PUBLIC"
+
+DOMAIN_IP=$(dig +short "$DOMAIN" | tail -n1)
+if [ "$DOMAIN_IP" != "$IP_PUBLIC" ]; then
+  echo "Attention : le domaine $DOMAIN ne pointe pas vers l’IP $IP_PUBLIC."
+  echo "Assurez-vous que le domaine est correctement configuré avant de continuer."
+  read -p "Voulez-vous continuer quand même ? [oui/non] : " choix
+  if [[ ! "$choix" =~ ^(o|oui)$ ]]; then
+    echo "Installation arrêtée."
+    exit 1
+  fi
+fi
+
+# Exporter la variable pour que les scripts enfants y aient accès
+export DOMAIN
+
 echo "=============================================="
 echo " 🚀 Installation de Kighmu VPS Manager..."
 echo "=============================================="
