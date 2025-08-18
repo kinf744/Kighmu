@@ -35,6 +35,29 @@ fi
 export DOMAIN
 
 echo "=============================================="
+echo " 🚀 Installation des paquets essentiels..."
+echo "=============================================="
+
+apt update && apt upgrade -y
+
+apt install -y \
+curl dnsutils net-tools wget sudo iptables ufw \
+openssl openssl-blacklist psmisc fuser \
+nginx certbot python3-certbot-nginx \
+dropbear badvpn \
+python3 python3-pip python3-setuptools \
+wireguard-tools qrencode \
+gcc make perl \
+software-properties-common socat
+
+# Activer et configurer UFW
+ufw allow OpenSSH
+ufw allow 22
+ufw allow 80
+ufw allow 443
+ufw --force enable
+
+echo "=============================================="
 echo " 🚀 Installation de Kighmu VPS Manager..."
 echo "=============================================="
 
