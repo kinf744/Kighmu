@@ -13,7 +13,7 @@ echo "=============================================="
 INSTALL_DIR="$HOME/Kighmu"
 mkdir -p "$INSTALL_DIR" || { echo "Erreur : impossible de créer le dossier $INSTALL_DIR"; exit 1; }
 
-# Liste des fichiers à télécharger
+# Liste des fichiers à télécharger (ajout des nouveaux scripts)
 FILES=(
     "install_kighmu.sh"
     "kighmu-manager.sh"
@@ -28,6 +28,10 @@ FILES=(
     "slowdns.sh"
     "socks_python.sh"
     "udp_custom.sh"
+    "dropbear.sh"
+    "ssl.sh"
+    "badvpn.sh"
+    "system_dns.sh"
 )
 
 # URL de base du dépôt GitHub
@@ -44,13 +48,13 @@ for file in "${FILES[@]}"; do
     chmod +x "$INSTALL_DIR/$file"
 done
 
-# Création de l'alias pour un lancement facile
-if ! grep -q "alias kighmu=" "$HOME/.bashrc"; then
-    echo "Ajout de l'alias kighmu dans ~/.bashrc"
-    echo "alias kighmu='$INSTALL_DIR/kighmu.sh'" >> "$HOME/.bashrc"
-else
-    echo "Alias kighmu déjà présent dans ~/.bashrc"
-fi
+# Exécution automatique des scripts d’installation supplémentaires
+echo "🚀 Lancement des installations automatiques complémentaires..."
+
+bash "$INSTALL_DIR/dropbear.sh"
+bash "$INSTALL_DIR/ssl.sh"
+bash "$INSTALL_DIR/badvpn.sh"
+bash "$INSTALL_DIR/system_dns.sh"
 
 echo
 echo "=============================================="
