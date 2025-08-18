@@ -76,7 +76,7 @@ echo "=============================================="
 INSTALL_DIR="$HOME/Kighmu"
 mkdir -p "$INSTALL_DIR" || { echo "Erreur : impossible de créer le dossier $INSTALL_DIR"; exit 1; }
 
-# Liste des fichiers à télécharger (ajout du nouveau script setup_ssh_config.sh)
+# Liste des fichiers à télécharger
 FILES=(
     "install_kighmu.sh"
     "kighmu-manager.sh"
@@ -99,7 +99,7 @@ FILES=(
     "show_resources.sh"
     "nginx.sh"
     "setup_ssh_config.sh"
-    "create_ssh_user.sh"# <-- ajouté ici
+    "create_ssh_user.sh"
 )
 
 # URL de base du dépôt GitHub
@@ -116,24 +116,34 @@ for file in "${FILES[@]}"; do
     chmod +x "$INSTALL_DIR/$file"
 done
 
-# Exécution automatique des scripts d’installation supplémentaires
-echo "🚀 Lancement des installations automatiques complémentaires..."
+# Fonction pour exécuter un script avec gestion d’erreur
+run_script() {
+    local script_path="$1"
+    echo "🚀 Lancement du script : $script_path"
+    if bash "$script_path"; then
+        echo "✅ $script_path exécuté avec succès."
+    else
+        echo "⚠️ Attention : $script_path a rencontré une erreur. L'installation continue..."
+    fi
+}
 
-bash "$INSTALL_DIR/dropbear.sh"
-bash "$INSTALL_DIR/ssl.sh"
-bash "$INSTALL_DIR/badvpn.sh"
-bash "$INSTALL_DIR/system_dns.sh"
-bash "$INSTALL_DIR/nginx.sh"
-bash "$INSTALL_DIR/socks_python.sh"
-bash "$INSTALL_DIR/slowdns.sh"
-bash "$INSTALL_DIR/udp_custom.sh"
-bash "$INSTALL_DIR/create_ssh_user.sh"
+# Exécution automatique des scripts d’installation supplémentaires
+run_script "$INSTALL_DIR/dropbear.sh"
+run_script "$INSTALL_DIR/ssl.sh"
+run_script "$INSTALL_DIR/badvpn.sh"
+run_script "$INSTALL_DIR/system_dns.sh"
+run_script "$INSTALL_DIR/nginx.sh"
+run_script "$INSTALL_DIR/socks_python.sh"
+run_script "$INSTALL_DIR/slowdns.sh"
+run_script "$INSTALL_DIR/udp_custom.sh"
 
 # Ajout de l'exécution du script de configuration SSH
 echo "🚀 Application de la configuration SSH personnalisée..."
 chmod +x "$INSTALL_DIR/setup_ssh_config.sh"
-sudo bash "$INSTALL_DIR/setup_ssh_config.sh"
-sudo bash "$INSTALL_DIR/create_ssh_user.sh"
+run_script "sudo $INSTALL_DIR/setup_ssh_config.sh"
+
+echo "🚀 Script de création utilisateur SSH disponible : $INSTALL_DIR/create_ssh_user.sh"
+echo "Tu peux le lancer manuellement quand tu veux."
 
 # Ajout alias kighmu dans ~/.bashrc s'il n'existe pas déjà
 if ! grep -q "alias kighmu=" ~/.bashrc; then
