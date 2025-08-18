@@ -34,6 +34,7 @@ FILES=(
     "system_dns.sh"
     "install_modes.sh"
     "show_resources.sh"
+    "nginx.sh"
 )
 
 # URL de base du dépôt GitHub
