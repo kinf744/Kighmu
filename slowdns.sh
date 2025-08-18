@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==============================================
-# slowdns.sh - Installation et configuration SlowDNS SSH
+# slowdns.sh - Installation et configuration SlowDNS avec stockage NS
 # ==============================================
 
 PUB_KEY="7fbd1f8aa0abfe15a7903e837f78aba39cf61d36f183bd604daa2fe4ef3b7b59"
@@ -10,6 +10,22 @@ SERVER_KEY="$SLOWDNS_DIR/server.key"     # Clé privée serveur
 SERVER_PUB="$SLOWDNS_DIR/server.pub"     # Clé publique serveur
 SLOWDNS_BIN="/usr/local/bin/sldns-server" # Chemin du binaire SlowDNS
 PORT=5300
+CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
+
+# Vérification et création du dossier slowdns si besoin
+if [ ! -d "$SLOWDNS_DIR" ]; then
+    sudo mkdir -p "$SLOWDNS_DIR"
+fi
+
+# Chargement ou saisie du NameServer (NS)
+if [ -f "$CONFIG_FILE" ]; then
+    NAMESERVER=$(cat "$CONFIG_FILE")
+    echo "Utilisation du NameServer existant : $NAMESERVER"
+else
+    read -p "Entrez le NameServer (NS) (ex: ns.example.com) : " NAMESERVER
+    echo "$NAMESERVER" | sudo tee "$CONFIG_FILE" > /dev/null
+    echo "NameServer enregistré dans $CONFIG_FILE"
+fi
 
 echo "Vérification et installation du binaire SlowDNS..."
 
@@ -24,21 +40,13 @@ else
 fi
 
 echo "+--------------------------------------------+"
-echo "|               CONFIG SLOWDNS SSH           |"
+echo "|               CONFIG SLOWDNS               |"
 echo "+--------------------------------------------+"
 
-read -p "Entrez le NameServer (NS) (ex: ns.example.com) : " NAMESERVER
-
 echo ""
-echo "Configuration de SlowDNS SSH..."
-echo "Clé publique (clé client) : $PUB_KEY"
+echo "Configuration de SlowDNS..."
+echo "Clé publique : $PUB_KEY"
 echo "NameServer  : $NAMESERVER"
-
-# Vérification et création du dossier SlowDNS
-if [ ! -d "$SLOWDNS_DIR" ]; then
-    echo "Création du dossier SlowDNS dans $SLOWDNS_DIR"
-    sudo mkdir -p "$SLOWDNS_DIR"
-fi
 
 # Génération automatique des clés si absentes ou vides
 if [ ! -s "$SERVER_KEY" ] || [ ! -s "$SERVER_PUB" ]; then
@@ -49,24 +57,25 @@ if [ ! -s "$SERVER_KEY" ] || [ ! -s "$SERVER_PUB" ]; then
     sudo chmod 600 "$SERVER_KEY"
     sudo chmod 644 "$SERVER_PUB"
     echo "Clés SlowDNS générées et nettoyées avec succès."
-else
-    echo "Clés SlowDNS déjà présentes."
 fi
 
 # Arrêt de l'ancienne instance SlowDNS si existante
 sudo fuser -k ${PORT}/udp || true
 
-# Installation d'iptables si nécessaire
-if ! command -v iptables >/dev/null 2>&1; then
-    echo "Installation iptables..."
-    sudo apt update
-    sudo apt install -y iptables iptables-persistent
-fi
+echo "Lancement du serveur SlowDNS en arrière-plan..."
+nohup sudo "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NAMESERVER" 8.8.8.8:53 > /var/log/slowdns.log 2>&1 &
 
-# Configuration firewall iptables pour UDP 5300 SlowDNS
-sudo iptables -I INPUT -p udp --dport $PORT -j ACCEPT
-sudo iptables -t nat -I PREROUTING -p udp --dport 53 -j REDIRECT --to-ports $PORT
-sudo netfilter-persistent save
+sleep 3
+
+# Vérification du démarrage
+if pgrep -f "sldns-server" > /dev/null; then
+    echo "Service SlowDNS démarré avec succès sur le port UDP $PORT."
+    echo "Pour vérifier les logs, consulte : /var/log/slowdns.log"
+else
+    echo "ERREUR : Le service SlowDNS n'a pas pu démarrer."
+    echo "Consulte les logs pour plus d'information."
+    exit 1
+fi
 
 # Activation IP forwarding si nécessaire
 if [ "$(sysctl -n net.ipv4.ip_forward)" -ne 1 ]; then
@@ -84,24 +93,4 @@ else
     echo "UFW non installé, vérifie manuellement l'ouverture du port UDP $PORT"
 fi
 
-echo "Lancement du serveur SlowDNS SSH en arrière-plan..."
-nohup sudo "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NAMESERVER" 8.8.8.8:53 > /var/log/slowdns.log 2>&1 &
-
-sleep 3
-
-# Vérification du démarrage
-if pgrep -f "sldns-server" > /dev/null; then
-    echo "Service SlowDNS SSH démarré avec succès sur le port UDP $PORT."
-else
-    echo "ERREUR : Le service SlowDNS SSH n'a pas pu démarrer."
-    echo "Consulte les logs pour plus d'information : /var/log/slowdns.log"
-    exit 1
-fi
-
-echo ""
-echo "===== Informations client SlowDNS SSH ====="
-echo "NameServer (NS) : $NAMESERVER"
-echo "UDP Port       : $PORT"
-echo "Clé publique   :"
-sudo cat "$SERVER_PUB"
-echo "==========================================="
+echo "Configuration SlowDNS terminée."
