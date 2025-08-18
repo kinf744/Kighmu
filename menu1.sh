@@ -1,6 +1,6 @@
 #!/bin/bash
 # menu1.sh
-# Créer un utilisateur normal
+# Créer un utilisateur normal et sauvegarder ses infos
 
 # Charger la configuration globale si elle existe
 if [ -f ./config.sh ]; then
@@ -22,10 +22,10 @@ read -p "Durée de validité (en jours) : " days
 expire_date=$(date -d "+$days days" '+%Y-%m-%d')
 
 # Créer l'utilisateur système
-useradd -M -s /bin/false $username
+useradd -M -s /bin/false "$username"
 echo "$username:$password" | chpasswd
 
-# Générer les informations d'accès (ports fixes pour exemple)
+# Définir les ports et variables personnalisés
 SSH_PORT=22
 SYSTEM_DNS=53
 SOCKS_PORT=80
@@ -41,31 +41,38 @@ HOST_IP=$(curl -s https://api.ipify.org)
 SLOWDNS_KEY="7fbd1f8aa0abfe15a7903e837f78aba39cf61d36f183bd604daa2fe4ef3b7b59"
 read -p "SlowDNS NameServer (NS) : " SLOWDNS_NS
 
-# Afficher résumé
+# Sauvegarder les infos utilisateur dans un fichier dédié
+USER_FILE="/etc/kighmu/users.list"
+mkdir -p /etc/kighmu
+touch "$USER_FILE"
+chmod 600 "$USER_FILE"
+echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
+
+# Affichage résumé
 echo ""
 echo "*NOUVEAU UTILISATEUR CRÉÉ*"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "∘ SSH: $SSH_PORT            ∘ System-DNS: $SYSTEM_DNS"
-echo "∘ SOCKS/PYTHON: $SOCKS_PORT   ∘ WEB-NGinx: $WEB_NGINX"
+echo "∘ SOCKS/PYTHON: $SOCKS_PORT   ∘ WEB-NGINX: $WEB_NGINX"
 echo "∘ DROPBEAR: $DROPBEAR       ∘ SSL: $SSL_PORT"
 echo "∘ BadVPN: $BADVPN1       ∘ BadVPN: $BADVPN2"
 echo "∘ SlowDNS: $SLOWDNS_PORT      ∘ UDP-Custom: $UDP_CUSTOM"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "DOMAIN  : $DOMAIN"
+echo "DOMAIN        : $DOMAIN"
 echo "Host/IP-Address : $HOST_IP"
-echo "USUARIO : $username"
-echo "PASSWD  : $password"       # Mot de passe affiché en clair ici
-echo "LIMITE  : $limite"
-echo "VALIDEZ : $expire_date"
+echo "UTILISATEUR   : $username"
+echo "MOT DE PASSE  : $password"
+echo "LIMITE       : $limite"
+echo "DATE EXPIRÉE : $expire_date"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "En APPS comme HTTP Inyector,CUSTOM,KPN Rev,etc"
+echo "En APPS comme HTTP Injector, CUSTOM, KPN Rev, etc."
 echo ""
 echo "🙍 HTTP-Direct  : $HOST_IP:90@$username:$password"
 echo "🙍 SSL/TLS(SNI) : $HOST_IP:443@$username:$password"
-echo "🙍 Proxy(WS) : $DOMAIN:80@$username:$password"
-echo "🙍 SSH UDP  : $HOST_IP:1-65535@$username:$password"
+echo "🙍 Proxy(WS)    : $DOMAIN:80@$username:$password"
+echo "🙍 SSH UDP     : $HOST_IP:1-65535@$username:$password"
 echo ""
-echo "━━━━━━━━━━━  SLOWDNS CONFIGS PORT 22 ━━━━━━━━━━━"
+echo "━━━━━━━━━━━  CONFIGS SLOWDNS PORT 22 ━━━━━━━━━━━"
 echo "Pub KEY : $SLOWDNS_KEY"
 echo "NameServer (NS) : $SLOWDNS_NS"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
