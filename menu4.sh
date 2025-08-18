@@ -20,16 +20,34 @@ cut -d'|' -f1 "$USER_FILE"
 # Demander le nom de l'utilisateur à supprimer
 read -p "Nom de l'utilisateur à supprimer : " username
 
-# Vérifier si l'utilisateur existe dans la liste
+# Vérifier si l'utilisateur est dans la liste users.list
 if ! grep -q "^$username|" "$USER_FILE"; then
-    echo "Utilisateur $username introuvable."
+    echo "Utilisateur $username introuvable dans la liste des utilisateurs."
     exit 1
 fi
 
-# Supprimer l'utilisateur système (avec suppression du dossier home si existe)
-userdel -r "$username" 2>/dev/null || echo "Attention: utilisateur système non trouvé ou déjà supprimé."
+# Vérifier que l'utilisateur système existe avant suppression
+if id "$username" &>/dev/null; then
+    # Supprimer l'utilisateur système et son dossier home
+    if sudo userdel -r "$username"; then
+        echo "Utilisateur système $username supprimé avec succès."
+    else
+        echo "Erreur lors de la suppression de l'utilisateur système $username."
+        exit 1
+    fi
+else
+    echo "Attention : utilisateur système $username non trouvé ou déjà supprimé."
+fi
 
-# Supprimer l'utilisateur du fichier users.list
-grep -v "^$username|" "$USER_FILE" > "${USER_FILE}.tmp" && mv "${USER_FILE}.tmp" "$USER_FILE"
+# Mettre à jour le fichier users.list en supprimant l'utilisateur
+if grep -v "^$username|" "$USER_FILE" > "${USER_FILE}.tmp"; then
+    mv "${USER_FILE}.tmp" "$USER_FILE"
+    echo "Utilisateur $username supprimé de la liste utilisateurs."
+else
+    echo "Erreur lors de la mise à jour de la liste des utilisateurs."
+    exit 1
+fi
 
-echo "Utilisateur $username supprimé avec succès."
+echo "Suppression de l'utilisateur $username terminée."
+
+read -p "Appuyez sur Entrée pour revenir au menu..."
