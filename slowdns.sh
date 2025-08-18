@@ -11,26 +11,18 @@ SLOWDNS_BIN="/usr/local/bin/sldns-server" # Chemin du binaire SlowDNS
 PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 
-# Installation automatique des dépendances iptables et screen
+# Installation automatique des dépendances iptables, screen, tcpdump
 install_dependencies() {
-    # Mise à jour des dépôts
     sudo apt update
 
-    # Installation iptables si absent
-    if ! command -v iptables >/dev/null 2>&1; then
-        echo "iptables non trouvé. Installation en cours..."
-        sudo apt install -y iptables
-    else
-        echo "iptables est déjà installé."
-    fi
-
-    # Installation screen si absent
-    if ! command -v screen >/dev/null 2>&1; then
-        echo "screen non trouvé. Installation en cours..."
-        sudo apt install -y screen
-    else
-        echo "screen est déjà installé."
-    fi
+    for pkg in iptables screen tcpdump; do
+        if ! command -v $pkg >/dev/null 2>&1; then
+            echo "$pkg non trouvé. Installation en cours..."
+            sudo apt install -y $pkg
+        else
+            echo "$pkg est déjà installé."
+        fi
+    done
 }
 
 install_dependencies
@@ -107,9 +99,9 @@ configure_iptables() {
 
 configure_iptables
 
-# Lancement du serveur SlowDNS dans screen détaché
+# Lancement du serveur SlowDNS dans screen détaché avec commande conforme à DarkSSH
 echo "Démarrage du serveur SlowDNS sur UDP port $PORT avec NS $NAMESERVER..."
-sudo screen -dmS slowdns_session $SLOWDNS_BIN -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NAMESERVER" 8.8.8.8:53
+sudo screen -dmS slowdns_session $SLOWDNS_BIN -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NAMESERVER" 0.0.0.0:22
 
 sleep 3
 
