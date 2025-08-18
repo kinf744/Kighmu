@@ -9,7 +9,7 @@ SLOWDNS_DIR="/etc/slowdns"
 SERVER_KEY="$SLOWDNS_DIR/server.key"     # Clé privée serveur
 SERVER_PUB="$SLOWDNS_DIR/server.pub"     # Clé publique serveur
 SLOWDNS_BIN="/usr/local/bin/sldns-server" # Chemin du binaire SlowDNS
-PORT=53
+PORT=5300
 
 echo "Vérification et installation du binaire SlowDNS..."
 
