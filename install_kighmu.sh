@@ -116,6 +116,44 @@ for file in "${FILES[@]}"; do
     chmod +x "$INSTALL_DIR/$file"
 done
 
+# --- Ajout du proxy SOCKS KIGHMUSSH ---
+
+echo "=============================================="
+echo " 🚀 Installation du proxy SOCKS KIGHMUSSH..."
+echo "=============================================="
+
+PROXY_SCRIPT_PATH="/usr/local/bin/KIGHMUPROXY.py"
+PROXY_SCRIPT_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main/KIGHMUPROXY.py"
+
+wget -q -O "$PROXY_SCRIPT_PATH" "$PROXY_SCRIPT_URL"
+chmod +x "$PROXY_SCRIPT_PATH"
+echo "Script proxy SOCKS KIGHMUSSH installé dans $PROXY_SCRIPT_PATH"
+
+# Génération du script local socks_python.sh dans le dossier d'installation
+cat > "$INSTALL_DIR/socks_python.sh" <<'EOF'
+#!/bin/bash
+
+PROXY_PORT=8080
+SCRIPT_PATH="/usr/local/bin/KIGHMUPROXY.py"
+LOG_FILE="/var/log/kighmuproxy.log"
+
+echo "Arrêt d'un ancien proxy SOCKS KIGHMUSSH..."
+sudo pkill -f "$SCRIPT_PATH" || true
+
+echo "Démarrage du proxy SOCKS KIGHMUSSH sur le port $PROXY_PORT..."
+nohup sudo python3 "$SCRIPT_PATH" $PROXY_PORT > "$LOG_FILE" 2>&1 &
+
+sleep 3
+
+if pgrep -f "$SCRIPT_PATH" > /dev/null; then
+    echo "Proxy SOCKS KIGHMUSSH lancé avec succès."
+else
+    echo "Erreur lors du démarrage du proxy SOCKS. Consultez $LOG_FILE"
+fi
+EOF
+
+chmod +x "$INSTALL_DIR/socks_python.sh"
+
 # Fonction pour exécuter un script avec gestion d’erreur
 run_script() {
     local script_path="$1"
