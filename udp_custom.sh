@@ -5,7 +5,8 @@
 set -e
 
 INSTALL_DIR="/root/udp-custom"
-CONFIG_FILE="$INSTALL_DIR/config.json"
+CONFIG_FILE="$INSTALL_DIR/config/config.json"
+BIN_PATH="$INSTALL_DIR/bin/udp-custom-linux-amd64"
 UDP_PORT=54000
 
 echo "+--------------------------------------------+"
@@ -28,21 +29,21 @@ fi
 
 cd "$INSTALL_DIR"
 
-# Compilation du projet udp-custom (si Makefile présent)
-if [ -f "Makefile" ]; then
-    echo "Compilation du projet udp-custom..."
-    make clean && make
+# Vérifier la présence et droits du binaire précompilé
+if [ ! -x "$BIN_PATH" ]; then
+    echo "Le binaire $BIN_PATH n'est pas exécutable, changement de permission..."
+    chmod +x "$BIN_PATH"
 fi
 
-# Vérification du binaire udp-custom
-if [ ! -x "./udp-custom" ]; then
-    echo "Erreur: Le binaire udp-custom n'a pas été compilé ou est manquant."
+if [ ! -x "$BIN_PATH" ]; then
+    echo "Erreur: Le binaire $BIN_PATH est manquant ou non exécutable."
     exit 1
 fi
 
 # Configuration du port UDP dans config.json
 if [ ! -f "$CONFIG_FILE" ]; then
     echo "Création du fichier de configuration UDP custom..."
+    mkdir -p "$(dirname "$CONFIG_FILE")"
     cat > "$CONFIG_FILE" << EOF
 {
   "server_port": $UDP_PORT,
@@ -62,11 +63,11 @@ iptables -I INPUT -p udp --dport $UDP_PORT -j ACCEPT
 
 # Démarrage du démon udp-custom en arrière-plan
 echo "Démarrage du démon udp-custom sur le port $UDP_PORT..."
-nohup "$INSTALL_DIR/udp-custom" -c "$CONFIG_FILE" > /var/log/udp_custom.log 2>&1 &
+nohup "$BIN_PATH" -c "$CONFIG_FILE" > /var/log/udp_custom.log 2>&1 &
 
 sleep 3
 
-if pgrep -f "udp-custom" > /dev/null; then
+if pgrep -f "udp-custom-linux-amd64" > /dev/null; then
     echo "UDP Custom démarré avec succès sur le port $UDP_PORT."
 else
     echo "Erreur: UDP Custom ne s'est pas lancé correctement."
