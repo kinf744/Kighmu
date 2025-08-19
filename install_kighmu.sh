@@ -199,6 +199,26 @@ if ! grep -q "/usr/local/bin" ~/.bashrc; then
     echo "Ajout de /usr/local/bin au PATH dans ~/.bashrc"
 fi
 
+# --- Génération automatique du fichier ~/.kighmu_info ---
+
+NS="slowdns5.kighmup.ddns-ip.net"
+
+SLOWDNS_PUBKEY="/etc/slowdns/server.pub"
+if [ -f "$SLOWDNS_PUBKEY" ]; then
+    PUBLIC_KEY=$(sed ':a;N;$!ba;s/\n/\\n/g' "$SLOWDNS_PUBKEY")
+else
+    PUBLIC_KEY="Clé publique SlowDNS non trouvée"
+fi
+
+cat > ~/.kighmu_info <<EOF
+DOMAIN=$DOMAIN
+NS=$NS
+PUBLIC_KEY="$PUBLIC_KEY"
+EOF
+
+chmod 600 ~/.kighmu_info
+echo "Fichier ~/.kighmu_info créé avec succès et prêt à être utilisé par les scripts."
+
 echo
 echo "=============================================="
 echo " ✅ Installation terminée !"
