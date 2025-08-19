@@ -1,24 +1,16 @@
 #!/usr/bin/env python3
-# encoding: utf-8
-# KIGHMUSSH By @Crazy_vpn
+# KIGHMUSSH simple SOCKS proxy
+
 import socket
 import threading
 import select
 import sys
 import time
-from os import system
 
-# Nettoyer l’écran à chaque lancement (optionnel)
-system("clear")
-
-IP = '0.0.0.0'  # écoute sur toutes les interfaces
-try:
-    PORT = int(sys.argv[1])
-except:
-    PORT = 8080
+IP = '0.0.0.0'
+PORT = 8080
 BUFLEN = 8192
 TIMEOUT = 60
-RESPONSE = "HTTP/1.1 200 OK\r\n\r\n"
 
 class Server(threading.Thread):
     def __init__(self, host, port):
@@ -60,18 +52,18 @@ class ConnectionHandler(threading.Thread):
     def run(self):
         try:
             print(f"Connexion entrante de {self.client_addr}")
-            self.client_socket.send(RESPONSE.encode())
-            # Simple boucle echo pour test, à remplacer par un vrai tunnel SOCKS
-            ready = select.select([self.client_socket], [], [], TIMEOUT)
-            if ready[0]:
-                data = self.client_socket.recv(BUFLEN)
-                self.client_socket.send(data)
+            data = self.client_socket.recv(BUFLEN)
+            # Traiter les données ici (mode proxy SOCKS à compléter)
+            self.client_socket.send(data)  # Echo simple pour test
             self.client_socket.close()
         except Exception as e:
             print(f"Erreur connexion {self.client_addr}: {e}")
 
 def main():
-    server = Server(IP, PORT)
+    port = PORT
+    if len(sys.argv) > 1:
+        port = int(sys.argv[1])
+    server = Server(IP, port)
     server.start()
     try:
         while True:
