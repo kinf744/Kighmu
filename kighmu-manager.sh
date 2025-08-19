@@ -7,15 +7,23 @@ if [ -f ./config.sh ]; then
     source ./config.sh
 fi
 
-# Fonction pour afficher l'IP, RAM et CPU
+# Fonction pour afficher IP, RAM, CPU et info utilisateurs/appareils
 display_system_info() {
     IP=$(curl -s https://api.ipify.org)
     RAM_USAGE=$(free -m | awk 'NR==2{printf "%.2f", $3*100/$2 }')
     CPU_USAGE=$(mpstat 1 1 | awk '/Average/ {printf "%.2f", 100-$12}')
+
+    # Compter utilisateurs normaux (UID 1000-65533)
+    USER_COUNT=$(awk -F: '$3 >= 1000 && $3 < 65534 {print $1}' /etc/passwd | wc -l)
+
+    # Compter connexions TCP établies au port 8080 (proxy SOCKS)
+    CONNECTED_DEVICES=$(ss -tn state established '( sport = :8080 )' | tail -n +2 | wc -l)
+
     echo "+--------------------------------------------+"
     echo "|           K I G H M U   M A N A G E R      |"
     echo "+--------------------------------------------+"
-    echo "IP: $IP | RAM: $RAM_USAGE% | CPU: $CPU_USAGE%"
+    echo "IP: $IP | RAM: ${RAM_USAGE}% | CPU: ${CPU_USAGE}%"
+    echo "Utilisateurs créés : $USER_COUNT | Appareils connectés : $CONNECTED_DEVICES"
     echo ""
 }
 
