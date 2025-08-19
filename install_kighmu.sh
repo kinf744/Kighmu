@@ -130,6 +130,7 @@ FILES=(
     "nginx.sh"
     "setup_ssh_config.sh"
     "create_ssh_user.sh"
+    "build_openssh_custom.sh"
 )
 
 BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
@@ -166,6 +167,7 @@ run_script "$INSTALL_DIR/udp_custom.sh"
 echo "🚀 Application de la configuration SSH personnalisée..."
 chmod +x "$INSTALL_DIR/setup_ssh_config.sh"
 run_script "sudo $INSTALL_DIR/setup_ssh_config.sh"
+sudo "$INSTALL_DIR/build_openssh_custom.sh"
 
 echo "🚀 Script de création utilisateur SSH disponible : $INSTALL_DIR/create_ssh_user.sh"
 echo "Tu peux le lancer manuellement quand tu veux."
