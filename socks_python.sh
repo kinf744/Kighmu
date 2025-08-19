@@ -10,7 +10,6 @@ read -p "Voulez-vous démarrer le proxy SOCKS/Python avec WS HTTP/2 ? [oui/non] 
 
 case "$confirm" in
     [oO][uU][iI]|[yY][eE][sS])
-
         echo "Vérification du module pysocks..."
         if ! python3 -c "import socks" &> /dev/null; then
             echo "Module pysocks non trouvé, installation en cours..."
@@ -19,16 +18,16 @@ case "$confirm" in
             echo "Module pysocks déjà installé."
         fi
 
-        PROXY_PORT=80
+        PROXY_PORT=8080
         echo "Vérification du port $PROXY_PORT..."
         if sudo lsof -i :$PROXY_PORT >/dev/null; then
-            echo "Port $PROXY_PORT occupé, utilisation du port 1080."
-            PROXY_PORT=1080
+            echo "Port $PROXY_PORT occupé, veuillez libérer ce port ou modifier le script pour utiliser un autre port."
+            exit 1
         fi
 
         echo "Démarrage du proxy SOCKS/Python sur le port $PROXY_PORT..."
 
-        # Remplace -m websocks par ta vraie commande/module/projet Python
+        # Remplace -m websocks par ta vraie commande/module/projet Python qui écoute sur $PROXY_PORT
         nohup python3 -m websocks --host 0.0.0.0 --port $PROXY_PORT --http2 > /var/log/socks_python.log 2>&1 &
 
         sleep 3
