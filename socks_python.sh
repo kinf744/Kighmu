@@ -1,43 +1,52 @@
 #!/bin/bash
 # socks_python.sh
-# Activation du SOCKS Python avec WebSocket HTTP/2
+# Activation du proxy SOCKS basé sur DarkSSH Python
 
 echo "+--------------------------------------------+"
-echo "|             CONFIG SOCKS/PYTHON            |"
+echo "|             CONFIG PROXY DARKSSH           |"
 echo "+--------------------------------------------+"
 
-read -p "Voulez-vous démarrer le proxy SOCKS/Python avec WS HTTP/2 ? [oui/non] : " confirm
+read -p "Voulez-vous démarrer le proxy DarkSSH Python SOCKS sur le port 8080 ? [oui/non] : " confirm
 
 case "$confirm" in
     [oO][uU][iI]|[yY][eE][sS])
-        echo "Vérification du module pysocks..."
-        if ! python3 -c "import socks" &> /dev/null; then
-            echo "Module pysocks non trouvé, installation en cours..."
-            sudo pip3 install pysocks
+        echo "Vérification de Python3..."
+        if ! command -v python3 >/dev/null 2>&1; then
+            echo "Python3 non trouvé, installation en cours..."
+            sudo apt update
+            sudo apt install -y python3 python3-pip
         else
-            echo "Module pysocks déjà installé."
+            echo "Python3 déjà installé."
         fi
 
         PROXY_PORT=8080
+        DARKSSH_SCRIPT="/usr/local/bin/darkssh.py"
+        LOG_FILE="/var/log/darkssh.log"
+
+        # Téléchargement du script DarkSSH proxy SOCKS
+        echo "Téléchargement du script DarkSSH proxy SOCKS..."
+        sudo wget -q -O "$DARKSSH_SCRIPT" "https://raw.githubusercontent.com/ton-repo/DARKSSH/main/darkssh.py"
+        sudo chmod +x "$DARKSSH_SCRIPT"
+
         echo "Vérification du port $PROXY_PORT..."
         if sudo lsof -i :$PROXY_PORT >/dev/null; then
             echo "Port $PROXY_PORT occupé, veuillez libérer ce port ou modifier le script pour utiliser un autre port."
             exit 1
         fi
 
-        echo "Démarrage du proxy SOCKS/Python sur le port $PROXY_PORT..."
+        echo "Arrêt des anciens processus DarkSSH..."
+        sudo pkill -f "$DARKSSH_SCRIPT" || true
 
-        # Remplace -m websocks par ta vraie commande/module/projet Python qui écoute sur $PROXY_PORT
-        nohup python3 -m websocks --host 0.0.0.0 --port $PROXY_PORT --http2 > /var/log/socks_python.log 2>&1 &
+        echo "Démarrage du proxy DarkSSH SOCKS sur le port $PROXY_PORT..."
+        nohup sudo python3 "$DARKSSH_SCRIPT" $PROXY_PORT > "$LOG_FILE" 2>&1 &
 
         sleep 3
 
-        if pgrep -f "python3 -m websocks" > /dev/null; then
-            echo "Proxy SOCKS/Python démarré avec HTTP/2 sur le port $PROXY_PORT."
-            echo "Logs disponibles dans /var/log/socks_python.log"
+        if pgrep -f "$DARKSSH_SCRIPT" > /dev/null; then
+            echo "Proxy DarkSSH SOCKS lancé avec succès sur le port $PROXY_PORT."
+            echo "Logs disponibles dans $LOG_FILE"
         else
-            echo "Échec du démarrage du proxy SOCKS/Python."
-            echo "Consultez les logs : /var/log/socks_python.log"
+            echo "Échec du démarrage du proxy DarkSSH SOCKS. Consultez $LOG_FILE"
         fi
         ;;
     [nN][oO]|[nN])
