@@ -8,11 +8,13 @@ import select
 import sys
 import time
 
+print("Vérification de Python3...")
+
 IP = '0.0.0.0'
 try:
     PORT = int(sys.argv[1])
 except:
-    PORT = 8080  # Port par défaut changé ici à 8080
+    PORT = 8080  # Port par défaut modifié
 
 PASS = ''  # Mot de passe optionnel (laisser vide pour désactiver)
 BUFLEN = 8196 * 8
@@ -218,4 +220,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-        
