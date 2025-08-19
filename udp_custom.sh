@@ -1,80 +1,47 @@
 #!/bin/bash
 # udp_custom.sh
-# Installation et configuration UDP Custom pour HTTP Custom VPN
-
-set -e
-
-INSTALL_DIR="/root/udp-custom"
-CONFIG_FILE="$INSTALL_DIR/config.json"
-UDP_PORT=54000
+# Installation et configuration du mode UDP Custom
 
 echo "+--------------------------------------------+"
-echo "|             INSTALLATION UDP CUSTOM         |"
+echo "|               CONFIG UDP CUSTOM            |"
 echo "+--------------------------------------------+"
 
-# Installer dépendances basiques
-echo "Installation des dépendances..."
-apt-get update
-apt-get install -y git curl build-essential libssl-dev jq
+read -p "Voulez-vous installer UDP Custom sur tous les ports (1-65535) ? [oui/non] : " confirm
 
-# Cloner le dépôt udp-custom si non présent
-if [ ! -d "$INSTALL_DIR" ]; then
-    echo "Clonage du dépôt udp-custom..."
-    git clone https://github.com/http-custom/udp-custom.git "$INSTALL_DIR"
-else
-    echo "udp-custom déjà présent, mise à jour..."
-    cd "$INSTALL_DIR"
-    git pull
-fi
+case "$confirm" in
+    [oO][uU][iI]|[yY][eE][sS])
+        echo "Installation UDP Custom sur les ports 1-65535..."
 
-cd "$INSTALL_DIR"
+        # Exemple : vérification présence binaire udp-custom (ajuste selon ton dépôt)
+        if ! command -v udp-custom &> /dev/null; then
+            echo "udp-custom non trouvé, téléchargement et installation..."
+            # Exemple d’installation, adapte selon ta source
+            wget -O /usr/local/bin/udp-custom https://example.com/udp-custom
+            chmod +x /usr/local/bin/udp-custom
+        fi
 
-# Construction du binaire udp-custom (si Makefile présent)
-if [ -f "Makefile" ]; then
-    echo "Compilation du projet udp-custom..."
-    make clean && make
-fi
+        # Ouvrir la plage de ports UDP dans le pare-feu
+        sudo ufw allow 1:65535/udp
+        sudo iptables -I INPUT -p udp --dport 1:65535 -j ACCEPT
 
-# Vérifier que le binaire udp-custom est présent et exécutable
-if [ ! -x "./udp-custom" ]; then
-    echo "Erreur: Le binaire udp-custom n'a pas été compilé ou est manquant."
-    exit 1
-fi
+        # Kill ancien processus udp-custom éventuel
+        fuser -k 1-65535/udp || true
 
-# Configuration du port UDP
-if [ ! -f "$CONFIG_FILE" ]; then
-    echo "Création du fichier de configuration..."
-    cat > "$CONFIG_FILE" << EOF
-{
-  "server_port": $UDP_PORT,
-  "exclude_port": [],
-  "udp_timeout": 600,
-  "dns_cache": true
-}
-EOF
-else
-    echo "Modification du port dans la configuration existante..."
-    jq ".server_port = $UDP_PORT" "$CONFIG_FILE" > "$CONFIG_FILE.tmp" && mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
-fi
+        # Exemple de lancement du serveur UDP Custom sur la plage complète
+        nohup udp-custom --port-range 1-65535 > /var/log/udp_custom.log 2>&1 &
 
-# Ouverture du port UDP dans iptables
-echo "Ouverture du port UDP $UDP_PORT dans iptables..."
-iptables -I INPUT -p udp --dport $UDP_PORT -j ACCEPT
+        sleep 2
 
-# Démarrer udp-custom en arrière-plan
-echo "Démarrage du démon udp-custom sur le port $UDP_PORT..."
-nohup ./udp-custom -c "$CONFIG_FILE" > /var/log/udp_custom.log 2>&1 &
-
-sleep 3
-
-if pgrep -f "udp-custom" > /dev/null; then
-    echo "UDP Custom démarré avec succès sur le port $UDP_PORT."
-else
-    echo "Erreur: UDP Custom ne s'est pas lancé correctement."
-fi
-
-echo "+--------------------------------------------+"
-echo "|          Configuration terminée            |"
-echo "|  Configure HTTP Custom avec IP du serveur, |"
-echo "|  port UDP $UDP_PORT, et activez UDP Custom |"
-echo "+--------------------------------------------+"
+        if pgrep -f "udp-custom" > /dev/null; then
+            echo "UDP Custom démarré sur les ports 1-65535."
+        else
+            echo "Échec du démarrage du service UDP Custom."
+        fi
+        ;;
+    [nN][oO]|[nN])
+        echo "Installation annulée."
+        ;;
+    *)
+        echo "Réponse invalide. Annulation."
+        ;;
+esac
