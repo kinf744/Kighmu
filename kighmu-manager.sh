@@ -7,16 +7,13 @@ if [ -f ./config.sh ]; then
     source ./config.sh
 fi
 
-# Fonction pour afficher IP, RAM, CPU et info utilisateurs/appareils
+# Fonction pour afficher IP, RAM, CPU et info utilisateurs/appareils dans un cadre simple
 display_system_info() {
     IP=$(curl -s https://api.ipify.org)
     RAM_USAGE=$(free -m | awk 'NR==2{printf "%.2f", $3*100/$2 }')
     CPU_USAGE=$(mpstat 1 1 | awk '/Average/ {printf "%.2f", 100-$12}')
 
-    # Compter utilisateurs normaux (UID 1000-65533)
     USER_COUNT=$(awk -F: '$3 >= 1000 && $3 < 65534 {print $1}' /etc/passwd | wc -l)
-
-    # Compter connexions TCP établies au port 8080 (proxy SOCKS)
     CONNECTED_DEVICES=$(ss -tn state established '( sport = :8080 )' | tail -n +2 | wc -l)
 
     echo "+--------------------------------------------+"
@@ -30,6 +27,7 @@ display_system_info() {
 # Fonction menu principal
 main_menu() {
     while true; do
+        clear
         display_system_info
         echo "MENU PRINCIPAL:"
         echo "1. Créer un utilisateur"
@@ -44,16 +42,17 @@ main_menu() {
         read -p "Entrez votre choix [1-8]: " choice
 
         case $choice in
-            1) ./menu1.sh ;;
-            2) ./menu2.sh ;;
-            3) ./menu3.sh ;;
-            4) ./menu4.sh ;;
-            5) ./install_modes.sh ;;
-            6) ./menu6.sh ;;
-            7) ./menu7.sh ;;
+            1) bash ./menu1.sh ;;
+            2) bash ./menu2.sh ;;
+            3) bash ./menu3.sh ;;
+            4) bash ./menu4.sh ;;
+            5) bash ./menu5.sh ;;      # Modification ici : appel menu5.sh au lieu de install_modes.sh
+            6) bash ./menu6.sh ;;
+            7) bash ./menu7.sh ;;
             8) echo "Au revoir !"; exit 0 ;;
             *) echo "Choix invalide. Réessayez." ;;
         esac
+
         echo ""
         read -p "Appuyez sur Entrée pour revenir au menu principal..."
     done
