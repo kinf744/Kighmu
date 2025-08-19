@@ -1,24 +1,20 @@
 #!/bin/bash
 
-CONFIG_FILE="./config/sshd_config"  # Chemin vers ta config SSH dans le dépôt
-TARGET_FILE="/etc/ssh/sshd_config"
+# Créer le dossier .ssh si nécessaire
+mkdir -p /root/.ssh
+chmod 700 /root/.ssh
 
-if [ ! -f "$CONFIG_FILE" ]; then
-    echo "Erreur : fichier $CONFIG_FILE introuvable."
-    exit 1
-fi
+# Ajouter clé publique dans authorized_keys (remplacer la clé)
+PUBKEY="ssh-rsa AAAA..."
 
-echo "Sauvegarde de l'ancien fichier sshd_config..."
-sudo cp "$TARGET_FILE" "${TARGET_FILE}.backup.$(date +%F_%T)"
+grep -qxF "$PUBKEY" /root/.ssh/authorized_keys 2>/dev/null || echo "$PUBKEY" >> /root/.ssh/authorized_keys
+chmod 600 /root/.ssh/authorized_keys
 
-echo "Déploiement de la nouvelle configuration SSH..."
-sudo cp "$CONFIG_FILE" "$TARGET_FILE"
+# Modifier sshd_config pour autoriser tunneling
+SSHD_CONF="/etc/ssh/sshd_config"
 
-echo "Réglage des permissions..."
-sudo chown root:root "$TARGET_FILE"
-sudo chmod 644 "$TARGET_FILE"
+grep -q "^PermitTunnel yes" $SSHD_CONF || echo "PermitTunnel yes" >> $SSHD_CONF
+grep -q "^AllowTcpForwarding yes" $SSHD_CONF || echo "AllowTcpForwarding yes" >> $SSHD_CONF
 
-echo "Redémarrage du service SSH pour appliquer la nouvelle configuration..."
-sudo systemctl restart ssh
-
-echo "Configuration SSH appliquée avec succès."
+# Redémarrer le service SSH
+systemctl restart ssh
