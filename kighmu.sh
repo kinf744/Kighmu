@@ -7,7 +7,7 @@
 # ==============================================
 
 # Largeur cadre
-WIDTH=44
+WIDTH=50
 
 # Fonction affiche ligne cadre plein
 line_full() {
@@ -21,10 +21,8 @@ line_simple() {
 
 # Fonction affiche une ligne de contenu avec padding droite
 content_line() {
-    local left="$1"
-    local right="$2"
-    local space=$((WIDTH - ${#left} - ${#right}))
-    printf "| %s%${space}s%s |\n" "$left" "" "$right"
+    local content="$1"
+    printf "| %-${WIDTH}s |\n" "$content"
 }
 
 # Fonction affiche ligne centrée
@@ -32,6 +30,14 @@ center_line() {
     local text="$1"
     local padding=$(( (WIDTH - ${#text}) / 2 ))
     printf "|%*s%s%*s|\n" $padding "" "$text" $padding ""
+}
+
+# Fonction pour afficher une ligne avec deux éléments alignés
+double_content() {
+    local left="$1"
+    local right="$2"
+    local total_space=$((WIDTH - ${#left} - ${#right}))
+    printf "| %s%*s%s |\n" "$left" $total_space "" "$right"
 }
 
 # Récupérer le répertoire du script
@@ -55,30 +61,30 @@ while true; do
     # Compter connexions TCP établies au port 8080 (proxy SOCKS)
     CONNECTED_DEVICES=$(ss -tn state established '( sport = :8080 )' | tail -n +2 | wc -l)
 
-    content_line "IP: $IP | RAM utilisée: $RAM_USAGE" " "
-    content_line "CPU utilisé: $CPU_USAGE" " "
+    double_content "IP: $IP" "RAM utilisée: $RAM_USAGE"
+    double_content "CPU utilisé: $CPU_USAGE" " "
     line_simple
 
-    content_line "Utilisateurs créés: $USER_COUNT" "Appareils connectés: $CONNECTED_DEVICES"
+    double_content "Utilisateurs créés: $USER_COUNT" "Appareils connectés: $CONNECTED_DEVICES"
     line_simple
 
     center_line "MENU PRINCIPAL:"
     line_simple
 
-    content_line "1. Créer un utilisateur" ""
-    content_line "2. Créer un test utilisateur" ""
-    content_line "3. Voir les utilisateurs en ligne" ""
-    content_line "4. Supprimer utilisateur" ""
-    content_line "5. Installation de mode" ""
-    content_line "6. Désinstaller le script" ""
-    content_line "7. Blocage de torrents" ""
-    content_line "8. Quitter" ""
+    content_line "1. Créer un utilisateur"
+    content_line "2. Créer un test utilisateur"
+    content_line "3. Voir les utilisateurs en ligne"
+    content_line "4. Supprimer utilisateur"
+    content_line "5. Installation de mode"
+    content_line "6. Désinstaller le script"
+    content_line "7. Blocage de torrents"
+    content_line "8. Quitter"
     line_simple
 
-    printf "| %-*s|\n" $((WIDTH)) "Entrez votre choix [1-8]: "
-    read choix
-    printf "|%*s|\n" $((WIDTH+2)) ""
-
+    printf "| %-${WIDTH}s |\n" "Entrez votre choix [1-8]: "
+    line_simple
+    read -p "| Votre choix: " choix
+    
     case $choix in
       1) bash "$SCRIPT_DIR/menu1.sh" ;;
       2) bash "$SCRIPT_DIR/menu2.sh" ;;
