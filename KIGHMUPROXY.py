@@ -14,7 +14,7 @@ IP = '0.0.0.0'
 try:
     PORT = int(sys.argv[1])
 except:
-    PORT = 8080  # Port par défaut modifié
+    PORT = 8080  # Port par défaut modifié pour éviter conflit
 
 PASS = ''  # Mot de passe optionnel (laisser vide pour désactiver)
 BUFLEN = 8196 * 8
@@ -220,3 +220,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+    
