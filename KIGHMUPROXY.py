@@ -14,7 +14,7 @@ IP = '0.0.0.0'
 try:
     PORT = int(sys.argv[1])
 except:
-    PORT = 8080  # Port par défaut modifié pour éviter conflit
+    PORT = 8080  # Port par défaut modifié ici
 
 PASS = ''  # Mot de passe optionnel (laisser vide pour désactiver)
 BUFLEN = 8196 * 8
@@ -78,7 +78,6 @@ class Server(threading.Thread):
             threads = list(self.threads)
             for c in threads:
                 c.close()
-
 
 class ConnectionHandler(threading.Thread):
     def __init__(self, client_socket, server, addr):
@@ -205,7 +204,6 @@ class ConnectionHandler(threading.Thread):
             if timeout_counter >= TIMEOUT or error:
                 break
 
-
 def main():
     print("KIGHMUPROXY - tunnel SSH proxy SOCKS type DarkSSH\n")
     server = Server(IP, PORT)
@@ -217,7 +215,6 @@ def main():
         print("\nArrêt du proxy...")
         server.close()
 
-
 if __name__ == '__main__':
     main()
-    
+        
