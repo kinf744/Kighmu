@@ -17,6 +17,10 @@ case "$confirm" in
         rm -rf "$SCRIPT_DIR"
 
         echo "Script désinstallé avec succès."
+
+        echo "Le serveur VPS va redémarrer automatiquement dans 5 secondes..."
+        sleep 5
+        reboot
         ;;
     [nN][oO]|[nN])
         echo "Désinstallation annulée."
