@@ -6,7 +6,7 @@
 # Voir le fichier LICENSE pour plus de détails
 # ==============================================
 
-# Largeur cadre
+# Largeur interne du cadre (hors les + et |)
 WIDTH=50
 
 # Fonction affiche ligne cadre plein
@@ -19,27 +19,27 @@ line_simple() {
     echo "+$(printf '%0.s-' $(seq 1 $WIDTH))+"
 }
 
-# Fonction affiche une ligne de contenu avec padding droite
+# Fonction affiche une ligne de contenu (alignée à gauche)
 content_line() {
     local content="$1"
-    printf "| %-${WIDTH}s |\n" "$content"
+    printf "| %-*s |\n" $((WIDTH-2)) "$content"
 }
 
-# Fonction affiche ligne centrée (corrigée pour toujours fermer)
+# Fonction affiche une ligne centrée
 center_line() {
     local text="$1"
     local text_len=${#text}
-    local padding=$(( (WIDTH - text_len) / 2 ))
-    local extra=$(( (WIDTH - text_len) % 2 ))
-    printf "|%*s%s%*s|\n" $padding "" "$text" $((padding+extra)) ""
+    local padding=$(( (WIDTH-2 - text_len) / 2 ))
+    local extra=$(( (WIDTH-2 - text_len) % 2 ))
+    printf "| %*s%s%*s |\n" $padding "" "$text" $((padding+extra)) ""
 }
 
 # Fonction pour afficher une ligne avec deux éléments alignés
 double_content() {
     local left="$1"
     local right="$2"
-    local total_space=$((WIDTH - ${#left} - ${#right}))
-    printf "| %s%*s%s |\n" "$left" $total_space "" "$right"
+    local space=$((WIDTH-2 - ${#left} - ${#right}))
+    printf "| %s%*s%s |\n" "$left" $space "" "$right"
 }
 
 # Récupérer le répertoire du script
@@ -64,7 +64,7 @@ while true; do
     CONNECTED_DEVICES=$(ss -tn state established '( sport = :8080 )' | tail -n +2 | wc -l)
 
     double_content "IP: $IP" "RAM utilisée: $RAM_USAGE"
-    double_content "CPU utilisé: $CPU_USAGE" " "
+    double_content "CPU utilisé: $CPU_USAGE" ""
     line_simple
 
     double_content "Utilisateurs créés: $USER_COUNT" "Appareils connectés: $CONNECTED_DEVICES"
@@ -83,8 +83,8 @@ while true; do
     content_line "8. Quitter"
     line_simple
 
-    printf "| %-${WIDTH}s |\n" "Entrez votre choix [1-8]: "
-    line_full   # <<< fermée complètement en bas !
+    content_line "Entrez votre choix [1-8]:"
+    line_full   # cadre fermé en bas
 
     read -p "| Votre choix: " choix
     
