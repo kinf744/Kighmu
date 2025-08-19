@@ -270,3 +270,8 @@ echo
 echo "Tentative de rechargement automatique de ~/.bashrc dans cette session..."
 source ~/.bashrc || echo "Le rechargement automatique a échoué, merci de le faire manuellement."
 echo "=============================================="
+
+# Redémarrage automatique à la fin
+echo "Redémarrage du serveur dans 5 secondes..."
+sleep 5
+sudo reboot
