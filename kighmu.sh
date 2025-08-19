@@ -25,11 +25,13 @@ content_line() {
     printf "| %-${WIDTH}s |\n" "$content"
 }
 
-# Fonction affiche ligne centrée
+# Fonction affiche ligne centrée (corrigée pour toujours fermer)
 center_line() {
     local text="$1"
-    local padding=$(( (WIDTH - ${#text}) / 2 ))
-    printf "|%*s%s%*s|\n" $padding "" "$text" $padding ""
+    local text_len=${#text}
+    local padding=$(( (WIDTH - text_len) / 2 ))
+    local extra=$(( (WIDTH - text_len) % 2 ))
+    printf "|%*s%s%*s|\n" $padding "" "$text" $((padding+extra)) ""
 }
 
 # Fonction pour afficher une ligne avec deux éléments alignés
@@ -82,7 +84,8 @@ while true; do
     line_simple
 
     printf "| %-${WIDTH}s |\n" "Entrez votre choix [1-8]: "
-    line_simple
+    line_full   # <<< fermée complètement en bas !
+
     read -p "| Votre choix: " choix
     
     case $choix in
