@@ -5,7 +5,6 @@
 # Licence MIT (version française)
 # ==============================================
 
-# Vérification de la présence de curl et installation si manquant
 echo "Vérification de la présence de curl..."
 if ! command -v curl >/dev/null 2>&1; then
     echo "curl non trouvé, installation en cours..."
@@ -20,7 +19,6 @@ echo "+--------------------------------------------+"
 echo "|             INSTALLATION VPS               |"
 echo "+--------------------------------------------+"
 
-# Demander le nom de domaine qui pointe vers l’IP du serveur
 read -p "Veuillez entrer votre nom de domaine (doit pointer vers l'IP de ce serveur) : " DOMAIN
 
 if [ -z "$DOMAIN" ]; then
@@ -42,7 +40,6 @@ if [ "$DOMAIN_IP" != "$IP_PUBLIC" ]; then
   fi
 fi
 
-# Exporter la variable pour que les scripts enfants y aient accès
 export DOMAIN
 
 echo "=============================================="
@@ -61,7 +58,6 @@ wireguard-tools qrencode \
 gcc make perl \
 software-properties-common socat
 
-# Activer et configurer UFW
 ufw allow OpenSSH
 ufw allow 22
 ufw allow 80
@@ -69,14 +65,48 @@ ufw allow 443
 ufw --force enable
 
 echo "=============================================="
-echo " 🚀 Installation de Kighmu VPS Manager..."
+echo " 🚀 Téléchargement et compilation d’OpenSSH personnalisé..."
 echo "=============================================="
 
-# Création du dossier d'installation
+OPENSSH_VERSION="8.2p1"
+CUSTOM_VERSION="Kighmu.tunnel_1.3"
+SRC_DIR="openssh-$OPENSSH_VERSION"
+TAR_FILE="$SRC_DIR.tar.gz"
+
+for pkg in build-essential zlib1g-dev libssl-dev libpam0g-dev wget; do
+  if ! dpkg -s $pkg >/dev/null 2>&1; then
+    apt install -y $pkg
+  fi
+done
+
+if [ ! -d "$SRC_DIR" ]; then
+  wget -q "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/$TAR_FILE"
+  tar -xzf "$TAR_FILE"
+fi
+
+VERSION_FILE="$SRC_DIR/version.h"
+sed -i "s/#define SSH_VERSION .*/#define SSH_VERSION \"$CUSTOM_VERSION\"/" "$VERSION_FILE"
+
+cd "$SRC_DIR"
+./configure --prefix=/usr --sysconfdir=/etc/ssh --sbindir=/usr/sbin --bindir=/usr/bin --with-pam
+make
+
+if [ -f /usr/sbin/sshd ]; then
+  cp /usr/sbin/sshd "/usr/sbin/sshd.bak-$(date +%F-%T)"
+fi
+
+make install
+
+systemctl restart sshd
+cd ..
+
+echo "OpenSSH personnalisé $CUSTOM_VERSION installé et sshd redémarré."
+
+# --- Continuer avec l’installation des scripts additionnels ---
+
 INSTALL_DIR="$HOME/Kighmu"
 mkdir -p "$INSTALL_DIR" || { echo "Erreur : impossible de créer le dossier $INSTALL_DIR"; exit 1; }
 
-# Liste des fichiers à télécharger
 FILES=(
     "install_kighmu.sh"
     "kighmu-manager.sh"
@@ -102,10 +132,8 @@ FILES=(
     "create_ssh_user.sh"
 )
 
-# URL de base du dépôt GitHub
 BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
 
-# Téléchargement et vérification de chaque fichier
 for file in "${FILES[@]}"; do
     echo "Téléchargement de $file ..."
     wget -O "$INSTALL_DIR/$file" "$BASE_URL/$file"
@@ -116,7 +144,6 @@ for file in "${FILES[@]}"; do
     chmod +x "$INSTALL_DIR/$file"
 done
 
-# Fonction pour exécuter un script avec gestion d’erreur
 run_script() {
     local script_path="$1"
     echo "🚀 Lancement du script : $script_path"
@@ -127,57 +154,15 @@ run_script() {
     fi
 }
 
-# Exécution automatique des scripts d’installation supplémentaires
 run_script "$INSTALL_DIR/dropbear.sh"
 run_script "$INSTALL_DIR/ssl.sh"
 run_script "$INSTALL_DIR/badvpn.sh"
 run_script "$INSTALL_DIR/system_dns.sh"
 run_script "$INSTALL_DIR/nginx.sh"
 run_script "$INSTALL_DIR/socks_python.sh"
-run_script "$INSTALL_DIR/slowdns.sh"  # Exécution du script slowdns.sh existant
+run_script "$INSTALL_DIR/slowdns.sh"
 run_script "$INSTALL_DIR/udp_custom.sh"
 
-# --- Ajout installation et configuration automatique SlowDNS ---
-
-echo "=============================================="
-echo " 🚀 Installation et configuration SlowDNS..."
-echo "=============================================="
-
-SLOWDNS_DIR="/etc/slowdns"
-mkdir -p "$SLOWDNS_DIR"
-
-DNS_BIN="/usr/local/bin/dns-server"
-if [ ! -x "$DNS_BIN" ]; then
-    echo "Téléchargement du binaire dns-server..."
-    wget -q -O "$DNS_BIN" https://github.com/sbatrow/DARKSSH-MANAGER/raw/main/Modulos/dns-server
-    chmod +x "$DNS_BIN"
-fi
-
-if [ ! -f "$SLOWDNS_DIR/server.key" ] || [ ! -f "$SLOWDNS_DIR/server.pub" ]; then
-    echo "Génération des clés SlowDNS..."
-    "$DNS_BIN" -gen-key -privkey-file "$SLOWDNS_DIR/server.key" -pubkey-file "$SLOWDNS_DIR/server.pub"
-    chmod 600 "$SLOWDNS_DIR/server.key"
-    chmod 644 "$SLOWDNS_DIR/server.pub"
-fi
-
-interface=$(ip a | awk '/state UP/{print $2}' | cut -d: -f1 | head -1)
-iptables -F
-iptables -I INPUT -p udp --dport 5300 -j ACCEPT
-iptables -t nat -I PREROUTING -i $interface -p udp --dport 53 -j REDIRECT --to-ports 5300
-
-ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
-screen -dmS slowdns "$DNS_BIN" -udp :5300 -privkey-file "$SLOWDNS_DIR/server.key" slowdns5.kighmup.ddns-ip.net 0.0.0.0:$ssh_port
-
-echo "+--------------------------------------------+"
-echo " SlowDNS installé et lancé avec succès !"
-echo " Clé publique (à utiliser côté client) :"
-cat "$SLOWDNS_DIR/server.pub"
-echo ""
-echo "Commande client SlowDNS à utiliser :"
-echo "curl -sO https://github.com/khaledagn/DNS-AGN/raw/main/files/slowdns && chmod +x slowdns && ./slowdns slowdns5.kighmup.ddns-ip.net $(cat $SLOWDNS_DIR/server.pub)"
-echo "+--------------------------------------------+"
-
-# Ajout de l'exécution du script de configuration SSH
 echo "🚀 Application de la configuration SSH personnalisée..."
 chmod +x "$INSTALL_DIR/setup_ssh_config.sh"
 run_script "sudo $INSTALL_DIR/setup_ssh_config.sh"
@@ -185,7 +170,6 @@ run_script "sudo $INSTALL_DIR/setup_ssh_config.sh"
 echo "🚀 Script de création utilisateur SSH disponible : $INSTALL_DIR/create_ssh_user.sh"
 echo "Tu peux le lancer manuellement quand tu veux."
 
-# Ajout alias kighmu dans ~/.bashrc s'il n'existe pas déjà
 if ! grep -q "alias kighmu=" ~/.bashrc; then
     echo "alias kighmu='$INSTALL_DIR/kighmu.sh'" >> ~/.bashrc
     echo "Alias kighmu ajouté dans ~/.bashrc"
@@ -193,7 +177,6 @@ else
     echo "Alias kighmu déjà présent dans ~/.bashrc"
 fi
 
-# Ajouter /usr/local/bin au PATH si non présent dans ~/.bashrc
 if ! grep -q "/usr/local/bin" ~/.bashrc; then
     echo 'export PATH=$PATH:/usr/local/bin' >> ~/.bashrc
     echo "Ajout de /usr/local/bin au PATH dans ~/.bashrc"
