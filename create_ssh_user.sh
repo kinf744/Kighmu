@@ -2,6 +2,14 @@
 
 # Script pour créer un utilisateur SSH avec configuration complète
 
+# Charger les infos globales Kighmu
+if [ -f ~/.kighmu_info ]; then
+    source ~/.kighmu_info
+else
+    echo "Erreur : fichier ~/.kighmu_info introuvable. Informations globales manquantes."
+    exit 1
+fi
+
 read -p "Nom utilisateur à créer : " USERNAME
 
 if id "$USERNAME" &>/dev/null; then
@@ -34,5 +42,14 @@ fi
 
 # Finalisation des permissions
 sudo chown -R "$USERNAME":"$USERNAME" /home/"$USERNAME"/.ssh
+
+echo
+echo "+--------------------------------------------+"
+echo "|        UTILISATEUR SSH CRÉÉ AVEC SUCCÈS    |"
+echo "+--------------------------------------------+"
+echo "Nom de domaine           : $DOMAIN"
+echo "Serveur DNS (NS)         : $NS"
+echo -e "Clé publique SlowDNS     :\n$PUBLIC_KEY"
+echo "+--------------------------------------------+"
 
 echo "Utilisateur $USERNAME créé et configuré avec succès."
