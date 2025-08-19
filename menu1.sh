@@ -3,8 +3,18 @@
 # Créer un utilisateur normal et sauvegarder ses infos
 
 # Charger la configuration globale si elle existe
-if [ -f ./config.sh ]; then
-    source ./config.sh
+if [ -f ~/.kighmu_info ]; then
+    source ~/.kighmu_info
+else
+    echo "Erreur : fichier ~/.kighmu_info introuvable, informations globales manquantes."
+    exit 1
+fi
+
+# Charger la clé publique SlowDNS
+if [ -f /etc/slowdns/server.pub ]; then
+    SLOWDNS_KEY=$(cat /etc/slowdns/server.pub)
+else
+    SLOWDNS_KEY="Clé publique SlowDNS non trouvée!"
 fi
 
 echo "+--------------------------------------------+"
@@ -36,10 +46,11 @@ BADVPN1=7200
 BADVPN2=7300
 SLOWDNS_PORT=5300
 UDP_CUSTOM="1-65535"
-DOMAIN="${DOMAIN:-myserver.example.com}"
+
 HOST_IP=$(curl -s https://api.ipify.org)
-SLOWDNS_KEY="7fbd1f8aa0abfe15a7903e837f78aba39cf61d36f183bd604daa2fe4ef3b7b59"
-read -p "SlowDNS NameServer (NS) : " SLOWDNS_NS
+
+# SlowDNS NS récupéré depuis fichier global
+SLOWDNS_NS="${SLOWDNS_NS:-slowdns5.kighmup.ddns-ip.net}"
 
 # Sauvegarder les infos utilisateur dans un fichier dédié
 USER_FILE="/etc/kighmu/users.list"
@@ -73,7 +84,8 @@ echo "🙍 Proxy(WS)    : $DOMAIN:80@$username:$password"
 echo "🙍 SSH UDP     : $HOST_IP:1-65535@$username:$password"
 echo ""
 echo "━━━━━━━━━━━  CONFIGS SLOWDNS PORT 22 ━━━━━━━━━━━"
-echo "Pub KEY : $SLOWDNS_KEY"
+echo "Pub KEY :"
+echo "$SLOWDNS_KEY"
 echo "NameServer (NS) : $SLOWDNS_NS"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "Compte créé avec succès"
