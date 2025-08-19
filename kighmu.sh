@@ -20,7 +20,14 @@ while true; do
     RAM_USAGE=$(free -m | awk 'NR==2{printf "%.2f%%", $3*100/$2 }')
     CPU_USAGE=$(top -bn1 | grep "Cpu(s)" | awk '{printf "%.2f%%", $2+$4}')
 
+    # Compter utilisateurs normaux (UID >= 1000 et < 65534)
+    USER_COUNT=$(awk -F: '$3 >= 1000 && $3 < 65534 {print $1}' /etc/passwd | wc -l)
+
+    # Compter connexions TCP établies au port 8080 (proxy SOCKS)
+    CONNECTED_DEVICES=$(ss -tn state established '( sport = :8080 )' | tail -n +2 | wc -l)
+
     echo "IP: $IP | RAM utilisée: $RAM_USAGE | CPU utilisé: $CPU_USAGE"
+    echo "Utilisateurs créés : $USER_COUNT | Appareils connectés : $CONNECTED_DEVICES"
     echo ""
     echo "MENU PRINCIPAL:"
     echo "1. Créer un utilisateur"
