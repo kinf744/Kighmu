@@ -38,7 +38,7 @@ echo "$username:$password" | chpasswd
 # Définir les ports et variables personnalisés
 SSH_PORT=22
 SYSTEM_DNS=53
-SOCKS_PORT=80
+SOCKS_PORT=8080
 WEB_NGINX=81
 DROPBEAR=90
 SSL_PORT=443
@@ -80,7 +80,7 @@ echo "En APPS comme HTTP Injector, CUSTOM, KPN Rev, etc."
 echo ""
 echo "🙍 HTTP-Direct  : $HOST_IP:90@$username:$password"
 echo "🙍 SSL/TLS(SNI) : $HOST_IP:443@$username:$password"
-echo "🙍 Proxy(WS)    : $DOMAIN:80@$username:$password"
+echo "🙍 Proxy(WS)    : $DOMAIN:8080@$username:$password"
 echo "🙍 SSH UDP     : $HOST_IP:1-65535@$username:$password"
 echo ""
 echo "━━━━━━━━━━━  CONFIGS SLOWDNS PORT 22 ━━━━━━━━━━━"
