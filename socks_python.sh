@@ -10,20 +10,35 @@ read -p "Voulez-vous démarrer le proxy SOCKS/Python avec WS HTTP/2 ? [oui/non] 
 
 case "$confirm" in
     [oO][uU][iI]|[yY][eE][sS])
-        echo "Démarrage du proxy SOCKS/Python..."
 
-        # Exemple de commande de lancement, à adapter selon ton vrai serveur Python
-        # S'assurer d'écouter sur 0.0.0.0 pour accepter les connexions extérieures
-        # et pas uniquement localhost
-        nohup python3 -m websocks --host 0.0.0.0 --port 80 --http2 > /var/log/socks_python.log 2>&1 &
+        echo "Vérification du module pysocks..."
+        if ! python3 -c "import socks" &> /dev/null; then
+            echo "Module pysocks non trouvé, installation en cours..."
+            sudo pip3 install pysocks
+        else
+            echo "Module pysocks déjà installé."
+        fi
 
-        sleep 2
+        PROXY_PORT=80
+        echo "Vérification du port $PROXY_PORT..."
+        if sudo lsof -i :$PROXY_PORT >/dev/null; then
+            echo "Port $PROXY_PORT occupé, utilisation du port 1080."
+            PROXY_PORT=1080
+        fi
 
-        # Vérifie si le processus tourne
+        echo "Démarrage du proxy SOCKS/Python sur le port $PROXY_PORT..."
+
+        # Remplace -m websocks par ta vraie commande/module/projet Python
+        nohup python3 -m websocks --host 0.0.0.0 --port $PROXY_PORT --http2 > /var/log/socks_python.log 2>&1 &
+
+        sleep 3
+
         if pgrep -f "python3 -m websocks" > /dev/null; then
-            echo "Proxy SOCKS/Python démarré avec HTTP/2 sur le port 80."
+            echo "Proxy SOCKS/Python démarré avec HTTP/2 sur le port $PROXY_PORT."
+            echo "Logs disponibles dans /var/log/socks_python.log"
         else
             echo "Échec du démarrage du proxy SOCKS/Python."
+            echo "Consultez les logs : /var/log/socks_python.log"
         fi
         ;;
     [nN][oO]|[nN])
