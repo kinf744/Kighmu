@@ -12,7 +12,7 @@ IP = '0.0.0.0'
 try:
     PORT = int(sys.argv[1])
 except:
-    PORT = 80
+    PORT = 8080  # Port par défaut changé ici à 8080
 
 PASS = ''  # Mot de passe optionnel (laisser vide pour désactiver)
 BUFLEN = 8196 * 8
