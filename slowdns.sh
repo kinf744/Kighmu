@@ -107,7 +107,7 @@ sleep 3
 
 # Vérification du démarrage
 if pgrep -f "sldns-server" > /dev/null; then
-    echo "Service SlowDNS démarré avec succès sur le port UDP $PORT."
+    echo -e "\033[34mHTTP/1.1 200 OK Kighmu237 - Service SlowDNS démarré avec succès sur le port UDP $PORT.\033[0m"
     echo "Pour vérifier les logs, utilise : screen -r slowdns_session"
 else
     echo "ERREUR : Le service SlowDNS n'a pas pu démarrer."
