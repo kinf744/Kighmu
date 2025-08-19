@@ -1,34 +1,85 @@
-#!/bin/bash
+#!/usr/bin/env python3
+# encoding: utf-8
+# KIGHMUSSH By @Crazy_vpn
+import socket
+import threading
+import select
+import sys
+import time
+from os import system
 
-PROXY_PORT=8080
-SCRIPT_PATH="/usr/local/bin/KIGHMUPROXY.py"
-LOG_FILE="/var/log/kighmuproxy.log"
-SCRIPT_URL="https://raw.githubusercontent.com/ton-utilisateur/ton-depot/main/KIGHMUPROXY.py"  # Mets ici le vrai lien
+# Nettoyer l’écran à chaque lancement (optionnel)
+system("clear")
 
-echo "Vérification de Python3..."
-if ! command -v python3 >/dev/null 2>&1; then
-    sudo apt update
-    sudo apt install -y python3 python3-pip
-fi
+IP = '0.0.0.0'  # écoute sur toutes les interfaces
+try:
+    PORT = int(sys.argv[1])
+except:
+    PORT = 8080
+BUFLEN = 8192
+TIMEOUT = 60
+RESPONSE = "HTTP/1.1 200 OK\r\n\r\n"
 
-echo "Téléchargement du script KIGHMUPROXY proxy SOCKS..."
-sudo wget -q -O "$SCRIPT_PATH" "$SCRIPT_URL"
-sudo chmod +x "$SCRIPT_PATH"
+class Server(threading.Thread):
+    def __init__(self, host, port):
+        threading.Thread.__init__(self)
+        self.host = host
+        self.port = port
+        self.running = False
+        self.threads = []
 
-echo "Arrêt d'un ancien proxy KIGHMUPROXY en cours d'exécution..."
-sudo pkill -f "$SCRIPT_PATH" || true
+    def run(self):
+        self.running = True
+        self.soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.soc.bind((self.host, self.port))
+        self.soc.listen(5)
+        print(f"Proxy SOCKS KIGHMUSSH démarré sur {self.host}:{self.port}")
+        while self.running:
+            try:
+                client_socket, client_addr = self.soc.accept()
+                client_socket.settimeout(TIMEOUT)
+                handler = ConnectionHandler(client_socket, client_addr)
+                handler.start()
+                self.threads.append(handler)
+            except Exception:
+                continue
 
-echo "Démarrage du proxy SOCKS KIGHMUPROXY sur le port $PROXY_PORT..."
-nohup sudo python3 "$SCRIPT_PATH" $PROXY_PORT > "$LOG_FILE" 2>&1 &
+    def stop(self):
+        self.running = False
+        self.soc.close()
+        for t in self.threads:
+            t.join()
 
-sleep 3
+class ConnectionHandler(threading.Thread):
+    def __init__(self, client_socket, client_addr):
+        threading.Thread.__init__(self)
+        self.client_socket = client_socket
+        self.client_addr = client_addr
 
-if pgrep -f "$SCRIPT_PATH" > /dev/null; then
-    echo "Proxy SOCKS KIGHMUPROXY lancé sur le port $PROXY_PORT."
-    echo "Logs disponibles dans $LOG_FILE"
-else
-    echo "Erreur : échec de démarrage du proxy. Consultez $LOG_FILE."
-fi
+    def run(self):
+        try:
+            print(f"Connexion entrante de {self.client_addr}")
+            self.client_socket.send(RESPONSE.encode())
+            # Simple boucle echo pour test, à remplacer par un vrai tunnel SOCKS
+            ready = select.select([self.client_socket], [], [], TIMEOUT)
+            if ready[0]:
+                data = self.client_socket.recv(BUFLEN)
+                self.client_socket.send(data)
+            self.client_socket.close()
+        except Exception as e:
+            print(f"Erreur connexion {self.client_addr}: {e}")
 
-echo "Ouverture du port $PROXY_PORT dans le firewall (UFW)..."
-sudo ufw allow $PROXY_PORT/tcp
+def main():
+    server = Server(IP, PORT)
+    server.start()
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("Arrêt du proxy SOCKS KIGHMUSSH...")
+        server.stop()
+
+if __name__ == "__main__":
+    main()
+        
