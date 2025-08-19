@@ -18,8 +18,8 @@ case "$confirm" in
 
         echo "Script désinstallé avec succès."
 
-        echo "Le serveur VPS va redémarrer automatiquement dans 5 secondes..."
-        sleep 5
+        echo "Le serveur VPS va redémarrer automatiquement dans 2 secondes..."
+        sleep 2
         reboot
         ;;
     [nN][oO]|[nN])
