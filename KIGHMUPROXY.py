@@ -1,123 +1,221 @@
 #!/usr/bin/env python3
-import paramiko
+# encoding: utf-8
+# KIGHMUPROXY - Proxy TCP pour tunnel SSH Proxy SOCKS inspiré DarkSSH
+
 import socket
 import threading
-import struct
 import select
 import sys
+import time
 
-class ForwardServer(threading.Thread):
-    def __init__(self, ssh_transport, bind_addr='0.0.0.0', bind_port=8080):
+IP = '0.0.0.0'
+try:
+    PORT = int(sys.argv[1])
+except:
+    PORT = 80
+
+PASS = ''  # Mot de passe optionnel (laisser vide pour désactiver)
+BUFLEN = 8196 * 8
+TIMEOUT = 60
+MSG = 'KIGHMUPROXY'
+RESPONSE = "HTTP/1.1 200 OK\r\n\r\n"
+DEFAULT_HOST = '0.0.0.0:22'
+
+class Server(threading.Thread):
+    def __init__(self, host, port):
         super().__init__()
-        self.ssh_transport = ssh_transport
-        self.bind_addr = bind_addr
-        self.bind_port = bind_port
-        self.server = None
         self.running = False
+        self.host = host
+        self.port = port
+        self.threads = []
+        self.threadsLock = threading.Lock()
+        self.logLock = threading.Lock()
 
     def run(self):
+        self.soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.soc.settimeout(2)
+        self.soc.bind((self.host, self.port))
+        self.soc.listen(0)
         self.running = True
-        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.server.bind((self.bind_addr, self.bind_port))
-        self.server.listen(100)
-        print(f"Proxy SOCKS5 SSH démarré sur {self.bind_addr}:{self.bind_port}")
+        self.print_log(f"KIGHMUPROXY démarré sur {self.host}:{self.port}")
 
-        while self.running:
-            client_sock, addr = self.server.accept()
-            handler = ForwardHandler(client_sock, self.ssh_transport)
-            handler.start()
+        try:
+            while self.running:
+                try:
+                    c, addr = self.soc.accept()
+                    c.setblocking(1)
+                except socket.timeout:
+                    continue
 
-    def stop(self):
+                conn = ConnectionHandler(c, self, addr)
+                conn.start()
+                self.add_conn(conn)
+        finally:
+            self.running = False
+            self.soc.close()
+
+    def print_log(self, msg):
+        with self.logLock:
+            print(msg)
+
+    def add_conn(self, conn):
+        with self.threadsLock:
+            if self.running:
+                self.threads.append(conn)
+
+    def remove_conn(self, conn):
+        with self.threadsLock:
+            if conn in self.threads:
+                self.threads.remove(conn)
+
+    def close(self):
+        self.print_log("Fermeture du proxy et des connexions...")
         self.running = False
-        if self.server:
-            self.server.close()
+        with self.threadsLock:
+            threads = list(self.threads)
+            for c in threads:
+                c.close()
 
-class ForwardHandler(threading.Thread):
-    def __init__(self, client_sock, ssh_transport):
+
+class ConnectionHandler(threading.Thread):
+    def __init__(self, client_socket, server, addr):
         super().__init__()
-        self.client_sock = client_sock
-        self.ssh_transport = ssh_transport
+        self.client = client_socket
+        self.server = server
+        self.addr = addr
+        self.client_closed = False
+        self.target_closed = True
+
+    def close(self):
+        try:
+            if not self.client_closed:
+                self.client.shutdown(socket.SHUT_RDWR)
+                self.client.close()
+        except:
+            pass
+        finally:
+            self.client_closed = True
+
+        try:
+            if not self.target_closed:
+                self.target.shutdown(socket.SHUT_RDWR)
+                self.target.close()
+        except:
+            pass
+        finally:
+            self.target_closed = True
 
     def run(self):
         try:
-            ver, nmethods = struct.unpack("!BB", self.client_sock.recv(2))
-            self.client_sock.recv(nmethods)  # ignore methods
-            self.client_sock.sendall(b"\x05\x00")  # no auth required
+            client_buffer = self.client.recv(BUFLEN)
+            host_port = self.find_header(client_buffer, 'X-Real-Host')
 
-            ver, cmd, _, atyp = struct.unpack("!BBBB", self.client_sock.recv(4))
-            if ver != 5 or cmd != 1:  # only CONNECT supported
-                self.client_sock.close()
+            if host_port == '':
+                host_port = DEFAULT_HOST
+
+            passwd = self.find_header(client_buffer, 'X-Pass')
+
+            if PASS and passwd != PASS:
+                self.client.send(b"HTTP/1.1 400 WrongPass!\r\n\r\n")
+                self.close()
                 return
 
-            if atyp == 1:
-                dst_addr = socket.inet_ntoa(self.client_sock.recv(4))
-            elif atyp == 3:
-                domain_length = self.client_sock.recv(1)[0]
-                dst_addr = self.client_sock.recv(domain_length).decode()
-            elif atyp == 4:
-                dst_addr = socket.inet_ntop(socket.AF_INET6, self.client_sock.recv(16))
+            if host_port.startswith(IP) or not PASS:
+                self.method_connect(host_port)
             else:
-                self.client_sock.close()
-                return
+                self.client.send(b"HTTP/1.1 403 Forbidden!\r\n\r\n")
 
-            dst_port = struct.unpack('!H', self.client_sock.recv(2))
-
-            channel = self.ssh_transport.open_channel('direct-tcpip', (dst_addr, dst_port), self.client_sock.getsockname())
-            if channel is None:
-                self.client_sock.sendall(struct.pack("!BBBBIH", 5, 5, 0, 1, 0, 0))  # failure
-                self.client_sock.close()
-                return
-
-            self.client_sock.sendall(struct.pack("!BBBBIH", 5, 0, 0, 1, 0, 0))  # success
-
-            self.relay(self.client_sock, channel)
         except Exception as e:
-            print(f"Erreur canal : {e}")
+            self.server.print_log(f"[{self.addr}] Erreur : {e}")
         finally:
-            self.client_sock.close()
+            self.close()
+            self.server.remove_conn(self)
 
-    def relay(self, client_sock, channel):
-        sockets = [client_sock, channel]
+    def find_header(self, data, header):
+        try:
+            data_str = data.decode(errors='ignore')
+            start = data_str.find(header + ": ")
+            if start == -1:
+                return ''
+            start += len(header) + 2
+            end = data_str.find('\r\n', start)
+            if end == -1:
+                return ''
+            return data_str[start:end].strip()
+        except:
+            return ''
+
+    def connect_target(self, host_port):
+        i = host_port.find(':')
+        if i != -1:
+            port = int(host_port[i+1:])
+            host = host_port[:i]
+        else:
+            port = 22
+            host = host_port
+
+        info = socket.getaddrinfo(host, port)[0]
+        soc_family, soc_type, proto, _, addr = info
+
+        self.target = socket.socket(soc_family, soc_type, proto)
+        self.target_closed = False
+        self.target.connect(addr)
+
+    def method_connect(self, host_port):
+        self.server.print_log(f"[{self.addr}] CONNECT vers {host_port}")
+        self.connect_target(host_port)
+        self.client.sendall(RESPONSE.encode())
+        self.do_connect()
+
+    def do_connect(self):
+        socks = [self.client, self.target]
+        timeout_counter = 0
+        error = False
         while True:
-            rlist, _, _ = select.select(sockets, [], [])
-            if client_sock in rlist:
-                data = client_sock.recv(1024)
-                if len(data) == 0:
-                    break
-                channel.send(data)
-            if channel in rlist:
-                data = channel.recv(1024)
-                if len(data) == 0:
-                    break
-                client_sock.send(data)
-        channel.close()
+            try:
+                recv, _, err = select.select(socks, [], socks, 3)
+            except Exception:
+                break
 
-def create_ssh_transport(hostname, port, username, pkey_path):
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    key = paramiko.RSAKey.from_private_key_file(pkey_path)
-    client.connect(hostname=hostname, port=port, username=username, pkey=key)
-    return client.get_transport()
+            if err:
+                error = True
 
-if __name__ == "__main__":
-    if len(sys.argv) < 5:
-        print("Utilisation: python3 ssh_socks_proxy.py <serveur_ssh> <port_ssh> <utilisateur> <cle_privee> [port_local_proxy]")
-        sys.exit(1)
-    hostname = sys.argv[1]
-    port = int(sys.argv)
-    username = sys.argv
-    pkey_file = sys.argv
-    local_port = int(sys.argv) if len(sys.argv) > 5 else 8080
+            if recv:
+                for s in recv:
+                    try:
+                        data = s.recv(BUFLEN)
+                        if data:
+                            if s is self.target:
+                                self.client.send(data)
+                            else:
+                                while data:
+                                    sent = self.target.send(data)
+                                    data = data[sent:]
+                            timeout_counter = 0
+                        else:
+                            error = True
+                    except Exception:
+                        error = True
+                        break
 
-    transport = create_ssh_transport(hostname, port, username, pkey_file)
-    server = ForwardServer(transport, bind_port=local_port)
+            timeout_counter += 1
+            if timeout_counter >= TIMEOUT or error:
+                break
+
+
+def main():
+    print("KIGHMUPROXY - tunnel SSH proxy SOCKS type DarkSSH\n")
+    server = Server(IP, PORT)
     server.start()
-
     try:
         while True:
-            pass
+            time.sleep(1)
     except KeyboardInterrupt:
-        print("Arrêt du proxy SOCKS")
-        server.stop()
-            
+        print("\nArrêt du proxy...")
+        server.close()
+
+
+if __name__ == '__main__':
+    main()
+        
