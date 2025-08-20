@@ -41,7 +41,7 @@ SYSTEM_DNS=53
 SOCKS_PORT=8080
 WEB_NGINX=81
 DROPBEAR=90
-SSL_PORT=443
+SSL_PORT=445
 BADVPN1=7200
 BADVPN2=7300
 SLOWDNS_PORT=5300
@@ -79,7 +79,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "En APPS comme HTTP Injector, CUSTOM, KPN Rev, etc."
 echo ""
 echo "🙍 HTTP-Direct  : $HOST_IP:90@$username:$password"
-echo "🙍 SSL/TLS(SNI) : $HOST_IP:443@$username:$password"
+echo "🙍 SSL/TLS(SNI) : $HOST_IP:445@$username:$password"
 echo "🙍 Proxy(WS)    : $DOMAIN:8080@$username:$password"
 echo "🙍 SSH UDP     : $HOST_IP:1-65535@$username:$password"
 echo ""
