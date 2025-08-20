@@ -143,10 +143,10 @@ while true; do
   content_line "9. Quitter"
   line_simple
 
-  content_line "Appuyez sur Ctrl+C pour quitter. Tapez choix puis Entrée:"
+  content_line "Tapez votre choix puis appuyez sur Entrée:"
   line_full
 
-  read -t 1 -p "| Votre choix (1-9): " choix
+  read -p "| Votre choix (1-9): " choix
   if [[ -n "$choix" ]]; then
     case $choix in
       1) bash "$SCRIPT_DIR/menu1.sh" ;;
