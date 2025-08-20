@@ -53,8 +53,13 @@ chmod 750 /etc/letsencrypt/archive/"$DOMAIN"
 chmod 640 /etc/letsencrypt/live/"$DOMAIN"/* /etc/letsencrypt/archive/"$DOMAIN"/*
 chmod 755 /etc/letsencrypt /etc/letsencrypt/live /etc/letsencrypt/archive
 
-# Installer XRAY
-bash <(curl -Ls https://github.com/XTLS/Xray-install/raw/main/install-release.sh)
+# Installer Xray version 1.8.0 explicitement
+echo "Téléchargement et installation de Xray version 1.8.0 (2023)..."
+wget -q https://github.com/XTLS/Xray-core/releases/download/v1.8.0/Xray-linux-64.zip -O /tmp/xray.zip
+unzip -o /tmp/xray.zip -d /tmp/xray
+mv /tmp/xray/xray /usr/local/bin/xray
+chmod +x /usr/local/bin/xray
+rm -rf /tmp/xray /tmp/xray.zip
 
 # Configuration XRAY
 mkdir -p /usr/local/etc/xray
@@ -143,7 +148,7 @@ EOS
 chmod +x /usr/local/bin/renew-cert-xray.sh
 (crontab -l 2>/dev/null; echo "0 3 * * * /usr/local/bin/renew-cert-xray.sh") | crontab -
 
-echo "----- XRAY installé avec TLS Let’s Encrypt et renouvellement automatique -----"
+echo "----- XRAY v1.8.0 installé avec TLS Let’s Encrypt et renouvellement automatique -----"
 echo "Domaine : $DOMAIN"
 echo "UUID : $UUID"
 echo "Mot de passe Trojan (gRPC) : $TROJAN_PASS"
