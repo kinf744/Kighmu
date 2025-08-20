@@ -22,7 +22,6 @@ echo "+--------------------------------------------+"
 
 # Demander le nom de domaine qui pointe vers l’IP du serveur
 read -p "Veuillez entrer votre nom de domaine (doit pointer vers l'IP de ce serveur) : " DOMAIN
-
 if [ -z "$DOMAIN" ]; then
   echo "Erreur : vous devez entrer un nom de domaine valide."
   exit 1
@@ -42,7 +41,6 @@ if [ "$DOMAIN_IP" != "$IP_PUBLIC" ]; then
   fi
 fi
 
-# Exporter la variable pour que les scripts enfants y aient accès
 export DOMAIN
 
 echo "=============================================="
@@ -102,10 +100,8 @@ FILES=(
     "create_ssh_user.sh"
 )
 
-# URL de base du dépôt GitHub
 BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
 
-# Téléchargement et vérification de chaque fichier
 for file in "${FILES[@]}"; do
     echo "Téléchargement de $file ..."
     wget -O "$INSTALL_DIR/$file" "$BASE_URL/$file"
@@ -134,10 +130,8 @@ run_script "$INSTALL_DIR/badvpn.sh"
 run_script "$INSTALL_DIR/system_dns.sh"
 run_script "$INSTALL_DIR/nginx.sh"
 run_script "$INSTALL_DIR/socks_python.sh"
-run_script "$INSTALL_DIR/slowdns.sh"  # Exécution du script slowdns.sh existant
+run_script "$INSTALL_DIR/slowdns.sh"
 run_script "$INSTALL_DIR/udp_custom.sh"
-
-# --- Ajout installation et configuration automatique SlowDNS ---
 
 echo "=============================================="
 echo " 🚀 Installation et configuration SlowDNS..."
@@ -166,7 +160,7 @@ iptables -I INPUT -p udp --dport 5300 -j ACCEPT
 iptables -t nat -I PREROUTING -i $interface -p udp --dport 53 -j REDIRECT --to-ports 5300
 
 ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
-screen -dmS slowdns "$DNS_BIN" -udp :5300 -privkey-file "$SLOWDNS_DIR/server.key" slowdns5.kighmup.ddns-ip.net 0.0.0.0:$ssh_port
+screen -dmS slowdns "$DNS_BIN" -udp :5300 -privkey-file "$SLOWDNS_DIR/server.key" "$DOMAIN" 0.0.0.0:$ssh_port
 
 echo "+--------------------------------------------+"
 echo " SlowDNS installé et lancé avec succès !"
@@ -174,7 +168,7 @@ echo " Clé publique (à utiliser côté client) :"
 cat "$SLOWDNS_DIR/server.pub"
 echo ""
 echo "Commande client SlowDNS à utiliser :"
-echo "curl -sO https://github.com/khaledagn/DNS-AGN/raw/main/files/slowdns && chmod +x slowdns && ./slowdns slowdns5.kighmup.ddns-ip.net $(cat $SLOWDNS_DIR/server.pub)"
+echo "curl -sO https://github.com/khaledagn/DNS-AGN/raw/main/files/slowdns && chmod +x slowdns && ./slowdns $DOMAIN $(cat $SLOWDNS_DIR/server.pub)"
 echo "+--------------------------------------------+"
 
 # Ajout de l'exécution du script de configuration SSH
@@ -201,8 +195,6 @@ fi
 
 # --- Génération automatique du fichier ~/.kighmu_info ---
 
-NS="slowdns5.kighmup.ddns-ip.net"
-
 SLOWDNS_PUBKEY="/etc/slowdns/server.pub"
 if [ -f "$SLOWDNS_PUBKEY" ]; then
     PUBLIC_KEY=$(sed ':a;N;$!ba;s/\n/\\n/g' "$SLOWDNS_PUBKEY")
@@ -212,7 +204,6 @@ fi
 
 cat > ~/.kighmu_info <<EOF
 DOMAIN=$DOMAIN
-NS=$NS
 PUBLIC_KEY="$PUBLIC_KEY"
 EOF
 
