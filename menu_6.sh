@@ -2,6 +2,7 @@
 
 CONFIG_DIR="/usr/local/etc/xray"
 CONFIG_FILE="$CONFIG_DIR/config.json"
+DOMAIN="ton.domaine.com"  # Remplace par ton domaine ou rends dynamique
 
 print_header() {
   local width=44
@@ -26,17 +27,71 @@ show_menu() {
 }
 
 generate_uuid() {
-  cat /proc/sys/kernel/random/uuid
+  if command -v uuidgen >/dev/null 2>&1; then
+    uuidgen
+  else
+    cat /proc/sys/kernel/random/uuid
+  fi
 }
 
 create_config() {
-  # Paramètres simplifiés pour exemple, adapte en fonction de ton script complet
   local proto=$1
   local name=$2
   local days=$3
-  # Création de configs et redémarrage de xray ici...
-  echo "Création de la configuration $proto pour $name valable $days jours..."
-  # … Ton code détaillé ici
+
+  local uuid=$(generate_uuid)
+  local trojan_pass=$(openssl rand -base64 16)
+  local expiry_date=$(date -d "+$days days" +"%Y-%m-%d")
+  local port_tls=443
+  local port_ntls=80
+  local path_ws=""
+  local grpc_name=""
+  local link_tls=""
+  local link_ntls=""
+  local link_grpc=""
+  local encryption="none"
+
+  case "$proto" in
+    vmess)
+      path_ws="/vmessws"
+      grpc_name="vmess-grpc"
+      link_tls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$uuid\",\"aid\":\"0\",\"net\":\"ws\",\"type\":\"none\",\"host\":\"\",\"path\":\"$path_ws\",\"tls\":\"tls\"}" | base64 -w0)"
+      link_ntls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_ntls\",\"id\":\"$uuid\",\"aid\":\"0\",\"net\":\"ws\",\"type\":\"none\",\"host\":\"\",\"path\":\"$path_ws\",\"tls\":\"\"}" | base64 -w0)"
+      link_grpc="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$uuid\",\"aid\":\"0\",\"net\":\"grpc\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"\",\"tls\":\"tls\",\"serviceName\":\"$grpc_name\"}" | base64 -w0)"
+      ;;
+    vless)
+      path_ws="/vlessws"
+      grpc_name="vless-grpc"
+      link_tls="vless://$uuid@$DOMAIN:$port_tls?path=$path_ws&security=tls&encryption=$encryption&type=ws#$name"
+      link_ntls="vless://$uuid@$DOMAIN:$port_ntls?path=$path_ws&encryption=$encryption&type=ws#$name"
+      link_grpc="vless://$uuid@$DOMAIN:$port_tls?mode=gun&security=tls&encryption=$encryption&type=grpc&serviceName=$grpc_name&sni=$DOMAIN#$name"
+      ;;
+    trojan)
+      path_ws="/trojanws"
+      grpc_name="trojan-grpc"
+      link_tls="trojan://$trojan_pass@$DOMAIN:$port_tls?security=tls&type=ws&path=$path_ws#$name"
+      link_ntls="trojan://$trojan_pass@$DOMAIN:$port_ntls?type=ws&path=$path_ws#$name"
+      link_grpc="trojan://$trojan_pass@$DOMAIN:$port_tls?mode=gun&security=tls&type=grpc&serviceName=$grpc_name&sni=$DOMAIN#$name"
+      ;;
+  esac
+
+  echo
+  echo "-------- Configuration $proto générée --------"
+  echo "Nom d'utilisateur : $name"
+  echo "Identifiant UUID/MSI-Mot de passe :"
+  echo "  UUID (VMESS/VLESS) : $uuid"
+  if [[ "$proto" == "trojan" ]]; then
+    echo "  Mot de passe Trojan : $trojan_pass"
+  fi
+  echo "Durée de validité : $days jours (expire le $expiry_date)"
+  echo "Port TLS : $port_tls"
+  echo "Port Non-TLS : $port_ntls"
+  echo
+  echo "Lien TLS : $link_tls"
+  echo "Lien Non-TLS : $link_ntls"
+  echo "Lien GRPC : $link_grpc"
+  echo "--------------------------------------------"
+  echo
 }
 
 choice=0
@@ -52,22 +107,37 @@ while true; do
       read -p "Appuyez sur Entrée pour revenir au menu..."
       ;;
     2)
-      read -rp "Entrez un nom pour la configuration VMESS : " conf_name
+      read -rp "Nom de l'utilisateur VMESS : " conf_name
       read -rp "Durée de validité (jours) : " days
-      create_config "vmess" "$conf_name" "$days"
-      read -p "Appuyez sur Entrée pour revenir au menu..."
+      if [[ -z "$conf_name" || -z "$days" ]]; then
+        echo "Nom ou durée invalide."
+        read -p "Appuyez sur Entrée pour revenir au menu..."
+      else
+        create_config "vmess" "$conf_name" "$days"
+        read -p "Appuyez sur Entrée pour revenir au menu..."
+      fi
       ;;
     3)
-      read -rp "Entrez un nom pour la configuration VLESS : " conf_name
+      read -rp "Nom de l'utilisateur VLESS : " conf_name
       read -rp "Durée de validité (jours) : " days
-      create_config "vless" "$conf_name" "$days"
-      read -p "Appuyez sur Entrée pour revenir au menu..."
+      if [[ -z "$conf_name" || -z "$days" ]]; then
+        echo "Nom ou durée invalide."
+        read -p "Appuyez sur Entrée pour revenir au menu..."
+      else
+        create_config "vless" "$conf_name" "$days"
+        read -p "Appuyez sur Entrée pour revenir au menu..."
+      fi
       ;;
     4)
-      read -rp "Entrez un nom pour la configuration TROJAN : " conf_name
+      read -rp "Nom de l'utilisateur TROJAN : " conf_name
       read -rp "Durée de validité (jours) : " days
-      create_config "trojan" "$conf_name" "$days"
-      read -p "Appuyez sur Entrée pour revenir au menu..."
+      if [[ -z "$conf_name" || -z "$days" ]]; then
+        echo "Nom ou durée invalide."
+        read -p "Appuyez sur Entrée pour revenir au menu..."
+      else
+        create_config "trojan" "$conf_name" "$days"
+        read -p "Appuyez sur Entrée pour revenir au menu..."
+      fi
       ;;
     5)
       read -rp "Entrez le nom exact de l'utilisateur Xray à supprimer : " del_name
