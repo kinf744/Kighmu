@@ -33,13 +33,16 @@ optimize_system() {
   sync
   echo 3 > /proc/sys/vm/drop_caches
 
-  echo "Détection du processus le plus gourmand en CPU..."
-  PID=$(ps aux --sort=-%cpu | awk 'NR==2{print $2}')
-  PROC_NAME=$(ps -p "$PID" -o comm=)
-  echo "Processus $PROC_NAME (PID $PID) consomme le plus de CPU."
-
-  echo "Tuer le processus $PROC_NAME (PID $PID)..."
-  kill -9 "$PID" || echo "Impossible de tuer le processus ou processus déjà terminé."
+  # Trouver le processus consommant le plus de CPU sauf bash lui-même
+  PID=$(ps aux --sort=-%cpu | awk 'NR>1 && $11 != "bash" {print $2; exit}')
+  if [ -n "$PID" ]; then
+    PROC_NAME=$(ps -p "$PID" -o comm=)
+    echo "Processus $PROC_NAME (PID $PID) consomme le plus de CPU."
+    echo "Tuer le processus $PROC_NAME (PID $PID)..."
+    kill -9 "$PID" || echo "Impossible de tuer le processus ou processus déjà terminé."
+  else
+    echo "Pas de processus à tuer détecté."
+  fi
 
   echo "Optimisation système terminée."
 }
