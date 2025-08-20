@@ -103,9 +103,16 @@ get_ssh_traffic_bytes() {
 get_traffic_stats() {
   local xray_traffic=$(vnstat --oneline $INTERFACE 2>/dev/null | awk -F';' '{print $3}')
   local ssh_bytes=$(get_ssh_traffic_bytes)
-  local ssh_traffic=$(echo "scale=2; $ssh_bytes / 1073741824" | bc)
-  local total_today=$(echo "$xray_traffic + $ssh_traffic" | bc)
+  
+  ssh_bytes=${ssh_bytes:-0}
+  xray_traffic=${xray_traffic:-0}
+
+  local ssh_traffic=$(echo "scale=2; $ssh_bytes / 1073741824" | bc 2>/dev/null || echo 0)
+  ssh_traffic=${ssh_traffic:-0}
+
+  local total_today=$(echo "$xray_traffic + $ssh_traffic" | bc 2>/dev/null || echo 0)
   local total_month="$total_today"
+
   echo "${total_today}|${total_month}"
 }
 
