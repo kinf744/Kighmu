@@ -103,7 +103,7 @@ get_ssh_traffic_bytes() {
 get_traffic_stats() {
   local xray_traffic=$(vnstat --oneline $INTERFACE 2>/dev/null | awk -F';' '{print $3}')
   local ssh_bytes=$(get_ssh_traffic_bytes)
-  
+
   ssh_bytes=${ssh_bytes:-0}
   xray_traffic=${xray_traffic:-0}
 
@@ -147,34 +147,35 @@ while true; do
   center_line "MENU PRINCIPAL:"
   line_simple
 
-  content_line "1. Créer un utilisateur"
-  content_line "2. Créer un test utilisateur"
-  content_line "3. Voir les utilisateurs en ligne"
-  content_line "4. Supprimer utilisateur"
-  content_line "5. Installation de mode"
-  content_line "6. Xray mode"
-  content_line "7. Désinstaller le script"
-  content_line "8. Blocage de torrents"
-  content_line "9. Quitter"
+  content_line "[01] Créer un utilisateur"
+  content_line " Créer un test utilisateur"
+  content_line " Voir les utilisateurs en ligne"
+  content_line " Supprimer utilisateur"
+  content_line " Installation de mode"
+  content_line " Xray mode"
+  content_line " Désinstaller le script"
+  content_line " Blocage de torrents"
+  content_line " Quitter"
   line_simple
 
-  content_line "Tapez votre choix puis appuyez sur Entrée:"
+  content_line "Tapez votre choix [01-09] puis appuyez sur Entrée:"
   line_full
 
-  read -p "| Votre choix (1-9): " choix
-  if [[ -n "$choix" ]]; then
-    case $choix in
-      1) bash "$SCRIPT_DIR/menu1.sh" ;;
-      2) bash "$SCRIPT_DIR/menu2.sh" ;;
-      3) bash "$SCRIPT_DIR/menu3.sh" ;;
-      4) bash "$SCRIPT_DIR/menu4.sh" ;;
-      5) bash "$SCRIPT_DIR/menu5.sh" ;;
-      6) bash "$SCRIPT_DIR/menu_6.sh" ;;
-      7) bash "$SCRIPT_DIR/menu6.sh" ;;
-      8) bash "$SCRIPT_DIR/menu7.sh" ;;
-      9) echo "Au revoir !"; exit 0 ;;
-      *) echo "Choix invalide !" ;;
-    esac
-    read -p "Appuyez sur Entrée pour revenir au menu..."
-  fi
+  read -p "| Votre choix [01-09]: " choix
+  choix="${choix#[}"  # supprime [ si present
+  choix="${choix%]}"  # supprime ] si present
+
+  case $choix in
+    01) bash "$SCRIPT_DIR/menu1.sh" ;;
+    02) bash "$SCRIPT_DIR/menu2.sh" ;;
+    03) bash "$SCRIPT_DIR/menu3.sh" ;;
+    04) bash "$SCRIPT_DIR/menu4.sh" ;;
+    05) bash "$SCRIPT_DIR/menu5.sh" ;;
+    06) bash "$SCRIPT_DIR/menu_6.sh" ;;
+    07) bash "$SCRIPT_DIR/menu6.sh" ;;
+    08) bash "$SCRIPT_DIR/menu7.sh" ;;
+    09) echo "Au revoir !"; exit 0 ;;
+    *) echo "Choix invalide !" ;;
+  esac
+  read -p "Appuyez sur Entrée pour revenir au menu..."
 done
