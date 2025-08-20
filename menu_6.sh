@@ -109,7 +109,7 @@ create_config() {
 choice=0
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Charger domaine précédemment saisi
+# Charger automatiquement le domaine utilisé par Xray s’il existe
 if [[ -f /tmp/.xray_domain ]]; then
   DOMAIN=$(cat /tmp/.xray_domain)
 fi
@@ -121,6 +121,7 @@ while true; do
   case $choice in
     1)
       bash "$SCRIPT_DIR/xray_installe.sh"
+      # Recharge domaine après installation
       if [[ -f /tmp/.xray_domain ]]; then
         DOMAIN=$(cat /tmp/.xray_domain)
         echo "Nom de domaine $DOMAIN chargé automatiquement."
