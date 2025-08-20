@@ -58,20 +58,21 @@ else
     echo "Le binaire SlowDNS est déjà installé."
 fi
 
-# Fonction de génération automatique des clés si absentes
+# Fonction de gestion des clés (Génération désactivée)
 generate_keys() {
-    if [ ! -s "$SERVER_KEY" ] || [ ! -s "$SERVER_PUB" ]; then
-        echo "Clés SlowDNS manquantes ou vides, génération en cours..."
-        sudo $SLOWDNS_BIN -gen-key -privkey-file "$SERVER_KEY" -pubkey-file "$SERVER_PUB"
-        sudo chmod 600 "$SERVER_KEY"
-        sudo chmod 644 "$SERVER_PUB"
-        echo "Clés SlowDNS générées avec succès."
-    else
-        echo "Clés SlowDNS déjà présentes."
+    if [ ! -s "$SERVER_KEY" ]; then
+        echo "Erreur : La clé privée SlowDNS est manquante dans $SERVER_KEY."
+        echo "Merci de fournir une clé privée valide avant de lancer ce script."
+        exit 1
     fi
+
+    # Écriture de la clé publique personnalisée (remplacement)
+    echo "7fbd1f8aa0abfe15a7903e837f78aba39cf61d36f183bd604daa2fe4ef3b7b59" | sudo tee "$SERVER_PUB" > /dev/null
+    sudo chmod 644 "$SERVER_PUB"
+    echo "Clé publique personnalisée SlowDNS ajoutée."
 }
 
-# Génération des clés
+# Gestion des clés
 generate_keys
 
 # Lecture dynamique de la clé publique
