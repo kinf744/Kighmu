@@ -5,48 +5,6 @@
 # Licence MIT (version française)
 # ==============================================
 
-optimize_system() {
-  echo "=== Optimisation et nettoyage du système VPS ==="
-
-  echo "Mise à jour des paquets..."
-  apt update && apt upgrade -y
-
-  echo "Suppression des paquets inutiles et nettoyage du cache APT..."
-  apt autoremove --purge -y
-  apt clean
-
-  echo "Arrêt et désactivation des services inutiles..."
-  SERVICES_TO_STOP=("apache2" "mysql" "nginx" "postgresql" "cups")
-
-  for service in "${SERVICES_TO_STOP[@]}"; do
-    if systemctl is-active --quiet "$service"; then
-      systemctl stop "$service"
-      echo "Service $service arrêté."
-    fi
-    if systemctl is-enabled --quiet "$service"; then
-      systemctl disable "$service"
-      echo "Service $service désactivé."
-    fi
-  done
-
-  echo "Vider les caches de la mémoire..."
-  sync
-  echo 3 > /proc/sys/vm/drop_caches
-
-  # Trouver le processus consommant le plus de CPU sauf bash lui-même
-  PID=$(ps aux --sort=-%cpu | awk 'NR>1 && $11 != "bash" {print $2; exit}')
-  if [ -n "$PID" ]; then
-    PROC_NAME=$(ps -p "$PID" -o comm=)
-    echo "Processus $PROC_NAME (PID $PID) consomme le plus de CPU."
-    echo "Tuer le processus $PROC_NAME (PID $PID)..."
-    kill -9 "$PID" || echo "Impossible de tuer le processus ou processus déjà terminé."
-  else
-    echo "Pas de processus à tuer détecté."
-  fi
-
-  echo "Optimisation système terminée."
-}
-
 # Vérification de la présence de curl et installation si manquant
 echo "Vérification de la présence de curl..."
 if ! command -v curl >/dev/null 2>&1; then
@@ -58,29 +16,17 @@ else
     echo "curl est déjà installé."
 fi
 
-echo "🔧 Lancement de l'optimisation système avant installation..."
-optimize_system
-
 echo "+--------------------------------------------+"
 echo "|             INSTALLATION VPS               |"
 echo "+--------------------------------------------+"
 
 # Demander le nom de domaine qui pointe vers l’IP du serveur
 read -p "Veuillez entrer votre nom de domaine (doit pointer vers l'IP de ce serveur) : " DOMAIN
+
 if [ -z "$DOMAIN" ]; then
   echo "Erreur : vous devez entrer un nom de domaine valide."
   exit 1
 fi
-
-# Demander le NS (nom de serveur DNS) à utiliser
-read -p "Veuillez entrer le NS (nom de serveur DNS) à utiliser : " NS
-if [ -z "$NS" ]; then
-  echo "Erreur : le NS ne peut pas être vide."
-  exit 1
-fi
-
-export DOMAIN
-export NS
 
 IP_PUBLIC=$(curl -s https://api.ipify.org)
 echo "Votre IP publique détectée est : $IP_PUBLIC"
@@ -96,6 +42,9 @@ if [ "$DOMAIN_IP" != "$IP_PUBLIC" ]; then
   fi
 fi
 
+# Exporter la variable pour que les scripts enfants y aient accès
+export DOMAIN
+
 echo "=============================================="
 echo " 🚀 Installation des paquets essentiels..."
 echo "=============================================="
@@ -110,7 +59,7 @@ dropbear badvpn \
 python3 python3-pip python3-setuptools \
 wireguard-tools qrencode \
 gcc make perl \
-software-properties-common socat jq curl unzip sudo snapd
+software-properties-common socat
 
 # Activer et configurer UFW
 ufw allow OpenSSH
@@ -137,7 +86,6 @@ FILES=(
     "menu3.sh"
     "menu4.sh"
     "menu5.sh"
-    "menu_6.sh"
     "menu6.sh"
     "menu7.sh"
     "slowdns.sh"
@@ -152,11 +100,12 @@ FILES=(
     "nginx.sh"
     "setup_ssh_config.sh"
     "create_ssh_user.sh"
-    "xray_installe.sh"
 )
 
+# URL de base du dépôt GitHub
 BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
 
+# Téléchargement et vérification de chaque fichier
 for file in "${FILES[@]}"; do
     echo "Téléchargement de $file ..."
     wget -O "$INSTALL_DIR/$file" "$BASE_URL/$file"
@@ -166,44 +115,6 @@ for file in "${FILES[@]}"; do
     fi
     chmod +x "$INSTALL_DIR/$file"
 done
-
-# --- Ajout du proxy SOCKS KIGHMUSSH ---
-
-echo "=============================================="
-echo " 🚀 Installation du proxy SOCKS KIGHMUSSH..."
-echo "=============================================="
-
-PROXY_SCRIPT_PATH="/usr/local/bin/KIGHMUPROXY.py"
-PROXY_SCRIPT_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main/KIGHMUPROXY.py"
-
-wget -q -O "$PROXY_SCRIPT_PATH" "$PROXY_SCRIPT_URL"
-chmod +x "$PROXY_SCRIPT_PATH"
-echo "Script proxy SOCKS KIGHMUSSH installé dans $PROXY_SCRIPT_PATH"
-
-# Génération du script local socks_python.sh dans le dossier d'installation
-cat > "$INSTALL_DIR/socks_python.sh" <<'EOF'
-#!/bin/bash
-
-PROXY_PORT=8080
-SCRIPT_PATH="/usr/local/bin/KIGHMUPROXY.py"
-LOG_FILE="/var/log/kighmuproxy.log"
-
-echo "Arrêt d'un ancien proxy SOCKS KIGHMUSSH..."
-sudo pkill -f "$SCRIPT_PATH" || true
-
-echo "Démarrage du proxy SOCKS KIGHMUSSH sur le port $PROXY_PORT..."
-nohup sudo python3 "$SCRIPT_PATH" $PROXY_PORT > "$LOG_FILE" 2>&1 &
-
-sleep 3
-
-if pgrep -f "$SCRIPT_PATH" > /dev/null; then
-    echo "Proxy SOCKS KIGHMUSSH lancé avec succès."
-else
-    echo "Erreur lors du démarrage du proxy SOCKS. Consultez $LOG_FILE"
-fi
-EOF
-
-chmod +x "$INSTALL_DIR/socks_python.sh"
 
 # Fonction pour exécuter un script avec gestion d’erreur
 run_script() {
@@ -223,8 +134,10 @@ run_script "$INSTALL_DIR/badvpn.sh"
 run_script "$INSTALL_DIR/system_dns.sh"
 run_script "$INSTALL_DIR/nginx.sh"
 run_script "$INSTALL_DIR/socks_python.sh"
-run_script "$INSTALL_DIR/slowdns.sh"
+run_script "$INSTALL_DIR/slowdns.sh"  # Exécution du script slowdns.sh existant
 run_script "$INSTALL_DIR/udp_custom.sh"
+
+# --- Ajout installation et configuration automatique SlowDNS ---
 
 echo "=============================================="
 echo " 🚀 Installation et configuration SlowDNS..."
@@ -253,7 +166,7 @@ iptables -I INPUT -p udp --dport 5300 -j ACCEPT
 iptables -t nat -I PREROUTING -i $interface -p udp --dport 53 -j REDIRECT --to-ports 5300
 
 ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
-screen -dmS slowdns "$DNS_BIN" -udp :5300 -privkey-file "$SLOWDNS_DIR/server.key" "$NS" 0.0.0.0:$ssh_port
+screen -dmS slowdns "$DNS_BIN" -udp :5300 -privkey-file "$SLOWDNS_DIR/server.key" slowdns5.kighmup.ddns-ip.net 0.0.0.0:$ssh_port
 
 echo "+--------------------------------------------+"
 echo " SlowDNS installé et lancé avec succès !"
@@ -261,9 +174,10 @@ echo " Clé publique (à utiliser côté client) :"
 cat "$SLOWDNS_DIR/server.pub"
 echo ""
 echo "Commande client SlowDNS à utiliser :"
-echo "curl -sO https://github.com/khaledagn/DNS-AGN/raw/main/files/slowdns && chmod +x slowdns && ./slowdns $NS $(cat $SLOWDNS_DIR/server.pub)"
+echo "curl -sO https://github.com/khaledagn/DNS-AGN/raw/main/files/slowdns && chmod +x slowdns && ./slowdns slowdns5.kighmup.ddns-ip.net $(cat $SLOWDNS_DIR/server.pub)"
 echo "+--------------------------------------------+"
 
+# Ajout de l'exécution du script de configuration SSH
 echo "🚀 Application de la configuration SSH personnalisée..."
 chmod +x "$INSTALL_DIR/setup_ssh_config.sh"
 run_script "sudo $INSTALL_DIR/setup_ssh_config.sh"
@@ -286,6 +200,8 @@ if ! grep -q "/usr/local/bin" ~/.bashrc; then
 fi
 
 # --- Génération automatique du fichier ~/.kighmu_info ---
+
+NS="slowdns5.kighmup.ddns-ip.net"
 
 SLOWDNS_PUBKEY="/etc/slowdns/server.pub"
 if [ -f "$SLOWDNS_PUBKEY" ]; then
@@ -315,8 +231,3 @@ echo
 echo "Tentative de rechargement automatique de ~/.bashrc dans cette session..."
 source ~/.bashrc || echo "Le rechargement automatique a échoué, merci de le faire manuellement."
 echo "=============================================="
-
-# Redémarrage automatique à la fin
-echo "Redémarrage du serveur dans 5 secondes..."
-sleep 5
-sudo reboot
