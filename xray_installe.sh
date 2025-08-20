@@ -10,15 +10,17 @@ if [ -z "$DOMAIN" ]; then
   exit 1
 fi
 
+# Sauvegarder le domaine dans un fichier temporaire pour menu_6.sh
+echo "$DOMAIN" > /tmp/.xray_domain
+
 # UUID fixe (à modifier si besoin pour générer dynamiquement)
 UUID="b8a5dc8a-f4b7-4bc6-9848-5c80a310b6ae"
 TROJAN_PASS=$(openssl rand -base64 16)
 
 # Mise à jour & prérequis
-apt update && apt install -y curl unzip sudo socat
+apt update && apt install -y curl unzip sudo socat snapd
 
-# Installer snapd (pour certbot)
-apt install -y snapd
+# Installer snapd et certbot
 snap install core; snap refresh core
 snap install --classic certbot
 ln -sf /snap/bin/certbot /usr/bin/certbot
@@ -34,19 +36,17 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-# Chemins des certificats générés par certbot
 CRT_PATH="/etc/letsencrypt/live/$DOMAIN/fullchain.pem"
 KEY_PATH="/etc/letsencrypt/live/$DOMAIN/privkey.pem"
 
 if [[ ! -f "$CRT_PATH" ]] || [[ ! -f "$KEY_PATH" ]]; then
-  echo "Erreur : certificats TLS non trouvés, certificat Let’s Encrypt a échoué."
+  echo "Erreur : certificats TLS non trouvés."
   exit 1
 fi
 
-# Installer XRAY
+# Installer Xray
 bash <(curl -Ls https://github.com/XTLS/Xray-install/raw/main/install-release.sh)
 
-# Création de la configuration Xray
 mkdir -p /usr/local/etc/xray
 cat > /usr/local/etc/xray/config.json << EOF
 {
@@ -73,11 +73,7 @@ cat > /usr/local/etc/xray/config.json << EOF
         "clients": [ { "id": "$UUID", "flow": "xtls-rprx-vision" } ],
         "decryption": "none"
       },
-      "streamSettings": {
-        "network": "ws",
-        "security": "none",
-        "wsSettings": { "path": "/vlessws" }
-      }
+      "streamSettings": { "network": "ws", "security": "none", "wsSettings": { "path": "/vlessws" } }
     },
     {
       "port": 443,
@@ -98,11 +94,7 @@ cat > /usr/local/etc/xray/config.json << EOF
       "settings": {
         "clients": [ { "id": "$UUID", "alterId": 0 } ]
       },
-      "streamSettings": {
-        "network": "ws",
-        "security": "none",
-        "wsSettings": { "path": "/vmessws" }
-      }
+      "streamSettings": { "network": "ws", "security": "none", "wsSettings": { "path": "/vmessws" } }
     },
     {
       "port": 443,
@@ -136,10 +128,8 @@ cat > /usr/local/etc/xray/config.json << EOF
 }
 EOF
 
-# Redémarrage du service Xray
 systemctl restart xray
 
-# Création du script de renouvellement automatique des certificats
 cat > /usr/local/bin/renew-cert-xray.sh << 'EOS'
 #!/bin/bash
 certbot renew --quiet --post-hook "systemctl restart xray"
@@ -147,7 +137,6 @@ EOS
 
 chmod +x /usr/local/bin/renew-cert-xray.sh
 
-# Ajout d'une tâche cron pour le renouvellement automatique tous les jours à 3h du matin
 (crontab -l 2>/dev/null; echo "0 3 * * * /usr/local/bin/renew-cert-xray.sh") | crontab -
 
 echo "----- XRAY installé avec TLS Let’s Encrypt et renouvellement automatique -----"
