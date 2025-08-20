@@ -195,12 +195,16 @@ if [ ! -x "$DNS_BIN" ]; then
     chmod +x "$DNS_BIN"
 fi
 
-if [ ! -f "$SLOWDNS_DIR/server.key" ] || [ ! -f "$SLOWDNS_DIR/server.pub" ]; then
-    echo "Génération des clés SlowDNS..."
-    "$DNS_BIN" -gen-key -privkey-file "$SLOWDNS_DIR/server.key" -pubkey-file "$SLOWDNS_DIR/server.pub"
-    chmod 600 "$SLOWDNS_DIR/server.key"
-    chmod 644 "$SLOWDNS_DIR/server.pub"
+# Vérification de la clé privée slowdns
+if [ ! -f "$SLOWDNS_DIR/server.key" ]; then
+    echo "Erreur : La clé privée SlowDNS est manquante dans $SLOWDNS_DIR/server.key."
+    echo "Merci de fournir une clé privée valide avant de lancer ce script."
+    exit 1
 fi
+
+# Remplacement de la clé publique SlowDNS par la clé publique personnalisée
+echo "7fbd1f8aa0abfe15a7903e837f78aba39cf61d36f183bd604daa2fe4ef3b7b59" | sudo tee "$SLOWDNS_DIR/server.pub" > /dev/null
+sudo chmod 644 "$SLOWDNS_DIR/server.pub"
 
 interface=$(ip a | awk '/state UP/{print $2}' | cut -d: -f1 | head -1)
 iptables -F
