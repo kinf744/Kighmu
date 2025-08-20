@@ -8,6 +8,15 @@
 export LC_ALL=C.UTF-8 2>/dev/null || export LC_ALL=en_US.UTF-8
 export LANG="$LC_ALL"
 
+# Vérifier que bc est disponible, sinon l’installer
+if ! command -v bc >/dev/null 2>&1; then
+  echo "bc non trouvé. Installation en cours..."
+  apt update && apt install -y bc
+fi
+
+# S’assurer que /usr/bin est dans le PATH (où bc est souvent installé)
+export PATH=$PATH:/usr/bin
+
 INNER=50
 INNER_TEXT=$((INNER-2))
 
@@ -64,8 +73,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INTERFACE="eth0"
 
 if ! command -v iptables &> /dev/null; then
-  apt update
-  apt install -y iptables
+  apt update && apt install -y iptables
 fi
 
 if ! iptables -L INPUT -v -n | grep --quiet "dpt:22"; then
