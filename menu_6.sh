@@ -5,18 +5,18 @@ CONFIG_FILE="$CONFIG_DIR/config.json"
 
 EMAIL="votre-email@example.com"
 
-read -rp "Entrez le nom de domaine (ex: monsite.com) : " DOMAIN
-
-CRT_PATH="/etc/letsencrypt/live/$DOMAIN/fullchain.pem"
-KEY_PATH="/etc/letsencrypt/live/$DOMAIN/privkey.pem"
-
-apt update && apt install -y curl unzip sudo socat snapd
+apt update && apt install -y curl unzip sudo socat snapd jq
 snap install core; snap refresh core
 snap install --classic certbot
 ln -sf /snap/bin/certbot /usr/bin/certbot
 
 systemctl stop nginx 2>/dev/null || true
 systemctl stop apache2 2>/dev/null || true
+
+read -rp "Entrez le nom de domaine (ex: monsite.com) : " DOMAIN
+
+CRT_PATH="/etc/letsencrypt/live/$DOMAIN/fullchain.pem"
+KEY_PATH="/etc/letsencrypt/live/$DOMAIN/privkey.pem"
 
 certbot certonly --standalone --non-interactive --agree-tos --email "$EMAIL" -d "$DOMAIN"
 
@@ -45,11 +45,13 @@ print_header() {
 }
 
 show_menu() {
-  echo "Choisissez un protocole à configurer :"
-  echo "1) VMESS"
-  echo "2) VLESS"
-  echo "3) TROJAN"
-  echo "4) Quitter"
+  echo "Choisissez une action :"
+  echo "1) Installer le Xray"
+  echo "2) VMESS"
+  echo "3) VLESS"
+  echo "4) TROJAN"
+  echo "5) Supprimer un utilisateur Xray"
+  echo "6) Quitter"
   read -rp "Votre choix : " choice
 }
 
@@ -175,21 +177,55 @@ while true; do
   show_menu
   case $choice in
     1)
-      read -rp "Entrez un nom pour cette configuration : " conf_name
-      read -rp "Durée de validité (jours) : " days
-      create_config "vmess" "$conf_name" "$days"
+      echo "Installation automatique de Xray en cours..."
+      if ! command -v xray >/dev/null 2>&1; then
+        bash <(curl -Ls https://github.com/XTLS/Xray-install/raw/main/install-release.sh)
+      else
+        echo "Xray est déjà installé."
+      fi
+      read -p "Appuyez sur Entrée pour revenir au menu..."
       ;;
     2)
       read -rp "Entrez un nom pour cette configuration : " conf_name
       read -rp "Durée de validité (jours) : " days
-      create_config "vless" "$conf_name" "$days"
+      create_config "vmess" "$conf_name" "$days"
       ;;
     3)
       read -rp "Entrez un nom pour cette configuration : " conf_name
       read -rp "Durée de validité (jours) : " days
+      create_config "vless" "$conf_name" "$days"
+      ;;
+    4)
+      read -rp "Entrez un nom pour cette configuration : " conf_name
+      read -rp "Durée de validité (jours) : " days
       create_config "trojan" "$conf_name" "$days"
       ;;
-    4) echo "Quitter..."; break ;;
-    *) echo "Choix invalide"; sleep 2 ;;
+    5)
+      read -rp "Entrez le nom exact de l'utilisateur Xray à supprimer : " del_name
+      if [[ -z "$del_name" ]]; then
+        echo "Nom invalide. Aucune suppression effectuée."
+      else
+        read -rp "Confirmez-vous la suppression de l'utilisateur '$del_name' ? (oui/non) : " conf
+        if [[ "$conf" =~ ^([oO][uU][iI]|[oO])$ ]]; then
+          if [[ ! -f "$CONFIG_FILE" ]]; then
+            echo "Fichier de configuration Xray introuvable."
+          else
+            sudo jq "del(.inbounds[].settings.clients[] | select(.email==\"$del_name\"))" "$CONFIG_FILE" > "$CONFIG_FILE.tmp" && sudo mv "$CONFIG_FILE.tmp" "$CONFIG_FILE" && echo "Utilisateur $del_name supprimé avec succès." || echo "Erreur lors de la suppression."
+            sudo systemctl restart xray
+          fi
+        else
+          echo "Suppression annulée."
+        fi
+      fi
+      read -p "Appuyez sur Entrée pour revenir au menu..."
+      ;;
+    6)
+      echo "Quitter..."
+      break
+      ;;
+    *)
+      echo "Choix invalide"
+      sleep 2
+      ;;
   esac
 done
