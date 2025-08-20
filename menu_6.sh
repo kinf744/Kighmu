@@ -2,12 +2,12 @@
 
 CONFIG_DIR="/usr/local/etc/xray"
 CONFIG_FILE="$CONFIG_DIR/config.json"
-DOMAIN="ton.domaine.com"  # Remplace par ton domaine ou rends dynamique
+DOMAIN=""
 
 print_header() {
-  local width=44
-  local text="Xray_CONFIG_INSTALLER"
-  local border="+--------------------------------------------+"
+  local width=50
+  local text="Xray CONFIG INSTALLER"
+  local border="+--------------------------------------------------+"
 
   echo "$border"
   local padding=$(( (width - ${#text}) / 2 ))
@@ -39,9 +39,14 @@ create_config() {
   local name=$2
   local days=$3
 
+  if [[ -z "$DOMAIN" ]]; then
+    echo "⚠️ Le nom de domaine n'est pas défini. Veuillez d'abord installer le mode Xray."
+    return
+  fi
+
   local uuid=$(generate_uuid)
   local trojan_pass=$(openssl rand -base64 16)
-  local expiry_date=$(date -d "+$days days" +"%Y-%m-%d")
+  local expiry_date=$(date -d "+$days days" +"%d/%m/%Y")
   local port_tls=443
   local port_ntls=80
   local path_ws=""
@@ -76,21 +81,28 @@ create_config() {
   esac
 
   echo
-  echo "-------- Configuration $proto générée --------"
-  echo "Nom d'utilisateur : $name"
-  echo "Identifiant UUID/MSI-Mot de passe :"
-  echo "  UUID (VMESS/VLESS) : $uuid"
+  echo "=================================================="
+  echo "📄 Configuration $proto générée pour l'utilisateur : $name"
+  echo "--------------------------------------------------"
+  echo "➤ UUID / Mot de passe :"
+  echo "    UUID (VMESS/VLESS) : $uuid"
   if [[ "$proto" == "trojan" ]]; then
-    echo "  Mot de passe Trojan : $trojan_pass"
+    echo "    Mot de passe Trojan : $trojan_pass"
   fi
-  echo "Durée de validité : $days jours (expire le $expiry_date)"
-  echo "Port TLS : $port_tls"
-  echo "Port Non-TLS : $port_ntls"
   echo
-  echo "Lien TLS : $link_tls"
-  echo "Lien Non-TLS : $link_ntls"
-  echo "Lien GRPC : $link_grpc"
-  echo "--------------------------------------------"
+  echo "➤ Durée de validité : $days jours (expire le $expiry_date)"
+  echo "➤ Ports utilisés : TLS=$port_tls, Non-TLS=$port_ntls"
+  echo
+  echo "➤ Liens de configuration :"
+  echo "  • TLS :"
+  echo "    $link_tls"
+  echo
+  echo "  • Non-TLS :"
+  echo "    $link_ntls"
+  echo
+  echo "  • GRPC :"
+  echo "    $link_grpc"
+  echo "=================================================="
   echo
 }
 
@@ -104,6 +116,9 @@ while true; do
   case $choice in
     1)
       bash "$SCRIPT_DIR/xray_installe.sh"
+      # Récupérer le nom de domaine saisi dans le script d’installation
+      # On suppose que le script exporte DOMAIN une fois saisi, ou demande ici aussi
+      read -rp "Entrez le nom de domaine utilisé dans l'installation Xray : " DOMAIN
       read -p "Appuyez sur Entrée pour revenir au menu..."
       ;;
     2)
