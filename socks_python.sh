@@ -3,7 +3,7 @@
 # Activation du proxy SOCKS basé sur DarkSSH Python
 
 echo "+--------------------------------------------+"
-echo "|             CONFIG PROXY DARKSSH           |"
+echo "|             CONFIG PROXY KIGHMUSSH           |"
 echo "+--------------------------------------------+"
 
 read -p "Voulez-vous démarrer le proxy DarkSSH Python SOCKS sur le port 8080 ? [oui/non] : " confirm
