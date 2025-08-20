@@ -84,6 +84,7 @@ FILES=(
     "menu3.sh"
     "menu4.sh"
     "menu5.sh"
+    "menu_6.sh"
     "menu6.sh"
     "menu7.sh"
     "slowdns.sh"
@@ -98,6 +99,7 @@ FILES=(
     "nginx.sh"
     "setup_ssh_config.sh"
     "create_ssh_user.sh"
+    "xray_installe.sh"
 )
 
 BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
@@ -174,6 +176,7 @@ echo "+--------------------------------------------+"
 # Ajout de l'exécution du script de configuration SSH
 echo "🚀 Application de la configuration SSH personnalisée..."
 chmod +x "$INSTALL_DIR/setup_ssh_config.sh"
+chmod +x "$INSTALL_DIR/xray_installe.sh"
 run_script "sudo $INSTALL_DIR/setup_ssh_config.sh"
 
 echo "🚀 Script de création utilisateur SSH disponible : $INSTALL_DIR/create_ssh_user.sh"
