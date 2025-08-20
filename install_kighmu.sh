@@ -65,7 +65,7 @@ dropbear badvpn \
 python3 python3-pip python3-setuptools \
 wireguard-tools qrencode \
 gcc make perl \
-software-properties-common socat
+software-properties-common socat jq curl unzip sudo snapd
 
 # Activer et configurer UFW
 ufw allow OpenSSH
@@ -107,6 +107,7 @@ FILES=(
     "nginx.sh"
     "setup_ssh_config.sh"
     "create_ssh_user.sh"
+    "xray_installe.sh"  # Ajout du script d'installation Xray
 )
 
 # URL de base du dépôt GitHub
@@ -179,7 +180,7 @@ run_script "$INSTALL_DIR/badvpn.sh"
 run_script "$INSTALL_DIR/system_dns.sh"
 run_script "$INSTALL_DIR/nginx.sh"
 run_script "$INSTALL_DIR/socks_python.sh"
-run_script "$INSTALL_DIR/slowdns.sh"  # Exécution du script slowdns.sh existant
+run_script "$INSTALL_DIR/slowdns.sh"
 run_script "$INSTALL_DIR/udp_custom.sh"
 
 echo "=============================================="
