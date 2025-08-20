@@ -5,6 +5,45 @@
 # Licence MIT (version française)
 # ==============================================
 
+optimize_system() {
+  echo "=== Optimisation et nettoyage du système VPS ==="
+
+  echo "Mise à jour des paquets..."
+  apt update && apt upgrade -y
+
+  echo "Suppression des paquets inutiles et nettoyage du cache APT..."
+  apt autoremove --purge -y
+  apt clean
+
+  echo "Arrêt et désactivation des services inutiles..."
+  SERVICES_TO_STOP=("apache2" "mysql" "nginx" "postgresql" "cups")
+
+  for service in "${SERVICES_TO_STOP[@]}"; do
+    if systemctl is-active --quiet "$service"; then
+      systemctl stop "$service"
+      echo "Service $service arrêté."
+    fi
+    if systemctl is-enabled --quiet "$service"; then
+      systemctl disable "$service"
+      echo "Service $service désactivé."
+    fi
+  done
+
+  echo "Vider les caches de la mémoire..."
+  sync
+  echo 3 > /proc/sys/vm/drop_caches
+
+  echo "Détection du processus le plus gourmand en CPU..."
+  PID=$(ps aux --sort=-%cpu | awk 'NR==2{print $2}')
+  PROC_NAME=$(ps -p "$PID" -o comm=)
+  echo "Processus $PROC_NAME (PID $PID) consomme le plus de CPU."
+
+  echo "Tuer le processus $PROC_NAME (PID $PID)..."
+  kill -9 "$PID" || echo "Impossible de tuer le processus ou processus déjà terminé."
+
+  echo "Optimisation système terminée."
+}
+
 # Vérification de la présence de curl et installation si manquant
 echo "Vérification de la présence de curl..."
 if ! command -v curl >/dev/null 2>&1; then
@@ -15,6 +54,9 @@ if ! command -v curl >/dev/null 2>&1; then
 else
     echo "curl est déjà installé."
 fi
+
+echo "🔧 Lancement de l'optimisation système avant installation..."
+optimize_system
 
 echo "+--------------------------------------------+"
 echo "|             INSTALLATION VPS               |"
@@ -107,13 +149,11 @@ FILES=(
     "nginx.sh"
     "setup_ssh_config.sh"
     "create_ssh_user.sh"
-    "xray_installe.sh"  # Ajout du script d'installation Xray
+    "xray_installe.sh"
 )
 
-# URL de base du dépôt GitHub
 BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
 
-# Téléchargement et vérification de chaque fichier
 for file in "${FILES[@]}"; do
     echo "Téléchargement de $file ..."
     wget -O "$INSTALL_DIR/$file" "$BASE_URL/$file"
