@@ -33,6 +33,17 @@ generate_uuid() {
   cat /proc/sys/kernel/random/uuid
 }
 
+print_header() {
+  local width=44
+  local text="Xray_CONFIG_INSTALLER"
+  local border="+--------------------------------------------+"
+
+  echo "$border"
+  local padding=$(( (width - ${#text}) / 2 ))
+  printf "|%*s%s%*s|\n" $padding "" "$text" $padding ""
+  echo "$border"
+}
+
 show_menu() {
   echo "Choisissez un protocole à configurer :"
   echo "1) VMESS"
@@ -82,12 +93,6 @@ create_config() {
       ;;
   esac
 
-  # Génération inbound pour XRAY (simplifiée pour exemple)
-  echo "Génération config XRAY et écriture dans $CONFIG_FILE..."
-
-  # (Ici, tu peux insérer la création JSON complète comme dans les versions précédentes)
-
-  # Pour le démonstration, on écrit une config simplifiée avec un seul inbound (adapter selon besoin)
   mkdir -p "$CONFIG_DIR"
   cat > "$CONFIG_FILE" << EOF
 {
@@ -156,23 +161,17 @@ EOF
   echo "☉——————————————————————————☉"
   echo "Format OpenClash : https://$DOMAIN:81/$proto-$name.txt"
   echo "☉——————————————————————————☉"
-  echo "durée     : $days jours"
-  echo "Créé le   : $(date +"%d %b, %Y")"
-  echo "Expire le : $expiry"
+  echo "Durée       : $days jours"
+  echo "Créé le     : $(date +"%d %b, %Y")"
+  echo "Expire le   : $expiry"
   echo "☉——————————————————————————☉"
   echo
 }
 
-show_menu() {
-  echo "Choisissez un protocole à configurer :"
-  echo "1) VMESS"
-  echo "2) VLESS"
-  echo "3) TROJAN"
-  echo "4) Quitter"
-  read -rp "Votre choix : " choice
-}
-
+choice=0
 while true; do
+  clear
+  print_header
   show_menu
   case $choice in
     1)
@@ -190,7 +189,7 @@ while true; do
       read -rp "Durée de validité (jours) : " days
       create_config "trojan" "$conf_name" "$days"
       ;;
-    4) echo "Quitter..."; exit 0 ;;
-    *) echo "Choix invalide";;
+    4) echo "Quitter..."; break ;;
+    *) echo "Choix invalide"; sleep 2 ;;
   esac
 done
