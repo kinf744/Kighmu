@@ -40,7 +40,7 @@ create_config() {
   local days=$3
 
   if [[ -z "$DOMAIN" ]]; then
-    echo "⚠️ Le nom de domaine n'est pas défini. Veuillez d'abord installer le mode Xray."
+    echo "⚠️ Le nom de domaine n'est pas défini. Veuillez installer Xray d'abord."
     return
   fi
 
@@ -109,6 +109,11 @@ create_config() {
 choice=0
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Charger domaine précédemment saisi
+if [[ -f /tmp/.xray_domain ]]; then
+  DOMAIN=$(cat /tmp/.xray_domain)
+fi
+
 while true; do
   clear
   print_header
@@ -116,9 +121,13 @@ while true; do
   case $choice in
     1)
       bash "$SCRIPT_DIR/xray_installe.sh"
-      # Récupérer le nom de domaine saisi dans le script d’installation
-      # On suppose que le script exporte DOMAIN une fois saisi, ou demande ici aussi
-      read -rp "Entrez le nom de domaine utilisé dans l'installation Xray : " DOMAIN
+      if [[ -f /tmp/.xray_domain ]]; then
+        DOMAIN=$(cat /tmp/.xray_domain)
+        echo "Nom de domaine $DOMAIN chargé automatiquement."
+      else
+        DOMAIN=""
+        echo "Aucun domaine enregistré. Veuillez installer Xray d’abord."
+      fi
       read -p "Appuyez sur Entrée pour revenir au menu..."
       ;;
     2)
@@ -175,6 +184,7 @@ while true; do
       ;;
     6)
       echo "Quitter..."
+      rm -f /tmp/.xray_domain
       break
       ;;
     *)
