@@ -148,14 +148,14 @@ while true; do
   line_simple
 
   content_line "[01] Créer un utilisateur"
-  content_line " Créer un test utilisateur"
-  content_line " Voir les utilisateurs en ligne"
-  content_line " Supprimer utilisateur"
-  content_line " Installation de mode"
-  content_line " Xray mode"
-  content_line " Désinstaller le script"
-  content_line " Blocage de torrents"
-  content_line " Quitter"
+  content_line "[02] Créer un test utilisateur"
+  content_line "[03] Voir les utilisateurs en ligne"
+  content_line "[04] Supprimer utilisateur"
+  content_line "[05] Installation de mode"
+  content_line "[06] Xray mode"
+  content_line "[07] Désinstaller le script"
+  content_line "[08] Blocage de torrents"
+  content_line "[09] Quitter"
   line_simple
 
   content_line "Tapez votre choix [01-09] puis appuyez sur Entrée:"
@@ -166,15 +166,15 @@ while true; do
   choix="${choix%]}"  # supprime ] si present
 
   case $choix in
-    01) bash "$SCRIPT_DIR/menu1.sh" ;;
-    02) bash "$SCRIPT_DIR/menu2.sh" ;;
-    03) bash "$SCRIPT_DIR/menu3.sh" ;;
-    04) bash "$SCRIPT_DIR/menu4.sh" ;;
-    05) bash "$SCRIPT_DIR/menu5.sh" ;;
-    06) bash "$SCRIPT_DIR/menu_6.sh" ;;
-    07) bash "$SCRIPT_DIR/menu6.sh" ;;
-    08) bash "$SCRIPT_DIR/menu7.sh" ;;
-    09) echo "Au revoir !"; exit 0 ;;
+    1) bash "$SCRIPT_DIR/menu1.sh" ;;
+    2) bash "$SCRIPT_DIR/menu2.sh" ;;
+    3) bash "$SCRIPT_DIR/menu3.sh" ;;
+    4) bash "$SCRIPT_DIR/menu4.sh" ;;
+    5) bash "$SCRIPT_DIR/menu5.sh" ;;
+    6) bash "$SCRIPT_DIR/menu_6.sh" ;;
+    7) bash "$SCRIPT_DIR/menu6.sh" ;;
+    8) bash "$SCRIPT_DIR/menu7.sh" ;;
+    9) echo "Au revoir !"; exit 0 ;;
     *) echo "Choix invalide !" ;;
   esac
   read -p "Appuyez sur Entrée pour revenir au menu..."
