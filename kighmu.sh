@@ -61,16 +61,13 @@ double_content() {
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# --- Configuration interface réseau principale
 INTERFACE="eth0"
 
-# Installer iptables si absent
 if ! command -v iptables &> /dev/null; then
   apt update
   apt install -y iptables
 fi
 
-# Mise en place règles iptables pour SSH (port 22) si manquantes
 if ! iptables -L INPUT -v -n | grep --quiet "dpt:22"; then
   iptables -I INPUT -p tcp --dport 22 -j ACCEPT
 fi
@@ -100,11 +97,10 @@ get_traffic_stats() {
   local ssh_bytes=$(get_ssh_traffic_bytes)
   local ssh_traffic=$(echo "scale=2; $ssh_bytes / 1073741824" | bc)
   local total_today=$(echo "$xray_traffic + $ssh_traffic" | bc)
-  local total_month="$total_today"  # À améliorer avec historique
+  local total_month="$total_today"
   echo "${total_today}|${total_month}"
 }
 
-# Boucle avec rafraîchissement toutes les secondes
 while true; do
   clear
 
@@ -130,7 +126,7 @@ while true; do
   double_content "Utilisateurs: $USER_COUNT" "Appareils connectés: $CONNECTED_DEVICES"
   line_simple
 
-  double_content "Trafic aujourd'hui: \033[93m${today_usage} GB\033[0m" "Trafic mois: \033[93m${month_usage} GB\033[0m"
+  double_content "Trafic aujourd'hui: ${today_usage} GB" "Trafic mois: ${month_usage} GB"
   line_simple
 
   center_line "MENU PRINCIPAL:"
