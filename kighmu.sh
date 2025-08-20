@@ -120,12 +120,13 @@ while true; do
   content_line "3. Voir les utilisateurs en ligne"
   content_line "4. Supprimer utilisateur"
   content_line "5. Installation de mode"
-  content_line "6. Désinstaller le script"
-  content_line "7. Blocage de torrents"
-  content_line "8. Quitter"
+  content_line "6. Xray mode"           # Nouveau menu ajouté
+  content_line "7. Désinstaller le script" # ancien 6 décalé en 7
+  content_line "8. Blocage de torrents"    # ancien 7 décalé en 8
+  content_line "9. Quitter"                 # ancien 8 décalé en 9
   line_simple
 
-  content_line "Entrez votre choix [1-8]:"
+  content_line "Entrez votre choix [1-9]:"
   line_full   # fermeture du cadre (haut = '=', bas = '=')
 
   # Prompt hors cadre (clair et lisible)
@@ -137,9 +138,10 @@ while true; do
     3) bash "$SCRIPT_DIR/menu3.sh" ;;
     4) bash "$SCRIPT_DIR/menu4.sh" ;;
     5) bash "$SCRIPT_DIR/menu5.sh" ;;
-    6) bash "$SCRIPT_DIR/menu6.sh" ;;
-    7) bash "$SCRIPT_DIR/menu7.sh" ;;
-    8) echo "Au revoir !"; exit 0 ;;
+    6) bash "$SCRIPT_DIR/menu_6.sh" ;;  # nouveau menu Xray mode
+    7) bash "$SCRIPT_DIR/menu6.sh" ;;    # ancien 6 décalé
+    8) bash "$SCRIPT_DIR/menu7.sh" ;;    # ancien 7 décalé
+    9) echo "Au revoir !"; exit 0 ;;
     *) echo "Choix invalide !" ;;
   esac
 
