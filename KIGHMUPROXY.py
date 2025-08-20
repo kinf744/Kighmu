@@ -20,7 +20,7 @@ PASS = ''  # Mot de passe optionnel (laisser vide pour désactiver)
 BUFLEN = 8196 * 8
 TIMEOUT = 60
 MSG = 'KIGHMUPROXY'
-RESPONSE = "HTTP/1.1 200 OK Kighmu237\r\n\r\n"  # Ligne modifiée
+RESPONSE = "HTTP/1.1 200 OK\r\n\r\n"
 DEFAULT_HOST = '0.0.0.0:22'
 
 class Server(threading.Thread):
@@ -217,4 +217,4 @@ def main():
 
 if __name__ == '__main__':
     main()
-    
+        
