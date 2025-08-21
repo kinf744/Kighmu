@@ -1,5 +1,5 @@
 #!/bin/bash
-# menu5.sh - Gestion complète des modes avec installation/désinstallation
+# menu5.sh - Gestion complète des modes avec installation/désinstallation + sous-menu V2Ray SlowDNS
 
 INSTALL_DIR="$HOME/Kighmu"
 WIDTH=60
@@ -20,7 +20,6 @@ content_line() { printf "| %-56s |\n" "$1"; }
 
 center_line() {
     local text="$1"
-    # Supprimer les séquences ANSI pour calcul correct
     local visible_text=$(echo -e "$text" | sed 's/\x1B\[[0-9;]*[mK]//g')
     local padding=$(( (WIDTH - ${#visible_text}) / 2 ))
     printf "|%*s%s%*s|\n" "$padding" "" "$text" "$padding" ""
@@ -91,15 +90,9 @@ install_mode() {
     case $1 in
         1) apt-get install -y openssh-server && systemctl enable ssh && systemctl restart ssh ;;
         2) apt-get install -y dropbear && systemctl enable dropbear && systemctl restart dropbear ;;
-        3)
-            [[ -x "$INSTALL_DIR/slowdns.sh" ]] && bash "$INSTALL_DIR/slowdns.sh" && create_service "slowdns" "/bin/bash $INSTALL_DIR/slowdns.sh" || echo -e "${RED}slowdns.sh introuvable.${RESET}"
-            ;;
-        4)
-            [[ -x "$INSTALL_DIR/udp_custom.sh" ]] && bash "$INSTALL_DIR/udp_custom.sh" && create_service "udp-custom" "/bin/bash $INSTALL_DIR/udp_custom.sh" || echo -e "${RED}udp_custom.sh introuvable.${RESET}"
-            ;;
-        5)
-            [[ -x "$INSTALL_DIR/socks_python.sh" ]] && bash "$INSTALL_DIR/socks_python.sh" && create_service "socks-python" "/usr/bin/python3 $INSTALL_DIR/KIGHMUPROXY.py" || echo -e "${RED}socks_python.sh introuvable.${RESET}"
-            ;;
+        3) [[ -x "$INSTALL_DIR/slowdns.sh" ]] && bash "$INSTALL_DIR/slowdns.sh" && create_service "slowdns" "/bin/bash $INSTALL_DIR/slowdns.sh" || echo -e "${RED}slowdns.sh introuvable.${RESET}" ;;
+        4) [[ -x "$INSTALL_DIR/udp_custom.sh" ]] && bash "$INSTALL_DIR/udp_custom.sh" && create_service "udp-custom" "/bin/bash $INSTALL_DIR/udp_custom.sh" || echo -e "${RED}udp_custom.sh introuvable.${RESET}" ;;
+        5) [[ -x "$INSTALL_DIR/socks_python.sh" ]] && bash "$INSTALL_DIR/socks_python.sh" && create_service "socks-python" "/usr/bin/python3 $INSTALL_DIR/KIGHMUPROXY.py" || echo -e "${RED}socks_python.sh introuvable.${RESET}" ;;
         6) apt-get install -y nginx && systemctl enable nginx && systemctl restart nginx ;;
         7) create_service "badvpn" "/usr/bin/badvpn-udpgw --listen-addr 127.0.0.1:7303 --max-clients 500" ;;
         *) echo -e "${RED}Choix invalide.${RESET}" ;;
@@ -120,7 +113,7 @@ uninstall_mode() {
     esac
 }
 
-# Boucle menu
+# Boucle menu principal des modes
 while true; do
     show_modes_status
     line_full
@@ -128,7 +121,8 @@ while true; do
     line_full
     content_line "1) Installer un mode"
     content_line "2) Désinstaller un mode"
-    content_line "3) Retour menu principal"
+    content_line "3) V2Ray SlowDNS"
+    content_line "4) Retour menu principal"
     line_simple
     echo ""
 
@@ -161,6 +155,14 @@ while true; do
             uninstall_mode "$choix"
             ;;
         3)
+            # Lancement du sous-menu V2Ray SlowDNS
+            if [[ -x "$INSTALL_DIR/v2ray_slowdns.sh" ]]; then
+                bash "$INSTALL_DIR/v2ray_slowdns.sh"
+            else
+                echo -e "${RED}Sous-menu v2ray_slowdns.sh introuvable.${RESET}"
+            fi
+            ;;
+        4)
             echo -e "${YELLOW}Retour au menu principal...${RESET}"
             sleep 1
             bash "$INSTALL_DIR/kighmu.sh"
