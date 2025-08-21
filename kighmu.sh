@@ -79,9 +79,27 @@ while true; do
       4) bash "$SCRIPT_DIR/menu4.sh" ;;
       5) bash "$SCRIPT_DIR/menu5.sh" ;;
       6) bash "$SCRIPT_DIR/menu6.sh" ;;
-      7) bash "$SCRIPT_DIR/menu7.sh" ;;
+      7) 
+         echo -e "${YELLOW}⚠️  Vous êtes sur le point de désinstaller le script.${RESET}"
+         read -p "Voulez-vous vraiment continuer ? (o/N): " confirm
+         if [[ "$confirm" =~ ^[Oo]$ ]]; then
+             echo -e "${RED}Désinstallation en cours...${RESET}"
+             # Exemple : suppression des fichiers installés
+             rm -rf "$SCRIPT_DIR"
+             clear
+             echo -e "${RED}✅ Script désinstallé avec succès.${RESET}"
+             echo -e "${CYAN}Le panneau de contrôle est maintenant désactivé.${RESET}"
+             exit 0
+         else
+             echo -e "${GREEN}Opération annulée, retour au menu...${RESET}"
+         fi
+         ;;
       8) bash "$SCRIPT_DIR/menu8.sh" ;;
-      9) echo -e "${RED}Au revoir !${RESET}" ; exit 0 ;;
+      9) 
+         clear
+         echo -e "${RED}Au revoir !${RESET}"
+         exit 0 
+         ;;
       *) echo -e "${RED}Choix invalide !${RESET}" ;;
     esac
 
