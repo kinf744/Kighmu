@@ -1,19 +1,19 @@
 #!/bin/bash
 # socks_python.sh
-# Activation du SOCKS Python avec WebSocket HTTP/2
+# Activation du SOCKS Python avec configuration simple
 
 echo "+--------------------------------------------+"
 echo "|             CONFIG SOCKS/PYTHON            |"
 echo "+--------------------------------------------+"
 
-read -p "Voulez-vous démarrer le proxy SOCKS/Python avec WS HTTP/2 ? [oui/non] : " confirm
+read -p "Voulez-vous démarrer le proxy SOCKS/Python ? [oui/non] : " confirm
 
 case "$confirm" in
     [oO][uU][iI]|[yY][eE][sS])
         echo "Vérification du module pysocks..."
         if ! python3 -c "import socks" &> /dev/null; then
             echo "Module pysocks non trouvé, installation en cours..."
-            sudo pip3 install pysocks
+            sudo pip3 install pysocks python-socks
         else
             echo "Module pysocks déjà installé."
         fi
@@ -26,14 +26,12 @@ case "$confirm" in
         fi
 
         echo "Démarrage du proxy SOCKS/Python sur le port $PROXY_PORT..."
-
-        # Remplace -m websocks par ta vraie commande/module/projet Python qui écoute sur $PROXY_PORT
-        nohup python3 -m websocks --host 0.0.0.0 --port $PROXY_PORT --http2 > /var/log/socks_python.log 2>&1 &
+        nohup python3 /chemin/vers/kighmu_proxy.py $PROXY_PORT > /var/log/socks_python.log 2>&1 &
 
         sleep 3
 
-        if pgrep -f "python3 -m websocks" > /dev/null; then
-            echo "Proxy SOCKS/Python démarré avec HTTP/2 sur le port $PROXY_PORT."
+        if pgrep -f "python3 /chemin/vers/kighmu_proxy.py" > /dev/null; then
+            echo "Proxy SOCKS/Python démarré sur le port $PROXY_PORT."
             echo "Logs disponibles dans /var/log/socks_python.log"
         else
             echo "Échec du démarrage du proxy SOCKS/Python."
