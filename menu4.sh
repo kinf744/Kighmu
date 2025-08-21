@@ -1,5 +1,5 @@
 #!/bin/bash
-# menu4.sh - Supprimer un utilisateur avec gestion robuste
+# menu4.sh - Supprimer un utilisateur avec gestion robuste et sudo mv pour update liste
 
 USER_FILE="/etc/kighmu/users.list"
 
@@ -16,12 +16,6 @@ echo "Utilisateurs existants :"
 cut -d'|' -f1 "$USER_FILE"
 
 read -p "Nom de l'utilisateur à supprimer : " username
-
-# Vérification dans users.list
-if ! grep -q "^$username|" "$USER_FILE"; then
-    echo "Utilisateur $username introuvable dans la liste."
-    exit 1
-fi
 
 # Fonction nettoyage fichiers liés à l'utilisateur
 cleanup_user_files() {
@@ -48,19 +42,23 @@ cleanup_user_files() {
 
 # Vérification de l'existence système
 if id "$username" &>/dev/null; then
-    # Suppression de l'utilisateur système et de son home
+    # Suppression manuelle des fichiers avant userdel pour éviter warnings
+    cleanup_user_files "$username"
+
+    # Suppression de l'utilisateur système
     if sudo userdel -r "$username"; then
         echo "Utilisateur système $username supprimé avec succès."
 
-        # Nettoyage supplémentaire si besoin
-        cleanup_user_files "$username"
-
-        # Suppression dans users.list
+        # Suppression dans users.list avec sudo mv
         if grep -v "^$username|" "$USER_FILE" > "${USER_FILE}.tmp"; then
-            mv "${USER_FILE}.tmp" "$USER_FILE"
-            echo "Utilisateur $username supprimé de la liste utilisateurs."
+            if sudo mv "${USER_FILE}.tmp" "$USER_FILE"; then
+                echo "Utilisateur $username supprimé de la liste utilisateurs."
+            else
+                echo "Erreur critique : impossible de remplacer le fichier ${USER_FILE}. Vérifiez les permissions."
+                exit 1
+            fi
         else
-            echo "Erreur : impossible de mettre à jour la liste des utilisateurs."
+            echo "Erreur critique : impossible de créer le fichier temporaire ${USER_FILE}.tmp."
             exit 1
         fi
     else
@@ -70,18 +68,24 @@ if id "$username" &>/dev/null; then
 else
     echo "Attention : utilisateur système $username non trouvé ou déjà supprimé."
 
-    # Nettoyage manuel même s’il n’est plus présent en système
+    # Nettoyage manuel même si utilisateur absent
     cleanup_user_files "$username"
 
-    # On peut quand même tenter de retirer de la liste users.list si présent
+    # Suppression dans users.list avec sudo mv
     if grep -q "^$username|" "$USER_FILE"; then
         if grep -v "^$username|" "$USER_FILE" > "${USER_FILE}.tmp"; then
-            mv "${USER_FILE}.tmp" "$USER_FILE"
-            echo "Utilisateur $username retiré de la liste utilisateurs."
+            if sudo mv "${USER_FILE}.tmp" "$USER_FILE"; then
+                echo "Utilisateur $username retiré de la liste utilisateurs."
+            else
+                echo "Erreur critique : impossible de remplacer le fichier ${USER_FILE}. Vérifiez les permissions."
+                exit 1
+            fi
         else
-            echo "Erreur : impossible de mettre à jour la liste des utilisateurs."
+            echo "Erreur critique : impossible de créer le fichier temporaire ${USER_FILE}.tmp."
             exit 1
         fi
+    else
+        echo "Utilisateur $username n'est pas dans la liste utilisateurs."
     fi
 fi
 
