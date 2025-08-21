@@ -85,7 +85,7 @@ cat > /usr/local/etc/xray/config.json << EOF
       "port": 80,
       "protocol": "vless",
       "settings": {
-        "clients": [ { "id": "$UUID", "flow": "xtls-rprx-vision" } ],
+        "clients": [ { "id": "$UUID" } ],
         "decryption": "none"
       },
       "streamSettings": { "network": "ws", "security": "none", "wsSettings": { "path": "/vlessws" } }
