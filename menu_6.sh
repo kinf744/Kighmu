@@ -4,26 +4,40 @@ CONFIG_DIR="/usr/local/etc/xray"
 CONFIG_FILE="$CONFIG_DIR/config.json"
 DOMAIN=""
 
+# Couleurs
+RED="\e[31m"
+GREEN="\e[32m"
+YELLOW="\e[33m"
+BLUE="\e[34m"
+MAGENTA="\e[35m"
+CYAN="\e[36m"
+BOLD="\e[1m"
+RESET="\e[0m"
+
 print_header() {
   local width=50
-  local text="Xray CONFIG INSTALLER"
+  local text="🚀 Xray CONFIG INSTALLER 🚀"
   local border="+--------------------------------------------------+"
 
-  echo "$border"
+  echo -e "${CYAN}$border${RESET}"
   local padding=$(( (width - ${#text}) / 2 ))
-  printf "|%*s%s%*s|\n" $padding "" "$text" $padding ""
-  echo "$border"
+  printf "${CYAN}|%*s${BOLD}${MAGENTA}%s${RESET}${CYAN}%*s|\n${RESET}" $padding "" "$text" $padding ""
+  echo -e "${CYAN}$border${RESET}"
 }
 
 show_menu() {
-  echo "Choisissez une action :"
-  echo "1) Installer le Xray"
-  echo "2) VMESS"
-  echo "3) VLESS"
-  echo "4) TROJAN"
-  echo "5) Supprimer un utilisateur Xray"
-  echo "6) Quitter"
-  read -rp "Votre choix : " choice
+  echo -e "${CYAN}+--------------------------------------------------+${RESET}"
+  echo -e "${BOLD}${YELLOW}|                  MENU Xray                        |${RESET}"
+  echo -e "${CYAN}+--------------------------------------------------+${RESET}"
+  echo -e "${GREEN}[01]${RESET} Installer le Xray"
+  echo -e "${GREEN}[02]${RESET} VMESS"
+  echo -e "${GREEN}[03]${RESET} VLESS"
+  echo -e "${GREEN}[04]${RESET} TROJAN"
+  echo -e "${GREEN}[05]${RESET} Supprimer un utilisateur Xray"
+  echo -e "${RED}[06]${RESET} Quitter"
+  echo -e "${CYAN}+--------------------------------------------------+${RESET}"
+  echo -ne "${BOLD}${YELLOW}Votre choix [1-6] : ${RESET}"
+  read -r choice
 }
 
 generate_uuid() {
@@ -40,7 +54,7 @@ create_config() {
   local days=$3
 
   if [[ -z "$DOMAIN" ]]; then
-    echo "⚠️ Le nom de domaine n'est pas défini. Veuillez installer Xray d'abord."
+    echo -e "${RED}⚠️ Le nom de domaine n'est pas défini. Veuillez installer Xray d'abord.${RESET}"
     return
   fi
 
@@ -81,28 +95,23 @@ create_config() {
   esac
 
   echo
-  echo "=================================================="
-  echo "📄 Configuration $proto générée pour l'utilisateur : $name"
-  echo "--------------------------------------------------"
-  echo "➤ UUID / Mot de passe :"
-  echo "    UUID (VMESS/VLESS) : $uuid"
+  echo -e "${CYAN}==================================================${RESET}"
+  echo -e "${BOLD}${MAGENTA}📄 Configuration $proto générée pour l'utilisateur : $name${RESET}"
+  echo -e "${CYAN}--------------------------------------------------${RESET}"
+  echo -e "${YELLOW}➤ UUID / Mot de passe :${RESET}"
+  echo -e "    UUID (VMESS/VLESS) : $uuid"
   if [[ "$proto" == "trojan" ]]; then
-    echo "    Mot de passe Trojan : $trojan_pass"
+    echo -e "    Mot de passe Trojan : $trojan_pass"
   fi
   echo
-  echo "➤ Durée de validité : $days jours (expire le $expiry_date)"
-  echo "➤ Ports utilisés : TLS=$port_tls, Non-TLS=$port_ntls"
+  echo -e "${YELLOW}➤ Durée de validité :${RESET} $days jours (expire le $expiry_date)"
+  echo -e "➤ Ports utilisés : TLS=$port_tls, Non-TLS=$port_ntls"
   echo
-  echo "➤ Liens de configuration :"
-  echo "  • TLS :"
-  echo "    $link_tls"
-  echo
-  echo "  • Non-TLS :"
-  echo "    $link_ntls"
-  echo
-  echo "  • GRPC :"
-  echo "    $link_grpc"
-  echo "=================================================="
+  echo -e "${YELLOW}➤ Liens de configuration :${RESET}"
+  echo -e "  • TLS : $link_tls"
+  echo -e "  • Non-TLS : $link_ntls"
+  echo -e "  • GRPC : $link_grpc"
+  echo -e "${CYAN}==================================================${RESET}"
   echo
 }
 
@@ -121,75 +130,57 @@ while true; do
   case $choice in
     1)
       bash "$SCRIPT_DIR/xray_installe.sh"
-      # Recharge domaine après installation
       if [[ -f /tmp/.xray_domain ]]; then
         DOMAIN=$(cat /tmp/.xray_domain)
-        echo "Nom de domaine $DOMAIN chargé automatiquement."
+        echo -e "${GREEN}Nom de domaine $DOMAIN chargé automatiquement.${RESET}"
       else
         DOMAIN=""
-        echo "Aucun domaine enregistré. Veuillez installer Xray d’abord."
+        echo -e "${RED}Aucun domaine enregistré. Veuillez installer Xray d’abord.${RESET}"
       fi
       read -p "Appuyez sur Entrée pour revenir au menu..."
       ;;
     2)
       read -rp "Nom de l'utilisateur VMESS : " conf_name
       read -rp "Durée de validité (jours) : " days
-      if [[ -z "$conf_name" || -z "$days" ]]; then
-        echo "Nom ou durée invalide."
-        read -p "Appuyez sur Entrée pour revenir au menu..."
-      else
-        create_config "vmess" "$conf_name" "$days"
-        read -p "Appuyez sur Entrée pour revenir au menu..."
-      fi
+      [[ -n "$conf_name" && -n "$days" ]] && create_config "vmess" "$conf_name" "$days"
+      read -p "Appuyez sur Entrée pour revenir au menu..."
       ;;
     3)
       read -rp "Nom de l'utilisateur VLESS : " conf_name
       read -rp "Durée de validité (jours) : " days
-      if [[ -z "$conf_name" || -z "$days" ]]; then
-        echo "Nom ou durée invalide."
-        read -p "Appuyez sur Entrée pour revenir au menu..."
-      else
-        create_config "vless" "$conf_name" "$days"
-        read -p "Appuyez sur Entrée pour revenir au menu..."
-      fi
+      [[ -n "$conf_name" && -n "$days" ]] && create_config "vless" "$conf_name" "$days"
+      read -p "Appuyez sur Entrée pour revenir au menu..."
       ;;
     4)
       read -rp "Nom de l'utilisateur TROJAN : " conf_name
       read -rp "Durée de validité (jours) : " days
-      if [[ -z "$conf_name" || -z "$days" ]]; then
-        echo "Nom ou durée invalide."
-        read -p "Appuyez sur Entrée pour revenir au menu..."
-      else
-        create_config "trojan" "$conf_name" "$days"
-        read -p "Appuyez sur Entrée pour revenir au menu..."
-      fi
+      [[ -n "$conf_name" && -n "$days" ]] && create_config "trojan" "$conf_name" "$days"
+      read -p "Appuyez sur Entrée pour revenir au menu..."
       ;;
     5)
       read -rp "Entrez le nom exact de l'utilisateur Xray à supprimer : " del_name
-      if [[ -z "$del_name" ]]; then
-        echo "Nom invalide. Aucune suppression effectuée."
-      else
-        read -rp "Confirmez-vous la suppression de l'utilisateur '$del_name' ? (oui/non) : " conf
+      if [[ -n "$del_name" ]]; then
+        read -rp "Confirmez la suppression de '$del_name' ? (oui/non) : " conf
         if [[ "$conf" =~ ^([oO][uU][iI]|[oO])$ ]]; then
-          if [[ ! -f "$CONFIG_FILE" ]]; then
-            echo "Fichier de configuration Xray introuvable."
-          else
-            sudo jq "del(.inbounds[].settings.clients[] | select(.email==\"$del_name\"))" "$CONFIG_FILE" > "$CONFIG_FILE.tmp" && sudo mv "$CONFIG_FILE.tmp" "$CONFIG_FILE" && echo "Utilisateur $del_name supprimé avec succès." || echo "Erreur lors de la suppression."
+          if [[ -f "$CONFIG_FILE" ]]; then
+            sudo jq "del(.inbounds[].settings.clients[] | select(.email==\"$del_name\"))" "$CONFIG_FILE" > "$CONFIG_FILE.tmp" && sudo mv "$CONFIG_FILE.tmp" "$CONFIG_FILE" && echo -e "${GREEN}Utilisateur $del_name supprimé avec succès.${RESET}" || echo -e "${RED}Erreur lors de la suppression.${RESET}"
             sudo systemctl restart xray
+          else
+            echo -e "${RED}Fichier de configuration Xray introuvable.${RESET}"
           fi
         else
-          echo "Suppression annulée."
+          echo -e "${YELLOW}Suppression annulée.${RESET}"
         fi
       fi
       read -p "Appuyez sur Entrée pour revenir au menu..."
       ;;
     6)
-      echo "Quitter..."
+      echo -e "${RED}Quitter...${RESET}"
       rm -f /tmp/.xray_domain
       break
       ;;
     *)
-      echo "Choix invalide, veuillez réessayer."
+      echo -e "${RED}Choix invalide, veuillez réessayer.${RESET}"
       sleep 2
       ;;
   esac
