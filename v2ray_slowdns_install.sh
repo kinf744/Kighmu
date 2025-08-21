@@ -45,7 +45,6 @@ fi
 mkdir -p "$INSTALL_DIR"
 
 # Créer le fichier de configuration V2Ray avec WebSocket path fixe /kighmu
-
 cat > "$CONFIG_PATH" <<EOF
 {
   "inbounds": [
@@ -80,11 +79,12 @@ EOF
 
 echo "Fichier de configuration créé : $CONFIG_PATH"
 
-# Création du service systemd
-
+# Création ou correction du service systemd
 SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME.service"
 
-cat > "$SERVICE_FILE" <<EOF
+if [[ ! -f "$SERVICE_FILE" ]] || ! grep -q "^ExecStart=$BIN_PATH run -config $CONFIG_PATH" "$SERVICE_FILE"; then
+  echo "Création/correction du fichier de service systemd : $SERVICE_FILE"
+  sudo tee "$SERVICE_FILE" > /dev/null <<EOF
 [Unit]
 Description=V2Ray SlowDNS Tunnel Service (WS)
 After=network.target
@@ -98,15 +98,21 @@ Restart=on-failure
 [Install]
 WantedBy=multi-user.target
 EOF
+else
+  echo "Le fichier systemd semble correct, pas de modification."
+fi
 
 # Activer et démarrer le service
-
-systemctl daemon-reload
-systemctl enable $SERVICE_NAME
-systemctl restart $SERVICE_NAME
+sudo systemctl daemon-reload
+sudo systemctl enable $SERVICE_NAME
+sudo systemctl restart $SERVICE_NAME
 
 echo "Service $SERVICE_NAME démarré sur TCP port $TCP_PORT avec WS chemin /kighmu, namespace $NAMESPACE et UUID $UUID."
 
 # Vérifier écoute sur TCP 5304
-
-ss -lnpt | grep $TCP_PORT && echo "V2Ray SlowDNS WS fonctionne correctement." || echo "Erreur : le service n'écoute pas sur le port $TCP_PORT."
+if ss -lnpt | grep -q ":$TCP_PORT "; then
+  echo "V2Ray SlowDNS WS fonctionne correctement."
+else
+  echo "Erreur : le service n'écoute pas sur le port $TCP_PORT."
+  echo "Vérifiez le statut du service avec : sudo systemctl status $SERVICE_NAME"
+fi
