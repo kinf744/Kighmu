@@ -69,73 +69,184 @@ cat > /usr/local/etc/xray/config.json << EOF
   "log": {
     "access": "/var/log/xray/access.log",
     "error": "/var/log/xray/error.log",
-    "loglevel": "debug"
+    "loglevel": "warning"
   },
   "inbounds": [
     {
       "port": 443,
       "protocol": "vless",
       "settings": {
-        "clients": [ { "id": "$UUID", "flow": "xtls-rprx-vision" } ],
+        "clients": [
+          {
+            "id": "$UUID",
+            "flow": "xtls-rprx-vision"
+          }
+        ],
         "decryption": "none"
       },
       "streamSettings": {
         "network": "ws",
         "security": "tls",
-        "tlsSettings": { "certificates": [ { "certificateFile": "$CRT_PATH", "keyFile": "$KEY_PATH" } ] },
-        "wsSettings": { "path": "/vlessws" }
+        "tlsSettings": {
+          "certificates": [
+            {
+              "certificateFile": "$CRT_PATH",
+              "keyFile": "$KEY_PATH"
+            }
+          ]
+        },
+        "wsSettings": {
+          "path": "/vlessws",
+          "headers": {
+            "Host": "$DOMAIN"
+          }
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls"]
       }
     },
     {
       "port": 80,
       "protocol": "vless",
       "settings": {
-        "clients": [ { "id": "$UUID" } ],
+        "clients": [
+          {
+            "id": "$UUID"
+          }
+        ],
         "decryption": "none"
       },
-      "streamSettings": { "network": "ws", "security": "none", "wsSettings": { "path": "/vlessws" } }
+      "streamSettings": {
+        "network": "ws",
+        "security": "none",
+        "wsSettings": {
+          "path": "/vlessws"
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http"]
+      }
     },
     {
       "port": 443,
       "protocol": "vmess",
-      "settings": { "clients": [ { "id": "$UUID", "alterId": 0 } ] },
+      "settings": {
+        "clients": [
+          {
+            "id": "$UUID",
+            "alterId": 0
+          }
+        ]
+      },
       "streamSettings": {
         "network": "ws",
         "security": "tls",
-        "tlsSettings": { "certificates": [ { "certificateFile": "$CRT_PATH", "keyFile": "$KEY_PATH" } ] },
-        "wsSettings": { "path": "/vmessws" }
+        "tlsSettings": {
+          "certificates": [
+            {
+              "certificateFile": "$CRT_PATH",
+              "keyFile": "$KEY_PATH"
+            }
+          ]
+        },
+        "wsSettings": {
+          "path": "/vmessws",
+          "headers": {
+            "Host": "$DOMAIN"
+          }
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls"]
       }
     },
     {
       "port": 80,
       "protocol": "vmess",
-      "settings": { "clients": [ { "id": "$UUID", "alterId": 0 } ] },
-      "streamSettings": { "network": "ws", "security": "none", "wsSettings": { "path": "/vmessws" } }
+      "settings": {
+        "clients": [
+          {
+            "id": "$UUID",
+            "alterId": 0
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "none",
+        "wsSettings": {
+          "path": "/vmessws"
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http"]
+      }
     },
     {
       "port": 443,
       "protocol": "trojan",
-      "settings": { "clients": [ { "password": "$TROJAN_PASS" } ] },
+      "settings": {
+        "clients": [
+          {
+            "password": "$TROJAN_PASS"
+          }
+        ]
+      },
       "streamSettings": {
         "network": "grpc",
         "security": "tls",
-        "tlsSettings": { "certificates": [ { "certificateFile": "$CRT_PATH", "keyFile": "$KEY_PATH" } ] },
-        "grpcSettings": { "serviceName": "trojan-grpc" }
+        "tlsSettings": {
+          "certificates": [
+            {
+              "certificateFile": "$CRT_PATH",
+              "keyFile": "$KEY_PATH"
+            }
+          ]
+        },
+        "grpcSettings": {
+          "serviceName": "trojan-grpc"
+        }
       }
     },
     {
       "port": 443,
       "protocol": "vless",
-      "settings": { "clients": [ { "id": "$UUID" } ], "decryption": "none" },
+      "settings": {
+        "clients": [
+          {
+            "id": "$UUID"
+          }
+        ],
+        "decryption": "none"
+      },
       "streamSettings": {
         "network": "grpc",
         "security": "tls",
-        "tlsSettings": { "certificates": [ { "certificateFile": "$CRT_PATH", "keyFile": "$KEY_PATH" } ] },
-        "grpcSettings": { "serviceName": "vless-grpc" }
+        "tlsSettings": {
+          "certificates": [
+            {
+              "certificateFile": "$CRT_PATH",
+              "keyFile": "$KEY_PATH"
+            }
+          ]
+        },
+        "grpcSettings": {
+          "serviceName": "vless-grpc"
+        }
       }
     }
   ],
-  "outbounds": [ { "protocol": "freedom", "settings": {} } ]
+  "outbounds": [
+    {
+      "protocol": "freedom",
+      "settings": {}
+    }
+  ]
 }
 EOF
 
