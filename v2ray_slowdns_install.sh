@@ -109,6 +109,9 @@ sudo systemctl restart $SERVICE_NAME
 
 echo "Service $SERVICE_NAME démarré sur TCP port $TCP_PORT avec WS chemin /kighmu, namespace $NAMESPACE et UUID $UUID."
 
+# Délai d’attente pour que le service démarre bien
+sleep 3
+
 # Vérifier écoute sur TCP 5304
 if ss -lnpt | grep -q ":$TCP_PORT "; then
   echo "V2Ray SlowDNS WS fonctionne correctement."
