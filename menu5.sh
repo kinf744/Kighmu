@@ -1,6 +1,6 @@
 #!/bin/bash
 # menu5.sh
-# Affichage dynamique état modes + installation/désinstallation interactive
+# Kighmu VPS Manager - Gestion des modes (Installation/Désinstallation)
 
 INSTALL_DIR="$HOME/Kighmu"
 WIDTH=60
@@ -17,11 +17,11 @@ MAGENTA="\e[35m"
 # Fonctions d'affichage
 line_full() { echo -e "${CYAN}+$(printf '%0.s=' $(seq 1 $WIDTH))+${RESET}"; }
 line_simple() { echo -e "${CYAN}+$(printf '%0.s-' $(seq 1 $WIDTH))+${RESET}"; }
+
 content_line() { printf "| %-56s |\n" "$1"; }
 
 center_line() {
     local text="$1"
-    # Supprimer les séquences ANSI pour le calcul de la largeur
     local visible_text=$(echo -e "$text" | sed 's/\x1B\[[0-9;]*[mK]//g')
     local padding=$(( (WIDTH - ${#visible_text}) / 2 ))
     printf "|%*s%s%*s|\n" "$padding" "" "$text" "$padding" ""
@@ -45,7 +45,7 @@ show_modes_status() {
     line_full
     center_line "${BOLD}${MAGENTA}Kighmu Control Panel${RESET}"
     line_full
-    echo -e "${YELLOW}Statut des modes installés et ports utilisés${RESET}"
+    center_line "${YELLOW}Statut des modes installés et ports utilisés${RESET}"
     line_simple
 
     print_status "OpenSSH"   "systemctl is-active --quiet ssh"       "22"
@@ -57,7 +57,6 @@ show_modes_status() {
     print_status "BadVPN"    "systemctl is-active --quiet badvpn"   "7303"
 
     line_simple
-    echo ""
 }
 
 # Créer un service systemd
@@ -109,30 +108,15 @@ install_mode() {
             ;;
         3)
             echo -e "${CYAN}Installation SlowDNS...${RESET}"
-            if [[ -x "$INSTALL_DIR/slowdns.sh" ]]; then
-                bash "$INSTALL_DIR/slowdns.sh"
-                create_service "slowdns" "/bin/bash $INSTALL_DIR/slowdns.sh"
-            else
-                echo -e "${RED}Script slowdns.sh introuvable ou non exécutable.${RESET}"
-            fi
+            [[ -x "$INSTALL_DIR/slowdns.sh" ]] && bash "$INSTALL_DIR/slowdns.sh" && create_service "slowdns" "/bin/bash $INSTALL_DIR/slowdns.sh" || echo -e "${RED}slowdns.sh introuvable ou non exécutable.${RESET}"
             ;;
         4)
             echo -e "${CYAN}Installation UDP Custom...${RESET}"
-            if [[ -x "$INSTALL_DIR/udp_custom.sh" ]]; then
-                bash "$INSTALL_DIR/udp_custom.sh"
-                create_service "udp-custom" "/bin/bash $INSTALL_DIR/udp_custom.sh"
-            else
-                echo -e "${RED}Script udp_custom.sh introuvable ou non exécutable.${RESET}"
-            fi
+            [[ -x "$INSTALL_DIR/udp_custom.sh" ]] && bash "$INSTALL_DIR/udp_custom.sh" && create_service "udp-custom" "/bin/bash $INSTALL_DIR/udp_custom.sh" || echo -e "${RED}udp_custom.sh introuvable ou non exécutable.${RESET}"
             ;;
         5)
             echo -e "${CYAN}Installation SOCKS/Python...${RESET}"
-            if [[ -x "$INSTALL_DIR/socks_python.sh" ]]; then
-                bash "$INSTALL_DIR/socks_python.sh"
-                create_service "socks-python" "/usr/bin/python3 $INSTALL_DIR/KIGHMUPROXY.py"
-            else
-                echo -e "${RED}Script socks_python.sh introuvable ou non exécutable.${RESET}"
-            fi
+            [[ -x "$INSTALL_DIR/socks_python.sh" ]] && bash "$INSTALL_DIR/socks_python.sh" && create_service "socks-python" "/usr/bin/python3 $INSTALL_DIR/KIGHMUPROXY.py" || echo -e "${RED}socks_python.sh introuvable ou non exécutable.${RESET}"
             ;;
         6)
             echo -e "${CYAN}Installation SSL/TLS...${RESET}"
@@ -189,7 +173,7 @@ uninstall_mode() {
     esac
 }
 
-# Boucle menu
+# Boucle menu principal modes
 while true; do
     show_modes_status
     line_full
