@@ -52,7 +52,12 @@ echo "Téléchargement et installation de Xray 1.8.0..."
 wget -q https://github.com/XTLS/Xray-core/releases/download/v1.8.0/Xray-linux-64.zip -O /tmp/xray.zip || { echo "Erreur téléchargement Xray"; exit 1; }
 unzip -o /tmp/xray.zip -d /tmp/xray || { echo "Erreur extraction Xray"; exit 1; }
 mv /tmp/xray/xray /usr/local/bin/xray
+
 chmod +x /usr/local/bin/xray
+
+# Ajout automatique des capacités pour écouter les ports privilégiés
+sudo setcap 'cap_net_bind_service=+ep' /usr/local/bin/xray
+
 rm -rf /tmp/xray /tmp/xray.zip
 
 echo "Création du dossier de configuration Xray..."
@@ -141,7 +146,7 @@ Description=Xray Service
 After=network.target
 
 [Service]
-User=root
+User=nobody
 ExecStart=/usr/local/bin/xray -config /usr/local/etc/xray/config.json
 Restart=on-failure
 
