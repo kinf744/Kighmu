@@ -1,53 +1,95 @@
 #!/bin/bash
+# ==============================================
 # menu_4.sh - Gestion des utilisateurs SSH
+# ==============================================
 
-RESET="\e[0m"; BOLD="\e[1m"; CYAN="\e[36m"; YELLOW="\e[33m"; GREEN="\e[32m"; RED="\e[31m"
+# Vérifier si l'utilisateur est root
+if [ "$(id -u)" -ne 0 ]; then
+    echo -e "\e[31m[ERREUR]\e[0m Veuillez exécuter ce script en root."
+    exit 1
+fi
+
+# Couleurs
+RED="\e[31m"
+GREEN="\e[32m"
+YELLOW="\e[33m"
+CYAN="\e[36m"
+RESET="\e[0m"
+
+# Récupérer tous les utilisateurs SSH (/home)
+users=$(awk -F: '/\/home/ {print $1}' /etc/passwd)
 
 while true; do
     clear
-    echo -e "${CYAN}+--------------------------------------------------+${RESET}"
-    echo -e "${CYAN}|         ${BOLD}GESTION UTILISATEURS SSH${RESET}${CYAN}                |${RESET}"
-    echo -e "${CYAN}+--------------------------------------------------+${RESET}"
-    echo -e "${YELLOW}1) Modifier durée (expiration) d’un utilisateur${RESET}"
-    echo -e "${YELLOW}2) Modifier mot de passe d’un utilisateur${RESET}"
-    echo -e "${YELLOW}3) Retour menu principal${RESET}"
-    echo -e "${CYAN}+--------------------------------------------------+${RESET}"
-    echo ""
+    echo -e "${CYAN}+=====================================+${RESET}"
+    echo -e "${GREEN}      Gestion des utilisateurs SSH     ${RESET}"
+    echo -e "${CYAN}+=====================================+${RESET}"
+    
+    # Affichage des utilisateurs avec expiration
+    printf "%-4s %-20s %-15s\n" "No." "Utilisateur" "Expiration"
+    echo "-----------------------------------------"
+    i=1
+    for u in $users; do
+        expire_date=$(chage -l "$u" 2>/dev/null | grep "Account expires" | cut -d: -f2 | xargs)
+        [ -z "$expire_date" ] && expire_date="Jamais"
+        printf "%-4s %-20s %-15s\n" "$i" "$u" "$expire_date"
+        i=$((i+1))
+    done
+    
+    echo -e "${CYAN}+-------------------------------------+${RESET}"
+    echo -e "${YELLOW}[0] Retour au menu principal${RESET}"
+    echo -ne "Sélectionnez un utilisateur (numéro) : "
+    read user_choice
 
-    read -p "Votre choix : " choix
+    if [ "$user_choice" == "0" ]; then
+        exit 0
+    fi
 
-    case $choix in
+    # Vérifier choix valide
+    selected_user=$(echo "$users" | sed -n "${user_choice}p")
+    if [ -z "$selected_user" ]; then
+        echo -e "${RED}Choix invalide !${RESET}"
+        sleep 2
+        continue
+    fi
+
+    # Menu pour cet utilisateur
+    echo -e "${CYAN}+-------------------------------------+${RESET}"
+    echo -e "Utilisateur sélectionné : ${GREEN}$selected_user${RESET}"
+    echo -e "[1] Modifier le mot de passe"
+    echo -e "[2] Modifier la durée/expiration"
+    echo -e "[0] Retour"
+    echo -ne "Votre choix : "
+    read action_choice
+
+    case $action_choice in
         1)
-            read -p "Nom de l’utilisateur : " user
-            if id "$user" &>/dev/null; then
-                read -p "Durée en jours : " jours
-                sudo chage -E $(date -d "+$jours days" +"%Y-%m-%d") "$user"
-                echo -e "${GREEN}Expiration de $user modifiée à $jours jours.${RESET}"
+            echo -ne "Entrez le nouveau mot de passe pour $selected_user : "
+            read -s new_pass
+            echo
+            echo -ne "Confirmez le mot de passe : "
+            read -s new_pass2
+            echo
+            if [ "$new_pass" == "$new_pass2" ]; then
+                echo "$selected_user:$new_pass" | chpasswd
+                echo -e "${GREEN}Mot de passe modifié avec succès !${RESET}"
             else
-                echo -e "${RED}Utilisateur introuvable.${RESET}"
+                echo -e "${RED}Les mots de passe ne correspondent pas.${RESET}"
             fi
+            sleep 2
             ;;
         2)
-            read -p "Nom de l’utilisateur : " user
-            if id "$user" &>/dev/null; then
-                read -p "Nouveau mot de passe : " mdp
-                echo "$user:$mdp" | sudo chpasswd
-                echo -e "${GREEN}Mot de passe de $user modifié avec succès.${RESET}"
+            echo -ne "Entrez la nouvelle durée (en jours) pour $selected_user : "
+            read days
+            if [[ "$days" =~ ^[0-9]+$ ]]; then
+                chage -E $(date -d "+$days days" +"%Y-%m-%d") "$selected_user"
+                echo -e "${GREEN}Expiration modifiée avec succès !${RESET}"
             else
-                echo -e "${RED}Utilisateur introuvable.${RESET}"
+                echo -e "${RED}Durée invalide.${RESET}"
             fi
+            sleep 2
             ;;
-        3)
-            echo -e "${YELLOW}Retour au menu principal...${RESET}"
-            sleep 1
-            bash "$HOME/Kighmu/kighmu.sh"
-            exit 0
-            ;;
-        *)
-            echo -e "${RED}Choix invalide !${RESET}"
-            ;;
+        0) continue ;;
+        *) echo -e "${RED}Choix invalide !${RESET}" ; sleep 2 ;;
     esac
-
-    echo ""
-    read -p "Appuyez sur Entrée pour continuer..."
 done
