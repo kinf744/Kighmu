@@ -18,10 +18,13 @@ MAGENTA="\e[35m"
 line_full() { echo -e "${CYAN}+$(printf '%0.s=' $(seq 1 $WIDTH))+${RESET}"; }
 line_simple() { echo -e "${CYAN}+$(printf '%0.s-' $(seq 1 $WIDTH))+${RESET}"; }
 content_line() { printf "| %-56s |\n" "$1"; }
+
 center_line() {
     local text="$1"
-    local padding=$(( (WIDTH - ${#text}) / 2 ))
-    printf "|%*s%s%*s|\n" $padding "" "$text" $padding ""
+    # Supprimer les séquences ANSI pour le calcul de la largeur
+    local visible_text=$(echo -e "$text" | sed 's/\x1B\[[0-9;]*[mK]//g')
+    local padding=$(( (WIDTH - ${#visible_text}) / 2 ))
+    printf "|%*s%s%*s|\n" "$padding" "" "$text" "$padding" ""
 }
 
 # Vérifie état d’un service/mode
@@ -30,9 +33,9 @@ print_status() {
     local check_cmd="$2"
     local port="$3"
     if eval "$check_cmd" >/dev/null 2>&1; then
-        content_line "$(printf "%-18s [%binstallé%b] Port: %s" "$name" "$GREEN" "$RESET" "$port")"
+        content_line "$(printf "%-18s [%binstallé%b] Port: %s" "$name" "${GREEN}" "${RESET}" "$port")"
     else
-        content_line "$(printf "%-18s [%bnon installé%b] Port: %s" "$name" "$RED" "$RESET" "$port")"
+        content_line "$(printf "%-18s [%bnon installé%b] Port: %s" "$name" "${RED}" "${RESET}" "$port")"
     fi
 }
 
@@ -42,7 +45,7 @@ show_modes_status() {
     line_full
     center_line "${BOLD}${MAGENTA}Kighmu Control Panel${RESET}"
     line_full
-    center_line "${YELLOW}Statut des modes installés et ports utilisés${RESET}"
+    echo -e "${YELLOW}Statut des modes installés et ports utilisés${RESET}"
     line_simple
 
     print_status "OpenSSH"   "systemctl is-active --quiet ssh"       "22"
@@ -106,18 +109,30 @@ install_mode() {
             ;;
         3)
             echo -e "${CYAN}Installation SlowDNS...${RESET}"
-            bash "$INSTALL_DIR/slowdns.sh"
-            create_service "slowdns" "/bin/bash $INSTALL_DIR/slowdns.sh"
+            if [[ -x "$INSTALL_DIR/slowdns.sh" ]]; then
+                bash "$INSTALL_DIR/slowdns.sh"
+                create_service "slowdns" "/bin/bash $INSTALL_DIR/slowdns.sh"
+            else
+                echo -e "${RED}Script slowdns.sh introuvable ou non exécutable.${RESET}"
+            fi
             ;;
         4)
             echo -e "${CYAN}Installation UDP Custom...${RESET}"
-            bash "$INSTALL_DIR/udp_custom.sh"
-            create_service "udp-custom" "/bin/bash $INSTALL_DIR/udp_custom.sh"
+            if [[ -x "$INSTALL_DIR/udp_custom.sh" ]]; then
+                bash "$INSTALL_DIR/udp_custom.sh"
+                create_service "udp-custom" "/bin/bash $INSTALL_DIR/udp_custom.sh"
+            else
+                echo -e "${RED}Script udp_custom.sh introuvable ou non exécutable.${RESET}"
+            fi
             ;;
         5)
             echo -e "${CYAN}Installation SOCKS/Python...${RESET}"
-            bash "$INSTALL_DIR/socks_python.sh"
-            create_service "socks-python" "/usr/bin/python3 $INSTALL_DIR/KIGHMUPROXY.py"
+            if [[ -x "$INSTALL_DIR/socks_python.sh" ]]; then
+                bash "$INSTALL_DIR/socks_python.sh"
+                create_service "socks-python" "/usr/bin/python3 $INSTALL_DIR/KIGHMUPROXY.py"
+            else
+                echo -e "${RED}Script socks_python.sh introuvable ou non exécutable.${RESET}"
+            fi
             ;;
         6)
             echo -e "${CYAN}Installation SSL/TLS...${RESET}"
@@ -184,10 +199,10 @@ while true; do
     content_line "2) Désinstaller un mode"
     content_line "3) Retour menu principal"
     line_simple
-    echo ""
+    echo -e ""
 
     read -p "Votre choix : " action
-    echo ""
+    echo -e ""
 
     case $action in
         1)
@@ -225,6 +240,6 @@ while true; do
             ;;
     esac
 
-    echo ""
+    echo -e ""
     read -p "Appuyez sur Entrée pour continuer..."
 done
