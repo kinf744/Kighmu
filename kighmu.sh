@@ -47,10 +47,11 @@ while true; do
     echo "| [08] Désinstaller le script                |"
     echo "| [09] Quitter                               |"
     echo "+--------------------------------------------+"
-    read -p "| Entrez votre choix [1-8]: choix         |"
-    case $choix in
+    echo -n "| Entrez votre choix [1-8]:               |"
+    read -r choix
     echo "+--------------------------------------------+"
-
+    
+    case $choix in
       1) bash "$SCRIPT_DIR/menu1.sh" ;;
       2) bash "$SCRIPT_DIR/menu2.sh" ;;
       3) bash "$SCRIPT_DIR/menu3.sh" ;;
