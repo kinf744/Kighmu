@@ -23,11 +23,37 @@ if ! grep -q "^$username|" "$USER_FILE"; then
     exit 1
 fi
 
+# Fonction nettoyage fichiers liés à l'utilisateur
+cleanup_user_files() {
+    echo "Nettoyage des fichiers restants de l'utilisateur $1..."
+
+    # Suppression manuelle du dossier home
+    if [ -d "/home/$1" ]; then
+        echo "Suppression du dossier home /home/$1"
+        sudo rm -rf "/home/$1"
+    fi
+
+    # Suppression des boîtes mail classiques
+    for mailpath in "/var/mail/$1" "/var/spool/mail/$1"; do
+        if [ -f "$mailpath" ]; then
+            echo "Suppression du fichier mail $mailpath"
+            sudo rm -f "$mailpath"
+        fi
+    done
+
+    # Suppression de tous les fichiers appartenant à l'utilisateur restants
+    echo "Recherche et suppression des fichiers appartenant à $1 dans le système..."
+    sudo find / -user "$1" -exec rm -rf {} + 2>/dev/null
+}
+
 # Vérification de l'existence système
 if id "$username" &>/dev/null; then
-    # Suppression de l'utilisateur système et son home
+    # Suppression de l'utilisateur système et de son home
     if sudo userdel -r "$username"; then
         echo "Utilisateur système $username supprimé avec succès."
+
+        # Nettoyage supplémentaire si besoin
+        cleanup_user_files "$username"
 
         # Suppression dans users.list
         if grep -v "^$username|" "$USER_FILE" > "${USER_FILE}.tmp"; then
@@ -43,6 +69,10 @@ if id "$username" &>/dev/null; then
     fi
 else
     echo "Attention : utilisateur système $username non trouvé ou déjà supprimé."
+
+    # Nettoyage manuel même s’il n’est plus présent en système
+    cleanup_user_files "$username"
+
     # On peut quand même tenter de retirer de la liste users.list si présent
     if grep -q "^$username|" "$USER_FILE"; then
         if grep -v "^$username|" "$USER_FILE" > "${USER_FILE}.tmp"; then
