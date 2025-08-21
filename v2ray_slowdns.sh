@@ -1,8 +1,11 @@
 #!/bin/bash
-# v2ray_slowdns.sh - Gestion des utilisateurs et installation V2Ray SlowDNS
+# v2ray_slowdns.sh - Gestion utilisateurs compatible avec tunnel V2Ray SlowDNS
 
 INSTALL_DIR="$HOME/Kighmu"
 USERS_FILE="/etc/v2ray_slowdns/users.txt"
+CONFIG_PATH="/usr/local/etc/v2ray_slowdns/config.json"
+NS_FILE="/etc/slowdns/ns.txt"
+PUB_KEY_FILE="/etc/slowdns/server.pub"
 
 # Couleurs
 RESET="\e[0m"
@@ -11,8 +14,36 @@ YELLOW="\e[33m"
 RED="\e[31m"
 BOLD="\e[1m"
 
-NS="slowdns5.kighmu.ddns-ip.net"
-PUB_KEY=$(openssl rand -hex 32)
+# Vérifier que jq est installé
+if ! command -v jq &> /dev/null; then
+  echo -e "${RED}Erreur : 'jq' n'est pas installé. Installe-le avec : sudo apt-get install -y jq${RESET}"
+  exit 1
+fi
+
+# Extraire paramètres fixes depuis config tunnel
+UUID=$(jq -r '.inbounds[0].settings.clients.id' "$CONFIG_PATH")
+PORT=$(jq -r '.inbounds.port' "$CONFIG_PATH")
+WS_PATH=$(jq -r '.inbounds.streamSettings.wsSettings.path' "$CONFIG_PATH")
+
+if [[ -z "$UUID" || -z "$PORT" || -z "$WS_PATH" || "$UUID" == "null" || "$PORT" == "null" || "$WS_PATH" == "null" ]]; then
+  echo -e "${RED}Impossible d'extraire UUID, PORT ou WS PATH depuis $CONFIG_PATH. Vérifie la configuration.${RESET}"
+  exit 1
+fi
+
+# Lire namespace SlowDNS et clé publique des fichiers fixes
+if [[ -f "$NS_FILE" ]]; then
+  NS=$(cat "$NS_FILE")
+else
+  echo -e "${RED}Attention : fichier namespace $NS_FILE introuvable.${RESET}"
+  NS="inconnu"
+fi
+
+if [[ -f "$PUB_KEY_FILE" ]]; then
+  PUB_KEY=$(cat "$PUB_KEY_FILE")
+else
+  echo -e "${RED}Attention : fichier clé publique $PUB_KEY_FILE introuvable.${RESET}"
+  PUB_KEY="inconnue"
+fi
 
 mkdir -p "$(dirname "$USERS_FILE")"
 touch "$USERS_FILE"
@@ -49,12 +80,11 @@ while true; do
             read -p "Nom de domaine : " domain
 
             expiry=$(date -d "+$duration days" +"%Y-%m-%d")
-            uuid=$(uuidgen)
-            port=$((10000 + RANDOM % 5000))
 
-            echo "$username:$duration:$limit:$domain:$expiry:$uuid:$port:$NS:$PUB_KEY" >> "$USERS_FILE"
+            # Utiliser UUID et port fixes, pas de génération aléatoire
+            echo "$username:$duration:$limit:$domain:$expiry:$UUID:$PORT:$NS:$PUB_KEY" >> "$USERS_FILE"
 
-            vmess_link=$(echo -n "{\"v\":\"2\",\"ps\":\"V2Ray SlowDNS\",\"add\":\"$domain\",\"port\":\"$port\",\"id\":\"$uuid\",\"aid\":\"0\",\"net\":\"ws\",\"type\":\"none\",\"host\":\"$domain\",\"path\":\"/v2ray\",\"tls\":\"none\",\"mux\":true}" | base64 -w0)
+            vmess_link=$(echo -n "{\"v\":\"2\",\"ps\":\"V2Ray SlowDNS\",\"add\":\"$domain\",\"port\":\"$PORT\",\"id\":\"$UUID\",\"aid\":\"0\",\"net\":\"ws\",\"type\":\"none\",\"host\":\"$domain\",\"path\":\"$WS_PATH\",\"tls\":\"none\",\"mux\":true}" | base64 -w0)
             vmess_link="vmess://$vmess_link"
 
             clear
