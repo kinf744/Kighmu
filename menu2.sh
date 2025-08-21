@@ -13,6 +13,7 @@ MAGENTA="\e[35m"
 
 WIDTH=60
 
+# Fonctions utilitaires
 line_full() { echo -e "${CYAN}+$(printf '%0.s=' $(seq 1 $WIDTH))+${RESET}"; }
 line_simple() { echo -e "${CYAN}+$(printf '%0.s-' $(seq 1 $WIDTH))+${RESET}"; }
 center_line() {
@@ -55,7 +56,7 @@ expire_date=$(date -d "+$minutes minutes" '+%Y-%m-%d %H:%M:%S')
 useradd -M -s /bin/false "$username" 2>/dev/null || true
 echo "$username:$password" | chpasswd 2>/dev/null || true
 
-# Définir ports et services
+# Définir ports et services (exemple, à adapter)
 SSH_PORT=22
 SYSTEM_DNS=53
 SOCKS_PORT=8080
@@ -86,6 +87,7 @@ line_full
 center_line "${GREEN}Utilisateur test $username créé avec succès !${RESET}"
 line_full
 
+# Affichage résumé
 echo ""
 echo "*NOUVEAU UTILISATEUR TEST CRÉÉ*"
 echo "DOMAIN        : $DOMAIN"
@@ -96,5 +98,6 @@ echo "LIMITE        : $limite"
 echo "DATE EXPIRÉE  : $expire_date"
 echo ""
 
+# Retour au menu principal
 read -n1 -r -p "Appuyez sur une touche pour revenir au menu principal..." key
 bash "$INSTALL_DIR/kighmu.sh"
