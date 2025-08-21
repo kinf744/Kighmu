@@ -1,5 +1,5 @@
 #!/bin/bash
-# v2ray_slowdns.sh - Gestion utilisateurs V2Ray SlowDNS avec synchronisation automatique des paramètres fixes
+# v2ray_slowdns.sh - Gestion utilisateurs V2Ray SlowDNS avec extraction fiable JSON via jq
 
 USERS_FILE="/etc/v2ray_slowdns/users.txt"
 CONFIG_PATH="/usr/local/etc/v2ray_slowdns/config.json"
@@ -13,37 +13,38 @@ YELLOW="\e[33m"
 RED="\e[31m"
 BOLD="\e[1m"
 
-# Fonction pour extraire valeur JSON simple (par exemple UUID, port, path) du fichier config.json
-get_json_value() {
-  local key=$1
-  grep -oP '"'"$key"'"\s*:\s*"\K[^"]+' "$CONFIG_PATH" | head -1
-}
-
-# Lecture des paramètres fixes depuis config et fichiers
-UUID=$(get_json_value "id")
-PORT=$(get_json_value "port")
-WS_PATH=$(get_json_value "path")
-
-if [[ -z "$UUID" || -z "$PORT" || -z "$WS_PATH" ]]; then
-  echo -e "${RED}Impossible d'extraire UUID, PORT ou WS PATH depuis $CONFIG_PATH. Vérifie la configuration.${RESET}"
+# Vérifier que jq est installé
+if ! command -v jq &> /dev/null; then
+  echo -e "${RED}Erreur : 'jq' n'est pas installé. Installe-le avec : sudo apt-get install -y jq${RESET}"
   exit 1
 fi
 
+# Extraction via jq
+UUID=$(jq -r '.inbounds[0].settings.clients.id' "$CONFIG_PATH")
+PORT=$(jq -r '.inbounds.port' "$CONFIG_PATH")
+WS_PATH=$(jq -r '.inbounds.streamSettings.wsSettings.path' "$CONFIG_PATH")
+
+if [[ -z "$UUID" || -z "$PORT" || -z "$WS_PATH" || "$UUID" == "null" || "$PORT" == "null" || "$WS_PATH" == "null" ]]; then
+  echo -e "${RED}Impossible d'extraire UUID, PORT ou WS PATH depuis le fichier $CONFIG_PATH. Vérifie la configuration.${RESET}"
+  exit 1
+fi
+
+# Lire namespace SlowDNS et clé publique
 if [[ -f "$NS_FILE" ]]; then
   NS=$(cat "$NS_FILE")
 else
-  echo -e "${RED}Fichier namespace $NS_FILE introuvable.${RESET}"
+  echo -e "${RED}Attention : Fichier namespace $NS_FILE introuvable.${RESET}"
   NS="inconnu"
 fi
 
 if [[ -f "$PUB_KEY_FILE" ]]; then
   PUB_KEY=$(cat "$PUB_KEY_FILE")
 else
-  echo -e "${RED}Fichier clé publique $PUB_KEY_FILE introuvable.${RESET}"
+  echo -e "${RED}Attention : Fichier clé publique $PUB_KEY_FILE introuvable.${RESET}"
   PUB_KEY="inconnue"
 fi
 
-# Création dossier/utilisateurs
+# Préparation utilisateurs
 mkdir -p "$(dirname "$USERS_FILE")"
 touch "$USERS_FILE"
 
