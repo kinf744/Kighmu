@@ -28,12 +28,12 @@ while true; do
     DEVICES_COUNT=$(get_devices_count)
 
     echo "+==================================================+"
-    echo "|            K I G H M U   M A N A G E R              |"
+    echo "|            K I G H M U   M A N A G E R           |"
     echo "+==================================================+"
-    printf "| IP: %-17s| RAM utilisée: %-7s |\n" "$IP" "$RAM_USAGE"
-    printf "| CPU utilisé: %-38s|\n" "$CPU_USAGE"
+    printf " IP: %-17s| RAM utilisée: %-7s \n" "$IP" "$RAM_USAGE"
+    printf " CPU utilisé: %-38s\n" "$CPU_USAGE"
     echo "+--------------------------------------------------+"
-    printf "| Utilisateurs créés: %-4d | Appareils: %-6d |\n" "$USERS_COUNT" "$DEVICES_COUNT"
+    printf " Utilisateurs créés: %-4d | Appareils: %-6d \n" "$USERS_COUNT" "$DEVICES_COUNT"
     echo "+--------------------------------------------------+"
     echo "|                  MENU PRINCIPAL:                   |"
     echo "+--------------------------------------------------+"
