@@ -141,7 +141,7 @@ Description=Xray Service
 After=network.target
 
 [Service]
-User=nobody
+User=root
 ExecStart=/usr/local/bin/xray -config /usr/local/etc/xray/config.json
 Restart=on-failure
 
