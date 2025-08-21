@@ -25,14 +25,19 @@ RESET="\e[0m"
 # Répertoire du script
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Fonction pour compter les utilisateurs (adapte le chemin selon ta gestion)
-get_users_count() {
+# Fonction pour compter les utilisateurs SSH
+get_ssh_users_count() {
+  grep -cE "/home" /etc/passwd
+}
+
+# Fonction pour compter les utilisateurs Xray
+get_xray_users_count() {
   ls /etc/xray/users/ 2>/dev/null | wc -l
 }
 
-# Fonction pour compter les appareils connectés (adapte selon ta méthode)
+# Fonction pour compter les appareils connectés
 get_devices_count() {
-  ss -ntu state established 2>/dev/null | wc -l
+  ss -ntu state established 2>/dev/null | grep -c ESTAB
 }
 
 # Fonction pour CPU usage plus précis
@@ -45,7 +50,8 @@ while true; do
     IP=$(hostname -I | awk '{print $1}')
     RAM_USAGE=$(free -m | awk 'NR==2{printf "%.2f%%", $3*100/$2 }')
     CPU_USAGE=$(get_cpu_usage)
-    USERS_COUNT=$(get_users_count)
+    SSH_USERS_COUNT=$(get_ssh_users_count)
+    XRAY_USERS_COUNT=$(get_xray_users_count)
     DEVICES_COUNT=$(get_devices_count)
 
     echo -e "${CYAN}+==================================================+${RESET}"
@@ -54,11 +60,12 @@ while true; do
     printf "${GREEN} IP: %-17s${RESET}| ${YELLOW}RAM utilisée:${RESET} %-7s \n" "$IP" "$RAM_USAGE"
     printf "${BLUE} CPU utilisé: %-38s${RESET}\n" "$CPU_USAGE"
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
-    printf " ${MAGENTA}Utilisateurs créés:${RESET} %-4d | ${MAGENTA}Appareils:${RESET} %-6d \n" "$USERS_COUNT" "$DEVICES_COUNT"
+    printf " ${MAGENTA}Utilisateurs SSH:${RESET} %-4d | ${MAGENTA}Xray:${RESET} %-4d | ${MAGENTA}Appareils:${RESET} %-6d \n" \
+    "$SSH_USERS_COUNT" "$XRAY_USERS_COUNT" "$DEVICES_COUNT"
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
     echo -e "${BOLD}${YELLOW}|                  MENU PRINCIPAL:                 |${RESET}"
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
-    echo -e "${GREEN}[01]${RESET} Créer un utilisateur"
+    echo -e "${GREEN}[01]${RESET} Créer un utilisateur SSH"
     echo -e "${GREEN}[02]${RESET} Créer un test utilisateur"
     echo -e "${GREEN}[03]${RESET} Voir les utilisateurs en ligne"
     echo -e "${GREEN}[04]${RESET} Supprimer un utilisateur"
