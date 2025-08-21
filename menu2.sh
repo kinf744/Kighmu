@@ -17,9 +17,9 @@ else
     SLOWDNS_KEY="Clé publique SlowDNS non trouvée!"
 fi
 
-echo "+--------------------------------------------+"
-echo "|         CRÉATION D'UTILISATEUR TEST       |"
-echo "+--------------------------------------------+"
+echo -e "${CYAN}+--------------------------------------------------+${RESET}"
+    echo -e "${BOLD}${YELLOW}|     CRÉATION D'UTILISATEUR TEST               |${RESET}"
+    echo -e "${CYAN}+--------------------------------------------------+${RESET}"
 
 # Demander les informations
 read -p "Nom d'utilisateur : " username
