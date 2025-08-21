@@ -17,9 +17,9 @@ else
     SLOWDNS_KEY="Clé publique SlowDNS non trouvée!"
 fi
 
-echo "+--------------------------------------------+"
-echo "|         CRÉATION D'UTILISATEUR            |"
-echo "+--------------------------------------------+"
+echo -e "${CYAN}+--------------------------------------------------+${RESET}"
+    echo -e "${BOLD}${YELLOW}|        CRÉATION D'UTILISATEUR                  |${RESET}"
+    echo -e "${CYAN}+--------------------------------------------------+${RESET}"
 
 # Demander les informations
 read -p "Nom d'utilisateur : " username
@@ -41,7 +41,7 @@ SYSTEM_DNS=53
 SOCKS_PORT=8080
 WEB_NGINX=81
 DROPBEAR=90
-SSL_PORT=443
+SSL_PORT=444
 BADVPN1=7200
 BADVPN2=7300
 SLOWDNS_PORT=5300
