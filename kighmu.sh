@@ -58,8 +58,8 @@ while true; do
       4) bash "$SCRIPT_DIR/menu4.sh" ;;
       5) bash "$SCRIPT_DIR/menu5.sh" ;;
       6) bash "$SCRIPT_DIR/menu_6.sh" ;;
-      7) bash "$SCRIPT_DIR/menu7.sh" ;;
-      8) bash "$SCRIPT_DIR/menu8.sh" ;;
+      7) bash "$SCRIPT_DIR/menu6.sh" ;;
+      8) bash "$SCRIPT_DIR/menu7.sh" ;;
       9) echo "Au revoir !" ; exit 0 ;;
       *) echo "Choix invalide !" ;;
     esac
