@@ -48,11 +48,10 @@ chmod 750 /etc/letsencrypt/live/"$DOMAIN" /etc/letsencrypt/archive/"$DOMAIN"
 chmod 640 /etc/letsencrypt/live/"$DOMAIN"/* /etc/letsencrypt/archive/"$DOMAIN"/*
 chmod 755 /etc/letsencrypt /etc/letsencrypt/live /etc/letsencrypt/archive
 
-echo "Téléchargement et installation de Xray 1.8.0..."
-wget -q https://github.com/XTLS/Xray-core/releases/download/v1.8.0/Xray-linux-64.zip -O /tmp/xray.zip || { echo "Erreur téléchargement Xray"; exit 1; }
+echo "Téléchargement et installation de Xray 25.8.3..."
+wget -q https://github.com/XTLS/Xray-core/releases/download/v25.8.3/Xray-linux-64.zip -O /tmp/xray.zip || { echo "Erreur téléchargement Xray"; exit 1; }
 unzip -o /tmp/xray.zip -d /tmp/xray || { echo "Erreur extraction Xray"; exit 1; }
 mv /tmp/xray/xray /usr/local/bin/xray
-
 chmod +x /usr/local/bin/xray
 
 # Ajout automatique des capacités pour écouter les ports privilégiés
@@ -286,7 +285,7 @@ EOS
 chmod +x /usr/local/bin/renew-cert-xray.sh
 (crontab -l 2>/dev/null; echo "0 3 * * * /usr/local/bin/renew-cert-xray.sh") | crontab -
 
-echo "----- XRAY v1.8.0 installé avec TLS Let’s Encrypt et renouvellement automatique -----"
+echo "----- XRAY v25.8.3 installé avec TLS Let’s Encrypt et renouvellement automatique -----"
 echo "Domaine : $DOMAIN"
 echo "UUID : $UUID"
 echo "Mot de passe Trojan (gRPC) : $TROJAN_PASS"
