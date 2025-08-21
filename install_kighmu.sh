@@ -101,6 +101,7 @@ FILES=(
     "setup_ssh_config.sh"
     "create_ssh_user.sh"
     "xray_installe.sh"
+    "v2ray_slowdns.sh"
     "v2ray_slowdns_install.sh"
 )
 
