@@ -85,8 +85,8 @@ while true; do
       3) bash "$SCRIPT_DIR/menu3.sh" ;;
       4) bash "$SCRIPT_DIR/menu4.sh" ;;
       5) bash "$SCRIPT_DIR/menu5.sh" ;;
-      6) bash "$SCRIPT_DIR/menu6.sh" ;;
-      7) 
+      6) bash "$SCRIPT_DIR/menu_6.sh" ;;
+      7) bash "$SCRIPT_DIR/menu6.sh" ;;
          echo -e "${YELLOW}⚠️  Vous êtes sur le point de désinstaller le script.${RESET}"
          read -p "Voulez-vous vraiment continuer ? (o/N): " confirm
          if [[ "$confirm" =~ ^[Oo]$ ]]; then
@@ -101,7 +101,7 @@ while true; do
              echo -e "${GREEN}Opération annulée, retour au menu...${RESET}"
          fi
          ;;
-      8) bash "$SCRIPT_DIR/menu8.sh" ;;
+      8) bash "$SCRIPT_DIR/menu7.sh" ;;
       9) 
          clear
          echo -e "${RED}Au revoir !${RESET}"
