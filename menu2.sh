@@ -1,6 +1,7 @@
 #!/bin/bash
-# menu2_color_fixed.sh modifié avec suivi TRAFFIC
-# Créer un utilisateur test avec suivi et sauvegarde
+# menu2_color.sh sécurisé avec suivi TRAFFIC et retour menu
+
+INSTALL_DIR="$HOME/Kighmu"
 
 # Couleurs
 RESET="\e[0m"
@@ -8,7 +9,6 @@ BOLD="\e[1m"
 CYAN="\e[36m"
 GREEN="\e[32m"
 RED="\e[31m"
-YELLOW="\e[33m"
 MAGENTA="\e[35m"
 
 WIDTH=60
@@ -21,19 +21,18 @@ center_line() {
     printf "|%*s%s%*s|\n" $padding "" "$text" $padding ""
 }
 
-# Charger les infos globales Kighmu
+# Charger la configuration globale
 if [ -f ~/.kighmu_info ]; then
     source ~/.kighmu_info
 else
     echo -e "${RED}Erreur : fichier ~/.kighmu_info introuvable.${RESET}"
-    exit 1
+    DOMAIN="non_defini"
 fi
 
-# Charger la clé publique SlowDNS
+# Charger clé SlowDNS
+SLOWDNS_KEY="Clé publique SlowDNS non trouvée!"
 if [ -f /etc/slowdns/server.pub ]; then
     SLOWDNS_KEY=$(cat /etc/slowdns/server.pub)
-else
-    SLOWDNS_KEY="Clé publique SlowDNS non trouvée!"
 fi
 
 # Cadre de saisie utilisateur test
@@ -53,8 +52,8 @@ line_simple
 expire_date=$(date -d "+$minutes minutes" '+%Y-%m-%d %H:%M:%S')
 
 # Créer l'utilisateur système
-useradd -M -s /bin/false "$username" 2>/dev/null
-echo "$username:$password" | chpasswd
+useradd -M -s /bin/false "$username" 2>/dev/null || true
+echo "$username:$password" | chpasswd 2>/dev/null || true
 
 # Définir ports et services
 SSH_PORT=22
@@ -78,52 +77,24 @@ touch "$USER_FILE"
 chmod 600 "$USER_FILE"
 echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
 
-# Création chaîne iptables TRAFFIC si elle n'existe pas
-if ! iptables -L TRAFFIC &>/dev/null; then
-    iptables -N TRAFFIC
-fi
-iptables -F TRAFFIC
-
-# Ajouter règle TRAFFIC pour cet utilisateur test (SSH/Dropbear par UID)
-iptables -A TRAFFIC -m owner --uid-owner "$username" -j RETURN
+# Création chaîne iptables TRAFFIC sécurisée
+iptables -N TRAFFIC 2>/dev/null || true
+iptables -F TRAFFIC 2>/dev/null || true
+iptables -A TRAFFIC -m owner --uid-owner "$username" -j RETURN 2>/dev/null || true
 
 line_full
 center_line "${GREEN}Utilisateur test $username créé avec succès !${RESET}"
 line_full
 
-# Affichage final hors cadre
-cat <<EOF
+echo ""
+echo "*NOUVEAU UTILISATEUR TEST CRÉÉ*"
+echo "DOMAIN        : $DOMAIN"
+echo "Host/IP       : $HOST_IP"
+echo "UTILISATEUR   : $username"
+echo "MOT DE PASSE  : $password"
+echo "LIMITE        : $limite"
+echo "DATE EXPIRÉE  : $expire_date"
+echo ""
 
-*NOUVEAU UTILISATEUR TEST CRÉÉ*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-∘ SSH: $SSH_PORT            ∘ System-DNS: $SYSTEM_DNS
-∘ SOCKS/PYTHON: $SOCKS_PORT   ∘ WEB-NGINX: $WEB_NGINX
-∘ DROPBEAR: $DROPBEAR       ∘ SSL: $SSL_PORT
-∘ BadVPN: $BADVPN1       ∘ BadVPN: $BADVPN2
-∘ SlowDNS: $SLOWDNS_PORT      ∘ UDP-Custom: $UDP_CUSTOM
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-DOMAIN        : $DOMAIN
-Host/IP-Address : $HOST_IP
-UTILISATEUR   : $username
-MOT DE PASSE  : $password
-LIMITE       : $limite
-DATE EXPIRÉE : $expire_date
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-En APPS comme HTTP Injector, CUSTOM, KPN Rev, etc.
-
-🙍 HTTP-Direct  : $HOST_IP:90@$username:$password
-🙍 SSL/TLS(SNI) : $HOST_IP:443@$username:$password
-🙍 Proxy(WS)    : $DOMAIN:8080@$username:$password
-🙍 SSH UDP     : $HOST_IP:1-65535@$username:$password
-
-━━━━━━━━━━━  CONFIGS SLOWDNS PORT 22 ━━━━━━━━━━━
-Pub KEY :
-$SLOWDNS_KEY
-NameServer (NS) : $SLOWDNS_NS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-EOF
-
-# Retour au menu principal
-read -p "Appuyez sur Entrée pour revenir au menu principal..." dummy
-"$INSTALL_DIR/kighmu.sh"
+read -n1 -r -p "Appuyez sur une touche pour revenir au menu principal..." key
+bash "$INSTALL_DIR/kighmu.sh"
