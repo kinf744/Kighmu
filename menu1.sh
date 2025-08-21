@@ -1,5 +1,5 @@
 #!/bin/bash
-# menu1_color.sh modifié avec suivi TRAFFIC
+# menu1_color_fixed.sh modifié avec suivi TRAFFIC
 INSTALL_DIR="$HOME/Kighmu"
 
 # Couleurs
@@ -53,7 +53,7 @@ line_simple
 expire_date=$(date -d "+$days days" '+%Y-%m-%d')
 
 # Créer l'utilisateur système
-useradd -M -s /bin/false "$username"
+useradd -M -s /bin/false "$username" 2>/dev/null
 echo "$username:$password" | chpasswd
 
 # Définir ports et variables
@@ -79,45 +79,51 @@ chmod 600 "$USER_FILE"
 echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
 
 # Création chaîne iptables TRAFFIC si elle n'existe pas
-iptables -N TRAFFIC 2>/dev/null
+if ! iptables -L TRAFFIC &>/dev/null; then
+    iptables -N TRAFFIC
+fi
 iptables -F TRAFFIC
 
 # Ajouter règle TRAFFIC pour cet utilisateur (SSH/Dropbear par UID)
 iptables -A TRAFFIC -m owner --uid-owner "$username" -j RETURN
-
-# Ajouter règle TRAFFIC pour UDP/SOCKS si nécessaire (basé sur IP)
-# iptables -A TRAFFIC -s "$HOST_IP" -m comment --comment "$username" -j RETURN
 
 line_full
 center_line "${GREEN}Utilisateur $username créé avec succès !${RESET}"
 line_full
 
 # Affichage final hors cadre
-echo ""
-echo "*NOUVEAU UTILISATEUR CRÉÉ*"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "∘ SSH: $SSH_PORT            ∘ System-DNS: $SYSTEM_DNS"
-echo "∘ SOCKS/PYTHON: $SOCKS_PORT   ∘ WEB-NGINX: $WEB_NGINX"
-echo "∘ DROPBEAR: $DROPBEAR       ∘ SSL: $SSL_PORT"
-echo "∘ BadVPN: $BADVPN1       ∘ BadVPN: $BADVPN2"
-echo "∘ SlowDNS: $SLOWDNS_PORT      ∘ UDP-Custom: $UDP_CUSTOM"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "DOMAIN        : $DOMAIN"
-echo "Host/IP-Address : $HOST_IP"
-echo "UTILISATEUR   : $username"
-echo "MOT DE PASSE  : $password"
-echo "LIMITE       : $limite"
-echo "DATE EXPIRÉE : $expire_date"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "En APPS comme HTTP Injector, CUSTOM, KPN Rev, etc."
-echo ""
-echo "🙍 HTTP-Direct  : $HOST_IP:90@$username:$password"
-echo "🙍 SSL/TLS(SNI) : $HOST_IP:445@$username:$password"
-echo "🙍 Proxy(WS)    : $DOMAIN:8080@$username:$password"
-echo "🙍 SSH UDP     : $HOST_IP:1-65535@$username:$password"
-echo ""
-echo "━━━━━━━━━━━  CONFIGS SLOWDNS PORT 22 ━━━━━━━━━━━"
-echo "Pub KEY :"
-echo "$SLOWDNS_KEY"
-echo "NameServer (NS) : $SLOWDNS_NS"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+cat <<EOF
+
+*NOUVEAU UTILISATEUR CRÉÉ*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+∘ SSH: $SSH_PORT            ∘ System-DNS: $SYSTEM_DNS
+∘ SOCKS/PYTHON: $SOCKS_PORT   ∘ WEB-NGINX: $WEB_NGINX
+∘ DROPBEAR: $DROPBEAR       ∘ SSL: $SSL_PORT
+∘ BadVPN: $BADVPN1       ∘ BadVPN: $BADVPN2
+∘ SlowDNS: $SLOWDNS_PORT      ∘ UDP-Custom: $UDP_CUSTOM
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DOMAIN        : $DOMAIN
+Host/IP-Address : $HOST_IP
+UTILISATEUR   : $username
+MOT DE PASSE  : $password
+LIMITE       : $limite
+DATE EXPIRÉE : $expire_date
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+En APPS comme HTTP Injector, CUSTOM, KPN Rev, etc.
+
+🙍 HTTP-Direct  : $HOST_IP:90@$username:$password
+🙍 SSL/TLS(SNI) : $HOST_IP:445@$username:$password
+🙍 Proxy(WS)    : $DOMAIN:8080@$username:$password
+🙍 SSH UDP     : $HOST_IP:1-65535@$username:$password
+
+━━━━━━━━━━━  CONFIGS SLOWDNS PORT 22 ━━━━━━━━━━━
+Pub KEY :
+$SLOWDNS_KEY
+NameServer (NS) : $SLOWDNS_NS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+EOF
+
+# Retour au menu principal
+read -p "Appuyez sur Entrée pour revenir au menu principal..." dummy
+"$INSTALL_DIR/menu.sh"
