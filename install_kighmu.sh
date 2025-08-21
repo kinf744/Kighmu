@@ -101,7 +101,7 @@ FILES=(
     "setup_ssh_config.sh"
     "create_ssh_user.sh"
     "xray_installe.sh"
-    "v2ray_slowdns.sh"
+    "v2ray_slowdns_install.sh"
 )
 
 BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
@@ -136,6 +136,9 @@ run_script "$INSTALL_DIR/nginx.sh"
 run_script "$INSTALL_DIR/socks_python.sh"
 run_script "$INSTALL_DIR/slowdns.sh"
 run_script "$INSTALL_DIR/udp_custom.sh"
+
+# Ajout de l'installation du tunnel V2Ray SlowDNS
+run_script "$INSTALL_DIR/v2ray_slowdns_install.sh"
 
 echo "=============================================="
 echo " 🚀 Installation et configuration SlowDNS..."
