@@ -1,6 +1,6 @@
 #!/bin/bash
-# menu2_color.sh
-# Créer un utilisateur test avec sauvegarde dans users.list
+# menu2_color.sh modifié avec suivi TRAFFIC
+# Créer un utilisateur test avec suivi et sauvegarde
 
 # Couleurs
 RESET="\e[0m"
@@ -13,14 +13,8 @@ MAGENTA="\e[35m"
 
 WIDTH=60
 
-line_full() {
-    echo -e "${CYAN}+$(printf '%0.s=' $(seq 1 $WIDTH))+${RESET}"
-}
-
-line_simple() {
-    echo -e "${CYAN}+$(printf '%0.s-' $(seq 1 $WIDTH))+${RESET}"
-}
-
+line_full() { echo -e "${CYAN}+$(printf '%0.s=' $(seq 1 $WIDTH))+${RESET}"; }
+line_simple() { echo -e "${CYAN}+$(printf '%0.s-' $(seq 1 $WIDTH))+${RESET}"; }
 center_line() {
     local text="$1"
     local padding=$(( (WIDTH - ${#text}) / 2 ))
@@ -83,6 +77,16 @@ mkdir -p /etc/kighmu
 touch "$USER_FILE"
 chmod 600 "$USER_FILE"
 echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
+
+# Création chaîne iptables TRAFFIC si elle n'existe pas
+iptables -N TRAFFIC 2>/dev/null
+iptables -F TRAFFIC
+
+# Ajouter règle TRAFFIC pour cet utilisateur test (SSH/Dropbear par UID)
+iptables -A TRAFFIC -m owner --uid-owner "$username" -j RETURN
+
+# Ajouter règle TRAFFIC pour UDP/SOCKS si nécessaire (basé sur IP)
+# iptables -A TRAFFIC -s "$HOST_IP" -m comment --comment "$username" -j RETURN
 
 line_full
 center_line "${GREEN}Utilisateur test $username créé avec succès !${RESET}"
