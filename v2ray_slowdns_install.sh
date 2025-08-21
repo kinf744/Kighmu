@@ -92,7 +92,7 @@ After=network.target
 [Service]
 Type=simple
 User=root
-ExecStart=$BIN_PATH -config $CONFIG_PATH
+ExecStart=$BIN_PATH run -config $CONFIG_PATH
 Restart=on-failure
 
 [Install]
