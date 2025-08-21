@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # encoding: utf-8
-# KIGHMUPROXY - Proxy TCP pour tunnel SSH Proxy SOCKS inspiré DarkSSH
+# KIGHMUPROXY - Proxy TCP SOCKS inspiré DarkSSH (version corrigée)
 
 import socket
 import threading
@@ -8,15 +8,13 @@ import select
 import sys
 import time
 
-print("Vérification de Python3...")
-
 IP = '0.0.0.0'
 try:
     PORT = int(sys.argv[1])
 except:
-    PORT = 8080  # Port par défaut modifié ici
+    PORT = 8080
 
-PASS = ''  # Mot de passe optionnel (laisser vide pour désactiver)
+PASS = ''  # Mot de passe optionnel
 BUFLEN = 8196 * 8
 TIMEOUT = 60
 MSG = 'KIGHMUPROXY'
@@ -99,7 +97,7 @@ class ConnectionHandler(threading.Thread):
             self.client_closed = True
 
         try:
-            if not self.target_closed:
+            if not self.target_closed and hasattr(self, 'target'):
                 self.target.shutdown(socket.SHUT_RDWR)
                 self.target.close()
         except:
@@ -112,7 +110,7 @@ class ConnectionHandler(threading.Thread):
             client_buffer = self.client.recv(BUFLEN)
             host_port = self.find_header(client_buffer, 'X-Real-Host')
 
-            if host_port == '':
+            if not host_port:
                 host_port = DEFAULT_HOST
 
             passwd = self.find_header(client_buffer, 'X-Pass')
@@ -217,4 +215,4 @@ def main():
 
 if __name__ == '__main__':
     main()
-        
+                
