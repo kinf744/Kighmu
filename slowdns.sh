@@ -1,12 +1,12 @@
 #!/bin/bash
 
 # ==============================================
-# slowdns.sh - Installation et configuration SlowDNS avec stockage NS
+# slowdns_optimized.sh - Installation et configuration SlowDNS optimisée
 # ==============================================
 
 SLOWDNS_DIR="/etc/slowdns"
-SERVER_KEY="$SLOWDNS_DIR/server.key"     # Clé privée serveur
-SERVER_PUB="$SLOWDNS_DIR/server.pub"     # Clé publique serveur
+SERVER_KEY="$SLOWDNS_DIR/server.key"      # Clé privée serveur
+SERVER_PUB="$SLOWDNS_DIR/server.pub"      # Clé publique serveur
 SLOWDNS_BIN="/usr/local/bin/sldns-server" # Chemin du binaire SlowDNS
 PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
@@ -77,6 +77,25 @@ generate_keys
 # Lecture dynamique de la clé publique
 PUB_KEY=$(cat "$SERVER_PUB")
 
+# Optimisation des buffers UDP pour meilleure performance
+optimize_network_buffers() {
+    echo "Optimisation des buffers réseau UDP..."
+    sudo sysctl -w net.core.rmem_max=26214400
+    sudo sysctl -w net.core.wmem_max=26214400
+    sudo sysctl -w net.core.rmem_default=26214400
+    sudo sysctl -w net.core.wmem_default=26214400
+    sudo sysctl -w net.ipv4.udp_mem="65536 131072 262144"
+    sudo sysctl -w net.ipv4.udp_rmem_min=8192
+    sudo sysctl -w net.ipv4.udp_wmem_min=8192
+}
+
+optimize_network_buffers
+
+# Réduction MTU pour éviter fragmentation (adapter interface réseau)
+interface=$(ip a | awk '/state UP/{print $2}' | cut -d: -f1 | head -1)
+echo "Réduction du MTU sur interface $interface pour stabilité réseau..."
+sudo ip link set dev "$interface" mtu 1400
+
 # Arrêt de l’ancienne instance SlowDNS si existante
 if pgrep -f "sldns-server" >/dev/null; then
     echo "Arrêt de l'ancienne instance SlowDNS..."
@@ -86,10 +105,9 @@ fi
 
 # Configuration iptables pour redirection port 53 vers 5300 UDP
 configure_iptables() {
-    interface=$(ip a | awk '/state UP/{print $2}' | cut -d: -f1 | head -1)
     echo "Configuration iptables pour rediriger UDP port 53 vers $PORT (port SlowDNS)..."
     sudo iptables -I INPUT -p udp --dport $PORT -j ACCEPT
-    sudo iptables -t nat -I PREROUTING -i $interface -p udp --dport 53 -j REDIRECT --to-ports $PORT
+    sudo iptables -t nat -I PREROUTING -i "$interface" -p udp --dport 53 -j REDIRECT --to-ports $PORT
 
     # Sauvegarder règles iptables (Debian/Ubuntu)
     if command -v iptables-save >/dev/null 2>&1; then
@@ -99,7 +117,16 @@ configure_iptables() {
 
 configure_iptables
 
-# Lancement du serveur SlowDNS dans screen détaché avec commande conforme à DarkSSH
+# Activation IP forwarding si nécessaire
+if [ "$(sysctl -n net.ipv4.ip_forward)" -ne 1 ]; then
+    echo "Activation du routage IP..."
+    sudo sysctl -w net.ipv4.ip_forward=1
+    if ! grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf; then
+        echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf
+    fi
+fi
+
+# Lancement du serveur SlowDNS dans screen détaché avec commande optimisée (-udp et clé)
 echo "Démarrage du serveur SlowDNS sur UDP port $PORT avec NS $NAMESERVER..."
 sudo screen -dmS slowdns_session $SLOWDNS_BIN -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NAMESERVER" 0.0.0.0:22
 
@@ -112,15 +139,6 @@ if pgrep -f "sldns-server" > /dev/null; then
 else
     echo "ERREUR : Le service SlowDNS n'a pas pu démarrer."
     exit 1
-fi
-
-# Activation IP forwarding si nécessaire
-if [ "$(sysctl -n net.ipv4.ip_forward)" -ne 1 ]; then
-    echo "Activation du routage IP..."
-    sudo sysctl -w net.ipv4.ip_forward=1
-    if ! grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf; then
-        echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf
-    fi
 fi
 
 # Firewall UFW gestion
@@ -144,4 +162,4 @@ echo ""
 echo "Commande client Termux à utiliser :"
 echo "curl -sO https://github.com/khaledagn/DNS-AGN/raw/main/files/slowdns && chmod +x slowdns && ./slowdns $NAMESERVER $PUB_KEY"
 echo ""
-echo "Installation et configuration SlowDNS terminées."
+echo "Installation et configuration SlowDNS optimisées terminées."
