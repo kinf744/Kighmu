@@ -17,7 +17,7 @@ else
     SLOWDNS_KEY="Clé publique SlowDNS non trouvée!"
 fi
 
-echo -e "${CYAN}+--------------------------------------------------+${RESET}"
+    echo -e "${CYAN}+--------------------------------------------------+${RESET}"
     echo -e "${BOLD}${YELLOW}|     CRÉATION D'UTILISATEUR TEST               |${RESET}"
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
 
