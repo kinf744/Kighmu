@@ -126,4 +126,4 @@ EOF
 
 # Retour au menu principal
 read -p "Appuyez sur Entrée pour revenir au menu principal..." dummy
-"$INSTALL_DIR/menu.sh"
+"$INSTALL_DIR/kighmu.sh"
