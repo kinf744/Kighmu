@@ -9,7 +9,12 @@ Il offre une interface simple et des scripts automatisés pour créer, supprimer
 
 - Création d’utilisateurs avec durée limitée (jours ou minutes)
 - Affichage des utilisateurs connectés et nombre de connexions par utilisateur
-- Gestion des modules : OpenSSH, Dropbear, SOCKS/Python, SlowDNS, BadVPN, SSL/TLS, UDP-Custom
+- Gestion des modules : OpenSSH,
+- Dropbear,
+- SOCKS/Python,
+- DNSTT, BadVPN,
+- SSL/TLS,
+- UDP-Custom
 - Statistiques du VPS : IP, RAM, CPU
 - Installation et désinstallation simplifiées
 - Affichage de configurations pour applications comme HTTP Injector, SSH Custom, etc.
