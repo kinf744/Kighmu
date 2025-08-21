@@ -25,25 +25,11 @@ RESET="\e[0m"
 # Répertoire du script
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Fonction pour compter les utilisateurs SSH
-get_ssh_users_count() {
-  grep -cE "/home" /etc/passwd
-}
-
-# Fonction pour compter les utilisateurs Xray
-get_xray_users_count() {
-  ls /etc/xray/users/ 2>/dev/null | wc -l
-}
-
-# Fonction pour compter les appareils connectés
-get_devices_count() {
-  ss -ntu state established 2>/dev/null | grep -c ESTAB
-}
-
-# Fonction pour CPU usage plus précis
-get_cpu_usage() {
-  grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf "%.2f%%", usage}'
-}
+# Fonctions d'état
+get_ssh_users_count() { grep -cE "/home" /etc/passwd; }
+get_xray_users_count() { ls /etc/xray/users/ 2>/dev/null | wc -l; }
+get_devices_count() { ss -ntu state established 2>/dev/null | grep -c ESTAB; }
+get_cpu_usage() { grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf "%.2f%%", usage}'; }
 
 while true; do
     clear
@@ -61,7 +47,7 @@ while true; do
     printf "${BLUE} CPU utilisé: %-38s${RESET}\n" "$CPU_USAGE"
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
     printf " ${MAGENTA}Utilisateurs SSH:${RESET} %-4d | ${MAGENTA}Xray:${RESET} %-4d | ${MAGENTA}Appareils:${RESET} %-6d \n" \
-    "$SSH_USERS_COUNT" "$XRAY_USERS_COUNT" "$DEVICES_COUNT"
+        "$SSH_USERS_COUNT" "$XRAY_USERS_COUNT" "$DEVICES_COUNT"
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
     echo -e "${BOLD}${YELLOW}|                  MENU PRINCIPAL:                 |${RESET}"
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
@@ -78,36 +64,36 @@ while true; do
     echo -ne "${BOLD}${YELLOW} Entrez votre choix [1-9]: ${RESET}"
     read -r choix
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
-    
+
     case $choix in
-      1) bash "$SCRIPT_DIR/menu1.sh" ;;
-      2) bash "$SCRIPT_DIR/menu2.sh" ;;
-      3) bash "$SCRIPT_DIR/menu3.sh" ;;
-      4) bash "$SCRIPT_DIR/menu4.sh" ;;
-      5) bash "$SCRIPT_DIR/menu5.sh" ;;
-      6) bash "$SCRIPT_DIR/menu_6.sh" ;;
-      7) bash "$SCRIPT_DIR/menu6.sh" ;;
-         echo -e "${YELLOW}⚠️  Vous êtes sur le point de désinstaller le script.${RESET}"
-         read -p "Voulez-vous vraiment continuer ? (o/N): " confirm
-         if [[ "$confirm" =~ ^[Oo]$ ]]; then
-             echo -e "${RED}Désinstallation en cours...${RESET}"
-             # Exemple : suppression des fichiers installés
-             rm -rf "$SCRIPT_DIR"
-             clear
-             echo -e "${RED}✅ Script désinstallé avec succès.${RESET}"
-             echo -e "${CYAN}Le panneau de contrôle est maintenant désactivé.${RESET}"
-             exit 0
-         else
-             echo -e "${GREEN}Opération annulée, retour au menu...${RESET}"
-         fi
-         ;;
-      8) bash "$SCRIPT_DIR/menu7.sh" ;;
-      9) 
-         clear
-         echo -e "${RED}Au revoir !${RESET}"
-         exit 0 
-         ;;
-      *) echo -e "${RED}Choix invalide !${RESET}" ;;
+        1) bash "$SCRIPT_DIR/menu1.sh" ;;
+        2) bash "$SCRIPT_DIR/menu2.sh" ;;
+        3) bash "$SCRIPT_DIR/menu3.sh" ;;
+        4) bash "$SCRIPT_DIR/menu4.sh" ;;
+        5) bash "$SCRIPT_DIR/menu5.sh" ;;
+        6) bash "$SCRIPT_DIR/menu_6.sh" ;;
+        7)
+            echo -e "${YELLOW}⚠️  Vous êtes sur le point de désinstaller le script.${RESET}"
+            read -p "Voulez-vous vraiment continuer ? (o/N): " confirm
+            if [[ "$confirm" =~ ^[Oo]$ ]]; then
+                echo -e "${RED}Désinstallation en cours...${RESET}"
+                rm -rf "$SCRIPT_DIR"
+                clear
+                echo -e "${RED}✅ Script désinstallé avec succès.${RESET}"
+                echo -e "${CYAN}Le panneau de contrôle est maintenant désactivé.${RESET}"
+                exit 0
+            else
+                echo -e "${GREEN}Opération annulée, retour au menu...${RESET}"
+            fi
+            ;;
+        8) bash "$SCRIPT_DIR/menu7.sh" ;;
+        9)
+            clear
+            echo -e "${RED}Au revoir !${RESET}"
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}Choix invalide !${RESET}" ;;
     esac
 
     echo ""
