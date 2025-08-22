@@ -61,6 +61,38 @@ wireguard-tools qrencode \
 gcc make perl \
 software-properties-common socat
 
+# Dépendances supplémentaires requises
+echo "=============================================="
+echo " 🚀 Installation des dépendances supplémentaires..."
+echo "=============================================="
+
+if ! command -v pip3 >/dev/null 2>&1; then
+    echo "pip3 non trouvé, installation en cours..."
+    apt update
+    apt install -y python3-pip
+fi
+
+if ! command -v lsof >/dev/null 2>&1; then
+    echo "lsof non trouvé, installation en cours..."
+    apt update
+    apt install -y lsof
+fi
+
+if [ ! -f /etc/iptables/rules.v4 ]; then
+    echo "Création du fichier /etc/iptables/rules.v4 manquant..."
+    mkdir -p /etc/iptables
+    touch /etc/iptables/rules.v4
+fi
+
+# Création lien symbolique pour slowdns.sh
+INSTALL_DIR="$HOME/Kighmu"
+SLOWDNS_SCRIPT="$INSTALL_DIR/slowdns.sh"
+if [ ! -x "/usr/local/bin/slowdns.sh" ] && [ -x "$SLOWDNS_SCRIPT" ]; then
+    echo "Création du lien symbolique /usr/local/bin/slowdns.sh ..."
+    ln -s "$SLOWDNS_SCRIPT" /usr/local/bin/slowdns.sh
+    chmod +x /usr/local/bin/slowdns.sh
+fi
+
 # Activer et configurer UFW
 ufw allow OpenSSH
 ufw allow 22
@@ -73,7 +105,6 @@ echo " 🚀 Installation de Kighmu VPS Manager..."
 echo "=============================================="
 
 # Création du dossier d'installation
-INSTALL_DIR="$HOME/Kighmu"
 mkdir -p "$INSTALL_DIR" || { echo "Erreur : impossible de créer le dossier $INSTALL_DIR"; exit 1; }
 
 # Liste des fichiers à télécharger
