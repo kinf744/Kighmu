@@ -164,6 +164,14 @@ echo "=============================================="
 SLOWDNS_DIR="/etc/slowdns"
 mkdir -p "$SLOWDNS_DIR"
 
+# Toujours demander le NameServer à chaque installation
+read -p "Entrez le NameServer (NS) (ex: ns.example.com) : " NS
+if [[ -z "$NS" ]]; then
+    echo "Erreur : NameServer invalide."
+    exit 1
+fi
+echo "$NS" > "$SLOWDNS_DIR/ns.conf"
+
 DNS_BIN="/usr/local/bin/sldns-server"
 if [ ! -x "$DNS_BIN" ]; then
     echo "Téléchargement du binaire slowdns..."
@@ -171,9 +179,12 @@ if [ ! -x "$DNS_BIN" ]; then
     chmod +x "$DNS_BIN"
 fi
 
-chmod +x "$DNS_BIN"
+echo "Génération des clés SlowDNS à chaque installation..."
+"$DNS_BIN" -gen-key -privkey-file "$SLOWDNS_DIR/server.key" -pubkey-file "$SLOWDNS_DIR/server.pub"
 chmod 600 "$SLOWDNS_DIR/server.key"
 chmod 644 "$SLOWDNS_DIR/server.pub"
+
+chmod +x "$DNS_BIN"
 
 cat > /etc/systemd/system/slowdns.service <<EOF
 [Unit]
@@ -181,7 +192,7 @@ Description=SlowDNS Server
 After=network.target
 
 [Service]
-ExecStart=$DNS_BIN -udp :5300 -privkey-file $SLOWDNS_DIR/server.key slowdns5.kighmup.ddns-ip.net 0.0.0.0:22
+ExecStart=$DNS_BIN -udp :5300 -privkey-file $SLOWDNS_DIR/server.key $NS 0.0.0.0:22
 Restart=on-failure
 User=root
 
@@ -194,6 +205,11 @@ systemctl enable slowdns
 systemctl restart slowdns
 
 echo "Service SlowDNS systemd créé, activé et démarré."
+
+echo "+--------------------------------------------+"
+echo " Clé publique SlowDNS générée (à communiquer au client) :"
+cat "$SLOWDNS_DIR/server.pub"
+echo "+--------------------------------------------+"
 
 # Application SSH config
 echo "🚀 Application de la configuration SSH personnalisée..."
@@ -215,19 +231,10 @@ if ! grep -q "/usr/local/bin" ~/.bashrc; then
     echo "Ajout de /usr/local/bin au PATH dans ~/.bashrc"
 fi
 
-NS="slowdns5.kighmup.ddns-ip.net"
-
-SLOWDNS_PUBKEY="/etc/slowdns/server.pub"
-if [ -f "$SLOWDNS_PUBKEY" ]; then
-    PUBLIC_KEY=$(sed ':a;N;$!ba;s/\n/\\n/g' "$SLOWDNS_PUBKEY")
-else
-    PUBLIC_KEY="Clé publique SlowDNS non trouvée"
-fi
-
 cat > ~/.kighmu_info <<EOF
 DOMAIN=$DOMAIN
 NS=$NS
-PUBLIC_KEY="$PUBLIC_KEY"
+PUBLIC_KEY="$(sed ':a;N;$!ba;s/\n/\\n/g' "$SLOWDNS_DIR/server.pub")"
 EOF
 
 chmod 600 ~/.kighmu_info
