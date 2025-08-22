@@ -14,7 +14,6 @@ CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 # Installation automatique des dépendances iptables, screen, tcpdump
 install_dependencies() {
     sudo apt update
-
     for pkg in iptables screen tcpdump; do
         if ! command -v $pkg >/dev/null 2>&1; then
             echo "$pkg non trouvé. Installation en cours..."
@@ -28,9 +27,7 @@ install_dependencies() {
 install_dependencies
 
 # Création du dossier slowdns si absent
-if [ ! -d "$SLOWDNS_DIR" ]; then
-    sudo mkdir -p "$SLOWDNS_DIR"
-fi
+sudo mkdir -p "$SLOWDNS_DIR"
 
 # Chargement ou saisie du NameServer (NS)
 if [ -f "$CONFIG_FILE" ]; then
@@ -47,10 +44,8 @@ else
 fi
 
 # Installation du binaire SlowDNS si besoin
-echo "Vérification et installation du binaire SlowDNS..."
 if [ ! -x "$SLOWDNS_BIN" ]; then
     echo "Le binaire SlowDNS n'existe pas. Téléchargement en cours..."
-    sudo mkdir -p /usr/local/bin
     sudo wget -q -O "$SLOWDNS_BIN" https://raw.githubusercontent.com/fisabiliyusri/SLDNS/main/slowdns/sldns-server
     sudo chmod +x "$SLOWDNS_BIN"
     echo "Installation du binaire SlowDNS terminée."
@@ -58,7 +53,7 @@ else
     echo "Le binaire SlowDNS est déjà installé."
 fi
 
-# Fonction de génération automatique des clés si absentes
+# Fonction de génération automatique des clés
 generate_keys() {
     if [ ! -s "$SERVER_KEY" ] || [ ! -s "$SERVER_PUB" ]; then
         echo "Clés SlowDNS manquantes ou vides, génération en cours..."
@@ -71,93 +66,65 @@ generate_keys() {
     fi
 }
 
-# Génération des clés
 generate_keys
 
 # Lecture dynamique de la clé publique
 PUB_KEY=$(cat "$SERVER_PUB")
 
-# Optimisation des buffers UDP pour meilleure performance
-optimize_network_buffers() {
-    echo "Optimisation des buffers réseau UDP..."
-    sudo sysctl -w net.core.rmem_max=26214400
-    sudo sysctl -w net.core.wmem_max=26214400
-    sudo sysctl -w net.core.rmem_default=26214400
-    sudo sysctl -w net.core.wmem_default=26214400
-    sudo sysctl -w net.ipv4.udp_mem="65536 131072 262144"
-    sudo sysctl -w net.ipv4.udp_rmem_min=8192
-    sudo sysctl -w net.ipv4.udp_wmem_min=8192
-}
+# Optimisation des buffers UDP
+sudo sysctl -w net.core.rmem_max=26214400
+sudo sysctl -w net.core.wmem_max=26214400
+sudo sysctl -w net.core.rmem_default=26214400
+sudo sysctl -w net.core.wmem_default=26214400
+sudo sysctl -w net.ipv4.udp_mem="65536 131072 262144"
+sudo sysctl -w net.ipv4.udp_rmem_min=8192
+sudo sysctl -w net.ipv4.udp_wmem_min=8192
 
-optimize_network_buffers
-
-# Réduction MTU pour éviter fragmentation (adapter interface réseau)
+# Réduction MTU pour stabilité
 interface=$(ip a | awk '/state UP/{print $2}' | cut -d: -f1 | head -1)
-echo "Réduction du MTU sur interface $interface pour stabilité réseau..."
 sudo ip link set dev "$interface" mtu 1400
 
 # Arrêt de l’ancienne instance SlowDNS si existante
 if pgrep -f "sldns-server" >/dev/null; then
-    echo "Arrêt de l'ancienne instance SlowDNS..."
     sudo fuser -k ${PORT}/udp || true
     sleep 2
 fi
 
 # Configuration iptables pour redirection port 53 vers 5300 UDP
-configure_iptables() {
-    echo "Configuration iptables pour rediriger UDP port 53 vers $PORT (port SlowDNS)..."
-    sudo iptables -I INPUT -p udp --dport $PORT -j ACCEPT
-    sudo iptables -t nat -I PREROUTING -i "$interface" -p udp --dport 53 -j REDIRECT --to-ports $PORT
+sudo iptables -I INPUT -p udp --dport $PORT -j ACCEPT
+sudo iptables -t nat -I PREROUTING -i "$interface" -p udp --dport 53 -j REDIRECT --to-ports $PORT
+sudo iptables-save | sudo tee /etc/iptables/rules.v4 >/dev/null
 
-    # Sauvegarder règles iptables (Debian/Ubuntu)
-    if command -v iptables-save >/dev/null 2>&1; then
-        sudo iptables-save | sudo tee /etc/iptables/rules.v4 >/dev/null
-    fi
-}
-
-configure_iptables
-
-# Activation IP forwarding si nécessaire
-if [ "$(sysctl -n net.ipv4.ip_forward)" -ne 1 ]; then
-    echo "Activation du routage IP..."
-    sudo sysctl -w net.ipv4.ip_forward=1
-    if ! grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf; then
-        echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf
-    fi
+# Activation IP forwarding
+sudo sysctl -w net.ipv4.ip_forward=1
+if ! grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf; then
+    echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf
 fi
 
-# Lancement du serveur SlowDNS dans screen détaché avec commande optimisée (-udp et clé)
-echo "Démarrage du serveur SlowDNS sur UDP port $PORT avec NS $NAMESERVER..."
+# Lancement du serveur SlowDNS dans screen détaché
 sudo screen -dmS slowdns_session $SLOWDNS_BIN -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NAMESERVER" 0.0.0.0:22
-
 sleep 3
 
-# Vérification du démarrage
 if pgrep -f "sldns-server" > /dev/null; then
-    echo -e "\033[34mHTTP/1.1 200 OK Kighmu237 - Service SlowDNS démarré avec succès sur le port UDP $PORT.\033[0m"
-    echo "Pour vérifier les logs, utilise : screen -r slowdns_session"
+    echo "Service SlowDNS démarré sur le port UDP $PORT."
 else
     echo "ERREUR : Le service SlowDNS n'a pas pu démarrer."
     exit 1
 fi
 
-# Firewall UFW gestion
+# Firewall UFW
 if command -v ufw >/dev/null 2>&1; then
-    echo "Ouverture du port UDP $PORT dans le firewall (ufw)..."
     sudo ufw allow "$PORT"/udp
     sudo ufw reload
-else
-    echo "UFW non installé. Merci de vérifier manuellement l'ouverture du port UDP $PORT."
 fi
 
+# Affichage infos dynamiques
 echo "+--------------------------------------------+"
 echo "|               CONFIG SLOWDNS               |"
 echo "+--------------------------------------------+"
 echo ""
-echo "Clé publique :"
-echo "$PUB_KEY"
-echo ""
-echo "NameServer  : $NAMESERVER"
+echo "Clé publique : $PUB_KEY"
+echo "NameServer   : $NAMESERVER"
 echo ""
 echo "Commande client Termux à utiliser :"
 echo "curl -sO https://github.com/khaledagn/DNS-AGN/raw/main/files/slowdns && chmod +x slowdns && ./slowdns $NAMESERVER $PUB_KEY"
