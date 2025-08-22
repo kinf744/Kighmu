@@ -1,66 +1,63 @@
 #!/bin/bash
-# v2ray_slowdns_install.sh
-# Installation et configuration du tunnel V2Ray SlowDNS WS TCP
-# Utilise le même namespace et la même clé publique que SSH SlowDNS
+# ==============================================
+# v2ray_slowdns_install.sh - Installation et configuration V2Ray SlowDNS
+# ==============================================
 
-set -e
-
+INSTALL_DIR="$HOME/Kighmu"
+CONFIG_PATH="/usr/local/etc/v2ray_slowdns/config.json"
 SERVICE_NAME="v2ray-slowdns"
-INSTALL_DIR="/usr/local/etc/v2ray_slowdns"
-BIN_PATH="/usr/local/bin/v2ray"
-CONFIG_PATH="$INSTALL_DIR/config.json"
-TCP_PORT=5304
+PORT=5304  # Port par défaut pour V2Ray WS
+UUID=$(cat /proc/sys/kernel/random/uuid)
 
-# Fichiers du SSH SlowDNS pour NS et clé publique
-SSH_NS_FILE="/etc/slowdns/ns.txt"
-SSH_PUB_KEY_FILE="/etc/slowdns/server.pub"
+# Fichiers SlowDNS générés automatiquement
+SLOWDNS_DIR="/etc/slowdns"
+NS_FILE="$SLOWDNS_DIR/ns.txt"
+PUB_KEY_FILE="$SLOWDNS_DIR/server.pub"
 
-# Récupérer le NS et la clé publique depuis SSH SlowDNS
-if [[ -f "$SSH_NS_FILE" ]]; then
-    NAMESPACE=$(cat "$SSH_NS_FILE")
-else
-    echo "Namespace SSH SlowDNS introuvable ($SSH_NS_FILE)."
-    read -rp "Entrez le namespace (NS) pour V2Ray SlowDNS : " NAMESPACE
-    [[ -z "$NAMESPACE" ]] && { echo "Namespace non fourni, arrêt."; exit 1; }
+# Créer dossier config si nécessaire
+mkdir -p "$(dirname "$CONFIG_PATH")"
+
+# Vérifier que la clé publique SlowDNS existe
+if [ ! -f "$PUB_KEY_FILE" ]; then
+    echo "Clé publique SlowDNS introuvable ! Assurez-vous que le script VPS a été exécuté correctement."
+    exit 1
 fi
 
-if [[ -f "$SSH_PUB_KEY_FILE" ]]; then
-    PUB_KEY=$(cat "$SSH_PUB_KEY_FILE")
+PUB_KEY=$(cat "$PUB_KEY_FILE")
+
+# Demander le namespace si non défini
+if [ ! -f "$NS_FILE" ]; then
+    read -p "Entrez le namespace (NS) pour V2Ray SlowDNS : " NS
+    if [[ -z "$NS" ]]; then
+        echo "Namespace invalide. Abandon."
+        exit 1
+    fi
+    echo "$NS" > "$NS_FILE"
 else
-    echo "Clé publique SSH SlowDNS introuvable ($SSH_PUB_KEY_FILE)."
-    PUB_KEY="inconnue"
+    NS=$(cat "$NS_FILE")
 fi
 
-echo "Installation et configuration du tunnel V2Ray SlowDNS (WS TCP port $TCP_PORT)"
-echo "Namespace : $NAMESPACE"
-
-# Installer V2Ray si non présent
-if ! command -v $BIN_PATH &> /dev/null; then
-    echo "V2Ray non trouvé, installation..."
-    bash <(curl -L -s https://raw.githubusercontent.com/v2fly/fhs-install-v2ray/master/install-release.sh)
+# Installer V2Ray si nécessaire
+if ! command -v v2ray >/dev/null 2>&1; then
+    echo "Installation de V2Ray..."
+    bash "$INSTALL_DIR/xray_installe.sh"
 else
     echo "V2Ray déjà installé."
 fi
 
-# Créer le dossier de configuration
-mkdir -p "$INSTALL_DIR"
-
-# UUID initial pour le service
-UUID=$(cat /proc/sys/kernel/random/uuid)
-
-# Créer le fichier de configuration V2Ray
+# Créer fichier de configuration V2Ray SlowDNS avec WS path correct (/kighmu)
 cat > "$CONFIG_PATH" <<EOF
 {
   "inbounds": [
     {
-      "port": $TCP_PORT,
-      "listen": "0.0.0.0",
+      "port": $PORT,
       "protocol": "vmess",
       "settings": {
         "clients": [
           {
             "id": "$UUID",
-            "alterId": 0
+            "alterId": 0,
+            "email": "user@$NS"
           }
         ]
       },
@@ -74,46 +71,37 @@ cat > "$CONFIG_PATH" <<EOF
   ],
   "outbounds": [
     {
-      "protocol": "freedom",
-      "settings": {}
+      "protocol": "freedom"
     }
   ]
 }
 EOF
 
-echo "Fichier de configuration créé : $CONFIG_PATH"
-
-# Création du service systemd
-SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME.service"
-
-sudo tee "$SERVICE_FILE" > /dev/null <<EOF
+# Activer et démarrer le service V2Ray SlowDNS
+if systemctl list-unit-files | grep -q "$SERVICE_NAME"; then
+    systemctl restart "$SERVICE_NAME"
+else
+    # Créer service systemd si nécessaire
+    cat > /etc/systemd/system/$SERVICE_NAME.service <<EOL
 [Unit]
-Description=V2Ray SlowDNS Tunnel Service (WS)
+Description=V2Ray SlowDNS Service
 After=network.target
 
 [Service]
-Type=simple
-User=root
-ExecStart=$BIN_PATH run -config $CONFIG_PATH
+ExecStart=/usr/local/bin/v2ray -config $CONFIG_PATH
 Restart=on-failure
+User=root
 
 [Install]
 WantedBy=multi-user.target
-EOF
+EOL
 
-# Activer et démarrer le service
-sudo systemctl daemon-reload
-sudo systemctl enable "$SERVICE_NAME"
-sudo systemctl restart "$SERVICE_NAME"
-
-# Vérification du port
-sleep 2
-if ss -lnpt | grep -q ":$TCP_PORT "; then
-    echo "V2Ray SlowDNS WS fonctionne sur le port $TCP_PORT."
-    echo "UUID initial : $UUID"
-    echo "Namespace (NS) : $NAMESPACE"
-    echo "Clé publique : $PUB_KEY"
-else
-    echo "Erreur : le service n'écoute pas sur le port $TCP_PORT."
-    echo "Vérifiez avec : sudo systemctl status $SERVICE_NAME"
+    systemctl daemon-reload
+    systemctl enable "$SERVICE_NAME"
+    systemctl start "$SERVICE_NAME"
 fi
+
+echo "Installation et configuration du tunnel V2Ray SlowDNS (WS TCP port $PORT)"
+echo "Namespace : $NS"
+echo "UUID initial : $UUID"
+echo "Clé publique SlowDNS : $PUB_KEY"
