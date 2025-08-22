@@ -57,10 +57,9 @@ while true; do
     echo -e "${GREEN}[04]${RESET} Modifier durée / mot de passe utilisateur"  # Nouveau menu
     echo -e "${GREEN}[05]${RESET} Supprimer un utilisateur"
     echo -e "${GREEN}[06]${RESET} Installation de mode"
-    echo -e "${GREEN}[07]${RESET} Xray mode"
-    echo -e "${GREEN}[08]${RESET} Désinstaller le script"
-    echo -e "${GREEN}[09]${RESET} Blocage de torrents"
-    echo -e "${RED}[10] Quitter${RESET}"
+    echo -e "${GREEN}[07]${RESET} Désinstaller le script"
+    echo -e "${GREEN}[08]${RESET} Blocage de torrents"
+    echo -e "${RED}[09] Quitter${RESET}"
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
     echo -ne "${BOLD}${YELLOW} Entrez votre choix [1-10]: ${RESET}"
     read -r choix
@@ -73,7 +72,6 @@ while true; do
         4) bash "$SCRIPT_DIR/menu_4.sh" ;;  # Nouveau menu ajouté ici
         5) bash "$SCRIPT_DIR/menu4.sh" ;;
         6) bash "$SCRIPT_DIR/menu5.sh" ;;
-        7) bash "$SCRIPT_DIR/menu_6.sh" ;;
         8)
             echo -e "${YELLOW}⚠️  Vous êtes sur le point de désinstaller le script.${RESET}"
             read -p "Voulez-vous vraiment continuer ? (o/N): " confirm
