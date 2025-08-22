@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==============================================
-# Kighmu VPS Manager - Script d'installation modifié
+# Kighmu VPS Manager - Script d'installation modifié avec SlowDNS par screen
 # Copyright (c) 2025 Kinf744
 # Licence MIT (version française)
 # ==============================================
@@ -49,7 +49,7 @@ echo "=============================================="
 apt update && apt upgrade -y
 
 apt install -y \
-dnsutils net-tools wget sudo iptables ufw \
+dnsutils net-tools wget sudo iptables ufw screen \
 openssl openssl-blacklist psmisc \
 nginx certbot python3-certbot-nginx \
 dropbear badvpn \
@@ -61,12 +61,6 @@ software-properties-common socat
 echo "=============================================="
 echo " 🚀 Installation des dépendances supplémentaires..."
 echo "=============================================="
-
-if ! command -v pip3 >/dev/null 2>&1; then
-    echo "pip3 non trouvé, installation en cours..."
-    apt update
-    apt install -y python3-pip
-fi
 
 if ! command -v lsof >/dev/null 2>&1; then
     echo "lsof non trouvé, installation en cours..."
@@ -164,7 +158,6 @@ echo "=============================================="
 SLOWDNS_DIR="/etc/slowdns"
 mkdir -p "$SLOWDNS_DIR"
 
-# Toujours demander le NameServer à chaque installation
 read -p "Entrez le NameServer (NS) (ex: ns.example.com) : " NS
 if [[ -z "$NS" ]]; then
     echo "Erreur : NameServer invalide."
@@ -184,71 +177,61 @@ echo "Génération des clés SlowDNS à chaque installation..."
 chmod 600 "$SLOWDNS_DIR/server.key"
 chmod 644 "$SLOWDNS_DIR/server.pub"
 
-chmod +x "$DNS_BIN"
+# Arrêt propre de l'ancienne session slowdns si existante
+if screen -list | grep -q "slowdns_session"; then
+    echo "Arrêt de l'ancienne session screen slowdns_session..."
+    screen -S slowdns_session -X quit
+    sleep 2
+fi
 
-cat > /etc/systemd/system/slowdns.service <<EOF
-[Unit]
-Description=SlowDNS Server
-After=network.target
+configure_iptables() {
+    interface=$(ip a | awk '/state UP/{print $2}' | cut -d: -f1 | head -1)
+    echo "Configuration iptables pour rediriger UDP port 53 vers 5300 (port SlowDNS)..."
+    sudo iptables -I INPUT -p udp --dport 5300 -j ACCEPT
+    sudo iptables -t nat -I PREROUTING -i $interface -p udp --dport 53 -j REDIRECT --to-ports 5300
+    sudo iptables-save | sudo tee /etc/iptables/rules.v4 > /dev/null
+}
 
-[Service]
-ExecStart=$DNS_BIN -udp :5300 -privkey-file $SLOWDNS_DIR/server.key $NS 0.0.0.0:22
-Restart=on-failure
-User=root
+configure_iptables
 
-[Install]
-WantedBy=multi-user.target
-EOF
+echo "Démarrage du serveur SlowDNS dans screen session détachée..."
+screen -dmS slowdns_session "$DNS_BIN" -udp ":5300" -privkey-file "$SLOWDNS_DIR/server.key" "$NS" 0.0.0.0:22
 
-systemctl daemon-reload
-systemctl enable slowdns
-systemctl restart slowdns
+sleep 3
 
-echo "Service SlowDNS systemd créé, activé et démarré."
+if pgrep -f "sldns-server" > /dev/null; then
+    echo "SlowDNS démarré avec succès sur UDP port 5300."
+    echo "Pour rattacher la session screen : screen -r slowdns_session"
+else
+    echo "ERREUR : Le service SlowDNS n'a pas pu démarrer."
+    exit 1
+fi
+
+if [ "$(sysctl -n net.ipv4.ip_forward)" -ne 1 ]; then
+    echo "Activation du routage IP..."
+    sudo sysctl -w net.ipv4.ip_forward=1
+    if ! grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf; then
+        echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf
+    fi
+fi
+
+if command -v ufw >/dev/null 2>&1; then
+    echo "Ouverture du port UDP 5300 dans ufw..."
+    sudo ufw allow 5300/udp
+    sudo ufw reload
+else
+    echo "UFW non installé. Merci de vérifier manuellement l'ouverture du port UDP 5300."
+fi
 
 echo "+--------------------------------------------+"
-echo " Clé publique SlowDNS générée (à communiquer au client) :"
+echo " Clé publique SlowDNS (à communiquer au client) :"
 cat "$SLOWDNS_DIR/server.pub"
 echo "+--------------------------------------------+"
-
-# Application SSH config
-echo "🚀 Application de la configuration SSH personnalisée..."
-chmod +x "$INSTALL_DIR/setup_ssh_config.sh"
-run_script "sudo $INSTALL_DIR/setup_ssh_config.sh"
-
-echo "🚀 Script de création utilisateur SSH disponible : $INSTALL_DIR/create_ssh_user.sh"
-echo "Tu peux le lancer manuellement quand tu veux."
-
-if ! grep -q "alias kighmu=" ~/.bashrc; then
-    echo "alias kighmu='$INSTALL_DIR/kighmu.sh'" >> ~/.bashrc
-    echo "Alias kighmu ajouté dans ~/.bashrc"
-else
-    echo "Alias kighmu déjà présent dans ~/.bashrc"
-fi
-
-if ! grep -q "/usr/local/bin" ~/.bashrc; then
-    echo 'export PATH=$PATH:/usr/local/bin' >> ~/.bashrc
-    echo "Ajout de /usr/local/bin au PATH dans ~/.bashrc"
-fi
-
-cat > ~/.kighmu_info <<EOF
-DOMAIN=$DOMAIN
-NS=$NS
-PUBLIC_KEY="$(sed ':a;N;$!ba;s/\n/\\n/g' "$SLOWDNS_DIR/server.pub")"
-EOF
-
-chmod 600 ~/.kighmu_info
-echo "Fichier ~/.kighmu_info créé avec succès et prêt à être utilisé par les scripts."
 
 echo
 echo "=============================================="
 echo " ✅ Installation terminée !"
 echo " Pour lancer Kighmu, utilisez la commande : kighmu"
 echo
-echo " ⚠️ Pour que l'alias soit pris en compte :"
-echo " - Ouvre un nouveau terminal, ou"
-echo " - Exécute manuellement : source ~/.bashrc"
-echo
-echo "Tentative de rechargement automatique de ~/.bashrc dans cette session..."
-source ~/.bashrc || echo "Le rechargement automatique a échoué, merci de le faire manuellement."
+echo " ⚠️ Pour que l'alias soit pris en compte, ouvre un nouveau terminal ou exécute : source ~/.bashrc"
 echo "=============================================="
