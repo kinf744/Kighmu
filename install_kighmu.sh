@@ -5,6 +5,7 @@
 # Licence MIT (version française)
 # ==============================================
 
+# Vérification de la présence de curl et installation si manquant
 echo "Vérification de la présence de curl..."
 if ! command -v curl >/dev/null 2>&1; then
     echo "curl non trouvé, installation en cours..."
@@ -19,10 +20,12 @@ echo "+--------------------------------------------+"
 echo "|             INSTALLATION VPS               |"
 echo "+--------------------------------------------+"
 
+# Demander le nom de domaine qui pointe vers l’IP du serveur
 read -p "Veuillez entrer votre nom de domaine (doit pointer vers l'IP de ce serveur) : " DOMAIN
+
 if [ -z "$DOMAIN" ]; then
-    echo "Erreur : vous devez entrer un nom de domaine valide."
-    exit 1
+  echo "Erreur : vous devez entrer un nom de domaine valide."
+  exit 1
 fi
 
 IP_PUBLIC=$(curl -s https://api.ipify.org)
@@ -30,16 +33,21 @@ echo "Votre IP publique détectée est : $IP_PUBLIC"
 
 DOMAIN_IP=$(dig +short "$DOMAIN" | tail -n1)
 if [ "$DOMAIN_IP" != "$IP_PUBLIC" ]; then
-    echo "Attention : le domaine $DOMAIN ne pointe pas vers l’IP $IP_PUBLIC."
-    echo "Assurez-vous que le domaine est correctement configuré avant de continuer."
-    read -p "Voulez-vous continuer quand même ? [oui/non] : " choix
-    if [[ ! "$choix" =~ ^(o|oui)$ ]]; then
-        echo "Installation arrêtée."
-        exit 1
-    fi
+  echo "Attention : le domaine $DOMAIN ne pointe pas vers l’IP $IP_PUBLIC."
+  echo "Assurez-vous que le domaine est correctement configuré avant de continuer."
+  read -p "Voulez-vous continuer quand même ? [oui/non] : " choix
+  if [[ ! "$choix" =~ ^(o|oui)$ ]]; then
+    echo "Installation arrêtée."
+    exit 1
+  fi
 fi
 
+# Exporter la variable pour que les scripts enfants y aient accès
 export DOMAIN
+
+echo "=============================================="
+echo " 🚀 Installation des paquets essentiels..."
+echo "=============================================="
 
 apt update && apt upgrade -y
 
@@ -60,9 +68,15 @@ ufw allow 80
 ufw allow 443
 ufw --force enable
 
+echo "=============================================="
+echo " 🚀 Installation de Kighmu VPS Manager..."
+echo "=============================================="
+
+# Création du dossier d'installation
 INSTALL_DIR="$HOME/Kighmu"
 mkdir -p "$INSTALL_DIR" || { echo "Erreur : impossible de créer le dossier $INSTALL_DIR"; exit 1; }
 
+# Liste des fichiers à télécharger
 FILES=(
     "install_kighmu.sh"
     "kighmu-manager.sh"
@@ -70,10 +84,8 @@ FILES=(
     "menu1.sh"
     "menu2.sh"
     "menu3.sh"
-    "menu_4.sh"
     "menu4.sh"
     "menu5.sh"
-    "menu_6.sh"
     "menu6.sh"
     "menu7.sh"
     "slowdns.sh"
@@ -88,13 +100,12 @@ FILES=(
     "nginx.sh"
     "setup_ssh_config.sh"
     "create_ssh_user.sh"
-    "xray_installe.sh"
-    "v2ray_slowdns.sh"
-    "v2ray_slowdns_install.sh"
 )
 
+# URL de base du dépôt GitHub
 BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
 
+# Téléchargement et vérification de chaque fichier
 for file in "${FILES[@]}"; do
     echo "Téléchargement de $file ..."
     wget -O "$INSTALL_DIR/$file" "$BASE_URL/$file"
@@ -105,6 +116,7 @@ for file in "${FILES[@]}"; do
     chmod +x "$INSTALL_DIR/$file"
 done
 
+# Fonction pour exécuter un script avec gestion d’erreur
 run_script() {
     local script_path="$1"
     echo "🚀 Lancement du script : $script_path"
@@ -115,17 +127,17 @@ run_script() {
     fi
 }
 
-# Exécution des scripts supplémentaires
+# Exécution automatique des scripts d’installation supplémentaires
 run_script "$INSTALL_DIR/dropbear.sh"
 run_script "$INSTALL_DIR/ssl.sh"
 run_script "$INSTALL_DIR/badvpn.sh"
 run_script "$INSTALL_DIR/system_dns.sh"
 run_script "$INSTALL_DIR/nginx.sh"
 run_script "$INSTALL_DIR/socks_python.sh"
-run_script "$INSTALL_DIR/slowdns.sh"
+run_script "$INSTALL_DIR/slowdns.sh"  # Exécution du script slowdns.sh existant
 run_script "$INSTALL_DIR/udp_custom.sh"
 
-run_script "$INSTALL_DIR/v2ray_slowdns_install.sh"
+# --- Ajout installation et configuration automatique SlowDNS ---
 
 echo "=============================================="
 echo " 🚀 Installation et configuration SlowDNS..."
@@ -134,13 +146,6 @@ echo "=============================================="
 SLOWDNS_DIR="/etc/slowdns"
 mkdir -p "$SLOWDNS_DIR"
 
-read -rp "Entrez le Namespace (NS) à utiliser pour SlowDNS : " NAMESPACE
-if [[ -z "$NAMESPACE" ]]; then
-    echo "Namespace obligatoire. Arrêt."
-    exit 1
-fi
-echo "$NAMESPACE" > "$SLOWDNS_DIR/ns.txt"
-
 DNS_BIN="/usr/local/bin/dns-server"
 if [ ! -x "$DNS_BIN" ]; then
     echo "Téléchargement du binaire dns-server..."
@@ -148,19 +153,12 @@ if [ ! -x "$DNS_BIN" ]; then
     chmod +x "$DNS_BIN"
 fi
 
-PUB_KEY_FILE="$SLOWDNS_DIR/server.pub"
-PRIV_KEY_FILE="$SLOWDNS_DIR/server.key"
-
-if [[ ! -f "$PUB_KEY_FILE" || ! -f "$PRIV_KEY_FILE" ]]; then
-    echo "Aucune clé SlowDNS détectée, génération d'une nouvelle paire de clés..."
-    "$DNS_BIN" -gen-key -privkey-file "$PRIV_KEY_FILE" -pubkey-file "$PUB_KEY_FILE"
-    chmod 600 "$PRIV_KEY_FILE"
-    chmod 644 "$PUB_KEY_FILE"
-else
-    echo "Clés SlowDNS détectées, réutilisation des clés existantes."
+if [ ! -f "$SLOWDNS_DIR/server.key" ] || [ ! -f "$SLOWDNS_DIR/server.pub" ]; then
+    echo "Génération des clés SlowDNS..."
+    "$DNS_BIN" -gen-key -privkey-file "$SLOWDNS_DIR/server.key" -pubkey-file "$SLOWDNS_DIR/server.pub"
+    chmod 600 "$SLOWDNS_DIR/server.key"
+    chmod 644 "$SLOWDNS_DIR/server.pub"
 fi
-
-PUB_KEY=$(cat "$PUB_KEY_FILE")
 
 interface=$(ip a | awk '/state UP/{print $2}' | cut -d: -f1 | head -1)
 iptables -F
@@ -168,23 +166,26 @@ iptables -I INPUT -p udp --dport 5300 -j ACCEPT
 iptables -t nat -I PREROUTING -i $interface -p udp --dport 53 -j REDIRECT --to-ports 5300
 
 ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
-screen -dmS slowdns "$DNS_BIN" -udp :5300 -privkey-file "$PRIV_KEY_FILE" "$NAMESPACE" 0.0.0.0:$ssh_port
+screen -dmS slowdns "$DNS_BIN" -udp :5300 -privkey-file "$SLOWDNS_DIR/server.key" slowdns5.kighmup.ddns-ip.net 0.0.0.0:$ssh_port
 
 echo "+--------------------------------------------+"
 echo " SlowDNS installé et lancé avec succès !"
-echo " Namespace utilisé : $NAMESPACE"
 echo " Clé publique (à utiliser côté client) :"
-echo "$PUB_KEY"
+cat "$SLOWDNS_DIR/server.pub"
+echo ""
+echo "Commande client SlowDNS à utiliser :"
+echo "curl -sO https://github.com/khaledagn/DNS-AGN/raw/main/files/slowdns && chmod +x slowdns && ./slowdns slowdns5.kighmup.ddns-ip.net $(cat $SLOWDNS_DIR/server.pub)"
 echo "+--------------------------------------------+"
 
+# Ajout de l'exécution du script de configuration SSH
 echo "🚀 Application de la configuration SSH personnalisée..."
 chmod +x "$INSTALL_DIR/setup_ssh_config.sh"
-chmod +x "$INSTALL_DIR/xray_installe.sh"
 run_script "sudo $INSTALL_DIR/setup_ssh_config.sh"
 
 echo "🚀 Script de création utilisateur SSH disponible : $INSTALL_DIR/create_ssh_user.sh"
 echo "Tu peux le lancer manuellement quand tu veux."
 
+# Ajout alias kighmu dans ~/.bashrc s'il n'existe pas déjà
 if ! grep -q "alias kighmu=" ~/.bashrc; then
     echo "alias kighmu='$INSTALL_DIR/kighmu.sh'" >> ~/.bashrc
     echo "Alias kighmu ajouté dans ~/.bashrc"
@@ -192,10 +193,15 @@ else
     echo "Alias kighmu déjà présent dans ~/.bashrc"
 fi
 
+# Ajouter /usr/local/bin au PATH si non présent dans ~/.bashrc
 if ! grep -q "/usr/local/bin" ~/.bashrc; then
     echo 'export PATH=$PATH:/usr/local/bin' >> ~/.bashrc
     echo "Ajout de /usr/local/bin au PATH dans ~/.bashrc"
 fi
+
+# --- Génération automatique du fichier ~/.kighmu_info ---
+
+NS="slowdns5.kighmup.ddns-ip.net"
 
 SLOWDNS_PUBKEY="/etc/slowdns/server.pub"
 if [ -f "$SLOWDNS_PUBKEY" ]; then
@@ -206,6 +212,7 @@ fi
 
 cat > ~/.kighmu_info <<EOF
 DOMAIN=$DOMAIN
+NS=$NS
 PUBLIC_KEY="$PUBLIC_KEY"
 EOF
 
