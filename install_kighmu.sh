@@ -155,20 +155,17 @@ if [ ! -x "$DNS_BIN" ]; then
     chmod +x "$DNS_BIN"
 fi
 
-# Gestion de la clé publique SlowDNS persistante
 PUB_KEY_FILE="$SLOWDNS_DIR/server.pub"
 PRIV_KEY_FILE="$SLOWDNS_DIR/server.key"
 
-if [[ -f "$PUB_KEY_FILE" && -f "$PRIV_KEY_FILE" ]]; then
-    echo "Clés SlowDNS existantes détectées, utilisation des clés sauvegardées."
-else
-    echo "Aucune clé SlowDNS détectée, génération de nouvelles clés..."
-    "$DNS_BIN" -gen-key -privkey-file "$PRIV_KEY_FILE" -pubkey-file "$PUB_KEY_FILE"
-    chmod 600 "$PRIV_KEY_FILE"
-    chmod 644 "$PUB_KEY_FILE"
-fi
+# Suppression forcée des anciennes clés pour forcer une nouvelle génération
+rm -f "$PUB_KEY_FILE" "$PRIV_KEY_FILE"
 
-# Lecture de la clé publique pour affichage et utilisation
+echo "Génération de nouvelles clés SlowDNS..."
+"$DNS_BIN" -gen-key -privkey-file "$PRIV_KEY_FILE" -pubkey-file "$PUB_KEY_FILE"
+chmod 600 "$PRIV_KEY_FILE"
+chmod 644 "$PUB_KEY_FILE"
+
 PUB_KEY=$(cat "$PUB_KEY_FILE")
 
 interface=$(ip a | awk '/state UP/{print $2}' | cut -d: -f1 | head -1)
