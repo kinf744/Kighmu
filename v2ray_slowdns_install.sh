@@ -6,7 +6,7 @@
 INSTALL_DIR="$HOME/Kighmu"
 CONFIG_PATH="/usr/local/etc/v2ray_slowdns/config.json"
 SERVICE_NAME="v2ray-slowdns"
-PORT=5304  # Port par défaut pour V2Ray WS
+PORT=5304
 
 SLOWDNS_DIR="/etc/slowdns"
 NS_FILE="$SLOWDNS_DIR/ns.txt"
@@ -47,8 +47,14 @@ else
 fi
 
 # Création fichier config V2Ray SlowDNS
+mkdir -p "$(dirname "$CONFIG_PATH")"
 cat > "$CONFIG_PATH" <<EOF
 {
+  "log": {
+    "access": "/var/log/v2ray_access.log",
+    "error": "/var/log/v2ray_error.log",
+    "loglevel": "warning"
+  },
   "inbounds": [
     {
       "port": $PORT,
@@ -78,7 +84,7 @@ cat > "$CONFIG_PATH" <<EOF
 }
 EOF
 
-# Service systemd
+# Activer et démarrer le service V2Ray SlowDNS
 if systemctl list-unit-files | grep -q "$SERVICE_NAME"; then
     systemctl restart "$SERVICE_NAME"
 else
