@@ -1,7 +1,7 @@
 #!/bin/bash
 # v2ray_slowdns_install.sh
-# Installation et lancement tunnel V2Ray SlowDNS WS TCP 5304
-# Utilise le même namespace que SSH SlowDNS (récupéré depuis un fichier) et WS path fixe /kighmu
+# Installation et configuration du tunnel V2Ray SlowDNS WS TCP
+# Utilise le même namespace et la même clé publique que SSH SlowDNS
 
 set -e
 
@@ -10,41 +10,45 @@ INSTALL_DIR="/usr/local/etc/v2ray_slowdns"
 BIN_PATH="/usr/local/bin/v2ray"
 CONFIG_PATH="$INSTALL_DIR/config.json"
 TCP_PORT=5304
-UUID="afefe672-fae4-40ed-86c8-807c17d66703"
 
-# Définir le chemin où SSH SlowDNS stocke son NS
-SSH_SLOWDNS_NS_FILE="/etc/slowdns/ns.txt"
+# Fichiers du SSH SlowDNS pour NS et clé publique
+SSH_NS_FILE="/etc/slowdns/ns.txt"
+SSH_PUB_KEY_FILE="/etc/slowdns/server.pub"
 
-# Récupérer le NS ou demander à l'utilisateur
-if [[ -f "$SSH_SLOWDNS_NS_FILE" ]]; then
-  NAMESPACE=$(cat "$SSH_SLOWDNS_NS_FILE")
-  echo "Namespace récupéré depuis SSH SlowDNS : $NAMESPACE"
+# Récupérer le NS et la clé publique depuis SSH SlowDNS
+if [[ -f "$SSH_NS_FILE" ]]; then
+    NAMESPACE=$(cat "$SSH_NS_FILE")
 else
-  echo "Fichier namespace SSH SlowDNS introuvable ($SSH_SLOWDNS_NS_FILE)."
-  read -rp "Entrez manuellement le namespace (NS) pour V2Ray SlowDNS : " NAMESPACE
-  if [[ -z "$NAMESPACE" ]]; then
-    echo "Namespace non fourni, arrêt de l'installation."
-    exit 1
-  fi
+    echo "Namespace SSH SlowDNS introuvable ($SSH_NS_FILE)."
+    read -rp "Entrez le namespace (NS) pour V2Ray SlowDNS : " NAMESPACE
+    [[ -z "$NAMESPACE" ]] && { echo "Namespace non fourni, arrêt."; exit 1; }
+fi
+
+if [[ -f "$SSH_PUB_KEY_FILE" ]]; then
+    PUB_KEY=$(cat "$SSH_PUB_KEY_FILE")
+else
+    echo "Clé publique SSH SlowDNS introuvable ($SSH_PUB_KEY_FILE)."
+    PUB_KEY="inconnue"
 fi
 
 echo "Installation et configuration du tunnel V2Ray SlowDNS (WS TCP port $TCP_PORT)"
-echo "Namespace utilisé : $NAMESPACE"
-echo "UUID configuré : $UUID"
-echo "Chemin WS fixé à /kighmu"
+echo "Namespace : $NAMESPACE"
 
-# Installer V2Ray si non existant
+# Installer V2Ray si non présent
 if ! command -v $BIN_PATH &> /dev/null; then
-  echo "V2Ray non trouvé, installation en cours..."
-  bash <(curl -L -s https://raw.githubusercontent.com/v2fly/fhs-install-v2ray/master/install-release.sh)
+    echo "V2Ray non trouvé, installation..."
+    bash <(curl -L -s https://raw.githubusercontent.com/v2fly/fhs-install-v2ray/master/install-release.sh)
 else
-  echo "V2Ray déjà installé."
+    echo "V2Ray déjà installé."
 fi
 
-# Créer dossier de configuration
+# Créer le dossier de configuration
 mkdir -p "$INSTALL_DIR"
 
-# Créer le fichier de configuration V2Ray avec WebSocket path fixe /kighmu
+# UUID initial pour le service
+UUID=$(cat /proc/sys/kernel/random/uuid)
+
+# Créer le fichier de configuration V2Ray
 cat > "$CONFIG_PATH" <<EOF
 {
   "inbounds": [
@@ -79,12 +83,10 @@ EOF
 
 echo "Fichier de configuration créé : $CONFIG_PATH"
 
-# Création ou correction du service systemd
+# Création du service systemd
 SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME.service"
 
-if [[ ! -f "$SERVICE_FILE" ]] || ! grep -q "^ExecStart=$BIN_PATH run -config $CONFIG_PATH" "$SERVICE_FILE"; then
-  echo "Création/correction du fichier de service systemd : $SERVICE_FILE"
-  sudo tee "$SERVICE_FILE" > /dev/null <<EOF
+sudo tee "$SERVICE_FILE" > /dev/null <<EOF
 [Unit]
 Description=V2Ray SlowDNS Tunnel Service (WS)
 After=network.target
@@ -98,24 +100,20 @@ Restart=on-failure
 [Install]
 WantedBy=multi-user.target
 EOF
-else
-  echo "Le fichier systemd semble correct, pas de modification."
-fi
 
 # Activer et démarrer le service
 sudo systemctl daemon-reload
-sudo systemctl enable $SERVICE_NAME
-sudo systemctl restart $SERVICE_NAME
+sudo systemctl enable "$SERVICE_NAME"
+sudo systemctl restart "$SERVICE_NAME"
 
-echo "Service $SERVICE_NAME démarré sur TCP port $TCP_PORT avec WS chemin /kighmu, namespace $NAMESPACE et UUID $UUID."
-
-# Délai d’attente pour que le service démarre bien
-sleep 3
-
-# Vérifier écoute sur TCP 5304
+# Vérification du port
+sleep 2
 if ss -lnpt | grep -q ":$TCP_PORT "; then
-  echo "V2Ray SlowDNS WS fonctionne correctement."
+    echo "V2Ray SlowDNS WS fonctionne sur le port $TCP_PORT."
+    echo "UUID initial : $UUID"
+    echo "Namespace (NS) : $NAMESPACE"
+    echo "Clé publique : $PUB_KEY"
 else
-  echo "Erreur : le service n'écoute pas sur le port $TCP_PORT."
-  echo "Vérifiez le statut du service avec : sudo systemctl status $SERVICE_NAME"
+    echo "Erreur : le service n'écoute pas sur le port $TCP_PORT."
+    echo "Vérifiez avec : sudo systemctl status $SERVICE_NAME"
 fi
