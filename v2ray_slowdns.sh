@@ -10,6 +10,9 @@ SERVICE_NAME="v2ray-slowdns"
 SSH_NS_FILE="/etc/slowdns/ns.txt"
 SSH_PUB_KEY_FILE="/etc/slowdns/server.pub"
 
+# Domaine fixe utilisé pour tous les utilisateurs
+DOMAIN="sv2.kighmup.ddns-ip.net"
+
 # Couleurs
 RESET="\e[0m"
 GREEN="\e[32m"
@@ -24,9 +27,9 @@ if ! command -v jq &> /dev/null; then
 fi
 
 # Extraction UUID, PORT, WS_PATH depuis config.json V2Ray
-UUID=$(jq -r '.inbounds[0].settings.clients[0].id' "$CONFIG_PATH")
-PORT=$(jq -r '.inbounds[0].port' "$CONFIG_PATH")
-WS_PATH=$(jq -r '.inbounds[0].streamSettings.wsSettings.path' "$CONFIG_PATH")
+UUID=$(jq -r '.inbounds[0].settings.clients.id' "$CONFIG_PATH")
+PORT=$(jq -r '.inbounds.port' "$CONFIG_PATH")
+WS_PATH=$(jq -r '.inbounds.streamSettings.wsSettings.path' "$CONFIG_PATH")
 
 if [[ -z "$UUID" || -z "$PORT" || -z "$WS_PATH" || "$UUID" == "null" || "$PORT" == "null" || "$WS_PATH" == "null" ]]; then
     echo -e "${RED}Impossible d'extraire UUID, PORT ou WS PATH depuis $CONFIG_PATH.${RESET}"
@@ -86,7 +89,7 @@ while true; do
             fi
             read -p "Durée (jours) : " duration
             read -p "Limite (ex: 7 connexions) : " limit
-            read -p "Nom de domaine : " domain
+            domain="$DOMAIN"
 
             expiry=$(date -d "+$duration days" +"%Y-%m-%d")
             user_uuid=$(cat /proc/sys/kernel/random/uuid)
@@ -96,7 +99,7 @@ while true; do
 
             # Ajouter dans config.json
             tmp=$(mktemp)
-            jq ".inbounds[0].settings.clients += [{\"id\":\"$user_uuid\",\"alterId\":0,\"email\":\"$username\"}]" "$CONFIG_PATH" > "$tmp" && mv "$tmp" "$CONFIG_PATH"
+            jq ".inbounds[0].settings.clients += [{\"id\":\"$user_uuid\",\"alterId\":0,\"email\":\"$username@$domain\"}]" "$CONFIG_PATH" > "$tmp" && mv "$tmp" "$CONFIG_PATH"
 
             restart_service
 
