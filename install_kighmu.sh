@@ -49,24 +49,14 @@ echo "=============================================="
 apt update && apt upgrade -y
 
 apt install -y \
-dnsutils net-tools wget sudo iptables ufw screen \
-openssl openssl-blacklist psmisc \
+dnsutils net-tools wget sudo iptables ufw screen psmisc \
+openssl openssl-blacklist lsof psmisc \
 nginx certbot python3-certbot-nginx \
 dropbear badvpn \
 python3 python3-pip python3-setuptools \
 wireguard-tools qrencode \
 gcc make perl \
 software-properties-common socat
-
-echo "=============================================="
-echo " 🚀 Installation des dépendances supplémentaires..."
-echo "=============================================="
-
-if ! command -v lsof >/dev/null 2>&1; then
-    echo "lsof non trouvé, installation en cours..."
-    apt update
-    apt install -y lsof
-fi
 
 if [ ! -f /etc/iptables/rules.v4 ]; then
     echo "Création du fichier /etc/iptables/rules.v4 manquant..."
@@ -177,6 +167,14 @@ echo "Génération des clés SlowDNS à chaque installation..."
 chmod 600 "$SLOWDNS_DIR/server.key"
 chmod 644 "$SLOWDNS_DIR/server.pub"
 
+# Libération du port UDP 5300
+if command -v fuser >/dev/null 2>&1; then
+    sudo fuser -k 5300/udp || true
+else
+    echo "Commande fuser introuvable, installez psmisc pour gérer les processus."
+fi
+sleep 2
+
 # Arrêt propre de l'ancienne session slowdns si existante
 if screen -list | grep -q "slowdns_session"; then
     echo "Arrêt de l'ancienne session screen slowdns_session..."
@@ -197,13 +195,13 @@ configure_iptables
 echo "Démarrage du serveur SlowDNS dans screen session détachée..."
 screen -dmS slowdns_session "$DNS_BIN" -udp ":5300" -privkey-file "$SLOWDNS_DIR/server.key" "$NS" 0.0.0.0:22
 
-sleep 3
+sleep 5
 
-if pgrep -f "sldns-server" > /dev/null; then
-    echo "SlowDNS démarré avec succès sur UDP port 5300."
+if screen -list | grep -q "slowdns_session"; then
+    echo "SlowDNS démarré avec succès dans la session screen slowdns_session."
     echo "Pour rattacher la session screen : screen -r slowdns_session"
 else
-    echo "ERREUR : Le service SlowDNS n'a pas pu démarrer."
+    echo "ERREUR : La session screen slowdns_session n'a pas été trouvée."
     exit 1
 fi
 
