@@ -13,11 +13,15 @@ NS_FILE="$SLOWDNS_DIR/ns.txt"
 PUB_KEY_FILE="$SLOWDNS_DIR/server.pub"
 UUID_FILE="$INSTALL_DIR/v2ray_uuid.txt"
 
-# Domaine à utiliser dans la config V2Ray SlowDNS
-DOMAIN="sv2.kighmup.ddns-ip.net"
-
 mkdir -p "$(dirname "$CONFIG_PATH")"
 mkdir -p "$INSTALL_DIR"
+
+# Demande interactive du nom de domaine
+read -p "Entrez le nom de domaine à utiliser (ex: sv2.kighmup.ddns-ip.net) : " DOMAIN
+if [ -z "$DOMAIN" ]; then
+    echo "Aucun domaine saisi, interruption de l'installation."
+    exit 1
+fi
 
 # Lire Namespace
 if [ ! -f "$NS_FILE" ]; then
@@ -49,7 +53,7 @@ else
     echo "V2Ray déjà installé."
 fi
 
-# Création fichier config V2Ray SlowDNS avec domaine intégré dans wsSettings.host et email UUID
+# Création fichier config V2Ray SlowDNS avec domaine saisi par l'utilisateur
 mkdir -p "$(dirname "$CONFIG_PATH")"
 cat > "$CONFIG_PATH" <<EOF
 {
