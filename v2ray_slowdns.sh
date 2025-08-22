@@ -20,7 +20,7 @@ if ! command -v jq &> /dev/null; then
   exit 1
 fi
 
-# Extraire paramètres fixes depuis config tunnel
+# Extraction correcte avec indexation tableau
 UUID=$(jq -r '.inbounds[0].settings.clients.id' "$CONFIG_PATH")
 PORT=$(jq -r '.inbounds.port' "$CONFIG_PATH")
 WS_PATH=$(jq -r '.inbounds.streamSettings.wsSettings.path' "$CONFIG_PATH")
@@ -30,7 +30,7 @@ if [[ -z "$UUID" || -z "$PORT" || -z "$WS_PATH" || "$UUID" == "null" || "$PORT" 
   exit 1
 fi
 
-# Lire namespace SlowDNS et clé publique des fichiers fixes
+# Lire namespace SlowDNS et clé publique
 if [[ -f "$NS_FILE" ]]; then
   NS=$(cat "$NS_FILE")
 else
@@ -81,7 +81,6 @@ while true; do
 
             expiry=$(date -d "+$duration days" +"%Y-%m-%d")
 
-            # Utiliser UUID et port fixes, pas de génération aléatoire
             echo "$username:$duration:$limit:$domain:$expiry:$UUID:$PORT:$NS:$PUB_KEY" >> "$USERS_FILE"
 
             vmess_link=$(echo -n "{\"v\":\"2\",\"ps\":\"V2Ray SlowDNS\",\"add\":\"$domain\",\"port\":\"$PORT\",\"id\":\"$UUID\",\"aid\":\"0\",\"net\":\"ws\",\"type\":\"none\",\"host\":\"$domain\",\"path\":\"$WS_PATH\",\"tls\":\"none\",\"mux\":true}" | base64 -w0)
