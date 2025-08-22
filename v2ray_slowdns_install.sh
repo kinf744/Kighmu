@@ -1,121 +1,158 @@
 #!/bin/bash
-# v2ray_slowdns_install.sh
-# Installation et lancement tunnel V2Ray SlowDNS WS TCP 5304
-# Utilise le même namespace que SSH SlowDNS (récupéré depuis un fichier) et WS path fixe /kighmu
+# v2ray_slowdns.sh - Gestion utilisateurs compatible avec tunnel V2Ray SlowDNS
 
-set -e
-
+INSTALL_DIR="$HOME/Kighmu"
+USERS_FILE="/etc/v2ray_slowdns/users.txt"
+CONFIG_PATH="/usr/local/etc/v2ray_slowdns/config.json"
 SERVICE_NAME="v2ray-slowdns"
-INSTALL_DIR="/usr/local/etc/v2ray_slowdns"
-BIN_PATH="/usr/local/bin/v2ray"
-CONFIG_PATH="$INSTALL_DIR/config.json"
-TCP_PORT=5304
-UUID="afefe672-fae4-40ed-86c8-807c17d66703"
 
-# Définir le chemin où SSH SlowDNS stocke son NS
-SSH_SLOWDNS_NS_FILE="/etc/slowdns/ns.txt"
+# Fichiers du SSH SlowDNS pour NS et clé publique
+SSH_NS_FILE="/etc/slowdns/ns.txt"
+SSH_PUB_KEY_FILE="/etc/slowdns/server.pub"
 
-# Récupérer le NS ou demander à l'utilisateur
-if [[ -f "$SSH_SLOWDNS_NS_FILE" ]]; then
-  NAMESPACE=$(cat "$SSH_SLOWDNS_NS_FILE")
-  echo "Namespace récupéré depuis SSH SlowDNS : $NAMESPACE"
-else
-  echo "Fichier namespace SSH SlowDNS introuvable ($SSH_SLOWDNS_NS_FILE)."
-  read -rp "Entrez manuellement le namespace (NS) pour V2Ray SlowDNS : " NAMESPACE
-  if [[ -z "$NAMESPACE" ]]; then
-    echo "Namespace non fourni, arrêt de l'installation."
+# Domaine fixe utilisé pour tous les utilisateurs
+DOMAIN="sv2.kighmup.ddns-ip.net"
+
+# Couleurs
+RESET="\e[0m"
+GREEN="\e[32m"
+YELLOW="\e[33m"
+RED="\e[31m"
+BOLD="\e[1m"
+
+# Vérifier que jq est installé
+if ! command -v jq &> /dev/null; then
+    echo -e "${RED}Erreur : 'jq' n'est pas installé. Installe-le avec : sudo apt-get install -y jq${RESET}"
     exit 1
-  fi
 fi
 
-echo "Installation et configuration du tunnel V2Ray SlowDNS (WS TCP port $TCP_PORT)"
-echo "Namespace utilisé : $NAMESPACE"
-echo "UUID configuré : $UUID"
-echo "Chemin WS fixé à /kighmu"
+# Extraction UUID, PORT, WS_PATH depuis config.json V2Ray
+UUID=$(jq -r '.inbounds[0].settings.clients.id' "$CONFIG_PATH")
+PORT=$(jq -r '.inbounds.port' "$CONFIG_PATH")
+WS_PATH=$(jq -r '.inbounds.streamSettings.wsSettings.path' "$CONFIG_PATH")
 
-# Installer V2Ray si non existant
-if ! command -v $BIN_PATH &> /dev/null; then
-  echo "V2Ray non trouvé, installation en cours..."
-  bash <(curl -L -s https://raw.githubusercontent.com/v2fly/fhs-install-v2ray/master/install-release.sh)
+if [[ -z "$UUID" || -z "$PORT" || -z "$WS_PATH" || "$UUID" == "null" || "$PORT" == "null" || "$WS_PATH" == "null" ]]; then
+    echo -e "${RED}Impossible d'extraire UUID, PORT ou WS PATH depuis $CONFIG_PATH.${RESET}"
+    exit 1
+fi
+
+# Lire NS et clé publique du SSH SlowDNS
+if [[ -f "$SSH_NS_FILE" ]]; then
+    NS=$(cat "$SSH_NS_FILE")
 else
-  echo "V2Ray déjà installé."
+    echo -e "${RED}Fichier namespace SSH SlowDNS introuvable.${RESET}"
+    NS="inconnu"
 fi
 
-# Créer dossier de configuration
-mkdir -p "$INSTALL_DIR"
+if [[ -f "$SSH_PUB_KEY_FILE" ]]; then
+    PUB_KEY=$(cat "$SSH_PUB_KEY_FILE")
+else
+    echo -e "${RED}Fichier clé publique SSH SlowDNS introuvable.${RESET}"
+    PUB_KEY="inconnue"
+fi
 
-# Créer le fichier de configuration V2Ray avec WebSocket path fixe /kighmu
-cat > "$CONFIG_PATH" <<EOF
-{
-  "inbounds": [
-    {
-      "port": $TCP_PORT,
-      "listen": "0.0.0.0",
-      "protocol": "vmess",
-      "settings": {
-        "clients": [
-          {
-            "id": "$UUID",
-            "alterId": 0
-          }
-        ]
-      },
-      "streamSettings": {
-        "network": "ws",
-        "wsSettings": {
-          "path": "/kighmu"
-        }
-      }
-    }
-  ],
-  "outbounds": [
-    {
-      "protocol": "freedom",
-      "settings": {}
-    }
-  ]
+mkdir -p "$(dirname "$USERS_FILE")"
+touch "$USERS_FILE"
+
+restart_service() {
+    sudo systemctl restart "$SERVICE_NAME"
+    sleep 2
 }
-EOF
 
-echo "Fichier de configuration créé : $CONFIG_PATH"
+while true; do
+    clear
+    echo -e "${BOLD}${YELLOW}MENU V2RAY SLOWDNS${RESET}"
+    echo -e "${GREEN}1) Installer le tunnel V2Ray SlowDNS${RESET}"
+    echo -e "${GREEN}2) Créer un utilisateur${RESET}"
+    echo -e "${RED}3) Supprimer un utilisateur${RESET}"
+    echo -e "4) Retour au menu précédent"
+    echo ""
 
-# Création ou correction du service systemd
-SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME.service"
+    read -p "Votre choix : " choix
 
-if [[ ! -f "$SERVICE_FILE" ]] || ! grep -q "^ExecStart=$BIN_PATH run -config $CONFIG_PATH" "$SERVICE_FILE"; then
-  echo "Création/correction du fichier de service systemd : $SERVICE_FILE"
-  sudo tee "$SERVICE_FILE" > /dev/null <<EOF
-[Unit]
-Description=V2Ray SlowDNS Tunnel Service (WS)
-After=network.target
+    case $choix in
+        1)
+            if [[ -x "$INSTALL_DIR/v2ray_slowdns_install.sh" ]]; then
+                bash "$INSTALL_DIR/v2ray_slowdns_install.sh"
+            else
+                echo -e "${RED}Script d'installation introuvable.${RESET}"
+            fi
+            read -p "Appuyez sur Entrée pour continuer..."
+            ;;
+        2)
+            # Créer un utilisateur
+            read -p "Nom de l'utilisateur : " username
+            if grep -q "^$username:" "$USERS_FILE"; then
+                echo -e "${RED}Utilisateur déjà existant.${RESET}"
+                read -p "Appuyez sur Entrée pour continuer..."
+                continue
+            fi
+            read -p "Durée (jours) : " duration
+            read -p "Limite (ex: 7 connexions) : " limit
+            domain="$DOMAIN"
 
-[Service]
-Type=simple
-User=root
-ExecStart=$BIN_PATH run -config $CONFIG_PATH
-Restart=on-failure
+            expiry=$(date -d "+$duration days" +"%Y-%m-%d")
+            user_uuid=$(cat /proc/sys/kernel/random/uuid)
 
-[Install]
-WantedBy=multi-user.target
-EOF
-else
-  echo "Le fichier systemd semble correct, pas de modification."
-fi
+            # Ajouter dans users.txt
+            echo "$username:$duration:$limit:$domain:$expiry:$user_uuid:$PORT:$NS:$PUB_KEY" >> "$USERS_FILE"
 
-# Activer et démarrer le service
-sudo systemctl daemon-reload
-sudo systemctl enable $SERVICE_NAME
-sudo systemctl restart $SERVICE_NAME
+            # Ajouter dans config.json
+            tmp=$(mktemp)
+            jq ".inbounds[0].settings.clients += [{\"id\":\"$user_uuid\",\"alterId\":0,\"email\":\"$username@$domain\"}]" "$CONFIG_PATH" > "$tmp" && mv "$tmp" "$CONFIG_PATH"
 
-echo "Service $SERVICE_NAME démarré sur TCP port $TCP_PORT avec WS chemin /kighmu, namespace $NAMESPACE et UUID $UUID."
+            restart_service
 
-# Délai d’attente pour que le service démarre bien
-sleep 3
+            # Générer vmess link dynamique
+            vmess_link=$(echo -n "{\"v\":\"2\",\"ps\":\"$username\",\"add\":\"$domain\",\"port\":\"$PORT\",\"id\":\"$user_uuid\",\"aid\":\"0\",\"net\":\"ws\",\"type\":\"none\",\"host\":\"$domain\",\"path\":\"$WS_PATH\",\"tls\":\"none\"}" | base64 -w0)
+            vmess_link="vmess://$vmess_link"
 
-# Vérifier écoute sur TCP 5304
-if ss -lnpt | grep -q ":$TCP_PORT "; then
-  echo "V2Ray SlowDNS WS fonctionne correctement."
-else
-  echo "Erreur : le service n'écoute pas sur le port $TCP_PORT."
-  echo "Vérifiez le statut du service avec : sudo systemctl status $SERVICE_NAME"
-fi
+            clear
+            echo -e "*NOUVEAU UTILISATEUR V2RAY SLOWDNS CRÉÉ*"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "DOMAIN        : $domain"
+            echo "UTILISATEUR   : $username"
+            echo "UUID          : $user_uuid"
+            echo "LIMITE        : $limit"
+            echo "DATE EXPIRÉE  : $expiry"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "$vmess_link"
+            echo ""
+            echo "━━━━━━━━━━━  CONFIG SLOWDNS  ━━━━━━━━━━━"
+            echo "Pub KEY : $PUB_KEY"
+            echo "NameServer (NS) : $NS"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            read -p "Appuyez sur Entrée pour continuer..."
+            ;;
+        3)
+            # Supprimer un utilisateur
+            read -p "Nom de l'utilisateur à supprimer : " username
+            if grep -q "^$username:" "$USERS_FILE"; then
+                user_uuid=$(grep "^$username:" "$USERS_FILE" | cut -d: -f6)
+
+                # Supprimer du fichier users.txt
+                grep -v "^$username:" "$USERS_FILE" > "$USERS_FILE.tmp" && mv "$USERS_FILE.tmp" "$USERS_FILE"
+
+                # Supprimer du config.json
+                tmp=$(mktemp)
+                jq "(.inbounds[0].settings.clients) |= map(select(.id != \"$user_uuid\"))" "$CONFIG_PATH" > "$tmp" && mv "$tmp" "$CONFIG_PATH"
+
+                restart_service
+
+                echo -e "${GREEN}Utilisateur $username supprimé avec succès.${RESET}"
+            else
+                echo -e "${RED}Utilisateur non trouvé.${RESET}"
+            fi
+            read -p "Appuyez sur Entrée pour continuer..."
+            ;;
+        4)
+            echo -e "${YELLOW}Retour au menu précédent...${RESET}"
+            sleep 1
+            break
+            ;;
+        *)
+            echo -e "${RED}Choix invalide.${RESET}"
+            read -p "Appuyez sur Entrée pour continuer..."
+            ;;
+    esac
+done
