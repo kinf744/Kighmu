@@ -121,8 +121,7 @@ while true; do
     line_full
     content_line "1) Installer un mode"
     content_line "2) Désinstaller un mode"
-    content_line "3) V2Ray SlowDNS"
-    content_line "4) Retour menu principal"
+    content_line "3) Retour menu principal"
     line_simple
     echo ""
 
@@ -155,14 +154,6 @@ while true; do
             uninstall_mode "$choix"
             ;;
         3)
-            # Lancement du sous-menu V2Ray SlowDNS
-            if [[ -x "$INSTALL_DIR/v2ray_slowdns.sh" ]]; then
-                bash "$INSTALL_DIR/v2ray_slowdns.sh"
-            else
-                echo -e "${RED}Sous-menu v2ray_slowdns.sh introuvable.${RESET}"
-            fi
-            ;;
-        4)
             echo -e "${YELLOW}Retour au menu principal...${RESET}"
             sleep 1
             bash "$INSTALL_DIR/kighmu.sh"
