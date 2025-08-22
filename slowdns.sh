@@ -27,12 +27,12 @@ install_dependencies
 
 sudo mkdir -p "$SLOWDNS_DIR"
 
-# Lire le Namespace depuis fichier
+# Lire le Namespace depuis fichier généré par le script principal
 if [ -f "$NAMESPACE_FILE" ]; then
     NAMESERVER=$(cat "$NAMESPACE_FILE")
     echo "Utilisation du NameServer existant : $NAMESERVER"
 else
-    echo "Fichier Namespace ($NAMESPACE_FILE) introuvable. Assurez-vous que le script principal d'installation a été exécuté."
+    echo "Fichier Namespace ($NAMESPACE_FILE) introuvable. Assurez-vous que le script principal a été exécuté."
     exit 1
 fi
 
