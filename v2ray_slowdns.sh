@@ -21,38 +21,31 @@ if ! command -v jq &> /dev/null; then
   exit 1
 fi
 
-# Extraction correcte des infos V2Ray
-UUID=$(jq -r '.inbounds[0].settings.clients[0].id' "$CONFIG_PATH")
-PORT=$(jq -r '.inbounds[0].port' "$CONFIG_PATH")
-WS_PATH=$(jq -r '.inbounds[0].streamSettings.wsSettings.path' "$CONFIG_PATH")
-
-if [[ -z "$UUID" || -z "$PORT" || -z "$WS_PATH" || "$UUID" == "null" || "$PORT" == "null" || "$WS_PATH" == "null" ]]; then
-  echo -e "${RED}Impossible d'extraire UUID, PORT ou WS PATH depuis $CONFIG_PATH. Vérifie la configuration.${RESET}"
+# Vérifier que le fichier de config existe
+if [[ ! -f "$CONFIG_PATH" ]]; then
+  echo -e "${RED}Erreur : $CONFIG_PATH introuvable. Installe d'abord le tunnel V2Ray SlowDNS.${RESET}"
   exit 1
 fi
 
-# Lire namespace SlowDNS et clé publique
-if [[ -f "$NS_FILE" ]]; then
-  NS=$(cat "$NS_FILE")
-else
-  echo -e "${RED}Attention : fichier namespace $NS_FILE introuvable.${RESET}"
-  NS="inconnu"
-fi
-
-if [[ -f "$PUB_KEY_FILE" ]]; then
-  PUB_KEY=$(cat "$PUB_KEY_FILE")
-else
-  echo -e "${RED}Attention : fichier clé publique $PUB_KEY_FILE introuvable.${RESET}"
-  PUB_KEY="inconnue"
-fi
-
+# Créer le fichier users.txt si inexistant
 mkdir -p "$(dirname "$USERS_FILE")"
 touch "$USERS_FILE"
+
+# Lire namespace SlowDNS et clé publique
+NS=$( [[ -f "$NS_FILE" ]] && cat "$NS_FILE" || echo "inconnu" )
+PUB_KEY=$( [[ -f "$PUB_KEY_FILE" ]] && cat "$PUB_KEY_FILE" || echo "inconnue" )
 
 restart_service() {
   sudo systemctl restart "$SERVICE_NAME"
   sleep 2
+  if ! systemctl is-active --quiet "$SERVICE_NAME"; then
+    echo -e "${RED}Erreur : le service V2Ray ne démarre pas. Vérifie config.json${RESET}"
+    exit 1
+  fi
 }
+
+# Créer clients si absent
+jq 'if .inbounds[0].settings.clients == null then .inbounds[0].settings.clients = [] else . end' "$CONFIG_PATH" > tmp && mv tmp "$CONFIG_PATH"
 
 while true; do
     clear
@@ -74,7 +67,7 @@ while true; do
             fi
             read -p "Appuyez sur Entrée pour continuer..."
             ;;
-        2) # Créer un utilisateur
+        2)
             read -p "Nom de l'utilisateur : " username
             if grep -q "^$username:" "$USERS_FILE"; then
                 echo -e "${RED}Utilisateur déjà existant.${RESET}"
@@ -88,15 +81,18 @@ while true; do
             expiry=$(date -d "+$duration days" +"%Y-%m-%d")
             user_uuid=$(cat /proc/sys/kernel/random/uuid)
 
-            # Ajouter dans users.txt
-            echo "$username:$duration:$limit:$domain:$expiry:$user_uuid:$PORT:$NS:$PUB_KEY" >> "$USERS_FILE"
+            # Ajouter utilisateur dans users.txt
+            echo "$username:$duration:$limit:$domain:$expiry:$user_uuid:$NS:$PUB_KEY" >> "$USERS_FILE"
 
-            # Ajouter dans config.json
+            # Ajouter utilisateur dans config.json
             tmp=$(mktemp)
             jq ".inbounds[0].settings.clients += [{\"id\":\"$user_uuid\",\"alterId\":0,\"email\":\"$username\"}]" "$CONFIG_PATH" > "$tmp" && mv "$tmp" "$CONFIG_PATH"
 
             restart_service
 
+            # Extraire infos pour vmess
+            PORT=$(jq -r '.inbounds[0].port' "$CONFIG_PATH")
+            WS_PATH=$(jq -r '.inbounds[0].streamSettings.wsSettings.path' "$CONFIG_PATH")
             vmess_link=$(echo -n "{\"v\":\"2\",\"ps\":\"$username\",\"add\":\"$domain\",\"port\":\"$PORT\",\"id\":\"$user_uuid\",\"aid\":\"0\",\"net\":\"ws\",\"type\":\"none\",\"host\":\"$domain\",\"path\":\"$WS_PATH\",\"tls\":\"none\"}" | base64 -w0)
             vmess_link="vmess://$vmess_link"
 
@@ -117,20 +113,16 @@ while true; do
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             read -p "Appuyez sur Entrée pour continuer..."
             ;;
-        3) # Supprimer un utilisateur
+        3)
             read -p "Nom de l'utilisateur à supprimer : " username
             if grep -q "^$username:" "$USERS_FILE"; then
                 user_uuid=$(grep "^$username:" "$USERS_FILE" | cut -d: -f6)
-
                 # Supprimer du fichier users.txt
                 grep -v "^$username:" "$USERS_FILE" > "$USERS_FILE.tmp" && mv "$USERS_FILE.tmp" "$USERS_FILE"
-
                 # Supprimer du config.json
                 tmp=$(mktemp)
                 jq "(.inbounds[0].settings.clients) |= map(select(.id != \"$user_uuid\"))" "$CONFIG_PATH" > "$tmp" && mv "$tmp" "$CONFIG_PATH"
-
                 restart_service
-
                 echo -e "${GREEN}Utilisateur $username supprimé avec succès.${RESET}"
             else
                 echo -e "${RED}Utilisateur non trouvé.${RESET}"
