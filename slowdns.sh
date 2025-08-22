@@ -28,13 +28,13 @@ install_dependencies
 # Création du dossier si absent
 [ ! -d "$SLOWDNS_DIR" ] && sudo mkdir -p "$SLOWDNS_DIR"
 
-# Demande du NameServer à chaque installation
-read -p "Entrez le NameServer (NS) (ex: ns.example.com) : " NAMESERVER
-if [[ -z "$NAMESERVER" ]]; then
-    echo "NameServer invalide."
+# Lecture du NameServer depuis le fichier de config
+if [ -f "$CONFIG_FILE" ]; then
+    NAMESERVER=$(cat "$CONFIG_FILE")
+else
+    echo "Erreur : fichier NameServer $CONFIG_FILE introuvable !"
     exit 1
 fi
-echo "$NAMESERVER" | sudo tee "$CONFIG_FILE" > /dev/null
 
 # Téléchargement du binaire SlowDNS s'il manque
 if [ ! -x "$SLOWDNS_BIN" ]; then
