@@ -13,6 +13,9 @@ NS_FILE="$SLOWDNS_DIR/ns.txt"
 PUB_KEY_FILE="$SLOWDNS_DIR/server.pub"
 UUID_FILE="$INSTALL_DIR/v2ray_uuid.txt"
 
+# Domaine à utiliser dans la config V2Ray SlowDNS
+DOMAIN="sv2.kighmup.ddns-ip.net"
+
 mkdir -p "$(dirname "$CONFIG_PATH")"
 mkdir -p "$INSTALL_DIR"
 
@@ -46,7 +49,7 @@ else
     echo "V2Ray déjà installé."
 fi
 
-# Création fichier config V2Ray SlowDNS
+# Création fichier config V2Ray SlowDNS avec domaine intégré dans wsSettings.host et email UUID
 mkdir -p "$(dirname "$CONFIG_PATH")"
 cat > "$CONFIG_PATH" <<EOF
 {
@@ -64,14 +67,17 @@ cat > "$CONFIG_PATH" <<EOF
           {
             "id": "$UUID",
             "alterId": 0,
-            "email": "user@$NS"
+            "email": "user@$DOMAIN"
           }
         ]
       },
       "streamSettings": {
         "network": "ws",
         "wsSettings": {
-          "path": "/kighmu"
+          "path": "/kighmu",
+          "headers": {
+            "Host": "$DOMAIN"
+          }
         }
       }
     }
@@ -111,3 +117,4 @@ echo "Installation et configuration du tunnel V2Ray SlowDNS (WS TCP port $PORT)"
 echo "Namespace : $NS"
 echo "UUID : $UUID"
 echo "Clé publique SlowDNS : $PUB_KEY"
+echo "Domaine utilisé : $DOMAIN"
