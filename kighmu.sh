@@ -28,11 +28,11 @@ get_xray_users_count() { ls /etc/xray/users/ 2>/dev/null | wc -l; }
 get_devices_count() { ss -ntu state established 2>/dev/null | grep -c ESTAB; }
 get_cpu_usage() { grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf "%.2f%%", usage}'; }
 
-# Fonction pour détecter l'OS
+# Fonction pour détecter l'OS complet
 get_os_info() {
     if [ -f /etc/os-release ]; then
         . /etc/os-release
-        echo "$NAME $VERSION"
+        echo "$PRETTY_NAME"   # Affiche Ubuntu 20.04.6 LTS, Debian GNU/Linux 12 (bookworm), etc.
     else
         uname -s
     fi
