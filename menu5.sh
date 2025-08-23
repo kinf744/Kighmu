@@ -60,7 +60,7 @@ while true; do
     line_full
     content_line "1) Installer un mode"
     content_line "2) Désinstaller un mode"
-    content_line "3) Retour menu principal"
+    content_line "0) Retour menu principal"
     line_simple
     echo ""
 
@@ -92,7 +92,7 @@ while true; do
             read -p "Numéro du mode : " choix
             uninstall_mode "$choix"
             ;;
-        3)
+        0)
             echo "Retour au menu principal..."
             sleep 1
             bash "$INSTALL_DIR/kighmu.sh"
