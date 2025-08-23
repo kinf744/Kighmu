@@ -9,7 +9,7 @@
 echo "Vérification de la présence de curl..."
 if ! command -v curl >/dev/null 2>&1; then
     echo "curl non trouvé, installation en cours..."
-    apt update
+    apt update -y
     apt install -y curl
     echo "Installation de curl terminée."
 else
@@ -46,26 +46,24 @@ fi
 export DOMAIN
 
 echo "=============================================="
-echo " 🚀 Installation des paquets essentiels..."
+echo " 🚀 Mise à jour et installation des paquets essentiels..."
 echo "=============================================="
 
-apt update && apt upgrade -y
+apt update -y && apt upgrade -y
 
 apt install -y \
-dnsutils net-tools wget sudo iptables ufw \
-openssl openssl-blacklist psmisc \
-nginx certbot python3-certbot-nginx \
-dropbear badvpn \
-python3 python3-pip python3-setuptools \
-wireguard-tools qrencode \
-gcc make perl \
-software-properties-common socat
+sudo bsdmainutils zip unzip ufw curl python python3 python3-pip openssl screen cron iptables lsof pv boxes nano at mlocate \
+gawk grep bc jq npm nodejs socat netcat netcat-traditional net-tools cowsay figlet lolcat \
+dnsutils net-tools wget sudo iptables ufw openssl openssl-blacklist psmisc nginx certbot python3-certbot-nginx dropbear badvpn \
+python3-setuptools wireguard-tools qrencode gcc make perl software-properties-common socat
+
+apt autoremove -y
+apt clean
 
 echo "=============================================="
 echo " 🚀 Installation et configuration du module Python pysocks et du proxy SOCKS"
 echo "=============================================="
 
-# Installer pysocks si nécessaire
 if ! python3 -c "import socks" &> /dev/null; then
     echo "Installation du module pysocks via pip3..."
     pip3 install pysocks
@@ -73,7 +71,6 @@ else
     echo "Module pysocks déjà installé."
 fi
 
-# Télécharger le script KIGHMUPROXY.py s'il n'existe pas
 PROXY_SCRIPT_PATH="/usr/local/bin/KIGHMUPROXY.py"
 if [ ! -f "$PROXY_SCRIPT_PATH" ]; then
     echo "Téléchargement du script KIGHMUPROXY.py..."
@@ -88,7 +85,6 @@ else
     echo "Script KIGHMUPROXY.py déjà présent."
 fi
 
-# Activer et configurer UFW
 ufw allow OpenSSH
 ufw allow 22
 ufw allow 80
@@ -99,11 +95,9 @@ echo "=============================================="
 echo " 🚀 Installation de Kighmu VPS Manager..."
 echo "=============================================="
 
-# Création du dossier d'installation
 INSTALL_DIR="$HOME/Kighmu"
 mkdir -p "$INSTALL_DIR" || { echo "Erreur : impossible de créer le dossier $INSTALL_DIR"; exit 1; }
 
-# Liste des fichiers à télécharger
 FILES=(
     "install_kighmu.sh"
     "kighmu-manager.sh"
@@ -129,10 +123,8 @@ FILES=(
     "create_ssh_user.sh"
 )
 
-# URL de base du dépôt GitHub
 BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
 
-# Téléchargement et vérification de chaque fichier
 for file in "${FILES[@]}"; do
     echo "Téléchargement de $file ..."
     wget -O "$INSTALL_DIR/$file" "$BASE_URL/$file"
@@ -143,7 +135,6 @@ for file in "${FILES[@]}"; do
     chmod +x "$INSTALL_DIR/$file"
 done
 
-# Fonction pour exécuter un script avec gestion d’erreur
 run_script() {
     local script_path="$1"
     echo "🚀 Lancement du script : $script_path"
@@ -154,17 +145,14 @@ run_script() {
     fi
 }
 
-# Exécution automatique des scripts d’installation supplémentaires
 run_script "$INSTALL_DIR/dropbear.sh"
 run_script "$INSTALL_DIR/ssl.sh"
 run_script "$INSTALL_DIR/badvpn.sh"
 run_script "$INSTALL_DIR/system_dns.sh"
 run_script "$INSTALL_DIR/nginx.sh"
 run_script "$INSTALL_DIR/socks_python.sh"
-run_script "$INSTALL_DIR/slowdns.sh"  # Exécution du script slowdns.sh existant
+run_script "$INSTALL_DIR/slowdns.sh"
 run_script "$INSTALL_DIR/udp_custom.sh"
-
-# --- Ajout installation et configuration automatique SlowDNS ---
 
 echo "=============================================="
 echo " 🚀 Installation et configuration SlowDNS..."
@@ -204,7 +192,6 @@ echo "Commande client SlowDNS à utiliser :"
 echo "curl -sO https://github.com/khaledagn/DNS-AGN/raw/main/files/slowdns && chmod +x slowdns && ./slowdns slowdns5.kighmup.ddns-ip.net $(cat $SLOWDNS_DIR/server.pub)"
 echo "+--------------------------------------------+"
 
-# Ajout de l'exécution du script de configuration SSH
 echo "🚀 Application de la configuration SSH personnalisée..."
 chmod +x "$INSTALL_DIR/setup_ssh_config.sh"
 run_script "sudo $INSTALL_DIR/setup_ssh_config.sh"
@@ -212,7 +199,6 @@ run_script "sudo $INSTALL_DIR/setup_ssh_config.sh"
 echo "🚀 Script de création utilisateur SSH disponible : $INSTALL_DIR/create_ssh_user.sh"
 echo "Tu peux le lancer manuellement quand tu veux."
 
-# Ajout alias kighmu dans ~/.bashrc s'il n'existe pas déjà
 if ! grep -q "alias kighmu=" ~/.bashrc; then
     echo "alias kighmu='$INSTALL_DIR/kighmu.sh'" >> ~/.bashrc
     echo "Alias kighmu ajouté dans ~/.bashrc"
@@ -220,13 +206,10 @@ else
     echo "Alias kighmu déjà présent dans ~/.bashrc"
 fi
 
-# Ajouter /usr/local/bin au PATH si non présent dans ~/.bashrc
 if ! grep -q "/usr/local/bin" ~/.bashrc; then
     echo 'export PATH=$PATH:/usr/local/bin' >> ~/.bashrc
     echo "Ajout de /usr/local/bin au PATH dans ~/.bashrc"
 fi
-
-# --- Génération automatique du fichier ~/.kighmu_info ---
 
 NS="slowdns5.kighmup.ddns-ip.net"
 
