@@ -1,43 +1,54 @@
 #!/bin/bash
-# menu3.sh
-# Afficher les utilisateurs en ligne avec nombre d'appareils et limite
+# menu3.sh - Affichage des utilisateurs en ligne et de leur limite dans un panneau dynamique
 
 USER_FILE="/etc/kighmu/users.list"
+WIDTH=60
 
-# Couleur bleu marine pour les cadres
-BLUE="\e[34m"
+# Couleurs
+CYAN="\e[36m"    # lignes
+YELLOW="\e[33m"  # titres
 RESET="\e[0m"
 
-# Fonction pour encadrer un texte
-draw_frame() {
+# Fonctions d'affichage
+line_full() { echo -e "${CYAN}+$(printf '%0.s=' $(seq 1 $WIDTH))+${RESET}"; }
+line_simple() { echo -e "${CYAN}+$(printf '%0.s-' $(seq 1 $WIDTH))+${RESET}"; }
+content_line() { printf "| %-56s |\n" "$1"; }
+center_line() {
     local text="$1"
-    local width=60
-    echo -e "${BLUE}+$(printf '%.0s-' $(seq 1 $width))+${RESET}"
-    printf "|%*s%*s|\n" $(( (width + ${#text})/2 )) "$text" $(( (width - ${#text})/2 )) ""
-    echo -e "${BLUE}+$(printf '%.0s-' $(seq 1 $width))+${RESET}"
+    local padding=$(( (WIDTH - ${#text}) / 2 ))
+    printf "|%*s%s%*s|\n" "$padding" "" "$text" "$padding" ""
 }
 
-# Affichage du panneau d’accueil
+# Vérifier nombre de connexions actives pour un utilisateur
+connected_count() {
+    local user="$1"
+    # Compte les connexions SSH/Dropbear/UDP/SOCKS
+    who | awk '{print $1}' | grep -c "^$user$"
+}
+
+# Panneau d'accueil
 clear
-draw_frame "PANEL UTILISATEURS EN LIGNE"
+line_full
+center_line "${YELLOW}UTILISATEURS EN LIGNE${RESET}"
+line_full
 
 if [ ! -f "$USER_FILE" ]; then
-    echo "Aucun utilisateur trouvé."
-    draw_frame "FIN DE LA LISTE"
+    content_line "Aucun utilisateur trouvé."
+    line_full
     exit 0
 fi
 
-# En-tête du tableau encadré
-draw_frame "UTILISATEUR       CONNECTÉS       LIMITE"
+# En-tête tableau
+line_simple
+content_line "UTILISATEUR             CONNECTÉS   LIMITE"
+line_simple
 
-# Parcourir la liste des utilisateurs
+# Parcours des utilisateurs et affichage dynamique
 while IFS="|" read -r username password limite expire_date rest; do
-    # Compter le nombre de connexions SSH/Dropbear/UDP/SOCKS pour cet utilisateur
-    connected=$(who | awk '{print $1}' | grep -c "^$username$")
-    
-    printf "| %-16s | %-13s | %-6s |\n" "$username" "$connected" "$limite"
+    count=$(connected_count "$username")
+    content_line "$(printf '%-22s %-10s %-10s' "$username" "$count" "$limite")"
 done < "$USER_FILE"
 
-# Ligne de séparation et fin du panneau
-echo -e "${BLUE}+------------------------------------------------------------+${RESET}"
-draw_frame "FIN DE LA LISTE DES UTILISATEURS"
+line_simple
+center_line "${YELLOW}FIN DE LA LISTE DES UTILISATEURS${RESET}"
+line_full
