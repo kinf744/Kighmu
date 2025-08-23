@@ -117,6 +117,7 @@ FILES=(
     "menu3.sh"
     "menu4.sh"
     "menu5.sh"
+    "menu_5.sh"
     "menu6.sh"
     "menu7.sh"
     "slowdns.sh"
