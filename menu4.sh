@@ -3,17 +3,32 @@
 
 USER_FILE="/etc/kighmu/users.list"
 
-echo "+--------------------------------------------+"
-echo "|            SUPPRIMER UN UTILISATEUR       |"
-echo "+--------------------------------------------+"
+# Couleur bleu marine pour les cadres
+BLUE="\e[34m"
+RESET="\e[0m"
+
+# Fonction pour encadrer un texte
+draw_frame() {
+    local text="$1"
+    local width=60
+    echo -e "${BLUE}+$(printf '%.0s-' $(seq 1 $width))+${RESET}"
+    printf "|%*s%*s|\n" $(( (width + ${#text})/2 )) "$text" $(( (width - ${#text})/2 )) ""
+    echo -e "${BLUE}+$(printf '%.0s-' $(seq 1 $width))+${RESET}"
+}
+
+# Affichage du panneau d’accueil
+clear
+draw_frame "SUPPRIMER UN UTILISATEUR"
 
 if [ ! -f "$USER_FILE" ]; then
     echo "Aucun utilisateur trouvé."
+    draw_frame "FIN DU PANNEL"
     exit 0
 fi
 
-echo "Utilisateurs existants :"
+draw_frame "UTILISATEURS EXISTANTS"
 cut -d'|' -f1 "$USER_FILE"
+echo "------------------------------------------------------------"
 
 read -p "Nom de l'utilisateur à supprimer : " username
 
@@ -21,13 +36,11 @@ read -p "Nom de l'utilisateur à supprimer : " username
 cleanup_user_files() {
     echo "Nettoyage des fichiers restants de l'utilisateur $1..."
 
-    # Suppression manuelle du dossier home
     if [ -d "/home/$1" ]; then
         echo "Suppression du dossier home /home/$1"
         sudo rm -rf "/home/$1"
     fi
 
-    # Suppression des boîtes mail classiques
     for mailpath in "/var/mail/$1" "/var/spool/mail/$1"; do
         if [ -f "$mailpath" ]; then
             echo "Suppression du fichier mail $mailpath"
@@ -35,21 +48,17 @@ cleanup_user_files() {
         fi
     done
 
-    # Suppression de tous les fichiers appartenant à l'utilisateur restants
     echo "Recherche et suppression des fichiers appartenant à $1 dans le système..."
     sudo find / -user "$1" -exec rm -rf {} + 2>/dev/null
 }
 
 # Vérification de l'existence système
 if id "$username" &>/dev/null; then
-    # Suppression manuelle des fichiers avant userdel pour éviter warnings
     cleanup_user_files "$username"
 
-    # Suppression de l'utilisateur système
     if sudo userdel -r "$username"; then
         echo "Utilisateur système $username supprimé avec succès."
 
-        # Suppression dans users.list avec sudo mv
         if grep -v "^$username|" "$USER_FILE" > "${USER_FILE}.tmp"; then
             if sudo mv "${USER_FILE}.tmp" "$USER_FILE"; then
                 echo "Utilisateur $username supprimé de la liste utilisateurs."
@@ -67,11 +76,8 @@ if id "$username" &>/dev/null; then
     fi
 else
     echo "Attention : utilisateur système $username non trouvé ou déjà supprimé."
-
-    # Nettoyage manuel même si utilisateur absent
     cleanup_user_files "$username"
 
-    # Suppression dans users.list avec sudo mv
     if grep -q "^$username|" "$USER_FILE"; then
         if grep -v "^$username|" "$USER_FILE" > "${USER_FILE}.tmp"; then
             if sudo mv "${USER_FILE}.tmp" "$USER_FILE"; then
@@ -89,4 +95,5 @@ else
     fi
 fi
 
+draw_frame "FIN DE LA SUPPRESSION"
 read -p "Appuyez sur Entrée pour revenir au menu..."
