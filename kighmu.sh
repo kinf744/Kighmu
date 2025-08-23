@@ -1,9 +1,6 @@
 #!/bin/bash
 # ==============================================
 # Kighmu VPS Manager
-# Copyright (c) 2025 Kinf744
-# Licence MIT (version française)
-# Voir le fichier LICENSE pour plus de détails
 # ==============================================
 
 # Vérifier si l'utilisateur est root
@@ -31,8 +28,19 @@ get_xray_users_count() { ls /etc/xray/users/ 2>/dev/null | wc -l; }
 get_devices_count() { ss -ntu state established 2>/dev/null | grep -c ESTAB; }
 get_cpu_usage() { grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf "%.2f%%", usage}'; }
 
+# Fonction pour détecter l'OS
+get_os_info() {
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        echo "$NAME $VERSION"
+    else
+        uname -s
+    fi
+}
+
 while true; do
     clear
+    OS_INFO=$(get_os_info)
     IP=$(hostname -I | awk '{print $1}')
     RAM_USAGE=$(free -m | awk 'NR==2{printf "%.2f%%", $3*100/$2 }')
     CPU_USAGE=$(get_cpu_usage)
@@ -42,8 +50,9 @@ while true; do
     echo -e "${CYAN}+==================================================+${RESET}"
     echo -e "${BOLD}${MAGENTA}|                🚀 KIGHMU MANAGER 🚀               |${RESET}"
     echo -e "${CYAN}+==================================================+${RESET}"
-    printf "${GREEN} IP: %-17s${RESET}| ${YELLOW}RAM utilisée:${RESET} %-7s \n" "$IP" "$RAM_USAGE"
-    printf "${BLUE} CPU utilisé: %-38s${RESET}\n" "$CPU_USAGE"
+    printf "${GREEN} OS: %-30s${RESET}| ${YELLOW}IP:${RESET} %-15s \n" "$OS_INFO" "$IP"
+    printf "${BLUE} RAM utilisée: %-38s\n" "$RAM_USAGE"
+    printf "${BLUE} CPU utilisé: %-38s\n" "$CPU_USAGE"
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
     printf " ${MAGENTA}Utilisateurs SSH:${RESET} %-4d | ${MAGENTA}Appareils:${RESET} %-6d \n" \
         "$SSH_USERS_COUNT" "$DEVICES_COUNT"
@@ -53,7 +62,7 @@ while true; do
     echo -e "${GREEN}[01]${RESET} Créer un utilisateur SSH"
     echo -e "${GREEN}[02]${RESET} Créer un test utilisateur"
     echo -e "${GREEN}[03]${RESET} Voir les utilisateurs en ligne"
-    echo -e "${GREEN}[04]${RESET} Modifier durée / mot de passe utilisateur"  # Nouveau menu
+    echo -e "${GREEN}[04]${RESET} Modifier durée / mot de passe utilisateur"
     echo -e "${GREEN}[05]${RESET} Supprimer un utilisateur"
     echo -e "${GREEN}[06]${RESET} Installation de mode"
     echo -e "${GREEN}[07]${RESET} V2ray slowdns mode"
@@ -69,7 +78,7 @@ while true; do
         1) bash "$SCRIPT_DIR/menu1.sh" ;;
         2) bash "$SCRIPT_DIR/menu2.sh" ;;
         3) bash "$SCRIPT_DIR/menu3.sh" ;;
-        4) bash "$SCRIPT_DIR/menu_4.sh" ;;  # Nouveau menu ajouté ici
+        4) bash "$SCRIPT_DIR/menu_4.sh" ;;
         5) bash "$SCRIPT_DIR/menu4.sh" ;;
         6) bash "$SCRIPT_DIR/menu5.sh" ;;
         7) bash "$SCRIPT_DIR/menu_5.sh" ;;  
