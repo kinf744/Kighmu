@@ -4,19 +4,16 @@
 INSTALL_DIR="$HOME/Kighmu"
 WIDTH=60
 
-# Couleur bleue uniquement pour les lignes
+# Couleurs
 CYAN="\e[36m"
+YELLOW="\e[33m"
 RESET="\e[0m"
 
 # Fonctions d'affichage
 line_full() { echo -e "${CYAN}+$(printf '%0.s=' $(seq 1 $WIDTH))+${RESET}"; }
 line_simple() { echo -e "${CYAN}+$(printf '%0.s-' $(seq 1 $WIDTH))+${RESET}"; }
 content_line() { printf "| %-56s |\n" "$1"; }
-center_line() {
-    local text="$1"
-    local padding=$(( (WIDTH - ${#text}) / 2 ))
-    printf "|%*s%s%*s|\n" "$padding" "" "$text" "$padding" ""
-}
+center_line() { local text="$1"; local padding=$(( (WIDTH - ${#text}) / 2 )); printf "|%*s%s%*s|\n" "$padding" "" "$text" "$padding" ""; }
 
 # Affichage des statuts dynamiques
 print_status() {
@@ -38,9 +35,9 @@ print_status() {
 show_modes_status() {
     clear
     line_full
-    center_line "Kighmu Control Panel"
+    center_line "${YELLOW}Kighmu Control Panel${RESET}"
     line_full
-    center_line "Statut des modes installés et ports utilisés"
+    center_line "${YELLOW}Statut des modes installés et ports utilisés${RESET}"
     line_simple
     print_status "OpenSSH" "ssh" "22"
     print_status "Dropbear" "dropbear" "90"
@@ -59,7 +56,7 @@ show_modes_status() {
 while true; do
     show_modes_status
     line_full
-    center_line "MENU GESTION DES MODES"
+    center_line "${YELLOW}MENU GESTION DES MODES${RESET}"
     line_full
     content_line "1) Installer un mode"
     content_line "2) Désinstaller un mode"
