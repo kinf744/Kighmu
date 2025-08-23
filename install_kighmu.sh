@@ -61,6 +61,33 @@ wireguard-tools qrencode \
 gcc make perl \
 software-properties-common socat
 
+echo "=============================================="
+echo " 🚀 Installation et configuration du module Python pysocks et du proxy SOCKS"
+echo "=============================================="
+
+# Installer pysocks si nécessaire
+if ! python3 -c "import socks" &> /dev/null; then
+    echo "Installation du module pysocks via pip3..."
+    pip3 install pysocks
+else
+    echo "Module pysocks déjà installé."
+fi
+
+# Télécharger le script KIGHMUPROXY.py s'il n'existe pas
+PROXY_SCRIPT_PATH="/usr/local/bin/KIGHMUPROXY.py"
+if [ ! -f "$PROXY_SCRIPT_PATH" ]; then
+    echo "Téléchargement du script KIGHMUPROXY.py..."
+    wget -q -O "$PROXY_SCRIPT_PATH" "https://raw.githubusercontent.com/kinf744/Kighmu/main/KIGHMUPROXY.py"
+    if [ $? -eq 0 ]; then
+        chmod +x "$PROXY_SCRIPT_PATH"
+        echo "Script téléchargé et rendu exécutable."
+    else
+        echo "Erreur: impossible de télécharger KIGHMUPROXY.py. Veuillez vérifier l'URL."
+    fi
+else
+    echo "Script KIGHMUPROXY.py déjà présent."
+fi
+
 # Activer et configurer UFW
 ufw allow OpenSSH
 ufw allow 22
