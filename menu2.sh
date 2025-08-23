@@ -2,6 +2,19 @@
 # menu2.sh
 # Créer un utilisateur test avec sauvegarde dans users.list
 
+# Couleur bleu marine pour les cadres
+BLUE="\e[34m"
+RESET="\e[0m"
+
+# Fonction pour encadrer un texte
+draw_frame() {
+    local text="$1"
+    local width=50
+    echo -e "${BLUE}+$(printf '%.0s-' $(seq 1 $width))+${RESET}"
+    printf "|%*s%*s|\n" $(( (width + ${#text})/2 )) "$text" $(( (width - ${#text})/2 )) ""
+    echo -e "${BLUE}+$(printf '%.0s-' $(seq 1 $width))+${RESET}"
+}
+
 # Charger les infos globales Kighmu
 if [ -f ~/.kighmu_info ]; then
     source ~/.kighmu_info
@@ -17,9 +30,9 @@ else
     SLOWDNS_KEY="Clé publique SlowDNS non trouvée!"
 fi
 
-    echo -e "${CYAN}+--------------------------------------------------+${RESET}"
-    echo -e "${BOLD}${YELLOW}|     CRÉATION D'UTILISATEUR TEST               |${RESET}"
-    echo -e "${CYAN}+--------------------------------------------------+${RESET}"
+# Affichage du panneau d’accueil
+clear
+draw_frame "CRÉATION D'UTILISATEUR TEST"
 
 # Demander les informations
 read -p "Nom d'utilisateur : " username
@@ -61,31 +74,30 @@ echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> 
 
 # Affichage résumé
 echo ""
-echo "*NOUVEAU UTILISATEUR CRÉÉ*"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+draw_frame "NOUVEAU UTILISATEUR TEST CRÉÉ"
 echo "∘ SSH: $SSH_PORT            ∘ System-DNS: $SYSTEM_DNS"
 echo "∘ SOCKS/PYTHON: $SOCKS_PORT   ∘ WEB-NGINX: $WEB_NGINX"
 echo "∘ DROPBEAR: $DROPBEAR       ∘ SSL: $SSL_PORT"
 echo "∘ BadVPN: $BADVPN1       ∘ BadVPN: $BADVPN2"
 echo "∘ SlowDNS: $SLOWDNS_PORT      ∘ UDP-Custom: $UDP_CUSTOM"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "--------------------------------------------------"
 echo "DOMAIN        : $DOMAIN"
 echo "Host/IP-Address : $HOST_IP"
 echo "UTILISATEUR   : $username"
 echo "MOT DE PASSE  : $password"
-echo "LIMITE       : $limite"
-echo "DATE EXPIRÉE : $expire_date"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "LIMITE        : $limite"
+echo "DATE EXPIRÉE  : $expire_date"
+echo "--------------------------------------------------"
 echo "En APPS comme HTTP Injector, CUSTOM, KPN Rev, etc."
 echo ""
 echo "🙍 HTTP-Direct  : $HOST_IP:90@$username:$password"
 echo "🙍 SSL/TLS(SNI) : $HOST_IP:443@$username:$password"
 echo "🙍 Proxy(WS)    : $DOMAIN:8080@$username:$password"
-echo "🙍 SSH UDP     : $HOST_IP:1-65535@$username:$password"
+echo "🙍 SSH UDP      : $HOST_IP:1-65535@$username:$password"
 echo ""
-echo "━━━━━━━━━━━  CONFIGS SLOWDNS PORT 22 ━━━━━━━━━━━"
+draw_frame "CONFIGS SLOWDNS PORT 22"
 echo "Pub KEY :"
 echo "$SLOWDNS_KEY"
 echo "NameServer (NS) : $SLOWDNS_NS"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Compte créé avec succès"
+echo "--------------------------------------------------"
+echo "Compte test créé avec succès"
