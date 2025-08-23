@@ -2,7 +2,7 @@
 
 # ==============================================
 # slowdns.sh - Installation et configuration SlowDNS avec stockage NS
-# Optimisé pour performance et stabilité du tunnel
+# Optimisé pour performances et stabilité
 # ==============================================
 
 SLOWDNS_DIR="/etc/slowdns"
@@ -12,9 +12,9 @@ SLOWDNS_BIN="/usr/local/bin/sldns-server"
 PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 
+# Installation dépendances si manquantes
 install_dependencies() {
     sudo apt update
-
     for pkg in iptables screen tcpdump; do
         if ! command -v $pkg >/dev/null 2>&1; then
             echo "$pkg non trouvé. Installation en cours..."
@@ -27,30 +27,28 @@ install_dependencies() {
 
 install_dependencies
 
-if [ ! -d "$SLOWDNS_DIR" ]; then
-    sudo mkdir -p "$SLOWDNS_DIR"
-fi
+# Création dossier slowdns
+[ ! -d "$SLOWDNS_DIR" ] && sudo mkdir -p "$SLOWDNS_DIR"
 
+# Chargement ou saisie NameServer
 if [ -f "$CONFIG_FILE" ]; then
     NAMESERVER=$(cat "$CONFIG_FILE")
     echo "Utilisation du NameServer existant : $NAMESERVER"
 else
     read -p "Entrez le NameServer (NS) (ex: ns.example.com) : " NAMESERVER
-    if [[ -z "$NAMESERVER" ]]; then
-        echo "NameServer invalide."
-        exit 1
-    fi
+    [[ -z "$NAMESERVER" ]] && { echo "NameServer invalide."; exit 1; }
     echo "$NAMESERVER" | sudo tee "$CONFIG_FILE" > /dev/null
     echo "NameServer enregistré dans $CONFIG_FILE"
 fi
 
-echo "Vérification et installation du binaire SlowDNS..."
+# Installation binaire SlowDNS si absent
 if [ ! -x "$SLOWDNS_BIN" ]; then
     sudo mkdir -p /usr/local/bin
     sudo wget -q -O "$SLOWDNS_BIN" https://raw.githubusercontent.com/fisabiliyusri/SLDNS/main/slowdns/sldns-server
     sudo chmod +x "$SLOWDNS_BIN"
 fi
 
+# Génération automatique clés
 generate_keys() {
     if [ ! -s "$SERVER_KEY" ] || [ ! -s "$SERVER_PUB" ]; then
         echo "Génération des clés SlowDNS..."
@@ -63,9 +61,9 @@ generate_keys() {
 }
 
 generate_keys
-
 PUB_KEY=$(cat "$SERVER_PUB")
 
+# Arrêt ancienne instance
 if pgrep -f "sldns-server" >/dev/null; then
     echo "Arrêt de l'ancienne instance SlowDNS..."
     sudo fuser -k ${PORT}/udp || true
@@ -74,14 +72,14 @@ fi
 
 # Optimisation réseau
 interface=$(ip a | awk '/state UP/{print $2}' | cut -d: -f1 | head -1)
-echo "Réglage MTU sur l'interface $interface à 1400 pour optimiser SlowDNS..."
+echo "Réglage MTU sur interface $interface à 1400..."
 sudo ip link set dev $interface mtu 1400
 
-echo "Optimisation des buffers UDP..."
+echo "Augmentation des buffers UDP..."
 sudo sysctl -w net.core.rmem_max=26214400
 sudo sysctl -w net.core.wmem_max=26214400
 
-echo "Configuration iptables pour rediriger UDP port 53 vers $PORT..."
+# Réglage iptables
 sudo iptables -F
 sudo iptables -I INPUT -p udp --dport $PORT -j ACCEPT
 sudo iptables -t nat -I PREROUTING -i $interface -p udp --dport 53 -j REDIRECT --to-ports $PORT
@@ -90,35 +88,39 @@ if command -v iptables-save >/dev/null 2>&1; then
     sudo iptables-save | sudo tee /etc/iptables/rules.v4 >/dev/null
 fi
 
-ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
-
-echo "Activation du routage IP si nécessaire..."
+# Configuration IP forwarding
 if [ "$(sysctl -n net.ipv4.ip_forward)" -ne 1 ]; then
+    echo "Activation du routage IP..."
     sudo sysctl -w net.ipv4.ip_forward=1
     if ! grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf; then
         echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf
     fi
 fi
 
-echo "Démarrage du serveur SlowDNS sur UDP port $PORT avec NS $NAMESERVER..."
+ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
+
+# Démarrage slowdns optimisé
+echo "Démarrage SlowDNS sur UDP port $PORT avec NS $NAMESERVER..."
 sudo screen -dmS slowdns_session $SLOWDNS_BIN -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NAMESERVER" 0.0.0.0:$ssh_port
 
+# Pause pour laisser démarrer
 sleep 3
 
-if pgrep -f "sldns-server" > /dev/null; then
-    echo "Service SlowDNS démarré avec succès sur le port UDP $PORT."
-    echo "Pour consulter les logs : screen -r slowdns_session"
+# Vérification démarrage
+if pgrep -f "sldns-server" >/dev/null; then
+    echo "SlowDNS démarré avec succès sur UDP port $PORT."
+    echo "Pour les logs : screen -r slowdns_session"
 else
-    echo "ERREUR : Le service SlowDNS n'a pas pu démarrer."
+    echo "ERREUR : SlowDNS n'a pas pu démarrer."
     exit 1
 fi
 
+# Firewall UFW port ouvert
 if command -v ufw >/dev/null 2>&1; then
-    echo "Ouverture du port UDP $PORT dans le firewall (ufw)..."
     sudo ufw allow "$PORT"/udp
     sudo ufw reload
 else
-    echo "UFW non installé. Veuillez vérifier manuellement l'ouverture du port UDP $PORT."
+    echo "UFW non installé. Vérifier ouverture port UDP $PORT manuellement."
 fi
 
 echo "+--------------------------------------------+"
@@ -130,7 +132,7 @@ echo "$PUB_KEY"
 echo ""
 echo "NameServer  : $NAMESERVER"
 echo ""
-echo "Commande client Termux à utiliser :"
+echo "Commande client (termux) :"
 echo "curl -sO https://github.com/khaledagn/DNS-AGN/raw/main/files/slowdns && chmod +x slowdns && ./slowdns $NAMESERVER $PUB_KEY"
 echo ""
-echo "Installation et configuration SlowDNS terminées."
+echo "Installation et configuration SlowDNS optimisées terminées."
