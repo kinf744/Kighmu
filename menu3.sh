@@ -4,22 +4,40 @@
 
 USER_FILE="/etc/kighmu/users.list"
 
-echo "+--------------------------------------------+"
-echo "|         UTILISATEURS EN LIGNE             |"
-echo "+--------------------------------------------+"
+# Couleur bleu marine pour les cadres
+BLUE="\e[34m"
+RESET="\e[0m"
+
+# Fonction pour encadrer un texte
+draw_frame() {
+    local text="$1"
+    local width=60
+    echo -e "${BLUE}+$(printf '%.0s-' $(seq 1 $width))+${RESET}"
+    printf "|%*s%*s|\n" $(( (width + ${#text})/2 )) "$text" $(( (width - ${#text})/2 )) ""
+    echo -e "${BLUE}+$(printf '%.0s-' $(seq 1 $width))+${RESET}"
+}
+
+# Affichage du panneau d’accueil
+clear
+draw_frame "PANEL UTILISATEURS EN LIGNE"
 
 if [ ! -f "$USER_FILE" ]; then
     echo "Aucun utilisateur trouvé."
+    draw_frame "FIN DE LA LISTE"
     exit 0
 fi
 
-printf "%-15s %-10s %-10s\n" "UTILISATEUR" "CONNECTÉS" "LIMITE"
-echo "----------------------------------------------"
+# En-tête du tableau encadré
+draw_frame "UTILISATEUR       CONNECTÉS       LIMITE"
 
+# Parcourir la liste des utilisateurs
 while IFS="|" read -r username password limite expire_date rest; do
     # Compter le nombre de connexions SSH/Dropbear/UDP/SOCKS pour cet utilisateur
-    # Exemple simple avec SSH (qui utilise 'who' pour voir les connexions actives)
     connected=$(who | awk '{print $1}' | grep -c "^$username$")
     
-    printf "%-15s %-10s %-10s\n" "$username" "$connected" "$limite"
+    printf "| %-16s | %-13s | %-6s |\n" "$username" "$connected" "$limite"
 done < "$USER_FILE"
+
+# Ligne de séparation et fin du panneau
+echo -e "${BLUE}+------------------------------------------------------------+${RESET}"
+draw_frame "FIN DE LA LISTE DES UTILISATEURS"
