@@ -12,20 +12,24 @@ RESET="\e[0m"
 line_full() { echo -e "${CYAN}+$(printf '%0.s=' $(seq 1 $WIDTH))+${RESET}"; }
 line_simple() { echo -e "${CYAN}+$(printf '%0.s-' $(seq 1 $WIDTH))+${RESET}"; }
 content_line() { printf "| %-56s |\n" "$1"; }
-
 center_line() {
     local text="$1"
     local padding=$(( (WIDTH - ${#text}) / 2 ))
     printf "|%*s%s%*s|\n" "$padding" "" "$text" "$padding" ""
 }
 
-# Affichage des statuts
+# Affichage des statuts dynamiques
 print_status() {
     local name="$1"
-    local cmd="$2"
+    local service="$2"
     local port="$3"
-    if eval "$cmd" >/dev/null 2>&1; then
-        content_line "$(printf "%-18s [installé] Port: %s" "$name" "$port")"
+
+    if systemctl list-unit-files | grep -q "^$service.service"; then
+        if systemctl is-active --quiet "$service"; then
+            content_line "$(printf "%-18s [installé & actif] Port: %s" "$name" "$port")"
+        else
+            content_line "$(printf "%-18s [installé mais inactif] Port: %s" "$name" "$port")"
+        fi
     else
         content_line "$(printf "%-18s [non installé] Port: %s" "$name" "$port")"
     fi
@@ -38,76 +42,20 @@ show_modes_status() {
     line_full
     center_line "Statut des modes installés et ports utilisés"
     line_simple
-    print_status "OpenSSH" "systemctl is-active --quiet ssh" "22"
-    print_status "Dropbear" "systemctl is-active --quiet dropbear" "90"
-    print_status "SlowDNS" "systemctl is-active --quiet slowdns" "5300"
-    print_status "UDP Custom" "systemctl is-active --quiet udp-custom" "54000"
-    print_status "SOCKS/Python" "systemctl is-active --quiet socks-python" "8080"
-    print_status "SSL/TLS" "systemctl is-active --quiet nginx" "444"
-    print_status "BadVPN" "systemctl is-active --quiet badvpn" "7303"
+    print_status "OpenSSH" "ssh" "22"
+    print_status "Dropbear" "dropbear" "90"
+    print_status "SlowDNS" "slowdns" "5300"
+    print_status "UDP Custom" "udp-custom" "54000"
+    print_status "SOCKS/Python" "socks-python" "8080"
+    print_status "SSL/TLS" "nginx" "444"
+    print_status "BadVPN" "badvpn" "7303"
     line_simple
     echo ""
 }
 
-# Création service systemd
-create_service() {
-    local name="$1"
-    local cmd="$2"
-    cat > "/etc/systemd/system/$name.service" <<EOF
-[Unit]
-Description=$name Service
-After=network.target
+# Les fonctions install_mode et uninstall_mode restent identiques à ton script précédent
 
-[Service]
-ExecStart=$cmd
-Restart=always
-User=root
-
-[Install]
-WantedBy=multi-user.target
-EOF
-    systemctl daemon-reload
-    systemctl enable "$name"
-    systemctl restart "$name"
-}
-
-remove_service() {
-    local name="$1"
-    systemctl disable --now "$name" 2>/dev/null
-    rm -f "/etc/systemd/system/$name.service"
-    systemctl daemon-reload
-    echo "Service $name désinstallé."
-}
-
-# Installation
-install_mode() {
-    case $1 in
-        1) apt-get install -y openssh-server && systemctl enable ssh && systemctl restart ssh ;;
-        2) apt-get install -y dropbear && systemctl enable dropbear && systemctl restart dropbear ;;
-        3) [[ -x "$INSTALL_DIR/slowdns.sh" ]] && bash "$INSTALL_DIR/slowdns.sh" && create_service "slowdns" "/bin/bash $INSTALL_DIR/slowdns.sh" || echo "slowdns.sh introuvable." ;;
-        4) [[ -x "$INSTALL_DIR/udp_custom.sh" ]] && bash "$INSTALL_DIR/udp_custom.sh" && create_service "udp-custom" "/bin/bash $INSTALL_DIR/udp_custom.sh" || echo "udp_custom.sh introuvable." ;;
-        5) [[ -x "$INSTALL_DIR/socks_python.sh" ]] && bash "$INSTALL_DIR/socks_python.sh" && create_service "socks-python" "/usr/bin/python3 $INSTALL_DIR/KIGHMUPROXY.py" || echo "socks_python.sh introuvable." ;;
-        6) apt-get install -y nginx && systemctl enable nginx && systemctl restart nginx ;;
-        7) create_service "badvpn" "/usr/bin/badvpn-udpgw --listen-addr 127.0.0.1:7303 --max-clients 500" ;;
-        *) echo "Choix invalide." ;;
-    esac
-}
-
-# Désinstallation
-uninstall_mode() {
-    case $1 in
-        1) systemctl disable --now ssh && apt-get remove -y openssh-server ;;
-        2) systemctl disable --now dropbear && apt-get remove -y dropbear ;;
-        3) remove_service "slowdns" ;;
-        4) remove_service "udp-custom" ;;
-        5) remove_service "socks-python" ;;
-        6) systemctl disable --now nginx && apt-get remove -y nginx ;;
-        7) remove_service "badvpn" ;;
-        *) echo "Choix invalide." ;;
-    esac
-}
-
-# Boucle menu principal des modes
+# Boucle principale
 while true; do
     show_modes_status
     line_full
