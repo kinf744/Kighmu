@@ -1,56 +1,87 @@
 #!/bin/bash
-# menu5.sh - Gestion complète des modes avec installation/désinstallation + sous-menu V2Ray SlowDNS
+# menu5.sh - Gestion complète des modes avec installation/désinstallation
 
 INSTALL_DIR="$HOME/Kighmu"
 WIDTH=60
 
 # Couleurs
-CYAN="\e[36m"
+RED="\e[31m"
+GREEN="\e[32m"
 YELLOW="\e[33m"
+CYAN="\e[36m"
+BOLD="\e[1m"
 RESET="\e[0m"
 
 # Fonctions d'affichage
 line_full() { echo -e "${CYAN}+$(printf '%0.s=' $(seq 1 $WIDTH))+${RESET}"; }
 line_simple() { echo -e "${CYAN}+$(printf '%0.s-' $(seq 1 $WIDTH))+${RESET}"; }
+center_line() {
+    local text="$1"
+    local padding=$(( (WIDTH - ${#text}) / 2 ))
+    printf "|%*s%s%*s|\n" "$padding" "" "$text" "$padding" ""
+}
 content_line() { printf "| %-56s |\n" "$1"; }
-center_line() { local text="$1"; local padding=$(( (WIDTH - ${#text}) / 2 )); printf "|%*s%s%*s|\n" "$padding" "" "$text" "$padding" ""; }
 
-# Affichage des statuts dynamiques
-print_status() {
-    local name="$1"
-    local service="$2"
-    local port="$3"
-
-    if systemctl list-unit-files | grep -q "^$service.service"; then
-        if systemctl is-active --quiet "$service"; then
-            content_line "$(printf "%-18s [installé & actif] Port: %s" "$name" "$port")"
+# Vérifie si un service est installé et actif
+service_status() {
+    local svc="$1"
+    if systemctl list-unit-files | grep -q "^$svc.service"; then
+        if systemctl is-active --quiet "$svc"; then
+            echo "[actif]"
         else
-            content_line "$(printf "%-18s [installé mais inactif] Port: %s" "$name" "$port")"
+            echo "[installé mais inactif]"
         fi
     else
-        content_line "$(printf "%-18s [non installé] Port: %s" "$name" "$port")"
+        echo "[non installé]"
     fi
 }
 
+# Affichage dynamique des statuts
 show_modes_status() {
     clear
     line_full
-    center_line "${YELLOW}Kighmu Control Panel${RESET}"
+    center_line "${YELLOW}GESTION DES MODES${RESET}"
     line_full
-    center_line "${YELLOW}Statut des modes installés et ports utilisés${RESET}"
+    content_line "Statut des modes installés et ports utilisés"
     line_simple
-    print_status "OpenSSH" "ssh" "22"
-    print_status "Dropbear" "dropbear" "90"
-    print_status "SlowDNS" "slowdns" "5300"
-    print_status "UDP Custom" "udp-custom" "54000"
-    print_status "SOCKS/Python" "socks-python" "8080"
-    print_status "SSL/TLS" "nginx" "444"
-    print_status "BadVPN" "badvpn" "7303"
+    content_line "OpenSSH       : 22 $(service_status ssh)"
+    content_line "Dropbear      : 90 $(service_status dropbear)"
+    content_line "SlowDNS       : 5300 $(service_status slowdns)"
+    content_line "UDP Custom    : 54000 $(service_status udp-custom)"
+    content_line "SOCKS/Python  : 8080 $(service_status socks-python)"
+    content_line "SSL/TLS       : 443 $(service_status nginx)"
+    content_line "BadVPN 1      : 7200 $(service_status badvpn)"
+    content_line "BadVPN 2      : 7300 $(service_status badvpn)"
     line_simple
-    echo ""
 }
 
-# Les fonctions install_mode et uninstall_mode restent identiques à ton script précédent
+# Installation d'un mode
+install_mode() {
+    case $1 in
+        1) apt-get install -y openssh-server && systemctl enable ssh && systemctl restart ssh ;;
+        2) apt-get install -y dropbear && systemctl enable dropbear && systemctl restart dropbear ;;
+        3) [[ -x "$INSTALL_DIR/slowdns.sh" ]] && bash "$INSTALL_DIR/slowdns.sh" && systemctl enable --now slowdns ;;
+        4) [[ -x "$INSTALL_DIR/udp_custom.sh" ]] && bash "$INSTALL_DIR/udp_custom.sh" && systemctl enable --now udp-custom ;;
+        5) [[ -x "$INSTALL_DIR/socks_python.sh" ]] && bash "$INSTALL_DIR/socks_python.sh" && systemctl enable --now socks-python ;;
+        6) apt-get install -y nginx && systemctl enable nginx && systemctl restart nginx ;;
+        7) systemctl enable --now badvpn ;;
+        *) echo -e "${RED}Choix invalide.${RESET}" ;;
+    esac
+}
+
+# Désinstallation d'un mode
+uninstall_mode() {
+    case $1 in
+        1) systemctl disable --now ssh && apt-get remove -y openssh-server ;;
+        2) systemctl disable --now dropbear && apt-get remove -y dropbear ;;
+        3) systemctl disable --now slowdns ;;
+        4) systemctl disable --now udp-custom ;;
+        5) systemctl disable --now socks-python ;;
+        6) systemctl disable --now nginx && apt-get remove -y nginx ;;
+        7) systemctl disable --now badvpn ;;
+        *) echo -e "${RED}Choix invalide.${RESET}" ;;
+    esac
+}
 
 # Boucle principale
 while true; do
@@ -60,12 +91,10 @@ while true; do
     line_full
     content_line "1) Installer un mode"
     content_line "2) Désinstaller un mode"
-    content_line "0) Retour menu principal"
+    content_line "3) Retour menu principal"
     line_simple
-    echo ""
 
     read -p "Votre choix : " action
-    echo ""
 
     case $action in
         1)
@@ -92,16 +121,15 @@ while true; do
             read -p "Numéro du mode : " choix
             uninstall_mode "$choix"
             ;;
-        0)
+        3)
             echo "Retour au menu principal..."
             sleep 1
             bash "$INSTALL_DIR/kighmu.sh"
             exit 0
             ;;
         *)
-            echo "Choix invalide." ;;
+            echo -e "${RED}Choix invalide.${RESET}" ;;
     esac
 
-    echo ""
     read -p "Appuyez sur Entrée pour continuer..."
 done
