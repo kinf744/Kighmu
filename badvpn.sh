@@ -1,14 +1,11 @@
 #!/bin/bash
-# badvpn.sh
-# Script d'installation et configuration de BadVPN sur VPS
-
 set -e
 
 echo "Mise à jour des paquets..."
 apt-get update -y
 
 echo "Installation des dépendances nécessaires..."
-apt-get install -y cmake build-essential git
+apt-get install -y git cmake build-essential
 
 echo "Clonage du dépôt BadVPN..."
 if [ ! -d "/root/badvpn" ]; then
@@ -18,21 +15,39 @@ else
     cd /root/badvpn && git pull
 fi
 
-echo "Compilation de BadVPN..."
+echo "Compilation de BadVPN uniquement UDPGW..."
 cd /root/badvpn
-cmake -DBUILD_NOTHING_BY_DEFAULT=1 -DBUILD_UDPGW=1 .
+mkdir -p build
+cd build
+cmake .. -DBUILD_NOTHING_BY_DEFAULT=1 -DBUILD_UDPGW=1
 make
 
-echo "Copie binaire badvpn-udpgw dans /usr/local/bin/..."
-cp badvpn-udpgw /usr/local/bin/
+echo "Installation du binaire badvpn-udpgw..."
+cp ./udpgw/badvpn-udpgw /usr/local/bin/
+chmod +x /usr/local/bin/badvpn-udpgw
 
-echo "Lancement de BadVPN UDPGW sur les ports 7200 et 7300..."
-# Arrêt des éventuels processus existants sur ces ports
-pkill -f "badvpn-udpgw --listen-addr 127.0.0.1:7200" || true
-pkill -f "badvpn-udpgw --listen-addr 127.0.0.1:7300" || true
+echo "Création du service systemd pour badvpn-udpgw..."
+cat << EOF > /etc/systemd/system/badvpn-udp.service
+[Unit]
+Description=BadVPN UDP Gateway
+After=network.target
 
-# Démarrage en arrière-plan
-nohup /usr/local/bin/badvpn-udpgw --listen-addr 127.0.0.1:7200 > /dev/null 2>&1 &
-nohup /usr/local/bin/badvpn-udpgw --listen-addr 127.0.0.1:7300 > /dev/null 2>&1 &
+[Service]
+ExecStart=/usr/local/bin/badvpn-udpgw --listen-addr 0.0.0.0:54000 --max-clients 500
+Restart=on-failure
+User=root
 
-echo "BadVPN installé et lancé sur les ports 7200 et 7300."
+[Install]
+WantedBy=multi-user.target
+EOF
+
+echo "Activation et démarrage du service badvpn-udp.service..."
+systemctl daemon-reload
+systemctl enable badvpn-udp.service
+systemctl restart badvpn-udp.service
+
+echo "Ouverture du port UDP 54000 dans le firewall (ufw)..."
+ufw allow 54000/udp
+
+echo "Installation et configuration terminées."
+systemctl status badvpn-udp.service --no-pager
