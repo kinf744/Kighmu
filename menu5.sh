@@ -33,6 +33,7 @@ After=network.target
 ExecStart=$exec
 Restart=always
 RestartSec=3
+User=root
 
 [Install]
 WantedBy=multi-user.target" > "$service_file"
@@ -45,11 +46,18 @@ WantedBy=multi-user.target" > "$service_file"
 # Vérification du statut des services
 service_status() {
     local svc="$1"
-    if systemctl list-unit-files | grep -q "^$svc.service"; then
-        systemctl is-active --quiet "$svc" && echo "[ACTIF]" || echo "[INACTIF]"
-    else
-        echo "[NON INSTALLÉ]"
-    fi
+    case "$svc" in
+        "socks-python")
+            pgrep -f "KIGHMUPROXY.py" >/dev/null && echo "[ACTIF]" || echo "[INACTIF]"
+            ;;
+        *)
+            if systemctl list-unit-files | grep -q "^$svc.service"; then
+                systemctl is-active --quiet "$svc" && echo "[ACTIF]" || echo "[INACTIF]"
+            else
+                echo "[NON INSTALLÉ]"
+            fi
+            ;;
+    esac
 }
 
 show_modes_status() {
@@ -88,7 +96,10 @@ uninstall_mode() {
         2) systemctl disable --now dropbear && apt-get remove -y dropbear && echo "✔️ Dropbear désinstallé" ;;
         3) systemctl disable --now slowdns && echo "✔️ SlowDNS désinstallé" ;;
         4) systemctl disable --now udp-custom && echo "✔️ UDP-Custom désinstallé" ;;
-        5) systemctl disable --now socks-python && echo "✔️ SOCKS-Python désinstallé" ;;
+        5)
+            pkill -f "KIGHMUPROXY.py" 2>/dev/null
+            echo "✔️ SOCKS-Python désinstallé"
+            ;;
         6) systemctl disable --now nginx && apt-get remove -y nginx && echo "✔️ Nginx/SSL désinstallé" ;;
         7) 
             systemctl disable --now badvpn
