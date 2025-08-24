@@ -1,13 +1,11 @@
 #!/bin/bash
 # ==============================================
-# menu_4.sh - Gestion des utilisateurs SSH
+# menu5.sh - Gestion complète des modes (installation/désinstallation)
 # ==============================================
 
+INSTALL_DIR="$HOME/Kighmu"
 WIDTH=60
 CYAN="\e[36m"
-YELLOW="\e[33m"
-GREEN="\e[32m"
-RED="\e[31m"
 RESET="\e[0m"
 
 # Fonctions d'affichage
@@ -21,92 +19,123 @@ center_line() {
     printf "|%*s%s%*s|\n" "$padding" "" "$text" "$padding" ""
 }
 
-# Vérification root
-if [ "$(id -u)" -ne 0 ]; then
-    echo -e "${RED}[ERREUR]${RESET} Veuillez exécuter ce script en root."
-    exit 1
-fi
+# Fonction pour créer un service systemd
+def create_service() {
+    local name="$1"
+    local exec="$2"
+    local service_file="/etc/systemd/system/${name}.service"
 
-while true; do
+    echo "[Unit]
+Description=$name Service
+After=network.target
+
+[Service]
+ExecStart=$exec
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target" > "$service_file"
+
+    systemctl daemon-reload
+    systemctl enable --now "$name"
+    echo "✔️ Service $name installé et démarré"
+}
+
+# Vérification du statut des services
+service_status() {
+    local svc="$1"
+    if systemctl list-unit-files | grep -q "^$svc.service"; then
+        systemctl is-active --quiet "$svc" && echo "[ACTIF]" || echo "[INACTIF]"
+    else
+        echo "[NON INSTALLÉ]"
+    fi
+}
+
+show_modes_status() {
     clear
     line_full
-    center_line "GESTION DES UTILISATEURS SSH"
+    center_line "GESTION DES MODES"
     line_full
-
-    # Liste des utilisateurs SSH
-    users=($(awk -F: '/\/home/ {print $1}' /etc/passwd))
-    if [ ${#users[@]} -eq 0 ]; then
-        content_line "Aucun utilisateur SSH trouvé."
-        line_full
-        read -p "Appuyez sur Entrée pour revenir au menu..." dummy
-        exit 0
-    fi
-
-    # Affichage des utilisateurs avec expiration
-    content_line "No. Utilisateur        Expiration"
+    center_line "Statut des modes installés et ports"
     line_simple
-    i=1
-    for u in "${users[@]}"; do
-        expire_date=$(chage -l "$u" 2>/dev/null | grep "Account expires" | cut -d: -f2 | xargs)
-        [ -z "$expire_date" ] && expire_date="Jamais"
-        content_line "$(printf "%-3s %-20s %-15s" "$i" "$u" "$expire_date")"
-        i=$((i+1))
-    done
+    content_line "OpenSSH     : 22 $(service_status ssh)"
+    content_line "Dropbear    : 90 $(service_status dropbear)"
+    content_line "SlowDNS     : 5300 $(service_status slowdns)"
+    content_line "UDP Custom  : 54000 $(service_status udp-custom)"
+    content_line "SOCKS/Python: 8080 $(service_status socks-python)"
+    content_line "SSL/TLS     : 443 $(service_status nginx)"
+    content_line "BadVPN      : 7303 $(service_status badvpn)"
+    line_simple
+}
+
+install_mode() {
+    case $1 in
+        1) apt-get install -y openssh-server && systemctl enable --now ssh && echo "✔️ OpenSSH installé" ;;
+        2) apt-get install -y dropbear && systemctl enable --now dropbear && echo "✔️ Dropbear installé" ;;
+        3) [[ -x "$INSTALL_DIR/slowdns.sh" ]] && bash "$INSTALL_DIR/slowdns.sh" || echo "❌ slowdns.sh introuvable" ;;
+        4) [[ -x "$INSTALL_DIR/udp_custom.sh" ]] && bash "$INSTALL_DIR/udp_custom.sh" || echo "❌ udp_custom.sh introuvable" ;;
+        5) [[ -x "$INSTALL_DIR/socks_python.sh" ]] && bash "$INSTALL_DIR/socks_python.sh" || echo "❌ socks_python.sh introuvable" ;;
+        6) apt-get install -y nginx && systemctl enable --now nginx && echo "✔️ Nginx/SSL installé" ;;
+        7) create_service "badvpn" "/usr/bin/badvpn-udpgw --listen-addr 127.0.0.1:7303 --max-clients 500" ;;
+        *) echo "❌ Choix invalide" ;;
+    esac
+}
+
+uninstall_mode() {
+    case $1 in
+        1) systemctl disable --now ssh && apt-get remove -y openssh-server && echo "✔️ OpenSSH désinstallé" ;;
+        2) systemctl disable --now dropbear && apt-get remove -y dropbear && echo "✔️ Dropbear désinstallé" ;;
+        3) systemctl disable --now slowdns && echo "✔️ SlowDNS désinstallé" ;;
+        4) systemctl disable --now udp-custom && echo "✔️ UDP-Custom désinstallé" ;;
+        5) systemctl disable --now socks-python && echo "✔️ SOCKS-Python désinstallé" ;;
+        6) systemctl disable --now nginx && apt-get remove -y nginx && echo "✔️ Nginx/SSL désinstallé" ;;
+        7) 
+            systemctl disable --now badvpn
+            rm -f /etc/systemd/system/badvpn.service
+            systemctl daemon-reload
+            echo "✔️ BadVPN désinstallé" 
+            ;;
+        *) echo "❌ Choix invalide" ;;
+    esac
+}
+
+# Menu principal des modes
+while true; do
+    show_modes_status
     line_full
+    content_line "1) Installer un mode"
+    content_line "2) Désinstaller un mode"
     content_line "0) Retour au menu principal"
     line_simple
-    read -p "Sélectionnez un utilisateur (numéro) : " user_choice
 
-    if [ "$user_choice" == "0" ]; then
-        exit 0
-    fi
-
-    selected_user="${users[$((user_choice-1))]}"
-    if [ -z "$selected_user" ]; then
-        content_line "Choix invalide !"
-        read -p "Appuyez sur Entrée pour continuer..." dummy
-        continue
-    fi
-
-    # Menu pour l'utilisateur sélectionné
-    while true; do
-        clear
-        line_full
-        center_line "UTILISATEUR : $selected_user"
-        line_full
-        content_line "1) Modifier le mot de passe"
-        content_line "2) Modifier la durée / expiration"
-        content_line "0) Retour"
-        line_simple
-        read -p "Votre choix : " action_choice
-
-        case $action_choice in
-            1)
-                read -s -p "Nouveau mot de passe : " new_pass
-                echo
-                read -s -p "Confirmez le mot de passe : " new_pass2
-                echo
-                if [ "$new_pass" == "$new_pass2" ]; then
-                    echo "$selected_user:$new_pass" | chpasswd
-                    content_line "${GREEN}Mot de passe modifié avec succès !${RESET}"
-                else
-                    content_line "${RED}Les mots de passe ne correspondent pas.${RESET}"
-                fi
-                read -p "Appuyez sur Entrée pour continuer..." dummy
-                ;;
-            2)
-                read -p "Nouvelle durée (en jours) : " days
-                if [[ "$days" =~ ^[0-9]+$ ]]; then
-                    chage -E $(date -d "+$days days" +"%Y-%m-%d") "$selected_user"
-                    content_line "${GREEN}Expiration modifiée avec succès !${RESET}"
-                else
-                    content_line "${RED}Durée invalide.${RESET}"
-                fi
-                read -p "Appuyez sur Entrée pour continuer..." dummy
-                ;;
-            0) break ;;
-            *) content_line "${RED}Choix invalide !${RESET}"
-               read -p "Appuyez sur Entrée pour continuer..." dummy ;;
-        esac
-    done
+    read -p "Votre choix : " action
+    case $action in
+        1)
+            echo "Choisissez un mode à installer :"
+            echo "1) OpenSSH Server"
+            echo "2) Dropbear SSH"
+            echo "3) SlowDNS"
+            echo "4) UDP Custom"
+            echo "5) SOCKS/Python"
+            echo "6) SSL/TLS"
+            echo "7) BadVPN"
+            read -p "Numéro du mode : " choix
+            install_mode "$choix"
+            ;;
+        2)
+            echo "Choisissez un mode à désinstaller :"
+            echo "1) OpenSSH Server"
+            echo "2) Dropbear SSH"
+            echo "3) SlowDNS"
+            echo "4) UDP Custom"
+            echo "5) SOCKS/Python"
+            echo "6) SSL/TLS"
+            echo "7) BadVPN"
+            read -p "Numéro du mode : " choix
+            uninstall_mode "$choix"
+            ;;
+        0) break ;;
+        *) echo "❌ Choix invalide" ; read -p "Appuyez sur Entrée pour continuer..." ;;
+    esac
 done
