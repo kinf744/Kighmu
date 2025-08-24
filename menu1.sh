@@ -7,9 +7,13 @@ INSTALL_DIR="$HOME/Kighmu"
 WIDTH=60
 
 # Couleurs
-YELLOW="\e[33m"
+RED="\e[31m"
 GREEN="\e[32m"
+YELLOW="\e[33m"
+BLUE="\e[34m"
+MAGENTA="\e[35m"
 CYAN="\e[36m"
+BOLD="\e[1m"
 RESET="\e[0m"
 
 # Fonctions d'affichage
@@ -17,34 +21,35 @@ line_full() { echo -e "${CYAN}+$(printf '%0.s=' $(seq 1 $WIDTH))+${RESET}"; }
 line_simple() { echo -e "${CYAN}+$(printf '%0.s-' $(seq 1 $WIDTH))+${RESET}"; }
 content_line() { printf "| %-56s |\n" "$1"; }
 
-# Centre un texte avec gestion des couleurs ANSI
 center_line() {
     local text="$1"
-    local clean_text=$(echo -e "$text" | sed 's/\x1B\[[0-9;]*[a-zA-Z]//g')
+    # Supprimer les séquences ANSI pour le calcul
+    local clean_text=$(echo -e "$text" | sed 's/\x1B\[[0-9;]*[mK]//g')
     local padding=$(( (WIDTH - ${#clean_text}) / 2 ))
     printf "|%*s%s%*s|\n" "$padding" "" "$text" "$padding" ""
 }
 
-# Vérifie si un service est actif
+# Vérification que les fonctions systemctl existent pour le statut
 service_status() {
-    if systemctl list-unit-files | grep -q "^$1.service"; then
-        if systemctl is-active --quiet "$1"; then
-            echo "[actif]"
+    local svc="$1"
+    if systemctl list-unit-files | grep -q "^$svc.service"; then
+        if systemctl is-active --quiet "$svc"; then
+            echo "[ACTIF]"
         else
-            echo "[inactif]"
+            echo "[INACTIF]"
         fi
     else
-        echo "[non installé]"
+        echo "[NON INSTALLÉ]"
     fi
 }
 
-# --- Début du menu ---
+# Début du panneau
 clear
 line_full
 center_line "${YELLOW}CRÉATION D'UTILISATEUR${RESET}"
 line_full
 
-# Demande des infos utilisateur
+# Demande infos utilisateur
 read -p "Nom d'utilisateur : " username
 read -s -p "Mot de passe : " password
 echo ""
@@ -89,8 +94,8 @@ content_line "UDP Custom  : 1-65535 $(service_status udp-custom)"
 line_full
 center_line "${YELLOW}CONFIGURATION SLOWDNS${RESET}"
 line_simple
-content_line "Pub KEY : $SLOWDNS_KEY"
-content_line "NameServer (NS) : $SLOWDNS_NS"
+content_line "Pub KEY        : $SLOWDNS_KEY"
+content_line "NameServer (NS): $SLOWDNS_NS"
 line_full
 
 read -p "Appuyez sur Entrée pour revenir au menu..."
