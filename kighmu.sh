@@ -25,7 +25,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Fonctions d'état
 get_ssh_users_count() { grep -cE "/home" /etc/passwd; }
 get_xray_users_count() { ls /etc/xray/users/ 2>/dev/null | wc -l; }
-get_devices_count() { ss -ntu state established 2>/dev/null | grep -c ESTAB; }
+
+# Fonction qui compte les IP SSH uniques connectées actuellement
+count_connected_devices() {
+    ss -tn src :22 state established | awk 'NR>1 {print $5}' | cut -d: -f1 | sort -u | wc -l
+}
+
 get_cpu_usage() { grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf "%.2f%%", usage}'; }
 
 # Fonction pour détecter l'OS
@@ -38,11 +43,6 @@ get_os_info() {
     fi
 }
 
-# Nouvelle fonction pour lister les IP connectées via SSH (port 22)
-get_ssh_connected_ips() {
-    ss -tn src :22 state established | awk 'NR>1 {print $5}' | cut -d: -f1 | sort | uniq
-}
-
 while true; do
     clear
     OS_INFO=$(get_os_info)
@@ -50,7 +50,7 @@ while true; do
     RAM_USAGE=$(free -m | awk 'NR==2{printf "%.2f%%", $3*100/$2 }')
     CPU_USAGE=$(get_cpu_usage)
     SSH_USERS_COUNT=$(get_ssh_users_count)
-    DEVICES_COUNT=$(get_devices_count)
+    DEVICES_COUNT=$(count_connected_devices)
 
     echo -e "${CYAN}+==================================================+${RESET}"
     echo -e "${BOLD}${MAGENTA}|                🚀 KIGHMU MANAGER 🚀               |${RESET}"
@@ -64,21 +64,9 @@ while true; do
 
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
 
-    # Utilisateurs SSH et appareils en couleurs différentes
+    # Utilisateurs SSH et appareils (nombre d'IP SSH uniques) en couleurs différentes
     printf " Utilisateurs SSH: ${BLUE}%-4d${RESET} | Appareils: ${MAGENTA}%-4d${RESET}\n" "$SSH_USERS_COUNT" "$DEVICES_COUNT"
 
-    echo -e "${CYAN}+--------------------------------------------------+${RESET}"
-
-    # Affichage en temps réel des IP connectées sur SSH
-    echo -e "${BOLD}${YELLOW}|      Appareils SSH connectés actuellement :     |${RESET}"
-    ips=$(get_ssh_connected_ips)
-    if [ -z "$ips" ]; then
-        echo "  Aucun appareil connecté"
-    else
-        echo "$ips" | while read -r ip; do
-            echo "  - $ip"
-        done
-    fi
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
 
     echo -e "${BOLD}${YELLOW}|                  MENU PRINCIPAL:                 |${RESET}"
