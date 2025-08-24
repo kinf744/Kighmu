@@ -1,33 +1,34 @@
 #!/bin/bash
-# menu1.sh - Création d'un utilisateur SSH avec affichage dynamique
+# ==============================================
+# menu1.sh - Création d'utilisateur SSH
+# ==============================================
 
 INSTALL_DIR="$HOME/Kighmu"
-USER_FILE="/etc/kighmu/users.list"
 WIDTH=60
 
 # Couleurs
-RED="\e[31m"
-GREEN="\e[32m"
 YELLOW="\e[33m"
+GREEN="\e[32m"
 CYAN="\e[36m"
-BOLD="\e[1m"
 RESET="\e[0m"
 
 # Fonctions d'affichage
-line_full() { echo -e "${CYAN}+$(printf '%0.s-' $(seq 1 $WIDTH))+${RESET}"; }
+line_full() { echo -e "${CYAN}+$(printf '%0.s=' $(seq 1 $WIDTH))+${RESET}"; }
 line_simple() { echo -e "${CYAN}+$(printf '%0.s-' $(seq 1 $WIDTH))+${RESET}"; }
-center_line() {
-    local text="$1"
-    local padding=$(( (WIDTH - ${#text}) / 2 ))
-    printf "|%*s%s%*s|\n" "$padding" "" "$text" "$padding" ""
-}
 content_line() { printf "| %-56s |\n" "$1"; }
 
-# Fonction pour le statut d'un service
+# Centre un texte avec gestion des couleurs ANSI
+center_line() {
+    local text="$1"
+    local clean_text=$(echo -e "$text" | sed 's/\x1B\[[0-9;]*[a-zA-Z]//g')
+    local padding=$(( (WIDTH - ${#clean_text}) / 2 ))
+    printf "|%*s%s%*s|\n" "$padding" "" "$text" "$padding" ""
+}
+
+# Vérifie si un service est actif
 service_status() {
-    local svc="$1"
-    if systemctl list-unit-files | grep -q "^$svc.service"; then
-        if systemctl is-active --quiet "$svc"; then
+    if systemctl list-unit-files | grep -q "^$1.service"; then
+        if systemctl is-active --quiet "$1"; then
             echo "[actif]"
         else
             echo "[inactif]"
@@ -37,13 +38,13 @@ service_status() {
     fi
 }
 
-# Création panneau
+# --- Début du menu ---
 clear
 line_full
 center_line "${YELLOW}CRÉATION D'UTILISATEUR${RESET}"
 line_full
 
-# Demande informations
+# Demande des infos utilisateur
 read -p "Nom d'utilisateur : " username
 read -s -p "Mot de passe : " password
 echo ""
@@ -55,17 +56,14 @@ expire_date=$(date -d "+$days days" '+%Y-%m-%d')
 useradd -M -s /bin/false "$username"
 echo "$username:$password" | chpasswd
 
-# Récupération informations réseau et SlowDNS
+# Sauvegarde
 HOST_IP=$(curl -s https://api.ipify.org)
 SLOWDNS_KEY=$(cat /etc/slowdns/server.pub 2>/dev/null || echo "Clé publique SlowDNS non trouvée!")
 SLOWDNS_NS="${SLOWDNS_NS:-slowdns5.kighmup.ddns-ip.net}"
-DOMAIN="${DOMAIN:-localhost}"
-
-# Sauvegarde
 mkdir -p /etc/kighmu
-touch "$USER_FILE"
-chmod 600 "$USER_FILE"
-echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
+touch /etc/kighmu/users.list
+chmod 600 /etc/kighmu/users.list
+echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> /etc/kighmu/users.list
 
 # Affichage dynamique
 line_full
