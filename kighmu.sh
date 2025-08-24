@@ -38,6 +38,11 @@ get_os_info() {
     fi
 }
 
+# Nouvelle fonction pour lister les IP connectées via SSH (port 22)
+get_ssh_connected_ips() {
+    ss -tn src :22 state established | awk 'NR>1 {print $5}' | cut -d: -f1 | sort | uniq
+}
+
 while true; do
     clear
     OS_INFO=$(get_os_info)
@@ -58,8 +63,22 @@ while true; do
     printf " RAM utilisée: ${GREEN}%-6s${RESET} | CPU utilisé: ${YELLOW}%-6s${RESET}\n" "$RAM_USAGE" "$CPU_USAGE"
 
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
+
     # Utilisateurs SSH et appareils en couleurs différentes
     printf " Utilisateurs SSH: ${BLUE}%-4d${RESET} | Appareils: ${MAGENTA}%-4d${RESET}\n" "$SSH_USERS_COUNT" "$DEVICES_COUNT"
+
+    echo -e "${CYAN}+--------------------------------------------------+${RESET}"
+
+    # Affichage en temps réel des IP connectées sur SSH
+    echo -e "${BOLD}${YELLOW}|      Appareils SSH connectés actuellement :     |${RESET}"
+    ips=$(get_ssh_connected_ips)
+    if [ -z "$ips" ]; then
+        echo "  Aucun appareil connecté"
+    else
+        echo "$ips" | while read -r ip; do
+            echo "  - $ip"
+        done
+    fi
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
 
     echo -e "${BOLD}${YELLOW}|                  MENU PRINCIPAL:                 |${RESET}"
