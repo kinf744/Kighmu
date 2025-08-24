@@ -54,11 +54,12 @@ while true; do
     # Ligne compacte OS et IP
     printf " OS: %-20s | IP: %-15s\n" "$OS_INFO" "$IP"
 
-    # Ligne RAM et CPU
-    printf " RAM utilisée: %-6s | CPU utilisé: %-6s\n" "$RAM_USAGE" "$CPU_USAGE"
+    # Ligne RAM et CPU (ajout couleurs)
+    printf " RAM utilisée: ${GREEN}%-6s${RESET} | CPU utilisé: ${YELLOW}%-6s${RESET}\n" "$RAM_USAGE" "$CPU_USAGE"
 
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
-    printf " Utilisateurs SSH: %-4d | Appareils: %-4d\n" "$SSH_USERS_COUNT" "$DEVICES_COUNT"
+    # Utilisateurs SSH et appareils en couleurs différentes
+    printf " Utilisateurs SSH: ${BLUE}%-4d${RESET} | Appareils: ${MAGENTA}%-4d${RESET}\n" "$SSH_USERS_COUNT" "$DEVICES_COUNT"
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
 
     echo -e "${BOLD}${YELLOW}|                  MENU PRINCIPAL:                 |${RESET}"
