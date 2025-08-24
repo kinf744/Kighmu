@@ -6,14 +6,8 @@
 INSTALL_DIR="$HOME/Kighmu"
 WIDTH=60
 
-# Couleurs
-RED="\e[31m"
-GREEN="\e[32m"
-YELLOW="\e[33m"
-BLUE="\e[34m"
-MAGENTA="\e[35m"
+# Couleurs pour lignes et contenus
 CYAN="\e[36m"
-BOLD="\e[1m"
 RESET="\e[0m"
 
 # Fonctions d'affichage
@@ -46,7 +40,7 @@ service_status() {
 # Début du panneau
 clear
 line_full
-center_line "${YELLOW}${BOLD}CRÉATION D'UTILISATEUR${RESET}"
+center_line "CRÉATION D'UTILISATEUR"
 line_full
 
 # Demande infos utilisateur
@@ -72,7 +66,7 @@ echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> 
 
 # Affichage dynamique
 line_full
-center_line "${YELLOW}${BOLD}INFORMATIONS UTILISATEUR${RESET}"
+center_line "INFORMATIONS UTILISATEUR"
 line_simple
 content_line "UTILISATEUR : $username"
 content_line "MOT DE PASSE  : $password"
@@ -80,7 +74,7 @@ content_line "LIMITE       : $limite"
 content_line "DATE EXPIRÉE : $expire_date"
 content_line "IP/DOMAIN    : $HOST_IP / $DOMAIN"
 line_simple
-center_line "${YELLOW}${BOLD}PORTS DES MODES INSTALLÉS${RESET}"
+center_line "PORTS DES MODES INSTALLÉS"
 line_simple
 content_line "SSH         : 22 $(service_status ssh)"
 content_line "Dropbear    : 90 $(service_status dropbear)"
@@ -92,7 +86,7 @@ content_line "BadVPN 1    : 7200 $(service_status badvpn)"
 content_line "BadVPN 2    : 7300 $(service_status badvpn)"
 content_line "UDP Custom  : 1-65535 $(service_status udp-custom)"
 line_full
-center_line "${YELLOW}${BOLD}CONFIGURATION SLOWDNS${RESET}"
+center_line "CONFIGURATION SLOWDNS"
 line_simple
 content_line "Pub KEY        : $SLOWDNS_KEY"
 content_line "NameServer (NS): $SLOWDNS_NS"
