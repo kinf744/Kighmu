@@ -75,8 +75,13 @@ else
     SLOWDNS_KEY="Clé publique SlowDNS non trouvée!"
 fi
 
-# NS SlowDNS
-SLOWDNS_NS="${SLOWDNS_NS:-slowdns5.kighmup.ddns-ip.net}"
+# NS SlowDNS utilisé lors de l'installation
+if [ -f /etc/slowdns/config.json ]; then
+    SLOWDNS_NS=$(jq -r '.ns' /etc/slowdns/config.json 2>/dev/null)
+    [ -z "$SLOWDNS_NS" ] && SLOWDNS_NS="NS SlowDNS non trouvé !"
+else
+    SLOWDNS_NS="NS SlowDNS non trouvé !"
+fi
 
 # Sauvegarde des infos
 mkdir -p /etc/kighmu
