@@ -6,9 +6,7 @@
 INSTALL_DIR="$HOME/Kighmu"
 WIDTH=60
 
-# Couleurs
-YELLOW="\e[33m"
-GREEN="\e[32m"
+# Couleurs pour lignes et contenus
 CYAN="\e[36m"
 RESET="\e[0m"
 
@@ -17,34 +15,34 @@ line_full() { echo -e "${CYAN}+$(printf '%0.s=' $(seq 1 $WIDTH))+${RESET}"; }
 line_simple() { echo -e "${CYAN}+$(printf '%0.s-' $(seq 1 $WIDTH))+${RESET}"; }
 content_line() { printf "| %-56s |\n" "$1"; }
 
-# Centre un texte avec gestion des couleurs ANSI
 center_line() {
     local text="$1"
-    local clean_text=$(echo -e "$text" | sed 's/\x1B\[[0-9;]*[a-zA-Z]//g')
+    local clean_text=$(echo -e "$text" | sed 's/\x1B\[[0-9;]*[mK]//g')
     local padding=$(( (WIDTH - ${#clean_text}) / 2 ))
     printf "|%*s%s%*s|\n" "$padding" "" "$text" "$padding" ""
 }
 
-# Vérifie si un service est actif
+# Vérification du statut d'un service
 service_status() {
-    if systemctl list-unit-files | grep -q "^$1.service"; then
-        if systemctl is-active --quiet "$1"; then
-            echo "[actif]"
+    local svc="$1"
+    if systemctl list-unit-files | grep -q "^$svc.service"; then
+        if systemctl is-active --quiet "$svc"; then
+            echo "[ACTIF]"
         else
-            echo "[inactif]"
+            echo "[INACTIF]"
         fi
     else
-        echo "[non installé]"
+        echo "[NON INSTALLÉ]"
     fi
 }
 
-# --- Début du menu ---
+# Début du panneau
 clear
 line_full
-center_line "${YELLOW}CRÉATION D'UTILISATEUR TEST${RESET}"
+center_line "CRÉATION D'UTILISATEUR TEST"
 line_full
 
-# Demande des infos utilisateur test
+# Demande infos utilisateur
 read -p "Nom de l'utilisateur test : " username
 read -s -p "Mot de passe : " password
 echo ""
@@ -67,7 +65,7 @@ echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> 
 
 # Affichage dynamique
 line_full
-center_line "${YELLOW}INFORMATIONS UTILISATEUR TEST${RESET}"
+center_line "INFORMATIONS UTILISATEUR TEST"
 line_simple
 content_line "UTILISATEUR : $username"
 content_line "MOT DE PASSE  : $password"
@@ -75,7 +73,7 @@ content_line "LIMITE       : $limite"
 content_line "DATE EXPIRÉE : $expire_date"
 content_line "IP/DOMAIN    : $HOST_IP / $DOMAIN"
 line_simple
-center_line "${YELLOW}PORTS DES MODES INSTALLÉS${RESET}"
+center_line "PORTS DES MODES INSTALLÉS"
 line_simple
 content_line "SSH         : 22 $(service_status ssh)"
 content_line "Dropbear    : 90 $(service_status dropbear)"
@@ -87,10 +85,10 @@ content_line "BadVPN 1    : 7200 $(service_status badvpn)"
 content_line "BadVPN 2    : 7300 $(service_status badvpn)"
 content_line "UDP Custom  : 1-65535 $(service_status udp-custom)"
 line_full
-center_line "${YELLOW}CONFIGURATION SLOWDNS${RESET}"
+center_line "CONFIGURATION SLOWDNS"
 line_simple
-content_line "Pub KEY : $SLOWDNS_KEY"
-content_line "NameServer (NS) : $SLOWDNS_NS"
+content_line "Pub KEY        : $SLOWDNS_KEY"
+content_line "NameServer (NS): $SLOWDNS_NS"
 line_full
 
 read -p "Appuyez sur Entrée pour revenir au menu..."
