@@ -20,6 +20,7 @@ echo "+--------------------------------------------+"
 echo "|             INSTALLATION VPS               |"
 echo "+--------------------------------------------+"
 
+# Demander le nom de domaine qui pointe vers l’IP du serveur
 read -p "Veuillez entrer votre nom de domaine (doit pointer vers l'IP de ce serveur) : " DOMAIN
 
 if [ -z "$DOMAIN" ]; then
@@ -41,34 +42,23 @@ if [ "$DOMAIN_IP" != "$IP_PUBLIC" ]; then
   fi
 fi
 
+# Exporter la variable pour que les scripts enfants y aient accès
 export DOMAIN
 
 echo "=============================================="
-echo " 🚀 Mise à jour complète et installation des paquets essentiels..."
+echo " 🚀 Mise à jour et installation des paquets essentiels..."
 echo "=============================================="
 
-sudo apt-get update -y
-
-# Corriger les problèmes éventuels avant upgrade
-sudo apt-get -f install -y
-
-sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
-sudo DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y
-
-sudo apt-get autoremove -y
-sudo apt-get autoclean -y
-sudo apt-get clean
-
-# Reconfiguration de tous les paquets en cas de problème
-sudo dpkg --configure -a || true
-
-echo "Installation des paquets essentiels..."
+apt update -y && apt upgrade -y
 
 apt install -y \
 sudo bsdmainutils zip unzip ufw curl python python3 python3-pip openssl screen cron iptables lsof pv boxes nano at mlocate \
 gawk grep bc jq npm nodejs socat netcat netcat-traditional net-tools cowsay figlet lolcat \
 dnsutils net-tools wget sudo iptables ufw openssl openssl-blacklist psmisc nginx certbot python3-certbot-nginx dropbear badvpn \
 python3-setuptools wireguard-tools qrencode gcc make perl software-properties-common socat
+
+apt autoremove -y
+apt clean
 
 echo "=============================================="
 echo " 🚀 Installation et configuration du module Python pysocks et du proxy SOCKS"
@@ -115,7 +105,6 @@ FILES=(
     "menu1.sh"
     "menu2.sh"
     "menu3.sh"
-    "menu_4.sh"
     "menu4.sh"
     "menu5.sh"
     "menu6.sh"
@@ -166,7 +155,7 @@ run_script "$INSTALL_DIR/slowdns.sh"
 run_script "$INSTALL_DIR/udp_custom.sh"
 
 echo "=============================================="
-echo " 🚀 Installation et configuration SlowDNS optimisée..."
+echo " 🚀 Installation et configuration SlowDNS..."
 echo "=============================================="
 
 SLOWDNS_DIR="/etc/slowdns"
@@ -187,31 +176,11 @@ if [ ! -f "$SLOWDNS_DIR/server.key" ] || [ ! -f "$SLOWDNS_DIR/server.pub" ]; the
 fi
 
 interface=$(ip a | awk '/state UP/{print $2}' | cut -d: -f1 | head -1)
-echo "Réglage MTU sur l'interface $interface à 1400..."
-ip link set dev $interface mtu 1400
-
-echo "Augmentation des buffers UDP..."
-sysctl -w net.core.rmem_max=26214400
-sysctl -w net.core.wmem_max=26214400
-
 iptables -F
 iptables -I INPUT -p udp --dport 5300 -j ACCEPT
 iptables -t nat -I PREROUTING -i $interface -p udp --dport 53 -j REDIRECT --to-ports 5300
 
-if command -v iptables-save >/dev/null 2>&1; then
-    iptables-save | tee /etc/iptables/rules.v4 >/dev/null
-fi
-
 ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
-
-if [ "$(sysctl -n net.ipv4.ip_forward)" -ne 1 ]; then
-    echo "Activation du routage IP..."
-    sysctl -w net.ipv4.ip_forward=1
-    if ! grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf; then
-        echo "net.ipv4.ip_forward=1" | tee -a /etc/sysctl.conf
-    fi
-fi
-
 screen -dmS slowdns "$DNS_BIN" -udp :5300 -privkey-file "$SLOWDNS_DIR/server.key" slowdns5.kighmup.ddns-ip.net 0.0.0.0:$ssh_port
 
 echo "+--------------------------------------------+"
