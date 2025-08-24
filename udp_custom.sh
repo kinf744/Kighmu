@@ -1,7 +1,6 @@
 #!/bin/bash
 # udp_custom.sh
 # Installation et configuration UDP Custom pour HTTP Custom VPN
-# + Forwarding UDP via socat pour SSH UDP Custom
 
 set -e
 
@@ -9,16 +8,14 @@ INSTALL_DIR="/root/udp-custom"
 CONFIG_FILE="$INSTALL_DIR/config/config.json"
 BIN_PATH="$INSTALL_DIR/bin/udp-custom-linux-amd64"
 UDP_PORT=54000
-BADVPN_UDP_PORT=7200
-SOCAT_SERVICE="/etc/systemd/system/socat-udp-forward.service"
 
 echo "+--------------------------------------------+"
-echo "|             INSTALLATION UDP CUSTOM        |"
+echo "|             INSTALLATION UDP CUSTOM         |"
 echo "+--------------------------------------------+"
 
 echo "Installation des dépendances..."
 apt-get update
-apt-get install -y git curl build-essential libssl-dev jq iptables socat
+apt-get install -y git curl build-essential libssl-dev jq iptables
 
 # Cloner le dépôt udp-custom si non présent
 if [ ! -d "$INSTALL_DIR" ]; then
@@ -74,41 +71,10 @@ if pgrep -f "udp-custom-linux-amd64" > /dev/null; then
     echo "UDP Custom démarré avec succès sur le port $UDP_PORT."
 else
     echo "Erreur: UDP Custom ne s'est pas lancé correctement."
-    exit 1
 fi
 
-# Lancement Socat pour forwarding UDP vers badvpn-udpgw
-echo "Configuration du forwarding UDP via socat du port $UDP_PORT vers badvpn-udpgw sur 127.0.0.1:$BADVPN_UDP_PORT..."
-
-# Créer un service systemd pour socat
-cat << EOF > $SOCAT_SERVICE
-[Unit]
-Description=Socat UDP Forward from $UDP_PORT to BadVPN UDPGW $BADVPN_UDP_PORT
-After=network.target
-
-[Service]
-ExecStart=/usr/bin/socat UDP4-RECVFROM:$UDP_PORT,fork UDP4-SENDTO:127.0.0.1:$BADVPN_UDP_PORT
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-systemctl daemon-reload
-systemctl enable socat-udp-forward.service
-systemctl restart socat-udp-forward.service
-
-# Ouverture du port badvpn UDP internal sur grand public firewall (optionnel)
-iptables -I INPUT -p udp --dport $BADVPN_UDP_PORT -j ACCEPT || true
-
 echo "+--------------------------------------------+"
-echo "|         Configuration terminée             |"
-echo "|   Configure HTTP Custom avec IP du serveur|"
-echo "|   port UDP $UDP_PORT, activez UDP Custom   |"
-echo "|                                            |"
-echo "|   Côté client : lancez socat pour forwarder|"
-echo "|   le port UDP local vers tunnel SSH TCP    |"
-echo "|                                            |"
-echo "|   Exemple client socat (termux/android/linux)|"
-echo "|   socat UDP4-LISTEN:$BADVPN_UDP_PORT,fork TCP:127.0.0.1:<PORT_SSH_TCP> |"
+echo "|          Configuration terminée            |"
+echo "|  Configure HTTP Custom avec IP du serveur, |"
+echo "|  port UDP $UDP_PORT, et activez UDP Custom |"
 echo "+--------------------------------------------+"
