@@ -19,26 +19,28 @@ center_line() {
     printf "|%*s%s%*s|\n" "$padding" "" "$text" "$padding" ""
 }
 
-# Fonction pour créer un service systemd
-def create_service() {
+# Fonction pour créer un service systemd personnalisé
+create_service() {
     local name="$1"
-    local exec="$2"
-    local service_file="/etc/systemd/system/${name}.service"
+    local cmd="$2"
 
-    echo "[Unit]
+    cat > /etc/systemd/system/$name.service <<EOF
+[Unit]
 Description=$name Service
 After=network.target
 
 [Service]
-ExecStart=$exec
+ExecStart=$cmd
 Restart=always
-RestartSec=3
+User=nobody
+LimitNOFILE=65536
 
 [Install]
-WantedBy=multi-user.target" > "$service_file"
+WantedBy=multi-user.target
+EOF
 
     systemctl daemon-reload
-    systemctl enable --now "$name"
+    systemctl enable --now $name
     echo "✔️ Service $name installé et démarré"
 }
 
@@ -76,9 +78,9 @@ install_mode() {
         3) [[ -x "$INSTALL_DIR/slowdns.sh" ]] && bash "$INSTALL_DIR/slowdns.sh" || echo "❌ slowdns.sh introuvable" ;;
         4) [[ -x "$INSTALL_DIR/udp_custom.sh" ]] && bash "$INSTALL_DIR/udp_custom.sh" || echo "❌ udp_custom.sh introuvable" ;;
         5) [[ -x "$INSTALL_DIR/socks_python.sh" ]] && bash "$INSTALL_DIR/socks_python.sh" || echo "❌ socks_python.sh introuvable" ;;
-        6) apt-get install -y nginx && systemctl enable --now nginx && echo "✔️ Nginx/SSL installé" ;;
+        6) apt-get install -y nginx && systemctl enable --now nginx && echo "✔️ Nginx (SSL/TLS) installé" ;;
         7) create_service "badvpn" "/usr/bin/badvpn-udpgw --listen-addr 127.0.0.1:7303 --max-clients 500" ;;
-        *) echo "❌ Choix invalide" ;;
+        *) echo "Choix invalide" ;;
     esac
 }
 
@@ -88,15 +90,15 @@ uninstall_mode() {
         2) systemctl disable --now dropbear && apt-get remove -y dropbear && echo "✔️ Dropbear désinstallé" ;;
         3) systemctl disable --now slowdns && echo "✔️ SlowDNS désinstallé" ;;
         4) systemctl disable --now udp-custom && echo "✔️ UDP-Custom désinstallé" ;;
-        5) systemctl disable --now socks-python && echo "✔️ SOCKS-Python désinstallé" ;;
-        6) systemctl disable --now nginx && apt-get remove -y nginx && echo "✔️ Nginx/SSL désinstallé" ;;
+        5) systemctl disable --now socks-python && echo "✔️ SOCKS/Python désinstallé" ;;
+        6) systemctl disable --now nginx && apt-get remove -y nginx && echo "✔️ Nginx désinstallé" ;;
         7) 
             systemctl disable --now badvpn
             rm -f /etc/systemd/system/badvpn.service
             systemctl daemon-reload
-            echo "✔️ BadVPN désinstallé" 
+            echo "✔️ BadVPN désinstallé"
             ;;
-        *) echo "❌ Choix invalide" ;;
+        *) echo "Choix invalide" ;;
     esac
 }
 
@@ -136,6 +138,6 @@ while true; do
             uninstall_mode "$choix"
             ;;
         0) break ;;
-        *) echo "❌ Choix invalide" ; read -p "Appuyez sur Entrée pour continuer..." ;;
+        *) echo "Choix invalide" ; read -p "Appuyez sur Entrée pour continuer..." ;;
     esac
 done
