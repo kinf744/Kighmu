@@ -2,10 +2,12 @@
 # menu4.sh - Suppression des utilisateurs SSH
 
 WIDTH=60
+BLUE="\e[34m"   # Bleu marine
+RESET="\e[0m"
 
 # Fonctions d'affichage
-line_full() { echo "+$(printf '%0.s=' $(seq 1 $WIDTH))+"; }
-line_simple() { echo "+$(printf '%0.s-' $(seq 1 $WIDTH))+"; }
+line_full() { echo -e "${BLUE}+$(printf '%0.s=' $(seq 1 $WIDTH))+${RESET}"; }
+line_simple() { echo -e "${BLUE}+$(printf '%0.s-' $(seq 1 $WIDTH))+${RESET}"; }
 content_line() { printf "| %-56s |\n" "$1"; }
 center_line() {
     local text="$1"
