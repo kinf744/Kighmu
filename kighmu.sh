@@ -28,11 +28,11 @@ get_xray_users_count() { ls /etc/xray/users/ 2>/dev/null | wc -l; }
 get_devices_count() { ss -ntu state established 2>/dev/null | grep -c ESTAB; }
 get_cpu_usage() { grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf "%.2f%%", usage}'; }
 
-# Fonction pour détecter l'OS complet
+# Fonction pour détecter l'OS
 get_os_info() {
     if [ -f /etc/os-release ]; then
         . /etc/os-release
-        echo "$PRETTY_NAME"   # Affiche Ubuntu 20.04.6 LTS, Debian GNU/Linux 12 (bookworm), etc.
+        echo "$NAME $VERSION_ID"
     else
         uname -s
     fi
@@ -50,13 +50,17 @@ while true; do
     echo -e "${CYAN}+==================================================+${RESET}"
     echo -e "${BOLD}${MAGENTA}|                🚀 KIGHMU MANAGER 🚀               |${RESET}"
     echo -e "${CYAN}+==================================================+${RESET}"
-    printf "${GREEN} OS: %-30s${RESET}| ${YELLOW}IP:${RESET} %-15s \n" "$OS_INFO" "$IP"
-    printf "${BLUE} RAM utilisée: %-38s\n" "$RAM_USAGE"
-    printf "${BLUE} CPU utilisé: %-38s\n" "$CPU_USAGE"
+
+    # Ligne compacte OS et IP
+    printf " OS: %-20s | IP: %-15s\n" "$OS_INFO" "$IP"
+
+    # Ligne RAM et CPU
+    printf " RAM utilisée: %-6s | CPU utilisé: %-6s\n" "$RAM_USAGE" "$CPU_USAGE"
+
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
-    printf " ${MAGENTA}Utilisateurs SSH:${RESET} %-4d | ${MAGENTA}Appareils:${RESET} %-6d \n" \
-        "$SSH_USERS_COUNT" "$DEVICES_COUNT"
+    printf " Utilisateurs SSH: %-4d | Appareils: %-4d\n" "$SSH_USERS_COUNT" "$DEVICES_COUNT"
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
+
     echo -e "${BOLD}${YELLOW}|                  MENU PRINCIPAL:                 |${RESET}"
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
     echo -e "${GREEN}[01]${RESET} Créer un utilisateur SSH"
