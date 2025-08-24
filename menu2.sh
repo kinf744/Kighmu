@@ -6,7 +6,10 @@
 INSTALL_DIR="$HOME/Kighmu"
 WIDTH=60
 
-# Couleurs pour lignes et contenus
+# Couleurs
+RED="\e[31m"
+GREEN="\e[32m"
+YELLOW="\e[33m"
 CYAN="\e[36m"
 RESET="\e[0m"
 
@@ -14,15 +17,14 @@ RESET="\e[0m"
 line_full() { echo -e "${CYAN}+$(printf '%0.s=' $(seq 1 $WIDTH))+${RESET}"; }
 line_simple() { echo -e "${CYAN}+$(printf '%0.s-' $(seq 1 $WIDTH))+${RESET}"; }
 content_line() { printf "| %-56s |\n" "$1"; }
-
-center_line() {
+center_line() { 
     local text="$1"
     local clean_text=$(echo -e "$text" | sed 's/\x1B\[[0-9;]*[mK]//g')
     local padding=$(( (WIDTH - ${#clean_text}) / 2 ))
     printf "|%*s%s%*s|\n" "$padding" "" "$text" "$padding" ""
 }
 
-# Vérification du statut d'un service
+# Statut des services/modes
 service_status() {
     local svc="$1"
     if systemctl list-unit-files | grep -q "^$svc.service"; then
@@ -36,34 +38,61 @@ service_status() {
     fi
 }
 
+# Fonction pour demander une info avec 2 essais max
+ask_input() {
+    local prompt="$1"
+    local silent="$2"
+    local input=""
+    local attempts=0
+
+    while [ $attempts -lt 2 ]; do
+        if [ "$silent" == "true" ]; then
+            read -s -p "$prompt" input
+            echo ""
+        else
+            read -p "$prompt" input
+        fi
+
+        if [ -n "$input" ]; then
+            echo "$input"
+            return
+        fi
+
+        attempts=$((attempts + 1))
+        echo -e "${RED}Valeur obligatoire. Essai $attempts/2${RESET}"
+    done
+
+    echo -e "${RED}Création annulée.${RESET}"
+    exit 1
+}
+
 # Début du panneau
 clear
 line_full
-center_line "CRÉATION D'UTILISATEUR TEST"
+center_line "CRÉATION UTILISATEUR TEST"
 line_full
 
 # Demande infos utilisateur
-read -p "Nom de l'utilisateur test : " username
-read -s -p "Mot de passe : " password
-echo ""
-read -p "Nombre d'appareils autorisés : " limite
-read -p "Durée de validité (jours) : " days
+username=$(ask_input "Nom utilisateur test : " false)
+password=$(ask_input "Mot de passe : " true)
+limite=$(ask_input "Nombre d'appareils autorisés : " false)
+days=$(ask_input "Durée de validité (jours) : " false)
 
-# Calcul date expiration et création utilisateur
+# Création utilisateur et calcul expiration
 expire_date=$(date -d "+$days days" '+%Y-%m-%d')
 useradd -M -s /bin/false "$username"
 echo "$username:$password" | chpasswd
 
-# Sauvegarde
-HOST_IP=$(curl -s https://api.ipify.org)
-SLOWDNS_KEY=$(cat /etc/slowdns/server.pub 2>/dev/null || echo "Clé publique SlowDNS non trouvée!")
-SLOWDNS_NS="${SLOWDNS_NS:-slowdns5.kighmup.ddns-ip.net}"
+# Sauvegarde dans fichier users.list
 mkdir -p /etc/kighmu
 touch /etc/kighmu/users.list
 chmod 600 /etc/kighmu/users.list
+HOST_IP=$(curl -s https://api.ipify.org)
+SLOWDNS_KEY=$(cat /etc/slowdns/server.pub 2>/dev/null || echo "Clé publique SlowDNS non trouvée!")
+SLOWDNS_NS="${SLOWDNS_NS:-slowdns5.kighmup.ddns-ip.net}"
 echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> /etc/kighmu/users.list
 
-# Affichage dynamique
+# Affichage dynamique complet
 line_full
 center_line "INFORMATIONS UTILISATEUR TEST"
 line_simple
