@@ -29,7 +29,7 @@ center_line() {
     printf "|%*s%s%*s|\n" "$padding" "" "$text" "$padding" ""
 }
 
-# Vérification que les fonctions systemctl existent pour le statut
+# Vérification du statut d'un service
 service_status() {
     local svc="$1"
     if systemctl list-unit-files | grep -q "^$svc.service"; then
@@ -46,7 +46,7 @@ service_status() {
 # Début du panneau
 clear
 line_full
-center_line "${YELLOW}CRÉATION D'UTILISATEUR${RESET}"
+center_line "${YELLOW}${BOLD}CRÉATION D'UTILISATEUR${RESET}"
 line_full
 
 # Demande infos utilisateur
@@ -72,7 +72,7 @@ echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> 
 
 # Affichage dynamique
 line_full
-center_line "${YELLOW}INFORMATIONS UTILISATEUR${RESET}"
+center_line "${YELLOW}${BOLD}INFORMATIONS UTILISATEUR${RESET}"
 line_simple
 content_line "UTILISATEUR : $username"
 content_line "MOT DE PASSE  : $password"
@@ -80,7 +80,7 @@ content_line "LIMITE       : $limite"
 content_line "DATE EXPIRÉE : $expire_date"
 content_line "IP/DOMAIN    : $HOST_IP / $DOMAIN"
 line_simple
-center_line "${YELLOW}PORTS DES MODES INSTALLÉS${RESET}"
+center_line "${YELLOW}${BOLD}PORTS DES MODES INSTALLÉS${RESET}"
 line_simple
 content_line "SSH         : 22 $(service_status ssh)"
 content_line "Dropbear    : 90 $(service_status dropbear)"
@@ -92,7 +92,7 @@ content_line "BadVPN 1    : 7200 $(service_status badvpn)"
 content_line "BadVPN 2    : 7300 $(service_status badvpn)"
 content_line "UDP Custom  : 1-65535 $(service_status udp-custom)"
 line_full
-center_line "${YELLOW}CONFIGURATION SLOWDNS${RESET}"
+center_line "${YELLOW}${BOLD}CONFIGURATION SLOWDNS${RESET}"
 line_simple
 content_line "Pub KEY        : $SLOWDNS_KEY"
 content_line "NameServer (NS): $SLOWDNS_NS"
