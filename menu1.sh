@@ -7,7 +7,7 @@ WIDTH=60
 
 # Couleurs
 CYAN="\e[36m"   # lignes
-YELLOW="\e[33m" # titre
+YELLOW="\e[33m" # titre (non utilisé pour les titres principaux)
 RESET="\e[0m"
 
 # Fonctions d'affichage
@@ -48,7 +48,7 @@ UDP_CUSTOM="1-65535"
 # Panneau d’accueil
 clear
 line_full
-center_line "${YELLOW}CRÉATION D'UTILISATEUR${RESET}"
+center_line "CRÉATION D'UTILISATEUR"
 line_full
 
 # Demande des infos utilisateur
@@ -87,7 +87,7 @@ echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> 
 # Affichage résumé dynamique
 echo ""
 line_full
-center_line "${YELLOW}INFORMATIONS UTILISATEUR${RESET}"
+center_line "INFORMATIONS UTILISATEUR"
 line_simple
 content_line "UTILISATEUR : $username"
 content_line "MOT DE PASSE  : $password"
@@ -95,7 +95,7 @@ content_line "LIMITE       : $limite"
 content_line "DATE EXPIRÉE : $expire_date"
 content_line "IP/DOMAIN    : $HOST_IP / $DOMAIN"
 line_simple
-center_line "${YELLOW}PORTS DES MODES INSTALLÉS${RESET}"
+center_line "PORTS DES MODES INSTALLÉS"
 line_simple
 content_line "SSH         : $SSH_PORT $(service_status ssh)"
 content_line "Dropbear    : $DROPBEAR_PORT $(service_status dropbear)"
@@ -108,7 +108,7 @@ content_line "BadVPN 2    : $BADVPN2 $(service_status badvpn)"
 content_line "UDP Custom  : $UDP_CUSTOM $(service_status udp-custom)"
 line_full
 
-center_line "${YELLOW}CONFIGURATION SLOWDNS${RESET}"
+center_line "CONFIGURATION SLOWDNS"
 line_simple
 content_line "Pub KEY : $SLOWDNS_KEY"
 content_line "NameServer (NS) : $SLOWDNS_NS"
