@@ -26,9 +26,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 get_ssh_users_count() { grep -cE "/home" /etc/passwd; }
 get_xray_users_count() { ls /etc/xray/users/ 2>/dev/null | wc -l; }
 
-# Fonction qui compte les IP SSH uniques connectées actuellement
+# Compte les IP SSH uniques connectées actuellement (port 22)
 count_connected_devices() {
-    ss -tn src :22 state established | awk 'NR>1 {print $5}' | cut -d: -f1 | sort -u | wc -l
+    ss -tn state established '( sport = :22 )' | awk 'NR>1 {print $5}' | cut -d: -f1 | sort -u | wc -l
 }
 
 get_cpu_usage() { grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf "%.2f%%", usage}'; }
