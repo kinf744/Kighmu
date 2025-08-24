@@ -1,100 +1,93 @@
 #!/bin/bash
-# ==============================================
-# menu2.sh - Création d'un utilisateur test
-# ==============================================
+# menu2.sh - Création d'un utilisateur TEST avec panneau de contrôle dynamique
 
+USER_FILE="/etc/kighmu/users.list"
 INSTALL_DIR="$HOME/Kighmu"
 WIDTH=60
 
 # Couleurs
-RED="\e[31m"
-GREEN="\e[32m"
-YELLOW="\e[33m"
-CYAN="\e[36m"
+CYAN="\e[36m"    # lignes
+YELLOW="\e[33m"  # titres (désactivé dans les titres principaux)
 RESET="\e[0m"
 
 # Fonctions d'affichage
 line_full() { echo -e "${CYAN}+$(printf '%0.s=' $(seq 1 $WIDTH))+${RESET}"; }
 line_simple() { echo -e "${CYAN}+$(printf '%0.s-' $(seq 1 $WIDTH))+${RESET}"; }
 content_line() { printf "| %-56s |\n" "$1"; }
-center_line() { 
+center_line() {
     local text="$1"
-    local clean_text=$(echo -e "$text" | sed 's/\x1B\[[0-9;]*[mK]//g')
-    local padding=$(( (WIDTH - ${#clean_text}) / 2 ))
+    local padding=$(( (WIDTH - ${#text}) / 2 ))
     printf "|%*s%s%*s|\n" "$padding" "" "$text" "$padding" ""
 }
 
-# Statut des services/modes
+# Vérification de l'état d'un service
 service_status() {
-    local svc="$1"
+    local svc=$1
     if systemctl list-unit-files | grep -q "^$svc.service"; then
         if systemctl is-active --quiet "$svc"; then
-            echo "[ACTIF]"
+            echo "[actif]"
         else
-            echo "[INACTIF]"
+            echo "[inactif]"
         fi
     else
-        echo "[NON INSTALLÉ]"
+        echo "[non installé]"
     fi
 }
 
-# Fonction pour demander une info avec 2 essais max
-ask_input() {
-    local prompt="$1"
-    local silent="$2"
-    local input=""
-    local attempts=0
+# Ports par défaut
+SSH_PORT=22
+DROPBEAR_PORT=90
+SLOWDNS_PORT=5300
+SOCKS_PORT=8080
+WEB_NGINX=81
+SSL_PORT=443
+BADVPN1=7200
+BADVPN2=7300
+UDP_CUSTOM="1-65535"
 
-    while [ $attempts -lt 2 ]; do
-        if [ "$silent" == "true" ]; then
-            read -s -p "$prompt" input
-            echo ""
-        else
-            read -p "$prompt" input
-        fi
-
-        if [ -n "$input" ]; then
-            echo "$input"
-            return
-        fi
-
-        attempts=$((attempts + 1))
-        echo -e "${RED}Valeur obligatoire. Essai $attempts/2${RESET}"
-    done
-
-    echo -e "${RED}Création annulée.${RESET}"
-    exit 1
-}
-
-# Début du panneau
+# Panneau d'accueil
 clear
 line_full
-center_line "CRÉATION UTILISATEUR TEST"
+center_line "CRÉATION D'UTILISATEUR TEST"
 line_full
 
-# Demande infos utilisateur
-username=$(ask_input "Nom utilisateur test : " false)
-password=$(ask_input "Mot de passe : " true)
-limite=$(ask_input "Nombre d'appareils autorisés : " false)
-days=$(ask_input "Durée de validité (jours) : " false)
+# Demande des infos utilisateur
+read -p "Nom d'utilisateur : " username
+read -s -p "Mot de passe : " password
+echo ""
+read -p "Nombre d'appareils autorisés : " limite
+read -p "Durée de validité (en minutes) : " minutes
 
-# Création utilisateur et calcul expiration
-expire_date=$(date -d "+$days days" '+%Y-%m-%d')
+# Calcul de la date d'expiration
+expire_date=$(date -d "+$minutes minutes" '+%Y-%m-%d %H:%M:%S')
+
+# Création utilisateur système
 useradd -M -s /bin/false "$username"
 echo "$username:$password" | chpasswd
 
-# Sauvegarde dans fichier users.list
-mkdir -p /etc/kighmu
-touch /etc/kighmu/users.list
-chmod 600 /etc/kighmu/users.list
+# IP publique
 HOST_IP=$(curl -s https://api.ipify.org)
-SLOWDNS_KEY=$(cat /etc/slowdns/server.pub 2>/dev/null || echo "Clé publique SlowDNS non trouvée!")
-SLOWDNS_NS="${SLOWDNS_NS:-slowdns5.kighmup.ddns-ip.net}"
-echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> /etc/kighmu/users.list
 
-# Affichage dynamique complet
+# Clé publique SlowDNS
+if [ -f /etc/slowdns/server.pub ]; then
+    SLOWDNS_KEY=$(cat /etc/slowdns/server.pub)
+else
+    SLOWDNS_KEY="Clé publique SlowDNS non trouvée!"
+fi
+
+# NS SlowDNS
+SLOWDNS_NS="${SLOWDNS_NS:-slowdns5.kighmup.ddns-ip.net}"
+
+# Sauvegarde des infos
+mkdir -p /etc/kighmu
+touch "$USER_FILE"
+chmod 600 "$USER_FILE"
+echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
+
+# Affichage résumé dynamique
+echo ""
 line_full
-center_line "INFORMATIONS UTILISATEUR TEST"
+center_line "INFORMATIONS UTILISATEUR"
 line_simple
 content_line "UTILISATEUR : $username"
 content_line "MOT DE PASSE  : $password"
@@ -104,20 +97,21 @@ content_line "IP/DOMAIN    : $HOST_IP / $DOMAIN"
 line_simple
 center_line "PORTS DES MODES INSTALLÉS"
 line_simple
-content_line "SSH         : 22 $(service_status ssh)"
-content_line "Dropbear    : 90 $(service_status dropbear)"
-content_line "SlowDNS     : 5300 $(service_status slowdns)"
-content_line "SOCKS/Python: 8080 $(service_status socks-python)"
-content_line "SSL/TLS     : 443 $(service_status nginx)"
-content_line "Web Nginx   : 81 $(service_status nginx)"
-content_line "BadVPN 1    : 7200 $(service_status badvpn)"
-content_line "BadVPN 2    : 7300 $(service_status badvpn)"
-content_line "UDP Custom  : 1-65535 $(service_status udp-custom)"
-line_full
-center_line "CONFIGURATION SLOWDNS"
-line_simple
-content_line "Pub KEY        : $SLOWDNS_KEY"
-content_line "NameServer (NS): $SLOWDNS_NS"
+content_line "SSH         : $SSH_PORT $(service_status ssh)"
+content_line "Dropbear    : $DROPBEAR_PORT $(service_status dropbear)"
+content_line "SlowDNS     : $SLOWDNS_PORT $(service_status slowdns)"
+content_line "SOCKS/Python: $SOCKS_PORT $(service_status socks-python)"
+content_line "SSL/TLS     : $SSL_PORT $(service_status nginx)"
+content_line "Web Nginx   : $WEB_NGINX $(service_status nginx)"
+content_line "BadVPN 1    : $BADVPN1 $(service_status badvpn)"
+content_line "BadVPN 2    : $BADVPN2 $(service_status badvpn)"
+content_line "UDP Custom  : $UDP_CUSTOM $(service_status udp-custom)"
 line_full
 
-read -p "Appuyez sur Entrée pour revenir au menu..."
+center_line "CONFIGURATION SLOWDNS"
+line_simple
+content_line "Pub KEY : $SLOWDNS_KEY"
+content_line "NameServer (NS) : $SLOWDNS_NS"
+line_full
+
+echo "Compte TEST créé avec succès."
