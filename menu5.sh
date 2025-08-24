@@ -20,7 +20,7 @@ center_line() {
 }
 
 # Fonction pour créer un service systemd
-def create_service() {
+create_service() {
     local name="$1"
     local exec="$2"
     local service_file="/etc/systemd/system/${name}.service"
