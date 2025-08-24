@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==============================================
-# Kighmu VPS Manager
+# Kighmu VPS Manager (affichage coloré RAM/CPU/Users)
 # ==============================================
 
 # Vérifier si l'utilisateur est root
@@ -13,22 +13,20 @@ fi
 RED="\e[31m"
 GREEN="\e[32m"
 YELLOW="\e[33m"
-BLUE="\e[34m"
-MAGENTA="\e[35m"
 CYAN="\e[36m"
+MAGENTA="\e[35m"
 BOLD="\e[1m"
 RESET="\e[0m"
 
 # Répertoire du script
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Fonctions d'état
+# Fonctions
 get_ssh_users_count() { grep -cE "/home" /etc/passwd; }
-get_xray_users_count() { ls /etc/xray/users/ 2>/dev/null | wc -l; }
 get_devices_count() { ss -ntu state established 2>/dev/null | grep -c ESTAB; }
-get_cpu_usage() { grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf "%.2f%%", usage}'; }
+get_cpu_usage() { grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf "%.2f", usage}'; }
 
-# Fonction pour détecter l'OS
+# Détection OS
 get_os_info() {
     if [ -f /etc/os-release ]; then
         . /etc/os-release
@@ -38,27 +36,54 @@ get_os_info() {
     fi
 }
 
+# Fonction de couleur selon utilisation %
+colorize_usage() {
+    local usage=$1
+    if (( $(echo "$usage < 50" | bc -l) )); then
+        echo -e "${GREEN}${usage}%${RESET}"
+    elif (( $(echo "$usage < 80" | bc -l) )); then
+        echo -e "${YELLOW}${usage}%${RESET}"
+    else
+        echo -e "${RED}${usage}%${RESET}"
+    fi
+}
+
 while true; do
     clear
     OS_INFO=$(get_os_info)
     IP=$(hostname -I | awk '{print $1}')
-    RAM_USAGE=$(free -m | awk 'NR==2{printf "%.2f%%", $3*100/$2 }')
+    RAM_USAGE=$(free -m | awk 'NR==2{printf "%.2f", $3*100/$2 }')
     CPU_USAGE=$(get_cpu_usage)
     SSH_USERS_COUNT=$(get_ssh_users_count)
     DEVICES_COUNT=$(get_devices_count)
+
+    RAM_COLORED=$(colorize_usage "$RAM_USAGE")
+    CPU_COLORED=$(colorize_usage "$CPU_USAGE")
+
+    if [ "$SSH_USERS_COUNT" -gt 0 ]; then
+        SSH_COLORED="${GREEN}${SSH_USERS_COUNT}${RESET}"
+    else
+        SSH_COLORED="${RED}${SSH_USERS_COUNT}${RESET}"
+    fi
+
+    if [ "$DEVICES_COUNT" -gt 0 ]; then
+        DEVICES_COLORED="${GREEN}${DEVICES_COUNT}${RESET}"
+    else
+        DEVICES_COLORED="${RED}${DEVICES_COUNT}${RESET}"
+    fi
 
     echo -e "${CYAN}+==================================================+${RESET}"
     echo -e "${BOLD}${MAGENTA}|                🚀 KIGHMU MANAGER 🚀               |${RESET}"
     echo -e "${CYAN}+==================================================+${RESET}"
 
-    # Ligne compacte OS et IP
+    # Ligne OS et IP
     printf " OS: %-20s | IP: %-15s\n" "$OS_INFO" "$IP"
 
-    # Ligne RAM et CPU
-    printf " RAM utilisée: %-6s | CPU utilisé: %-6s\n" "$RAM_USAGE" "$CPU_USAGE"
+    # Ligne RAM et CPU (colorée)
+    printf " RAM utilisée: %-6s | CPU utilisé: %-6s\n" "$RAM_COLORED" "$CPU_COLORED"
 
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
-    printf " Utilisateurs SSH: %-4d | Appareils: %-4d\n" "$SSH_USERS_COUNT" "$DEVICES_COUNT"
+    printf " Utilisateurs SSH: %-4s | Appareils: %-4s\n" "$SSH_COLORED" "$DEVICES_COLORED"
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
 
     echo -e "${BOLD}${YELLOW}|                  MENU PRINCIPAL:                 |${RESET}"
