@@ -31,43 +31,32 @@ read -p "Durée de validité (en jours) : " days
 # Calculer la date d'expiration
 expire_date=$(date -d "+$days days" '+%Y-%m-%d')
 
-# Créer l'utilisateur système
-useradd -M -s /bin/false "$username"
+# Créer l'utilisateur système sans home et sans shell
+useradd -M -s /bin/false "$username" || { echo "Erreur lors de la création de l'utilisateur"; exit 1; }
 echo "$username:$password" | chpasswd
 
-# Définir les ports et variables personnalisés
-SSH_PORT=22
-SYSTEM_DNS=53
-SOCKS_PORT=8080
-WEB_NGINX=81
-DROPBEAR=90
-SSL_PORT=443
-BADVPN1=7200
-BADVPN2=7300
-SLOWDNS_PORT=5300
-UDP_CUSTOM="1-65535"
+# Appliquer la date d'expiration du compte utilisateur
+chage -E "$expire_date" "$username"
 
-HOST_IP=$(curl -s https://api.ipify.org)
-
-# SlowDNS NS récupéré depuis fichier global
-SLOWDNS_NS="${SLOWDNS_NS:-slowdns5.kighmup.ddns-ip.net}"
-
+# (Optionnel) tu peux gérer une limite côté systeme via PAM, sinon utilise ton script de contrôle
 # Sauvegarder les infos utilisateur dans un fichier dédié
 USER_FILE="/etc/kighmu/users.list"
 mkdir -p /etc/kighmu
 touch "$USER_FILE"
 chmod 600 "$USER_FILE"
+
+# Écrire la ligne avec le nouveau format
 echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
 
 # Affichage résumé
 echo ""
 echo "*NOUVEAU UTILISATEUR CRÉÉ*"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "∘ SSH: $SSH_PORT            ∘ System-DNS: $SYSTEM_DNS"
-echo "∘ SOCKS/PYTHON: $SOCKS_PORT   ∘ WEB-NGINX: $WEB_NGINX"
-echo "∘ DROPBEAR: $DROPBEAR       ∘ SSL: $SSL_PORT"
-echo "∘ BadVPN: $BADVPN1       ∘ BadVPN: $BADVPN2"
-echo "∘ SlowDNS: $SLOWDNS_PORT      ∘ UDP-Custom: $UDP_CUSTOM"
+echo "∘ SSH: 22                  ∘ System-DNS: 53"
+echo "∘ SOCKS/PYTHON: 8080       ∘ WEB-NGINX: 81"
+echo "∘ DROPBEAR: 90             ∘ SSL: 443"
+echo "∘ BadVPN: 7200             ∘ BadVPN: 7300"
+echo "∘ SlowDNS: 5300            ∘ UDP-Custom: 1-65535"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "DOMAIN        : $DOMAIN"
 echo "Host/IP-Address : $HOST_IP"
