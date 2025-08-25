@@ -1,6 +1,6 @@
 #!/bin/bash
 # menu2.sh
-# Créer un utilisateur test avec sauvegarde dans users.list
+# Créer un utilisateur test avec sauvegarde dans users.list et date expiration
 
 # Charger les infos globales Kighmu
 if [ -f ~/.kighmu_info ]; then
@@ -28,12 +28,15 @@ echo ""
 read -p "Nombre d'appareils autorisés : " limite
 read -p "Durée de validité (en minutes) : " minutes
 
-# Calculer la date d'expiration
-expire_date=$(date -d "+$minutes minutes" '+%Y-%m-%d %H:%M:%S')
+# Calculer la date d'expiration en format YYYY-MM-DD
+expire_date=$(date -d "+$minutes minutes" '+%Y-%m-%d')
 
-# Créer l'utilisateur système
-useradd -M -s /bin/false "$username"
+# Créer l'utilisateur système sans home et shell
+useradd -M -s /bin/false "$username" || { echo "Erreur lors de la création de l'utilisateur."; exit 1; }
 echo "$username:$password" | chpasswd
+
+# Appliquer la date d'expiration du compte utilisateur
+chage -E "$expire_date" "$username"
 
 # Définir les ports et services (exemple)
 SSH_PORT=22
@@ -48,8 +51,6 @@ SLOWDNS_PORT=5300
 UDP_CUSTOM="1-65535"
 
 HOST_IP=$(curl -s https://api.ipify.org)
-
-# Remplacer NS par celui chargé des infos globales si vide
 SLOWDNS_NS="${SLOWDNS_NS:-slowdns5.kighmup.ddns-ip.net}"
 
 # Sauvegarder les infos utilisateur dans le fichier dédié
@@ -57,6 +58,7 @@ USER_FILE="/etc/kighmu/users.list"
 mkdir -p /etc/kighmu
 touch "$USER_FILE"
 chmod 600 "$USER_FILE"
+
 echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
 
 # Affichage résumé
