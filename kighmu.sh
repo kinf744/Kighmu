@@ -28,7 +28,7 @@ get_xray_users_count() { ls /etc/xray/users/ 2>/dev/null | wc -l; }
 
 # Compte les IP SSH uniques connectées actuellement (port 22)
 count_connected_devices() {
-    ss -tn state established sport = :22 | awk 'NR>1 {print $5}' | cut -d: -f1 | sort -u | wc -l
+    ss -tn state established | grep ':22 ' | awk '{print $5}' | cut -d: -f1 | sort -u | wc -l
 }
 
 get_cpu_usage() { grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf "%.2f%%", usage}'; }
