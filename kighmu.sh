@@ -53,7 +53,7 @@ while true; do
     DEVICES_COUNT=$(count_connected_devices)
 
     echo -e "${CYAN}+==================================================+${RESET}"
-    echo -e "${BOLD}${MAGENTA}|                🚀 KIGHMU MANAGER 🚀               |${RESET}"
+    echo -e "${BOLD}${MAGENTA}|                🚀 KIGHMU MANAGER 🇨🇲 🚀               |${RESET}"
     echo -e "${CYAN}+==================================================+${RESET}"
 
     # Ligne compacte OS et IP
