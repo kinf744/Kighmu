@@ -1,6 +1,6 @@
 #!/bin/bash
 # menu2.sh
-# Créer un utilisateur test avec sauvegarde dans users.list et date expiration
+# Créer un utilisateur test avec sauvegarde dans users.list et date expiration précise
 
 # Charger les infos globales Kighmu
 if [ -f ~/.kighmu_info ]; then
@@ -28,17 +28,19 @@ echo ""
 read -p "Nombre d'appareils autorisés : " limite
 read -p "Durée de validité (en minutes) : " minutes
 
-# Calculer la date d'expiration en format YYYY-MM-DD
-expire_date=$(date -d "+$minutes minutes" '+%Y-%m-%d')
+# Calcul de la date complète d'expiration (YYYY-MM-DD HH:MM:SS)
+expire_full=$(date -d "+$minutes minutes" '+%Y-%m-%d %H:%M:%S')
+# Date d'expiration au jour près (pour chage)
+expire_day=$(date -d "+$minutes minutes" '+%Y-%m-%d')
 
 # Créer l'utilisateur système sans home et shell
 useradd -M -s /bin/false "$username" || { echo "Erreur lors de la création de l'utilisateur."; exit 1; }
 echo "$username:$password" | chpasswd
 
-# Appliquer la date d'expiration du compte utilisateur
-chage -E "$expire_date" "$username"
+# Appliquer la date d'expiration du compte (approx. au jour)
+chage -E "$expire_day" "$username"
 
-# Définir les ports et services (exemple)
+# Définir ports et autres variables
 SSH_PORT=22
 SYSTEM_DNS=53
 SOCKS_PORT=8080
@@ -53,13 +55,12 @@ UDP_CUSTOM="1-65535"
 HOST_IP=$(curl -s https://api.ipify.org)
 SLOWDNS_NS="${SLOWDNS_NS:-slowdns5.kighmup.ddns-ip.net}"
 
-# Sauvegarder les infos utilisateur dans le fichier dédié
+# Sauvegarder les infos dans le fichier dédié
 USER_FILE="/etc/kighmu/users.list"
 mkdir -p /etc/kighmu
 touch "$USER_FILE"
 chmod 600 "$USER_FILE"
-
-echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
+echo "$username|$password|$limite|$expire_full|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
 
 # Affichage résumé
 echo ""
@@ -76,7 +77,7 @@ echo "Host/IP-Address : $HOST_IP"
 echo "UTILISATEUR   : $username"
 echo "MOT DE PASSE  : $password"
 echo "LIMITE       : $limite"
-echo "DATE EXPIRÉE : $expire_date"
+echo "DATE EXPIRÉE : $expire_full"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "En APPS comme HTTP Injector, CUSTOM, KPN Rev, etc."
 echo ""
