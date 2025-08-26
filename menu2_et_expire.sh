@@ -3,10 +3,11 @@
 # Usage :
 # ./menu2_et_expire.sh create   => Création utilisateur test
 # ./menu2_et_expire.sh expire   => Vérification expiration minute (pour cron)
+# ./menu2_et_expire.sh restore  => Restaurer règles iptables sauvegardées (ex: au démarrage)
 
 USER_FILE="/etc/kighmu/users.list"
 LOG_FILE="/var/log/expire_users.log"
-IPTABLES_BACKUP="/etc/iptables.backup"
+IPTABLES_BACKUP="/etc/iptables.rules.v4"
 
 create_user() {
     if [ -f ~/.kighmu_info ]; then
@@ -45,9 +46,15 @@ create_user() {
     chage -E "$expire_day" "$username"
 
     # Ouvrir les ports VPN dans iptables
-    iptables -I INPUT -p tcp --dport 8080 -j ACCEPT
-    iptables -I INPUT -p udp --dport 5300 -j ACCEPT
-    iptables -I INPUT -p udp --dport 54000 -j ACCEPT
+    for rule in \
+        "-I INPUT -p tcp --dport 8080 -j ACCEPT" \
+        "-I INPUT -p udp --dport 5300 -j ACCEPT" \
+        "-I INPUT -p udp --dport 54000 -j ACCEPT"
+    do
+        if ! iptables -C ${rule#-I } 2>/dev/null; then
+            iptables $rule
+        fi
+    done
 
     # Sauvegarde règles iptables
     iptables-save > "$IPTABLES_BACKUP"
@@ -66,17 +73,27 @@ create_user() {
     SLOWDNS_NS="${SLOWDNS_NS:-slowdns5.kighmup.ddns-ip.net}"
 
     mkdir -p /etc/kighmu
-    touch "$USER_FILE"
+    [ ! -f "$USER_FILE" ] && touch "$USER_FILE"
     chmod 600 "$USER_FILE"
     echo "$username|$password|$limite|$expire_full|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
 
+    # Affichage complet info utilisateur
     echo ""
-    echo "*NOUVEAU UTILISATEUR CRÉÉ*"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Utilisateur : $username"
-    echo "Durée validité : $expire_full"
-    echo "Ports VPN ouverts : SOCKS 8080, SlowDNS 5300, UDP custom 54000"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "+--------------------------------------------------+"
+    echo "|             INFOS UTILISATEUR TEST               |"
+    echo "+--------------------------------------------------+"
+    echo "IP Serveur       : $HOST_IP"
+    echo "Domaine          : $DOMAIN"
+    echo "Nom utilisateur  : $username"
+    echo "Mot de passe     : $password"
+    echo "Nombre appareils : $limite"
+    echo "Date expiration  : $expire_full"
+    echo ""
+    echo "Clé publique SlowDNS :"
+    echo "$SLOWDNS_KEY"
+    echo ""
+    echo "NameServer (NS)  : $SLOWDNS_NS"
+    echo "+--------------------------------------------------+"
 }
 
 expire_users() {
@@ -98,6 +115,15 @@ expire_users() {
     mv "$TMP_FILE" "$USER_FILE"
 }
 
+restore_iptables() {
+    if [ -f "$IPTABLES_BACKUP" ]; then
+        iptables-restore < "$IPTABLES_BACKUP"
+        echo "Règles iptables restaurées depuis $IPTABLES_BACKUP"
+    else
+        echo "Aucune sauvegarde iptables trouvée ($IPTABLES_BACKUP)"
+    fi
+}
+
 case "$1" in
     create)
         create_user
@@ -105,9 +131,13 @@ case "$1" in
     expire)
         expire_users
         ;;
+    restore)
+        restore_iptables
+        ;;
     *)
         echo "Usage: $0 create    # Pour création utilisateur test"
         echo "       $0 expire    # Pour vérifier/désactiver les expirés à la minute (à utiliser avec cron)"
+        echo "       $0 restore   # Restaurer règles iptables sauvegardées (ex: au démarrage)"
         exit 1
         ;;
 esac
