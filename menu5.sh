@@ -46,6 +46,11 @@ install_socks_python() {
     bash "$HOME/Kighmu/socks_python.sh" || echo "SOCKS/Python : script non trouvé ou erreur."
 }
 
+install_socks_python() {
+    echo "Installation WSS/Python..."
+    bash "$HOME/Kighmu/proxy_wss.py" || echo "WSS/Python : script non trouvé ou erreur."
+}
+
 install_ssl_tls() {
     echo "Installation SSL/TLS..."
     # Ajoute ici les commandes pour installer/configurer SSL/TLS
