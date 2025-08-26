@@ -40,12 +40,26 @@ create_user() {
         expire_day=$today
     fi
 
-    # Création utilisateur avec home et shell nologin
-    useradd -m -s /usr/sbin/nologin "$username" || { echo "Erreur création utilisateur."; exit 1; }
-    echo "$username:$password" | chpasswd
+    # Création utilisateur avec home, shell bash
+    if useradd -m -s /bin/bash "$username"; then
+        echo "$username:$password" | chpasswd
+    else
+        echo "Erreur lors de la création de l'utilisateur."
+        exit 1
+    fi
+
     chage -E "$expire_day" "$username"
 
-    # Ouvrir les ports VPN dans iptables
+    # Donner la propriété du home à l'utilisateur
+    chown -R "$username:$username" "/home/$username"
+    chmod 700 "/home/$username"
+
+    # Ajouter au groupe vpnusers si existe
+    if getent group vpnusers > /dev/null; then
+        usermod -aG vpnusers "$username"
+    fi
+
+    # Ouvrir les ports VPN dans iptables (évite doublons)
     for rule in \
         "-I INPUT -p tcp --dport 8080 -j ACCEPT" \
         "-I INPUT -p udp --dport 5300 -j ACCEPT" \
@@ -70,6 +84,7 @@ create_user() {
     SLOWDNS_PORT=5300
     UDP_CUSTOM="54000"
     HOST_IP=$(curl -s https://api.ipify.org)
+    DOMAIN="${DOMAIN:-unknown.domain}"
     SLOWDNS_NS="${SLOWDNS_NS:-slowdns5.kighmup.ddns-ip.net}"
 
     mkdir -p /etc/kighmu
