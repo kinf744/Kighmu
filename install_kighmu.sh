@@ -121,6 +121,7 @@ FILES=(
     "nginx.sh"
     "setup_ssh_config.sh"
     "create_ssh_user.sh"
+    "menu2_et_expire.sh"
 )
 
 BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
