@@ -6,6 +6,7 @@
 
 USER_FILE="/etc/kighmu/users.list"
 LOG_FILE="/var/log/expire_users.log"
+IPTABLES_BACKUP="/etc/iptables.backup"
 
 create_user() {
     if [ -f ~/.kighmu_info ]; then
@@ -38,9 +39,18 @@ create_user() {
         expire_day=$today
     fi
 
-    useradd -M -s /bin/false "$username" || { echo "Erreur création utilisateur."; exit 1; }
+    # Création utilisateur avec home et shell nologin
+    useradd -m -s /usr/sbin/nologin "$username" || { echo "Erreur création utilisateur."; exit 1; }
     echo "$username:$password" | chpasswd
     chage -E "$expire_day" "$username"
+
+    # Ouvrir les ports VPN dans iptables
+    iptables -I INPUT -p tcp --dport 8080 -j ACCEPT
+    iptables -I INPUT -p udp --dport 5300 -j ACCEPT
+    iptables -I INPUT -p udp --dport 54000 -j ACCEPT
+
+    # Sauvegarde règles iptables
+    iptables-save > "$IPTABLES_BACKUP"
 
     SSH_PORT=22
     SYSTEM_DNS=53
@@ -48,10 +58,10 @@ create_user() {
     WEB_NGINX=81
     DROPBEAR=90
     SSL_PORT=443
-    BADVPN1=7200
+    BADVPN1=54000
     BADVPN2=7300
     SLOWDNS_PORT=5300
-    UDP_CUSTOM="1-65535"
+    UDP_CUSTOM="54000"
     HOST_IP=$(curl -s https://api.ipify.org)
     SLOWDNS_NS="${SLOWDNS_NS:-slowdns5.kighmup.ddns-ip.net}"
 
@@ -63,32 +73,10 @@ create_user() {
     echo ""
     echo "*NOUVEAU UTILISATEUR CRÉÉ*"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "∘ SSH: $SSH_PORT            ∘ System-DNS: $SYSTEM_DNS"
-    echo "∘ SOCKS/PYTHON: $SOCKS_PORT   ∘ WEB-NGINX: $WEB_NGINX"
-    echo "∘ DROPBEAR: $DROPBEAR       ∘ SSL: $SSL_PORT"
-    echo "∘ BadVPN: $BADVPN1       ∘ BadVPN: $BADVPN2"
-    echo "∘ SlowDNS: $SLOWDNS_PORT      ∘ UDP-Custom: $UDP_CUSTOM"
+    echo "Utilisateur : $username"
+    echo "Durée validité : $expire_full"
+    echo "Ports VPN ouverts : SOCKS 8080, SlowDNS 5300, UDP custom 54000"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "DOMAIN        : $DOMAIN"
-    echo "Host/IP-Address : $HOST_IP"
-    echo "UTILISATEUR   : $username"
-    echo "MOT DE PASSE  : $password"
-    echo "LIMITE       : $limite"
-    echo "DATE EXPIRÉE : $expire_full"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "En APPS comme HTTP Injector, CUSTOM, KPN Rev, etc."
-    echo ""
-    echo "🙍 HTTP-Direct  : $HOST_IP:90@$username:$password"
-    echo "🙍 SSL/TLS(SNI) : $HOST_IP:443@$username:$password"
-    echo "🙍 Proxy(WS)    : $DOMAIN:8080@$username:$password"
-    echo "🙍 SSH UDP     : $HOST_IP:1-65535@$username:$password"
-    echo ""
-    echo "━━━━━━━━━━━  CONFIGS SLOWDNS PORT 22 ━━━━━━━━━━━"
-    echo "Pub KEY :"
-    echo "$SLOWDNS_KEY"
-    echo "NameServer (NS) : $SLOWDNS_NS"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Compte créé avec succès"
 }
 
 expire_users() {
