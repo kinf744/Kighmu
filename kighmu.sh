@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==============================================
-# Kighmu VPS Manager
+# Kighmu VPS Manager - Version Dynamique
 # ==============================================
 
 # Vérifier si l'utilisateur est root
@@ -23,17 +23,50 @@ RESET="\e[0m"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Fonctions d'état
-get_ssh_users_count() { grep -cE "/home" /etc/passwd; }
-get_xray_users_count() { ls /etc/xray/users/ 2>/dev/null | wc -l; }
 
-# Compte les IP SSH uniques connectées actuellement (port 22)
-count_connected_devices() {
-    ss -tn state established | grep ':22 ' | awk '{print $5}' | cut -d: -f1 | sort -u | wc -l
+get_ssh_users_count() {
+    grep -cE "/home" /etc/passwd
 }
 
-get_cpu_usage() { grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf "%.2f%%", usage}'; }
+# Fonction: Récupère les IP par port et protocole (tcp/udp)
+get_port_ips() {
+    local port=$1
+    local proto=$2
+    ss -n -"$proto" sport = :$port 2>/dev/null | awk 'NR>1{print $5}' | cut -d: -f1 | sort -u
+}
 
-# Fonction pour détecter l'OS
+# Dropbear: IP connectées
+get_dropbear_ips() {
+    local auth_log="/var/log/auth.log"
+    ps ax | grep dropbear | grep -v grep | awk '{print $1}' | while read pid; do
+        entry=$(grep "Password auth succeeded" $auth_log | grep "dropbear\[$pid\]")
+        if [[ $entry ]]; then
+            ip=$(echo $entry | awk -F'from ' '{print $2}' | awk '{print $1}')
+            echo "$ip"
+        fi
+    done | sort -u
+}
+
+# OpenVPN: IP connectées (si status file existe)
+get_openvpn_ips() {
+    local status_file="/etc/openvpn/openvpn-status.log"
+    if [ -f "$status_file" ]; then
+        grep 'CLIENT_LIST' "$status_file" | awk -F',' '{print $3}' | sort -u
+    fi
+}
+
+# WireGuard: IP connectées
+get_wireguard_ips() {
+    command -v wg >/dev/null 2>&1 || return
+    wg show | awk '/endpoint:/{print $2}' | cut -d: -f1 | sort -u
+}
+
+# Récupère la charge moyenne CPU
+get_cpu_usage() {
+    grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf "%.2f%%", usage}'
+}
+
+# Récupère les infos système OS
 get_os_info() {
     if [ -f /etc/os-release ]; then
         . /etc/os-release
@@ -43,17 +76,30 @@ get_os_info() {
     fi
 }
 
+# Calcule le nombre total d'appareils connectés (SSH, Dropbear, VPN, SlowDNS, UDP custom, SOCKS)
+count_all_connected_devices() {
+    local ips
+    ips=$(get_port_ips 22 t)
+    ips+=" "$(get_dropbear_ips)
+    ips+=" "$(get_openvpn_ips)
+    ips+=" "$(get_wireguard_ips)
+    ips+=" "$(get_port_ips 5300 u)
+    ips+=" "$(get_port_ips 54000 u)
+    ips+=" "$(get_port_ips 8080 t)
+    echo "$ips" | tr ' ' '\n' | grep -v "^$" | sort -u | wc -l
+}
+
 while true; do
     clear
     OS_INFO=$(get_os_info)
     IP=$(hostname -I | awk '{print $1}')
-    RAM_USAGE=$(free -m | awk 'NR==2{printf "%.2f%%", $3*100/$2 }')
+    RAM_USAGE=$(free -m | awk 'NR==2{printf "%.2f%%", $3*100/$2}')
     CPU_USAGE=$(get_cpu_usage)
     SSH_USERS_COUNT=$(get_ssh_users_count)
-    DEVICES_COUNT=$(count_connected_devices)
+    DEVICES_COUNT=$(count_all_connected_devices)
 
     echo -e "${CYAN}+==================================================+${RESET}"
-    echo -e "${BOLD}${MAGENTA}|                🚀 KIGHMU MANAGER 🇨🇲 🚀               |${RESET}"
+    echo -e "${BOLD}${MAGENTA}|                🚀 KIGHMU MANAGER 🇨🇲 🚀             |${RESET}"
     echo -e "${CYAN}+==================================================+${RESET}"
 
     # Ligne compacte OS et IP
@@ -65,7 +111,7 @@ while true; do
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
 
     # Utilisateurs SSH et appareils (nombre d'IP SSH uniques) en couleurs différentes
-    printf " Utilisateurs SSH: ${BLUE}%-4d${RESET} | Appareils: ${MAGENTA}%-4d${RESET}\n" "$SSH_USERS_COUNT" "$DEVICES_COUNT"
+    printf " Utilisateurs SSH: ${BLUE}%-4d${RESET} | Appareils connectés: ${MAGENTA}%-4d${RESET}\n" "$SSH_USERS_COUNT" "$DEVICES_COUNT"
 
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
 
