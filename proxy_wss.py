@@ -4,8 +4,8 @@ import subprocess
 import sys
 
 def run_command(command):
-    """Execute a system command and print output."""
-    print(f"Running: {command}")
+    """Exécute une commande système et affiche la sortie."""
+    print(f"Executing: {command}")
     result = subprocess.run(command, shell=True, text=True, capture_output=True)
     if result.returncode != 0:
         print(f"Error: {result.stderr.strip()}")
@@ -13,53 +13,53 @@ def run_command(command):
         print(result.stdout.strip())
 
 def install_python_packages():
-    """Install necessary Python packages."""
+    """Installe les paquets Python nécessaires."""
     print("Installing required Python packages...")
     run_command(f"{sys.executable} -m pip install --upgrade pip")
     run_command(f"{sys.executable} -m pip install sshtunnel paramiko")
 
 def main():
-    # Mandatory domain input
-    domain = input("Enter the domain (e.g., ws.example.com) for the SSH WebSocket tunnel (required): ").strip()
+    # Demande obligatoire du domaine
+    domain = input("Veuillez entrer le nom de domaine (ex: ws.example.com) pour le tunnel SSH WebSocket (obligatoire) : ").strip()
     if not domain:
-        print("Error: A domain is required to continue installation.")
+        print("Erreur : un domaine est requis pour continuer.")
         sys.exit(1)
 
-    # Check for root privileges
+    # Vérification des droits root
     if os.geteuid() != 0:
-        print("Error: This script must be run as root (use sudo).")
+        print("Erreur : ce script doit être lancé en root (utilisez sudo).")
         sys.exit(1)
 
-    # Update and install system dependencies
+    # Mise à jour et installation des dépendances système
     run_command("apt-get update -y")
     run_command("apt-get install -y nodejs npm screen python3-pip")
 
-    # Install wstunnel globally via npm
+    # Installation de wstunnel globalement via npm
     run_command("npm install -g wstunnel")
 
-    # Install required Python packages
+    # Installation des paquets Python nécessaires
     install_python_packages()
 
-    # Terminate any existing screen session named sshws
+    # Suppression éventuelle de la session screen existante nommée sshws
     run_command("screen -S sshws -X quit || true")
 
-    # Start SSH WebSocket tunnel in detached screen session on port 8880
+    # Démarrage du tunnel SSH WebSocket dans une session screen détachée sur le port 8880
     run_command("screen -dmS sshws wstunnel -s 8880")
 
-    # Generate and display WebSocket payload
+    # Payload WebSocket à utiliser côté client
     payload = (
         "GET /socket HTTP/1.1[crlf]"
         f"Host: {domain}[crlf]"
         "Upgrade: websocket[crlf][crlf]"
     )
 
-    print("\nInstallation completed successfully.")
-    print(f"SSH WebSocket tunnel is running on port 8880 with domain: {domain}")
-    print("\nUse the following payload to connect over WebSocket SSH:\n")
+    print("\nInstallation terminée avec succès.")
+    print(f"Le tunnel SSH WebSocket est en écoute sur le port 8880 avec le domaine : {domain}")
+    print("\nUtilisez le payload suivant pour vous connecter en WebSocket SSH :\n")
     print(payload)
-    print("\nTo attach to the screen session: screen -r sshws")
-    print("To manually restart the tunnel: screen -dmS sshws wstunnel -s 8880")
+    print("\nPour accéder à la session screen : screen -r sshws")
+    print("Pour relancer manuellement le tunnel : screen -dmS sshws wstunnel -s 8880")
 
-if name == "main":
+if __name__ == "__main__":
     main()
-        
+    
