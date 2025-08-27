@@ -23,32 +23,45 @@ echo "+--------------------------------------------+"
 
 # Demander les informations
 read -p "Nom d'utilisateur : " username
+
+if id "$username" &>/dev/null; then
+    echo "L'utilisateur existe déjà."
+    exit 1
+fi
+
 read -s -p "Mot de passe : " password
 echo ""
 read -p "Nombre d'appareils autorisés : " limite
 read -p "Durée de validité (en jours) : " days
 
+# Validation simple
+if ! [[ "$limite" =~ ^[0-9]+$ ]] || ! [[ "$days" =~ ^[0-9]+$ ]]; then
+    echo "Nombre d'appareils ou durée non valides."
+    exit 1
+fi
+
 # Calculer la date d'expiration
 expire_date=$(date -d "+$days days" '+%Y-%m-%d')
 
-# Créer l'utilisateur système sans home et sans shell
-useradd -M -s /bin/false "$username" || { echo "Erreur lors de la création de l'utilisateur"; exit 1; }
+# Création utilisateur sans home et shell bloqué
+useradd -M -s /bin/false "$username" || { echo "Erreur lors de la création"; exit 1; }
 echo "$username:$password" | chpasswd
 
-# Appliquer la date d'expiration du compte utilisateur
+# Appliquer la date d'expiration du compte
 chage -E "$expire_date" "$username"
 
-# (Optionnel) tu peux gérer une limite côté systeme via PAM, sinon utilise ton script de contrôle
-# Sauvegarder les infos utilisateur dans un fichier dédié
+# Préparer fichier d'utilisateurs
 USER_FILE="/etc/kighmu/users.list"
 mkdir -p /etc/kighmu
 touch "$USER_FILE"
 chmod 600 "$USER_FILE"
 
-# Écrire la ligne avec le nouveau format
+HOST_IP=$(hostname -I | awk '{print $1}')
+
+# Sauvegarder les infos utilisateur
 echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
 
-# Affichage résumé
+# Afficher résumé
 echo ""
 echo "*NOUVEAU UTILISATEUR CRÉÉ*"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -58,12 +71,12 @@ echo "∘ DROPBEAR: 90             ∘ SSL: 443"
 echo "∘ BadVPN: 7200             ∘ BadVPN: 7300"
 echo "∘ SlowDNS: 5300            ∘ UDP-Custom: 1-65535"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "DOMAIN        : $DOMAIN"
-echo "Host/IP-Address : $HOST_IP"
-echo "UTILISATEUR   : $username"
-echo "MOT DE PASSE  : $password"
-echo "LIMITE       : $limite"
-echo "DATE EXPIRÉE : $expire_date"
+echo "DOMAIN         : $DOMAIN"
+echo "Host/IP-Address: $HOST_IP"
+echo "UTILISATEUR    : $username"
+echo "MOT DE PASSE   : $password"
+echo "LIMITE         : $limite"
+echo "DATE EXPIRÉE   : $expire_date"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "En APPS comme HTTP Injector, CUSTOM, KPN Rev, etc."
 echo ""
