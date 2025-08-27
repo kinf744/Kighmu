@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script pour créer un utilisateur SSH avec configuration complète
+# Script pour créer un utilisateur SSH avec configuration complète Kighmu
 
 # Charger les infos globales Kighmu
 if [ -f ~/.kighmu_info ]; then
@@ -18,38 +18,36 @@ if id "$USERNAME" &>/dev/null; then
 fi
 
 # Création de l'utilisateur avec home et shell bash
-sudo useradd -m -s /bin/bash "$USERNAME"
+useradd -m -s /bin/bash "$USERNAME"
 
 # Demander et définir le mot de passe
 echo "Définir le mot de passe pour $USERNAME :"
-sudo passwd "$USERNAME"
+passwd "$USERNAME"
 
 # Création du dossier .ssh avec droits stricts
-sudo mkdir -p /home/"$USERNAME"/.ssh
-sudo chmod 700 /home/"$USERNAME"/.ssh
+mkdir -p /home/"$USERNAME"/.ssh
+chmod 700 /home/"$USERNAME"/.ssh
+chown -R "$USERNAME":"$USERNAME" /home/"$USERNAME"/.ssh
 
 # Optionnel : ajouter une clé publique SSH (si fournie)
 read -p "Si vous avez une clé publique SSH à ajouter, collez-la maintenant (ou appuyez sur Entrée pour passer) : " PUBKEY
 
 if [ -n "$PUBKEY" ]; then
-    echo "$PUBKEY" | sudo tee /home/"$USERNAME"/.ssh/authorized_keys > /dev/null
-    sudo chmod 600 /home/"$USERNAME"/.ssh/authorized_keys
-    sudo chown -R "$USERNAME":"$USERNAME" /home/"$USERNAME"/.ssh
+    echo "$PUBKEY" > /home/"$USERNAME"/.ssh/authorized_keys
+    chmod 600 /home/"$USERNAME"/.ssh/authorized_keys
+    chown "$USERNAME":"$USERNAME" /home/"$USERNAME"/.ssh/authorized_keys
     echo "Clé publique SSH ajoutée pour $USERNAME."
 else
     echo "Aucune clé publique SSH ajoutée."
 fi
 
-# Finalisation des permissions
-sudo chown -R "$USERNAME":"$USERNAME" /home/"$USERNAME"/.ssh
-
 echo
 echo "+--------------------------------------------+"
-echo "|        UTILISATEUR SSH CRÉÉ AVEC SUCCÈS    |"
+echo "|        UTILISATEUR SSH CRÉÉ AVEC SUCCÈS   |"
 echo "+--------------------------------------------+"
-echo "Nom de domaine           : $DOMAIN"
-echo "Serveur DNS (NS)         : $NS"
-echo -e "Clé publique SlowDNS     :\n$PUBLIC_KEY"
+echo "Nom de domaine       : $DOMAIN"
+echo "Serveur DNS (NS)     : $NS"
+echo -e "Clé publique SlowDNS :\n$PUBLIC_KEY"
 echo "+--------------------------------------------+"
 
 echo "Utilisateur $USERNAME créé et configuré avec succès."
