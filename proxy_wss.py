@@ -2,10 +2,12 @@
 import os
 import subprocess
 import sys
+import urllib.request
+import stat
 
 def run_command(command):
-    """Exécute une commande système et affiche la sortie."""
-    print(f"Executing: {command}")
+    """Execute a system command and print output."""
+    print(f"Running: {command}")
     result = subprocess.run(command, shell=True, text=True, capture_output=True)
     if result.returncode != 0:
         print(f"Error: {result.stderr.strip()}")
@@ -13,52 +15,69 @@ def run_command(command):
         print(result.stdout.strip())
 
 def install_python_packages():
-    """Installe les paquets Python nécessaires."""
+    """Install necessary Python packages."""
     print("Installing required Python packages...")
     run_command(f"{sys.executable} -m pip install --upgrade pip")
     run_command(f"{sys.executable} -m pip install sshtunnel paramiko")
 
+def install_wstunnel_binary():
+    """Download and install latest wstunnel binary for Linux x64."""
+    url = "https://github.com/erebe/wstunnel/releases/download/v5.1/wstunnel-linux-x64"
+    dest = "/usr/local/bin/wstunnel"
+    try:
+        print("Downloading wstunnel binary...")
+        urllib.request.urlretrieve(url, "/tmp/wstunnel-linux-x64")
+        os.chmod("/tmp/wstunnel-linux-x64", stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR |
+                                          stat.S_IRGRP | stat.S_IXGRP |
+                                          stat.S_IROTH | stat.S_IXOTH)
+        run_command(f"mv /tmp/wstunnel-linux-x64 {dest}")
+        print("wstunnel installed successfully.")
+    except Exception as e:
+        print(f"Failed to install wstunnel: {e}")
+        sys.exit(1)
+
 def main():
-    # Demande obligatoire du domaine
-    domain = input("Veuillez entrer le nom de domaine (ex: ws.example.com) pour le tunnel SSH WebSocket (obligatoire) : ").strip()
+    # Mandatory domain input
+    domain = input("Enter the domain (e.g., ws.example.com) for the SSH WebSocket tunnel (required): ").strip()
     if not domain:
-        print("Erreur : un domaine est requis pour continuer.")
+        print("Error: A domain is required to continue installation.")
         sys.exit(1)
 
-    # Vérification des droits root
+    # Check for root privileges
     if os.geteuid() != 0:
-        print("Erreur : ce script doit être lancé en root (utilisez sudo).")
+        print("Error: This script must be run as root (use sudo).")
         sys.exit(1)
 
-    # Mise à jour et installation des dépendances système
+    # Update and install system dependencies
     run_command("apt-get update -y")
-    run_command("apt-get install -y nodejs npm screen python3-pip")
+    run_command("apt-get install -y nodejs npm screen python3-pip wget")
 
-    # Installation de wstunnel globalement via npm
-    run_command("npm install -g wstunnel")
+    # Install wstunnel binary
+    install_wstunnel_binary()
 
-    # Installation des paquets Python nécessaires
+    # Install required Python packages
     install_python_packages()
 
-    # Suppression éventuelle de la session screen existante nommée sshws
+    # Terminate any existing screen session named sshws
     run_command("screen -S sshws -X quit || true")
 
-    # Démarrage du tunnel SSH WebSocket dans une session screen détachée sur le port 8880
-    run_command("screen -dmS sshws wstunnel -s 8880")
+    # Start SSH WebSocket tunnel in detached screen session on port 8880
+    # Correct latest wstunnel syntax
+    run_command(f"screen -dmS sshws wstunnel --server ws://0.0.0.0:8880 --restrict-to localhost:22")
 
-    # Payload WebSocket à utiliser côté client
+    # Generate and display WebSocket payload
     payload = (
         "GET /socket HTTP/1.1[crlf]"
         f"Host: {domain}[crlf]"
         "Upgrade: websocket[crlf][crlf]"
     )
 
-    print("\nInstallation terminée avec succès.")
-    print(f"Le tunnel SSH WebSocket est en écoute sur le port 8880 avec le domaine : {domain}")
-    print("\nUtilisez le payload suivant pour vous connecter en WebSocket SSH :\n")
+    print("\nInstallation completed successfully.")
+    print(f"SSH WebSocket tunnel is running on port 8880 with domain: {domain}")
+    print("\nUse the following payload to connect over WebSocket SSH:\n")
     print(payload)
-    print("\nPour accéder à la session screen : screen -r sshws")
-    print("Pour relancer manuellement le tunnel : screen -dmS sshws wstunnel -s 8880")
+    print("\nTo attach to the screen session: screen -r sshws")
+    print("To manually restart the tunnel: screen -dmS sshws wstunnel --server ws://0.0.0.0:8880 --restrict-to localhost:22")
 
 if __name__ == "__main__":
     main()
