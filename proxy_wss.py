@@ -1,104 +1,65 @@
-import asyncio
-import ssl
-import websockets
+#!/usr/bin/env python3
 import os
-from websockets.exceptions import ConnectionClosedOK, ConnectionClosedError
+import subprocess
+import sys
 
-CONF_FILE = "/etc/proxy_wss/domain.conf"
+def run_command(command):
+    """Execute a system command and print output."""
+    print(f"Running: {command}")
+    result = subprocess.run(command, shell=True, text=True, capture_output=True)
+    if result.returncode != 0:
+        print(f"Error: {result.stderr.strip()}")
+    else:
+        print(result.stdout.strip())
 
-def get_domain():
-    """Récupère le domaine depuis /etc/proxy_wss/domain.conf ou la variable d'environnement DOMAIN"""
-    if os.path.exists(CONF_FILE):
-        with open(CONF_FILE, "r") as f:
-            domain = f.read().strip()
-            if domain:
-                print(f"[+] Domaine chargé depuis {CONF_FILE}: {domain}")
-                return domain
+def install_python_packages():
+    """Install necessary Python packages."""
+    print("Installing required Python packages...")
+    run_command(f"{sys.executable} -m pip install --upgrade pip")
+    run_command(f"{sys.executable} -m pip install sshtunnel paramiko")
 
-    domain = os.environ.get('DOMAIN')
-    if domain:
-        print(f"[+] Domaine chargé depuis variable d'environnement : {domain}")
-        return domain
+def main():
+    # Mandatory domain input
+    domain = input("Enter the domain (e.g., ws.example.com) for the SSH WebSocket tunnel (required): ").strip()
+    if not domain:
+        print("Error: A domain is required to continue installation.")
+        sys.exit(1)
 
-    raise RuntimeError("❌ Domaine non défini dans le fichier de configuration ni variable d'environnement DOMAIN.")
+    # Check for root privileges
+    if os.geteuid() != 0:
+        print("Error: This script must be run as root (use sudo).")
+        sys.exit(1)
 
-def create_ssl_context(domain):
-    CERT_FILE = f"/etc/letsencrypt/live/{domain}/fullchain.pem"
-    KEY_FILE = f"/etc/letsencrypt/live/{domain}/privkey.pem"
+    # Update and install system dependencies
+    run_command("apt-get update -y")
+    run_command("apt-get install -y nodejs npm screen python3-pip")
 
-    if not (os.path.exists(CERT_FILE) and os.path.exists(KEY_FILE)):
-        raise FileNotFoundError(f"❌ Certificats introuvables pour le domaine {domain}, vérifiez la configuration Let's Encrypt.")
+    # Install wstunnel globally via npm
+    run_command("npm install -g wstunnel")
 
-    ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    ssl_ctx.load_cert_chain(CERT_FILE, KEY_FILE)
-    return ssl_ctx
+    # Install required Python packages
+    install_python_packages()
 
-async def ssh_wss_tunnel_handler(websocket, path, ssh_host='127.0.0.1', ssh_port=22):
-    print(f"Nouvelle connexion WSS de {websocket.remote_address}")
+    # Terminate any existing screen session named sshws
+    run_command("screen -S sshws -X quit || true")
 
-    auth_payload = websocket.request_headers.get("X-Auth-Payload")
-    if auth_payload:
-        print(f"Payload AUTH reçu : {auth_payload}")
+    # Start SSH WebSocket tunnel in detached screen session on port 8880
+    run_command("screen -dmS sshws wstunnel -s 8880")
 
-    try:
-        reader_tcp, writer_tcp = await asyncio.open_connection(ssh_host, ssh_port)
-    except Exception as e:
-        print(f"Erreur connexion SSH locale : {e}")
-        await websocket.close()
-        return
+    # Generate and display WebSocket payload
+    payload = (
+        "GET /socket HTTP/1.1[crlf]"
+        f"Host: {domain}[crlf]"
+        "Upgrade: websocket[crlf][crlf]"
+    )
 
-    async def websocket_to_tcp():
-        try:
-            async for message in websocket:
-                if isinstance(message, str):
-                    message = message.encode()
-                writer_tcp.write(message)
-                await writer_tcp.drain()
-        except (ConnectionClosedOK, ConnectionClosedError):
-            pass
-        except Exception as e:
-            print(f"Erreur websocket_to_tcp : {e}")
-        finally:
-            writer_tcp.close()
-            await writer_tcp.wait_closed()
+    print("\nInstallation completed successfully.")
+    print(f"SSH WebSocket tunnel is running on port 8880 with domain: {domain}")
+    print("\nUse the following payload to connect over WebSocket SSH:\n")
+    print(payload)
+    print("\nTo attach to the screen session: screen -r sshws")
+    print("To manually restart the tunnel: screen -dmS sshws wstunnel -s 8880")
 
-    async def tcp_to_websocket():
-        try:
-            while True:
-                data = await reader_tcp.read(1024)
-                if not data:
-                    break
-                await websocket.send(data)
-        except (ConnectionClosedOK, ConnectionClosedError):
-            pass
-        except Exception as e:
-            print(f"Erreur tcp_to_websocket : {e}")
-        finally:
-            await websocket.close()
-
-    await asyncio.gather(websocket_to_tcp(), tcp_to_websocket())
-    print(f"Connexion fermée : {websocket.remote_address}")
-
-async def main():
-    domain = get_domain()
-    ssl_context = create_ssl_context(domain)
-
-    wss_host = "0.0.0.0"
-    wss_port = 8443
-
-    async def handler(websocket, path):
-        await ssh_wss_tunnel_handler(websocket, path)
-
-    try:
-        server = await websockets.serve(handler, wss_host, wss_port, ssl=ssl_context)
-        print(f"✅ Serveur WSS démarré sur {wss_host}:{wss_port} avec domaine {domain}")
-        await server.wait_closed()
-    except Exception as e:
-        print(f"Erreur serveur WSS : {e}")
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("Arrêt du serveur WSS")
+if name == "main":
+    main()
         
