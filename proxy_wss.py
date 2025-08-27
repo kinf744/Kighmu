@@ -62,14 +62,15 @@ def main():
     run_command("screen -S sshws -X quit || true")
 
     # Start SSH WebSocket tunnel in detached screen session on port 8880
-    # Correct latest wstunnel syntax
-    run_command(f"screen -dmS sshws wstunnel --server ws://0.0.0.0:8880 --restrict-to localhost:22")
+    # Correct latest wstunnel syntax without --restrict-to
+    run_command(f"screen -dmS sshws wstunnel --server ws://0.0.0.0:8880 -r localhost:22")
 
     # Generate and display WebSocket payload
     payload = (
-        "GET /socket HTTP/1.1[crlf]"
-        f"Host: {domain}[crlf]"
-        "Upgrade: websocket[crlf][crlf]"
+        "GET /socket HTTP/1.1[crlf]\n"
+        f"Host: {domain}[crlf]\n"
+        "Upgrade: websocket[crlf]\n"
+        "Connection: Upgrade[crlf][crlf]"
     )
 
     print("\nInstallation completed successfully.")
@@ -77,8 +78,8 @@ def main():
     print("\nUse the following payload to connect over WebSocket SSH:\n")
     print(payload)
     print("\nTo attach to the screen session: screen -r sshws")
-    print("To manually restart the tunnel: screen -dmS sshws wstunnel --server ws://0.0.0.0:8880 --restrict-to localhost:22")
+    print("To manually restart the tunnel: screen -dmS sshws wstunnel --server ws://0.0.0.0:8880 -r localhost:22")
 
 if __name__ == "__main__":
     main()
-    
+        
