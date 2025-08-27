@@ -65,7 +65,6 @@ install_http_ws() {
         PAYLOAD="GET / HTTP/1.1[crlf]\nHost: $DOMAIN[crlf]\nUpgrade: websocket[crlf]\nConnection: Upgrade[crlf][crlf]"
         echo -e "$PAYLOAD" > /etc/proxy_wss/payload.txt
 
-        # Remplacement de la gestion systemd par un lancement screen
         # Fermer éventuelles anciennes sessions proxy_wss
         sessions=$(screen -ls | grep proxy_wss | awk '{print $1}')
         if [ -n "$sessions" ]; then
@@ -97,7 +96,7 @@ install_http_ws() {
 
 install_ssh_wstunnel() {
     echo "Démarrage du tunnel SSH WebSocket avec wstunnel dans screen..."
-    
+
     # Nettoyer sessions screen existantes nommées sshws
     sessions=$(screen -ls | grep sshws | awk '{print $1}')
     if [ -n "$sessions" ]; then
@@ -107,8 +106,9 @@ install_ssh_wstunnel() {
         echo "Anciennes sessions sshws supprimées."
     fi
 
-    # Démarrage de wstunnel server avec la bonne syntaxe
-    screen -dmS sshws wstunnel server --restrict-to localhost:22 ws://0.0.0.0:8880
+    # Démarrage de wstunnel server avec la bonne syntaxe (suppression de --restrict-to obsolète)
+    screen -dmS sshws wstunnel --server ws://0.0.0.0:8880 -r localhost:22
+
     echo "Tunnel SSH WebSocket lancé dans screen session 'sshws'."
     echo "Pour suivre le tunnel : screen -r sshws"
 }
