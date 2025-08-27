@@ -1,7 +1,6 @@
 #!/bin/bash
-# menu3-dynamique.sh
-# Affiche les utilisateurs en ligne avec nombre d'appareils, limite et durée de connexion,
-# incluant connexions Dropbear, SSH, SlowDNS, UDP custom, SOCKS, OpenVPN et WireGuard
+# menu3.sh
+# Amélioration du script pour un comptage précis des appareils par utilisateur
 
 USER_FILE="/etc/kighmu/users.list"
 AUTH_LOG="/var/log/auth.log"
@@ -23,68 +22,81 @@ fi
 printf "%-15s %-12s %-10s %-12s %-45s\n" "UTILISATEUR" "APPAREILS" "LIMITE" "TEMPS_CONN." "PROTOCOLES (IP connectées)"
 echo "-----------------------------------------------------------------------------------------------"
 
-# Récupère les IP (TCP ou UDP) connectées sur un port précis
-get_port_ips() {
+# Récupération des IP TCP établies pour un port
+get_established_tcp_ips() {
     local port=$1
-    local proto=$2
-    ss -n -"$proto" sport = :$port | awk 'NR>1{print $5}' | cut -d':' -f1 | sort -u
+    ss -tn state established sport = :$port 2>/dev/null | awk 'NR>1 {print $5}' | cut -d':' -f1 | sort -u
 }
 
-# Dropbear : utilisateurs connectés
+# Récupération des IP UDP "actives" récentes sur un port
+get_active_udp_ips() {
+    local port=$1
+    ss -nu sport = :$port 2>/dev/null | awk 'NR>1 {print $5}' | cut -d':' -f1 | sort -u
+}
+
+# Dropbear: utilisateurs avec IP depuis auth.log et PID en cours
 get_dropbear_users() {
-    ps ax | grep dropbear | grep -v grep | awk '{print $1}' | while read pid; do
-        entry=$(grep "Password auth succeeded" $AUTH_LOG | grep "dropbear\[$pid\]")
-        if [[ $entry ]]; then
-            user=$(echo $entry | awk '{print $10}' | tr -d "'")
-            ip=$(echo $entry | awk -F'from ' '{print $2}' | awk '{print $1}')
+    local auth_log="$AUTH_LOG"
+    local pids=($(pgrep dropbear))
+    for pid in "${pids[@]}"; do
+        local entry=$(grep "Password auth succeeded" $auth_log | grep "dropbear\[$pid\]" | tail -1)
+        if [[ -n $entry ]]; then
+            local user=$(echo "$entry" | awk '{print $10}' | tr -d "'")
+            local ip=$(echo "$entry" | awk -F'from ' '{print $2}' | awk '{print $1}')
             echo "$user $ip"
         fi
     done
 }
 
-# SSH : IP connectées par utilisateur
+# SSH: utilisateurs avec IP depuis auth.log et PID en cours
 get_ssh_ips() {
-    ps -u $(who | awk '{print $1}' | sort -u | xargs) | grep sshd | awk '{print $1}' | while read pid; do
-        entry=$(grep "Accepted password" $AUTH_LOG | grep "sshd[$pid]")
-        if [[ $entry ]]; then
-            user=$(echo $entry | awk '{print $9}')
-            ip=$(echo $entry | awk '{print $11}')
-            echo "$user $ip"
-        fi
+    local users=($(who | awk '{print $1}' | sort -u))
+    for user in "${users[@]}"; do
+        local pids=($(pgrep -u "$user" sshd))
+        for pid in "${pids[@]}"; do
+            local entry=$(grep "Accepted password" "$AUTH_LOG" | grep "sshd\[$pid\]" | tail -1)
+            if [[ -n $entry ]]; then
+                local user_logged=$(echo "$entry" | awk '{print $9}')
+                local ip=$(echo "$entry" | awk '{print $11}')
+                echo "$user_logged $ip"
+            fi
+        done
     done
 }
 
-# OpenVPN : adresses IP connectées
+# OpenVPN : récupère utilisateur et IP
 get_openvpn_ips() {
     if [ -f "$OPENVPN_STATUS" ]; then
         grep 'CLIENT_LIST' "$OPENVPN_STATUS" | awk -F',' '{print $2" "$3}'
     fi
 }
 
-# WireGuard : adresses IP connectées
+# WireGuard : récupère peer (user) et IP endpoint
 get_wireguard_ips() {
-    if command -v $WIREGUARD_CMD >/dev/null; then
-        $WIREGUARD_CMD show | awk '/peer: /{peer=$2} /endpoint:/{print peer" "$2}' | cut -d: -f1,2
+    if command -v $WIREGUARD_CMD >/dev/null 2>&1; then
+        $WIREGUARD_CMD show | awk '
+            /peer: / {peer=$2}
+            /endpoint:/ {print peer" "$2}
+        ' | cut -d: -f1,2
     fi
 }
 
 while IFS="|" read -r username password limite expire_date rest; do
-    # Récupération des IP pour chaque protocole
     ssh_ips=$(get_ssh_ips | awk -v user="$username" '$1==user {print $2}')
     dropbear_ips=$(get_dropbear_users | awk -v user="$username" '$1==user {print $2}')
     openvpn_ips=$(get_openvpn_ips | awk -v user="$username" '$1==user {print $2}')
     wireguard_ips=$(get_wireguard_ips | awk -v user="$username" '$1==user {print $2}')
-    slowdns_ips=$(get_port_ips $SLOWDNS_PORT "u")
-    udp_custom_ips=$(get_port_ips $UDP_CUSTOM_PORT "u")
-    socks_ips=$(get_port_ips $SOCKS_PORT "t")
+    slowdns_ips=$(get_active_udp_ips $SLOWDNS_PORT)
+    udp_custom_ips=$(get_active_udp_ips $UDP_CUSTOM_PORT)
+    socks_ips=$(get_established_tcp_ips $SOCKS_PORT)
 
-    # Construit la liste unique des IP connectées par utilisateur
-    user_ips=$(echo -e "$ssh_ips\n$dropbear_ips\n$openvpn_ips\n$wireguard_ips\n$socks_ips" | sort -u | grep -v "^$")
+    # Fusionne toutes les IP pour cet utilisateur
+    user_ips=$(echo -e "$ssh_ips\n$dropbear_ips\n$openvpn_ips\n$wireguard_ips" | sort -u | grep -v "^$")
+    # Note : slowdns, udp custom, socks IPs ne sont pas attribués à un utilisateur spécifique, donc non inclus ici
 
-    # Compte le nombre d'appareils
     connected_devices=$(echo "$user_ips" | wc -l)
 
-    # Calcule la durée de connexion SSH (premier sshd)
+    # Calcul durée connexion SSH utilisateur (premier sshd)
     pid=$(pgrep -u "$username" sshd | head -n1)
     if [[ -z "$pid" ]]; then
         connection_time="00:00:00"
@@ -101,15 +113,14 @@ while IFS="|" read -r username password limite expire_date rest; do
         fi
     fi
 
-    # Prépare le résumé des protocoles et IP connectées
     proto_ips=""
-    [[ "$ssh_ips" ]]         && proto_ips+="SSH:$(echo $ssh_ips | tr '\n' ',') "
-    [[ "$dropbear_ips" ]]    && proto_ips+="Dropbear:$(echo $dropbear_ips | tr '\n' ',') "
-    [[ "$openvpn_ips" ]]     && proto_ips+="OpenVPN:$(echo $openvpn_ips | tr '\n' ',') "
-    [[ "$wireguard_ips" ]]   && proto_ips+="WireGuard:$(echo $wireguard_ips | tr '\n' ',') "
-    [[ "$slowdns_ips" ]]     && proto_ips+="SlowDNS:$(echo $slowdns_ips | tr '\n' ',') "
-    [[ "$udp_custom_ips" ]]  && proto_ips+="UDP:$(echo $udp_custom_ips | tr '\n' ',') "
-    [[ "$socks_ips" ]]       && proto_ips+="SOCKS:$(echo $socks_ips | tr '\n' ',') "
+    [[ "$ssh_ips" ]]      && proto_ips+="SSH:$(echo $ssh_ips | tr '\n' ',') "
+    [[ "$dropbear_ips" ]] && proto_ips+="Dropbear:$(echo $dropbear_ips | tr '\n' ',') "
+    [[ "$openvpn_ips" ]]  && proto_ips+="OpenVPN:$(echo $openvpn_ips | tr '\n' ',') "
+    [[ "$wireguard_ips" ]]&& proto_ips+="WireGuard:$(echo $wireguard_ips | tr '\n' ',') "
+    [[ "$slowdns_ips" ]]  && proto_ips+="SlowDNS:$(echo $slowdns_ips | tr '\n' ',') "
+    [[ "$udp_custom_ips" ]]&& proto_ips+="UDP:$(echo $udp_custom_ips | tr '\n' ',') "
+    [[ "$socks_ips" ]]    && proto_ips+="SOCKS:$(echo $socks_ips | tr '\n' ',') "
 
     printf "%-15s %-12d %-10s %-12s %-45s\n" "$username" "$connected_devices" "$limite" "$connection_time" "$proto_ips"
 done < "$USER_FILE"
