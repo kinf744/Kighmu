@@ -61,6 +61,28 @@ apt autoremove -y
 apt clean
 
 echo "=============================================="
+echo " 🚀 Préparation du mode HTTP/WSS avec SSL Let's Encrypt..."
+echo "=============================================="
+
+# Installer certbot et python modules nécessaires pour WSS
+apt install -y certbot python3-certbot-nginx
+
+# Obtenir ou renouveler le certificat SSL Let's Encrypt
+echo "Obtention du certificat SSL pour le domaine $DOMAIN ..."
+certbot certonly --nginx -d "$DOMAIN" --non-interactive --agree-tos -m admin@"$DOMAIN" || {
+    echo "Erreur lors de l'obtention du certificat SSL. Vérifiez la configuration du domaine."
+    exit 1
+}
+
+# Installer le module python websockets si absent
+if ! python3 -c "import websockets" &> /dev/null; then
+    echo "Installation du module python websockets via pip3..."
+    pip3 install websockets
+else
+    echo "Module python websockets déjà installé."
+fi
+
+echo "=============================================="
 echo " 🚀 Installation et configuration du module Python pysocks et du proxy SOCKS"
 echo "=============================================="
 
@@ -147,15 +169,50 @@ run_script() {
     fi
 }
 
+# Lancer les scripts comme avant
 run_script "$INSTALL_DIR/dropbear.sh"
 run_script "$INSTALL_DIR/ssl.sh"
 run_script "$INSTALL_DIR/badvpn.sh"
 run_script "$INSTALL_DIR/system_dns.sh"
 run_script "$INSTALL_DIR/nginx.sh"
-run_script "$INSTALL_DIR/proxy_wss.py"
+# Ne lancez plus proxy_wss.py manuellement
+# run_script "$INSTALL_DIR/proxy_wss.py"
 run_script "$INSTALL_DIR/socks_python.sh"
 run_script "$INSTALL_DIR/slowdns.sh"
 run_script "$INSTALL_DIR/udp_custom.sh"
+
+echo "=============================================="
+echo " 🚀 Configuration du service systemd pour proxy_wss.py (serveur WSS Python)..."
+echo "=============================================="
+
+SERVICE_NAME="proxywss.service"
+WSS_SCRIPT="$INSTALL_DIR/proxy_wss.py"
+
+cat > /etc/systemd/system/$SERVICE_NAME <<EOL
+[Unit]
+Description=Serveur WebSocket Secure Python WSS
+After=network.target
+
+[Service]
+User=$(whoami)
+ExecStart=/usr/bin/python3 $WSS_SCRIPT
+Restart=always
+Environment=DOMAIN=$DOMAIN
+WorkingDirectory=$INSTALL_DIR
+
+[Install]
+WantedBy=multi-user.target
+EOL
+
+systemctl daemon-reload
+systemctl enable $SERVICE_NAME
+systemctl start $SERVICE_NAME
+
+if systemctl is-active --quiet $SERVICE_NAME; then
+    echo "Le serveur WSS est démarré et fonctionne via systemd."
+else
+    echo "Erreur : le serveur WSS n'a pas pu démarrer."
+fi
 
 echo "=============================================="
 echo " 🚀 Installation et configuration SlowDNS..."
