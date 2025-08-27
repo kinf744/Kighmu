@@ -42,7 +42,6 @@ if [ "$DOMAIN_IP" != "$IP_PUBLIC" ]; then
   fi
 fi
 
-# Exporter la variable pour que les scripts enfants y aient accès
 export DOMAIN
 
 echo "=============================================="
@@ -52,27 +51,17 @@ echo "=============================================="
 apt update -y && apt upgrade -y
 
 apt install -y \
-sudo bsdmainutils zip unzip ufw curl python python3 python3-pip openssl screen cron iptables lsof pv boxes nano at mlocate \
+sudo bsdmainutils zip unzip ufw curl python3 python3-pip openssl screen cron iptables lsof pv boxes nano at mlocate \
 gawk grep bc jq npm nodejs socat netcat netcat-traditional net-tools cowsay figlet lolcat \
-dnsutils net-tools wget sudo iptables ufw openssl openssl-blacklist psmisc nginx certbot python3-certbot-nginx dropbear badvpn \
+dnsutils net-tools wget sudo iptables ufw openssl psmisc nginx dropbear badvpn \
 python3-setuptools wireguard-tools qrencode gcc make perl software-properties-common socat
 
 apt autoremove -y
 apt clean
 
 echo "=============================================="
-echo " 🚀 Préparation du mode HTTP/WSS avec SSL Let's Encrypt..."
+echo " 🚀 Préparation du mode HTTP/WS sans SSL..."
 echo "=============================================="
-
-# Installer certbot et python modules nécessaires pour WSS
-apt install -y certbot python3-certbot-nginx
-
-# Obtenir ou renouveler le certificat SSL Let's Encrypt
-echo "Obtention du certificat SSL pour le domaine $DOMAIN ..."
-certbot certonly --nginx -d "$DOMAIN" --non-interactive --agree-tos -m admin@"$DOMAIN" || {
-    echo "Erreur lors de l'obtention du certificat SSL. Vérifiez la configuration du domaine."
-    exit 1
-}
 
 # Installer le module python websockets si absent
 if ! python3 -c "import websockets" &> /dev/null; then
@@ -169,20 +158,17 @@ run_script() {
     fi
 }
 
-# Lancer les scripts comme avant
 run_script "$INSTALL_DIR/dropbear.sh"
 run_script "$INSTALL_DIR/ssl.sh"
 run_script "$INSTALL_DIR/badvpn.sh"
 run_script "$INSTALL_DIR/system_dns.sh"
 run_script "$INSTALL_DIR/nginx.sh"
-# Ne lancez plus proxy_wss.py manuellement
-# run_script "$INSTALL_DIR/proxy_wss.py"
 run_script "$INSTALL_DIR/socks_python.sh"
 run_script "$INSTALL_DIR/slowdns.sh"
 run_script "$INSTALL_DIR/udp_custom.sh"
 
 echo "=============================================="
-echo " 🚀 Configuration du service systemd pour proxy_wss.py (serveur WSS Python)..."
+echo " 🚀 Configuration du service systemd pour proxy_wss.py (serveur WS Python)..."
 echo "=============================================="
 
 SERVICE_NAME="proxywss.service"
@@ -190,7 +176,7 @@ WSS_SCRIPT="$INSTALL_DIR/proxy_wss.py"
 
 cat > /etc/systemd/system/$SERVICE_NAME <<EOL
 [Unit]
-Description=Serveur WebSocket Secure Python WSS
+Description=Serveur WebSocket Python WS
 After=network.target
 
 [Service]
@@ -209,9 +195,9 @@ systemctl enable $SERVICE_NAME
 systemctl start $SERVICE_NAME
 
 if systemctl is-active --quiet $SERVICE_NAME; then
-    echo "Le serveur WSS est démarré et fonctionne via systemd."
+    echo "Le serveur WS est démarré et fonctionne via systemd."
 else
-    echo "Erreur : le serveur WSS n'a pas pu démarrer."
+    echo "Erreur : le serveur WS n'a pas pu démarrer."
 fi
 
 echo "=============================================="
@@ -296,8 +282,6 @@ echo " Pour lancer Kighmu, utilisez la commande : kighmu"
 echo
 echo " ⚠️ Pour que l'alias soit pris en compte :"
 echo " - Ouvre un nouveau terminal, ou"
-echo " - Exécute manuellement : source ~/.bashrc"
+echo " - Exécutez manuellement : source ~/.bashrc"
 echo
-echo "Tentative de rechargement automatique de ~/.bashrc dans cette session..."
-source ~/.bashrc || echo "Le rechargement automatique a échoué, merci de le faire manuellement."
 echo "=============================================="
