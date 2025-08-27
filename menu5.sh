@@ -1,6 +1,6 @@
 #!/bin/bash
 # menu5.sh
-# Installation automatique des modes spéciaux
+# Installation automatique des modes spéciaux et tunnel SSH WebSocket avec wstunnel
 
 echo "+--------------------------------------------+"
 echo "|      INSTALLATION AUTOMATIQUE DES MODES    |"
@@ -12,8 +12,6 @@ UPTIME=$(uptime -p)
 
 echo "IP: $HOST_IP | Uptime: $UPTIME"
 echo ""
-
-# Fonctions install/configuration pour chaque mode
 
 install_openssh() {
     echo "Installation / vérification Openssh..."
@@ -53,24 +51,20 @@ install_wstunnel() {
 }
 
 install_http_ws() {
-    echo "Installation HTTP/WS..."
+    echo "Installation HTTP/WS (proxy_wss.py)..."
     cd "$HOME/Kighmu" || exit 1
 
     if [ -f "proxy_wss.py" ]; then
         apt-get install -y python3 python3-pip
 
-        # Demande du domaine
         read -rp "Entrez le domaine à utiliser pour HTTP/WS: " DOMAIN
 
-        # Stockage du domaine
         mkdir -p /etc/proxy_wss
         echo "$DOMAIN" > /etc/proxy_wss/domain.conf
 
-        # Création du payload WebSocket clair comme dans l'exemple demandé
         PAYLOAD="GET / HTTP/1.1[crlf]\nHost: $DOMAIN[crlf]\nUpgrade: websocket[crlf]\nConnection: Upgrade[crlf][crlf]"
         echo -e "$PAYLOAD" > /etc/proxy_wss/payload.txt
 
-        # Création du service systemd pour proxy_wss.py
         cat > /etc/systemd/system/proxy_wss.service <<EOF
 [Unit]
 Description=HTTP/WS Proxy Service
@@ -89,24 +83,34 @@ StandardError=append:/var/log/proxy_wss.log
 WantedBy=multi-user.target
 EOF
 
-        # Activation
         systemctl daemon-reload
         systemctl enable proxy_wss
         systemctl restart proxy_wss
 
-        echo "✅ HTTP/WS installé avec succès."
-        echo "🌍 Domaine configuré: $DOMAIN"
-        echo ""
-        echo "=============================================="
-        echo "📦 Payload généré automatiquement :"
-        echo ""
+        echo "✅ HTTP/WS installé, domaine: $DOMAIN"
+        echo "📦 Payload sauvegardé dans /etc/proxy_wss/payload.txt:"
         cat /etc/proxy_wss/payload.txt
-        echo ""
-        echo "➡️ Le payload est sauvegardé dans : /etc/proxy_wss/payload.txt"
-        echo "=============================================="
     else
         echo "⚠️ proxy_wss.py introuvable dans $HOME/Kighmu/"
     fi
+}
+
+install_ssh_wstunnel() {
+    echo "Démarrage du tunnel SSH WebSocket avec wstunnel dans screen..."
+    
+    # Nettoyer sessions screen existantes nommées sshws
+    sessions=$(screen -ls | grep sshws | awk '{print $1}')
+    if [ -n "$sessions" ]; then
+        for session in $sessions; do
+            screen -S "$session" -X quit
+        done
+        echo "Anciennes sessions sshws supprimées."
+    fi
+
+    # Démarrage de wstunnel server avec la bonne syntaxe
+    screen -dmS sshws wstunnel server --restrict-to localhost:22 ws://0.0.0.0:8880
+    echo "Tunnel SSH WebSocket lancé dans screen session 'sshws'."
+    echo "Pour suivre le tunnel : screen -r sshws"
 }
 
 install_udp_custom() {
@@ -121,15 +125,15 @@ install_socks_python() {
 
 install_ssl_tls() {
     echo "Installation SSL/TLS..."
-    # Ajoute ici les commandes pour installer/configurer SSL/TLS
+    # Ajoutez ici les commandes pour SSL/TLS si besoin
 }
 
 install_badvpn() {
     echo "Installation BadVPN..."
-    # Ajoute ici les commandes pour installer/configurer BadVPN
+    # Ajoutez ici les commandes pour BadVPN si besoin
 }
 
-# Ordre d’installation (HTTP/WS après SlowDNS)
+# Ordre d'installation
 install_openssh
 install_dropbear
 install_slowdns
@@ -139,20 +143,16 @@ install_udp_custom
 install_socks_python
 install_ssl_tls
 install_badvpn
+install_ssh_wstunnel
 
 echo ""
 echo "=============================================="
 echo " ✅ Tous les modes ont été installés automatiquement."
 echo "=============================================="
 
-
-# ======================================================
-# Ajout de la commande de gestion rapide HTTP/WS
-# ======================================================
+# Commande de gestion rapide HTTP/WS
 cat > /usr/bin/http-ws <<'EOF'
 #!/bin/bash
-# Commande de gestion du mode HTTP/WS
-
 CONF=/etc/proxy_wss/domain.conf
 PAYLOAD_FILE=/etc/proxy_wss/payload.txt
 SERVICE=proxy_wss
@@ -173,9 +173,7 @@ case "$1" in
         generate_payload
         echo "[+] Domaine mis à jour : $2"
         echo "[+] Nouveau payload HTTP/WS généré :"
-        echo ""
         cat $PAYLOAD_FILE
-        echo ""
         systemctl restart $SERVICE
         echo "[+] Service redémarré."
         ;;
@@ -183,7 +181,6 @@ case "$1" in
         if [ -f "$CONF" ]; then
             echo "🌍 Domaine actuel : $(cat $CONF)"
             if [ -f "$PAYLOAD_FILE" ]; then
-                echo ""
                 echo "📦 Payload actuel :"
                 cat $PAYLOAD_FILE
             fi
