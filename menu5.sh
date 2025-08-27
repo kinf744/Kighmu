@@ -16,7 +16,6 @@ echo ""
 # Fonctions install/configuration pour chaque mode
 install_openssh() {
     echo "Installation / vérification Openssh..."
-    # commandes d'installation Openssh ici, par exemple :
     apt-get install -y openssh-server
     systemctl enable ssh
     systemctl start ssh
@@ -24,7 +23,6 @@ install_openssh() {
 
 install_dropbear() {
     echo "Installation / vérification Dropbear..."
-    # commandes d'installation Dropbear ici
     apt-get install -y dropbear
     systemctl enable dropbear
     systemctl start dropbear
@@ -32,8 +30,41 @@ install_dropbear() {
 
 install_slowdns() {
     echo "Installation / configuration SlowDNS..."
-    # Exécution du script slowdns.sh si présent
     bash "$HOME/Kighmu/slowdns.sh" || echo "SlowDNS : script non trouvé ou erreur."
+}
+
+install_http_wss() {
+    echo "Installation HTTP/WSS..."
+    cd "$HOME/Kighmu" || exit 1
+
+    if [ -f "proxy_wss.py" ]; then
+        apt-get install -y python3 python3-pip
+
+        cat > /etc/systemd/system/proxy_wss.service <<EOF
+[Unit]
+Description=HTTP/WSS Proxy Service
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 $HOME/Kighmu/proxy_wss.py
+Restart=always
+User=root
+WorkingDirectory=$HOME/Kighmu
+StandardOutput=append:/var/log/proxy_wss.log
+StandardError=append:/var/log/proxy_wss.log
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+        systemctl daemon-reload
+        systemctl enable proxy_wss
+        systemctl start proxy_wss
+
+        echo "✅ HTTP/WSS installé et démarré avec succès."
+    else
+        echo "⚠️ proxy_wss.py introuvable dans $HOME/Kighmu/"
+    fi
 }
 
 install_udp_custom() {
@@ -56,10 +87,11 @@ install_badvpn() {
     # Ajoute ici les commandes pour installer/configurer BadVPN
 }
 
-# Appel séquentiel de toutes les installations
+# Ordre d’installation (HTTP/WSS directement après SlowDNS)
 install_openssh
 install_dropbear
 install_slowdns
+install_http_wss
 install_udp_custom
 install_socks_python
 install_ssl_tls
