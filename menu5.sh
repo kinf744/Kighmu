@@ -43,9 +43,13 @@ install_http_wss() {
         # Demande du domaine
         read -rp "Entrez le domaine à utiliser pour HTTP/WSS: " DOMAIN
 
-        # Stockage
+        # Stockage du domaine
         mkdir -p /etc/proxy_wss
         echo "$DOMAIN" > /etc/proxy_wss/domain.conf
+
+        # Création du payload
+        PAYLOAD="GET wss://$DOMAIN/ HTTP/1.1[crlf]\nHost: $DOMAIN[crlf]\nUpgrade: websocket[crlf]\nConnection: Upgrade[crlf][crlf]"
+        echo -e "$PAYLOAD" > /etc/proxy_wss/payload.txt
 
         # Création du service systemd
         cat > /etc/systemd/system/proxy_wss.service <<EOF
@@ -73,6 +77,14 @@ EOF
 
         echo "✅ HTTP/WSS installé avec succès."
         echo "🌍 Domaine configuré: $DOMAIN"
+        echo ""
+        echo "=============================================="
+        echo "📦 Payload généré automatiquement :"
+        echo ""
+        cat /etc/proxy_wss/payload.txt
+        echo ""
+        echo "➡️ Le payload est sauvegardé dans : /etc/proxy_wss/payload.txt"
+        echo "=============================================="
     else
         echo "⚠️ proxy_wss.py introuvable dans $HOME/Kighmu/"
     fi
@@ -122,7 +134,13 @@ cat > /usr/bin/http-wss <<'EOF'
 # Commande de gestion du mode HTTP/WSS
 
 CONF=/etc/proxy_wss/domain.conf
+PAYLOAD_FILE=/etc/proxy_wss/payload.txt
 SERVICE=proxy_wss
+
+generate_payload() {
+    DOMAIN=$(cat $CONF)
+    echo -e "GET wss://$DOMAIN/ HTTP/1.1[crlf]\nHost: $DOMAIN[crlf]\nUpgrade: websocket[crlf]\nConnection: Upgrade[crlf][crlf]" > $PAYLOAD_FILE
+}
 
 case "$1" in
     domain)
@@ -132,13 +150,23 @@ case "$1" in
         fi
         mkdir -p /etc/proxy_wss
         echo "$2" > $CONF
+        generate_payload
         echo "[+] Domaine mis à jour : $2"
+        echo "[+] Nouveau payload HTTP/WSS généré :"
+        echo ""
+        cat $PAYLOAD_FILE
+        echo ""
         systemctl restart $SERVICE
         echo "[+] Service redémarré."
         ;;
     show)
         if [ -f "$CONF" ]; then
             echo "🌍 Domaine actuel : $(cat $CONF)"
+            if [ -f "$PAYLOAD_FILE" ]; then
+                echo ""
+                echo "📦 Payload actuel :"
+                cat $PAYLOAD_FILE
+            fi
         else
             echo "⚠️ Aucun domaine configuré."
         fi
@@ -157,8 +185,8 @@ case "$1" in
         echo "Commande HTTP/WSS Manager"
         echo "Usage: http-wss [action]"
         echo "Actions disponibles:"
-        echo "  domain <monsite.tld>   -> changer le domaine"
-        echo "  show                   -> afficher le domaine actuel"
+        echo "  domain <monsite.tld>   -> changer le domaine et régénérer le payload"
+        echo "  show                   -> afficher le domaine et le payload actuel"
         echo "  restart                -> redémarrer le service"
         echo "  status                 -> afficher l'état du service"
         echo "  logs                   -> afficher les logs du service"
