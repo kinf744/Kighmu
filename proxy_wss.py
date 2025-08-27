@@ -7,28 +7,27 @@ from websockets.exceptions import ConnectionClosedOK, ConnectionClosedError
 CONF_FILE = "/etc/proxy_wss/domain.conf"
 
 def get_domain():
-    """Récupère le domaine depuis /etc/proxy_wss/domain.conf ou demande à l'utilisateur"""
+    """Récupère le domaine depuis /etc/proxy_wss/domain.conf ou la variable d'environnement DOMAIN"""
     if os.path.exists(CONF_FILE):
         with open(CONF_FILE, "r") as f:
             domain = f.read().strip()
             if domain:
                 print(f"[+] Domaine chargé depuis {CONF_FILE}: {domain}")
                 return domain
-    # Fallback si pas trouvé (exécution manuelle)
-    domain = input("Entrez le nom de domaine (exemple: monserveur.exemple.com) : ").strip()
-    return domain
+
+    domain = os.environ.get('DOMAIN')
+    if domain:
+        print(f"[+] Domaine chargé depuis variable d'environnement : {domain}")
+        return domain
+
+    raise RuntimeError("❌ Domaine non défini dans le fichier de configuration ni variable d'environnement DOMAIN.")
 
 def create_ssl_context(domain):
-    """Crée le contexte SSL basé sur les certificats Let's Encrypt"""
     CERT_FILE = f"/etc/letsencrypt/live/{domain}/fullchain.pem"
     KEY_FILE = f"/etc/letsencrypt/live/{domain}/privkey.pem"
 
     if not (os.path.exists(CERT_FILE) and os.path.exists(KEY_FILE)):
-        raise FileNotFoundError(
-            f"❌ Certificats introuvables pour le domaine {domain}\n"
-            f"Vérifiez que Let's Encrypt est bien configuré:\n"
-            f"  certbot certonly --standalone -d {domain}"
-        )
+        raise FileNotFoundError(f"❌ Certificats introuvables pour le domaine {domain}, vérifiez la configuration Let's Encrypt.")
 
     ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ssl_ctx.load_cert_chain(CERT_FILE, KEY_FILE)
@@ -37,7 +36,6 @@ def create_ssl_context(domain):
 async def ssh_wss_tunnel_handler(websocket, path, ssh_host='127.0.0.1', ssh_port=22):
     print(f"Nouvelle connexion WSS de {websocket.remote_address}")
 
-    # Extra: lecture éventuelle d'un payload custom
     auth_payload = websocket.request_headers.get("X-Auth-Payload")
     if auth_payload:
         print(f"Payload AUTH reçu : {auth_payload}")
@@ -103,4 +101,4 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         print("Arrêt du serveur WSS")
-    
+        
