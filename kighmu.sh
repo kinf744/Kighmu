@@ -20,100 +20,109 @@ BOLD="\e[1m"
 RESET="\e[0m"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+USER_FILE="/etc/kighmu/users.list"
+AUTH_LOG="/var/log/auth.log"
+OPENVPN_STATUS="/etc/openvpn/openvpn-status.log"
+WIREGUARD_CMD="wg"
 
 get_ssh_users_count() {
     grep -cE "/home" /etc/passwd
 }
 
-# Récupération IP TCP connectées sur un port en état ESTABLISHED
-get_established_tcp_ips() {
-    local port=$1
-    ss -tn state established sport = :$port 2>/dev/null | awk 'NR>1 {print $5}' | cut -d':' -f1 | sort -u
+# Fonction pour récupérer IP et utilisateur des connexions TCP établies sur un port
+get_user_ips_by_service() {
+    local port="$1"
+    ss -tnp state established sport = :$port 2>/dev/null | awk '
+    NR>1 {
+        split($6,a,",");
+        pid=a[2]; sub("pid=","",pid);
+        ip=$5; sub(/:[0-9]+$/,"",ip);
+        cmd="ps -p " pid " -o user= 2>/dev/null"
+        cmd | getline user
+        close(cmd)
+        if(user!="" && ip!="") print user, ip
+    }'
 }
 
-# Récupération IP UDP "actives" (moins fiable)
-get_active_udp_ips() {
-    local port=$1
-    ss -nu sport = :$port 2>/dev/null | awk 'NR>1 {print $5}' | cut -d':' -f1 | sort -u
-}
-
-# Dropbear IP des sessions actives via auth.log + pgrep
-get_dropbear_ips() {
-    local auth_log="/var/log/auth.log"
-    local ips=()
-    mapfile -t pids < <(pgrep dropbear)
+# Dropbear IP par utilisateur via pgrep et auth.log
+get_dropbear_user_ips() {
+    local pids=($(pgrep dropbear))
     for pid in "${pids[@]}"; do
-        ip=$(grep "Password auth succeeded" $auth_log | grep "dropbear\[$pid\]" | tail -1 | awk -F'from ' '{print $2}' | awk '{print $1}')
-        [[ $ip ]] && ips+=("$ip")
+        local entry=$(grep "Password auth succeeded" "$AUTH_LOG" | grep "dropbear\[$pid\]" | tail -1)
+        if [[ -n $entry ]]; then
+            local user=$(echo "$entry" | awk '{print $10}' | tr -d "'")
+            local ip=$(echo "$entry" | awk -F'from ' '{print $2}' | awk '{print $1}')
+            echo "$user $ip"
+        fi
     done
-    printf "%s\n" "${ips[@]}" | sort -u
 }
 
-# OpenVPN IP (fichier status)
-get_openvpn_ips() {
-    local status_file="/etc/openvpn/openvpn-status.log"
-    if [ -f "$status_file" ]; then
-        grep '^CLIENT_LIST' "$status_file" | awk -F',' '{print $3}' | sort -u
+# OpenVPN IP et utilisateur via statut
+get_openvpn_user_ips() {
+    if [ -f "$OPENVPN_STATUS" ]; then
+        grep 'CLIENT_LIST' "$OPENVPN_STATUS" | awk -F',' '{print $2, $3}'
     fi
 }
 
-# WireGuard IP peer actif
-get_wireguard_ips() {
-    command -v wg >/dev/null 2>&1 || return
-    wg show | awk '/endpoint:/{print $2}' | cut -d: -f1 | sort -u
+# WireGuard IP et utilisateur
+get_wireguard_user_ips() {
+    if command -v $WIREGUARD_CMD >/dev/null 2>&1; then
+        $WIREGUARD_CMD show | awk '
+            /peer: / {peer=$2}
+            /endpoint:/ {print peer, $2}
+        ' | cut -d: -f1,2
+    fi
 }
 
-# CPU usage
-get_cpu_usage() {
-    grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf "%.2f%%", usage}'
-}
-
-get_os_info() {
-    if [ -f /etc/os-release ]; then
-        . /etc/os-release
-        echo "$NAME $VERSION_ID"
+# Calcule durée connexion SSH la plus ancienne
+get_ssh_connection_time() {
+    local user="$1"
+    local pids=($(pgrep -u "$user" sshd))
+    local earliest=0
+    for pid in "${pids[@]}"; do
+        local etime=$(ps -p "$pid" -o etime= | tr -d ' ')
+        if [[ $etime =~ ^([0-9]+)-([0-9]{2}):([0-9]{2}):([0-9]{2})$ ]]; then
+            days=${BASH_REMATCH[1]}
+            hh=${BASH_REMATCH[2]}
+            mm=${BASH_REMATCH[3]}
+            ss=${BASH_REMATCH[4]}
+            total_seconds=$((days*86400 + 10#$hh*3600 + 10#$mm*60 + 10#$ss))
+        elif [[ $etime =~ ^([0-9]{2}):([0-9]{2}):([0-9]{2})$ ]]; then
+            hh=${BASH_REMATCH[1]}
+            mm=${BASH_REMATCH[2]}
+            ss=${BASH_REMATCH[3]}
+            total_seconds=$((10#$hh*3600 + 10#$mm*60 + 10#$ss))
+        else
+            total_seconds=0
+        fi
+        if [[ $earliest -eq 0 || $total_seconds -lt $earliest ]]; then
+            earliest=$total_seconds
+        fi
+    done
+    if [[ $earliest -gt 0 ]]; then
+        printf '%02d:%02d:%02d\n' $((earliest/3600)) $(((earliest%3600)/60)) $((earliest%60))
     else
-        uname -s
+        echo "00:00:00"
     fi
-}
-
-# Compter le nombre exact d'appareils connectés (IP uniques sur tous services)
-count_all_connected_devices() {
-    local ips=()
-
-    mapfile -t ssh_ips < <(get_established_tcp_ips 22)
-    ips+=("${ssh_ips[@]}")
-
-    mapfile -t dropbear_ips < <(get_dropbear_ips)
-    ips+=("${dropbear_ips[@]}")
-
-    mapfile -t openvpn_ips < <(get_openvpn_ips)
-    ips+=("${openvpn_ips[@]}")
-
-    mapfile -t wireguard_ips < <(get_wireguard_ips)
-    ips+=("${wireguard_ips[@]}")
-
-    mapfile -t slowdns_ips < <(get_active_udp_ips 5300)
-    ips+=("${slowdns_ips[@]}")
-
-    mapfile -t udpcustom_ips < <(get_active_udp_ips 54000)
-    ips+=("${udpcustom_ips[@]}")
-
-    mapfile -t socks_ips < <(get_established_tcp_ips 8080)
-    ips+=("${socks_ips[@]}")
-
-    # Supprimer doublons, lignes vides, puis compter
-    printf "%s\n" "${ips[@]}" | grep -v '^$' | sort -u | wc -l
 }
 
 while true; do
     clear
-    OS_INFO=$(get_os_info)
+    OS_INFO=$(if [ -f /etc/os-release ]; then . /etc/os-release; echo "$NAME $VERSION_ID"; else uname -s; fi)
     IP=$(hostname -I | awk '{print $1}')
     RAM_USAGE=$(free -m | awk 'NR==2{printf "%.2f%%", $3*100/$2}')
-    CPU_USAGE=$(get_cpu_usage)
+    CPU_USAGE=$(grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf "%.2f%%", usage}')
     SSH_USERS_COUNT=$(get_ssh_users_count)
-    DEVICES_COUNT=$(count_all_connected_devices)
+    
+    # Nombre total d'appareils connectés (optionnel: fusionner par utilisateur si besoin)
+    # Ici on affiche la somme sur tous les services (simple version)
+    mapfile -t ssh_ips < <(get_user_ips_by_service 22)
+    mapfile -t dropbear_ips < <(get_dropbear_user_ips)
+    mapfile -t openvpn_ips < <(get_openvpn_user_ips)
+    mapfile -t wireguard_ips < <(get_wireguard_user_ips)
+
+    all_ips=("${ssh_ips[@]}" "${dropbear_ips[@]}" "${openvpn_ips[@]}" "${wireguard_ips[@]}")
+    total_connected=$(printf "%s\n" "${all_ips[@]}" | awk '{print $2}' | sort -u | wc -l)
 
     echo -e "${CYAN}+==================================================+${RESET}"
     echo -e "${BOLD}${MAGENTA}|                🚀 KIGHMU MANAGER 🇨🇲 🚀           |${RESET}"
@@ -125,7 +134,7 @@ while true; do
 
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
 
-    printf " Utilisateurs SSH: ${BLUE}%-4d${RESET} | Appareils connectés: ${MAGENTA}%-4d${RESET}\n" "$SSH_USERS_COUNT" "$DEVICES_COUNT"
+    printf " Utilisateurs SSH: ${BLUE}%-4d${RESET} | Appareils connectés: ${MAGENTA}%-4d${RESET}\n" "$SSH_USERS_COUNT" "$total_connected"
 
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
 
