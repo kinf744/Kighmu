@@ -14,6 +14,7 @@ echo "IP: $HOST_IP | Uptime: $UPTIME"
 echo ""
 
 # Fonctions install/configuration pour chaque mode
+
 install_openssh() {
     echo "Installation / vérification Openssh..."
     apt-get install -y openssh-server
@@ -33,28 +34,46 @@ install_slowdns() {
     bash "$HOME/Kighmu/slowdns.sh" || echo "SlowDNS : script non trouvé ou erreur."
 }
 
-install_http_wss() {
-    echo "Installation HTTP/WSS..."
+install_wstunnel() {
+    echo "Installation wstunnel (binaire)..."
+    apt-get install -y wget
+
+    WSTUNNEL_BIN_URL="https://github.com/erebe/wstunnel/releases/download/v5.1/wstunnel-linux-x64"
+    WSTUNNEL_BIN_PATH="/usr/local/bin/wstunnel"
+
+    if command -v wstunnel >/dev/null 2>&1; then
+        echo "wstunnel déjà installé."
+    else
+        echo "Téléchargement de wstunnel depuis $WSTUNNEL_BIN_URL ..."
+        wget -q -O /tmp/wstunnel "$WSTUNNEL_BIN_URL" || { echo "Erreur téléchargement wstunnel"; return 1; }
+        chmod +x /tmp/wstunnel
+        mv /tmp/wstunnel "$WSTUNNEL_BIN_PATH"
+        echo "wstunnel installé à $WSTUNNEL_BIN_PATH"
+    fi
+}
+
+install_http_ws() {
+    echo "Installation HTTP/WS..."
     cd "$HOME/Kighmu" || exit 1
 
     if [ -f "proxy_wss.py" ]; then
         apt-get install -y python3 python3-pip
 
         # Demande du domaine
-        read -rp "Entrez le domaine à utiliser pour HTTP/WSS: " DOMAIN
+        read -rp "Entrez le domaine à utiliser pour HTTP/WS: " DOMAIN
 
         # Stockage du domaine
         mkdir -p /etc/proxy_wss
         echo "$DOMAIN" > /etc/proxy_wss/domain.conf
 
-        # Création du payload
-        PAYLOAD="GET wss://$DOMAIN/ HTTP/1.1[crlf]\nHost: $DOMAIN[crlf]\nUpgrade: websocket[crlf]\nConnection: Upgrade[crlf][crlf]"
+        # Création du payload WebSocket clair comme dans l'exemple demandé
+        PAYLOAD="GET / HTTP/1.1[crlf]\nHost: $DOMAIN[crlf]\nUpgrade: websocket[crlf]\nConnection: Upgrade[crlf][crlf]"
         echo -e "$PAYLOAD" > /etc/proxy_wss/payload.txt
 
-        # Création du service systemd
+        # Création du service systemd pour proxy_wss.py
         cat > /etc/systemd/system/proxy_wss.service <<EOF
 [Unit]
-Description=HTTP/WSS Proxy Service
+Description=HTTP/WS Proxy Service
 After=network.target
 
 [Service]
@@ -75,7 +94,7 @@ EOF
         systemctl enable proxy_wss
         systemctl restart proxy_wss
 
-        echo "✅ HTTP/WSS installé avec succès."
+        echo "✅ HTTP/WS installé avec succès."
         echo "🌍 Domaine configuré: $DOMAIN"
         echo ""
         echo "=============================================="
@@ -110,11 +129,12 @@ install_badvpn() {
     # Ajoute ici les commandes pour installer/configurer BadVPN
 }
 
-# Ordre d’installation (HTTP/WSS directement après SlowDNS)
+# Ordre d’installation (HTTP/WS après SlowDNS)
 install_openssh
 install_dropbear
 install_slowdns
-install_http_wss
+install_wstunnel
+install_http_ws
 install_udp_custom
 install_socks_python
 install_ssl_tls
@@ -127,11 +147,11 @@ echo "=============================================="
 
 
 # ======================================================
-# Ajout de la commande de gestion rapide HTTP/WSS
+# Ajout de la commande de gestion rapide HTTP/WS
 # ======================================================
-cat > /usr/bin/http-wss <<'EOF'
+cat > /usr/bin/http-ws <<'EOF'
 #!/bin/bash
-# Commande de gestion du mode HTTP/WSS
+# Commande de gestion du mode HTTP/WS
 
 CONF=/etc/proxy_wss/domain.conf
 PAYLOAD_FILE=/etc/proxy_wss/payload.txt
@@ -139,20 +159,20 @@ SERVICE=proxy_wss
 
 generate_payload() {
     DOMAIN=$(cat $CONF)
-    echo -e "GET wss://$DOMAIN/ HTTP/1.1[crlf]\nHost: $DOMAIN[crlf]\nUpgrade: websocket[crlf]\nConnection: Upgrade[crlf][crlf]" > $PAYLOAD_FILE
+    echo -e "GET / HTTP/1.1[crlf]\nHost: $DOMAIN[crlf]\nUpgrade: websocket[crlf]\nConnection: Upgrade[crlf][crlf]" > $PAYLOAD_FILE
 }
 
 case "$1" in
     domain)
         if [ -z "$2" ]; then
-            echo "Usage: http-wss domain monsite.tld"
+            echo "Usage: http-ws domain monsite.tld"
             exit 1
         fi
         mkdir -p /etc/proxy_wss
         echo "$2" > $CONF
         generate_payload
         echo "[+] Domaine mis à jour : $2"
-        echo "[+] Nouveau payload HTTP/WSS généré :"
+        echo "[+] Nouveau payload HTTP/WS généré :"
         echo ""
         cat $PAYLOAD_FILE
         echo ""
@@ -182,8 +202,8 @@ case "$1" in
         journalctl -u $SERVICE -e --no-pager
         ;;
     *)
-        echo "Commande HTTP/WSS Manager"
-        echo "Usage: http-wss [action]"
+        echo "Commande HTTP/WS Manager"
+        echo "Usage: http-ws [action]"
         echo "Actions disponibles:"
         echo "  domain <monsite.tld>   -> changer le domaine et régénérer le payload"
         echo "  show                   -> afficher le domaine et le payload actuel"
@@ -194,4 +214,4 @@ case "$1" in
 esac
 EOF
 
-chmod +x /usr/bin/http-wss
+chmod +x /usr/bin/http-ws
