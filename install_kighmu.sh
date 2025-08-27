@@ -254,7 +254,7 @@ echo "+--------------------------------------------+"
 
 echo "🚀 Application de la configuration SSH personnalisée..."
 chmod +x "$INSTALL_DIR/setup_ssh_config.sh"
-run_script "sudo $INSTALL_DIR/setup_ssh_config.sh"
+run_script "$INSTALL_DIR/setup_ssh_config.sh"
 
 echo "🚀 Script de création utilisateur SSH disponible : $INSTALL_DIR/create_ssh_user.sh"
 echo "Tu peux le lancer manuellement quand tu veux."
