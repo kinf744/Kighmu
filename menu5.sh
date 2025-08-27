@@ -65,27 +65,27 @@ install_http_ws() {
         PAYLOAD="GET / HTTP/1.1[crlf]\nHost: $DOMAIN[crlf]\nUpgrade: websocket[crlf]\nConnection: Upgrade[crlf][crlf]"
         echo -e "$PAYLOAD" > /etc/proxy_wss/payload.txt
 
-        cat > /etc/systemd/system/proxy_wss.service <<EOF
-[Unit]
-Description=HTTP/WS Proxy Service
-After=network.target
+        # Remplacement de la gestion systemd par un lancement screen
+        # Fermer éventuelles anciennes sessions proxy_wss
+        sessions=$(screen -ls | grep proxy_wss | awk '{print $1}')
+        if [ -n "$sessions" ]; then
+          for session in $sessions; do
+            screen -S "$session" -X quit
+          done
+          echo "Anciennes sessions proxy_wss fermées."
+        fi
 
-[Service]
-Environment=DOMAIN=$(cat /etc/proxy_wss/domain.conf)
-ExecStart=/usr/bin/python3 $HOME/Kighmu/proxy_wss.py
-Restart=always
-User=root
-WorkingDirectory=$HOME/Kighmu
-StandardOutput=append:/var/log/proxy_wss.log
-StandardError=append:/var/log/proxy_wss.log
+        # Lancer proxy_wss.py dans une session screen détachée
+        screen -dmS proxy_wss /usr/bin/python3 $HOME/Kighmu/proxy_wss.py
 
-[Install]
-WantedBy=multi-user.target
-EOF
+        sleep 3
 
-        systemctl daemon-reload
-        systemctl enable proxy_wss
-        systemctl restart proxy_wss
+        # Vérifier que la session proxy_wss tourne
+        if screen -ls | grep -q proxy_wss; then
+          echo "Le proxy HTTP/WS est démarré dans screen."
+        else
+          echo "Erreur : le proxy HTTP/WS n'a pas pu démarrer."
+        fi
 
         echo "✅ HTTP/WS installé, domaine: $DOMAIN"
         echo "📦 Payload sauvegardé dans /etc/proxy_wss/payload.txt:"
