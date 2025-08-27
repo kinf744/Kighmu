@@ -168,36 +168,28 @@ run_script "$INSTALL_DIR/slowdns.sh"
 run_script "$INSTALL_DIR/udp_custom.sh"
 
 echo "=============================================="
-echo " 🚀 Configuration du service systemd pour proxy_wss.py (serveur WS Python)..."
+echo " 🚀 Lancement du mode HTTP/WS via screen..."
 echo "=============================================="
 
-SERVICE_NAME="proxywss.service"
-WSS_SCRIPT="$INSTALL_DIR/proxy_wss.py"
+# Nettoyer sessions écran existantes nommées proxy_wss
+sessions=$(screen -ls | grep proxy_wss | awk '{print $1}')
+if [ -n "$sessions" ]; then
+    for session in $sessions; do
+        screen -S "$session" -X quit
+    done
+    echo "Anciennes sessions proxy_wss supprimées."
+fi
 
-cat > /etc/systemd/system/$SERVICE_NAME <<EOL
-[Unit]
-Description=Serveur WebSocket Python WS
-After=network.target
+# Lancer proxy_wss.py dans screen détaché
+screen -dmS proxy_wss /usr/bin/python3 "$INSTALL_DIR/proxy_wss.py"
 
-[Service]
-User=$(whoami)
-ExecStart=/usr/bin/python3 $WSS_SCRIPT
-Restart=always
-Environment=DOMAIN=$DOMAIN
-WorkingDirectory=$INSTALL_DIR
+sleep 2
 
-[Install]
-WantedBy=multi-user.target
-EOL
-
-systemctl daemon-reload
-systemctl enable $SERVICE_NAME
-systemctl start $SERVICE_NAME
-
-if systemctl is-active --quiet $SERVICE_NAME; then
-    echo "Le serveur WS est démarré et fonctionne via systemd."
+# Vérifier que la session est bien lancée
+if screen -ls | grep -q proxy_wss; then
+    echo "Le serveur WS est démarré et fonctionne dans screen."
 else
-    echo "Erreur : le serveur WS n'a pas pu démarrer."
+    echo "Erreur : le serveur WS n'a pas pu démarrer dans screen."
 fi
 
 echo "=============================================="
