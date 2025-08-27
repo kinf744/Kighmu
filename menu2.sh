@@ -63,7 +63,7 @@ if ! [[ "$minutes" =~ ^[0-9]+$ ]]; then
 fi
 
 # Création utilisateur système sans home ni shell interactif
-useradd -M -s /bin/false "$username"
+useradd -M -s /bin/false "$username" || { echo "Erreur lors de la création du compte"; exit 1; }
 
 # Définition du mot de passe
 echo "$username:$password" | chpasswd
@@ -90,8 +90,13 @@ exit 0
 EOF
 chmod +x "$CLEAN_SCRIPT"
 
-# Planification suppression avec at
-echo "bash $CLEAN_SCRIPT" | at now + $minutes minutes 2>/dev/null
+# Vérifier que 'at' est installé
+if ! command -v at >/dev/null 2>&1; then
+    echo "La commande 'at' n'est pas installée. Veuillez l'installer pour que la suppression automatique fonctionne."
+else
+    # Planification suppression avec at
+    echo "bash $CLEAN_SCRIPT" | at now + "$minutes" minutes 2>/dev/null
+fi
 
 # Affichage résumé
 cat <<EOF
