@@ -1,25 +1,26 @@
 #!/bin/bash
 # ==============================================
-# slowdns.sh - Installation & SlowDNS x3 + HAProxy (profil unique client)
+# slowdns.sh - Installation et configuration SlowDNS rapide et stable
 # ==============================================
 
 SLOWDNS_DIR="/etc/slowdns"
+SERVER_KEY="$SLOWDNS_DIR/server.key"
+SERVER_PUB="$SLOWDNS_DIR/server.pub"
 SLOWDNS_BIN="/usr/local/bin/sldns-server"
+PORT1=5300 # premier port UDP
+PORT2=5353 # second port UDP
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
-
-UDP_PORTS=(5301 5302 5303)
-SSH_PORTS=(2201 2202 2203)
-VIP_PORT=5300
 
 # Installation des dépendances
 install_dependencies() {
     sudo apt update
-    for pkg in iptables screen tcpdump wget haproxy; do
+    for pkg in iptables screen tcpdump; do
         if ! command -v $pkg >/dev/null 2>&1; then
             sudo apt install -y $pkg
         fi
     done
 }
+
 install_dependencies
 
 # Création du dossier slowdns si absent
@@ -39,109 +40,74 @@ if [ ! -x "$SLOWDNS_BIN" ]; then
     sudo chmod +x "$SLOWDNS_BIN"
 fi
 
-# Ajout des ports SSH custom
-for p in "${SSH_PORTS[@]}"; do
-    if ! grep -q "Port $p" /etc/ssh/sshd_config; then
-        echo "Port $p" | sudo tee -a /etc/ssh/sshd_config > /dev/null
-    fi
-done
-sudo systemctl restart ssh
+# Génération automatique des clés si absentes
+if [ ! -s "$SERVER_KEY" ] || [ ! -s "$SERVER_PUB" ]; then
+    sudo $SLOWDNS_BIN -gen-key -privkey-file "$SERVER_KEY" -pubkey-file "$SERVER_PUB"
+    sudo chmod 600 "$SERVER_KEY"
+    sudo chmod 644 "$SERVER_PUB"
+fi
 
-# Génération et lancement des instances SlowDNS
-for i in 1 2 3; do
-    KEY="$SLOWDNS_DIR/server$i.key"
-    PUB="$SLOWDNS_DIR/server$i.pub"
-    PORT="${UDP_PORTS[$((i-1))]}"
-    SSH="${SSH_PORTS[$((i-1))]}"
-    # Génère clé si nécessaire
-    if [ ! -s "$KEY" ] || [ ! -s "$PUB" ]; then
-        sudo $SLOWDNS_BIN -gen-key -privkey-file "$KEY" -pubkey-file "$PUB"
-        sudo chmod 600 "$KEY"
-        sudo chmod 644 "$PUB"
-    fi
-    # Arrêt précédente
-    sudo pkill -f "$SLOWDNS_BIN.*:$PORT" || true
-    sleep 1
-    # Lance SlowDNS instance
-    sudo screen -dmS slowdns_$i $SLOWDNS_BIN -udp ":$PORT" -privkey-file "$KEY" "$NAMESERVER" 0.0.0.0:$SSH
-done
+PUB_KEY=$(cat "$SERVER_PUB")
 
-sleep 3
+# Arrêt de l’ancienne instance SlowDNS si existante
+sudo pkill -f "sldns-server" || true
+sleep 2
 
-# HAProxy config pour VIP unique côté client
-cat <<EOL | sudo tee /etc/haproxy/haproxy.cfg
-global
-    daemon
-    maxconn 4096
+# IPtables pour redirection 53 -> 5300 et 5353 UDP
+interface=$(ip a | awk '/state UP/{print $2}' | cut -d: -f1 | head -1)
+sudo iptables -I INPUT -p udp --dport $PORT1 -j ACCEPT
+sudo iptables -I INPUT -p udp --dport $PORT2 -j ACCEPT
+sudo iptables -I INPUT -p udp --dport 53 -j ACCEPT
+sudo iptables -t nat -I PREROUTING -i $interface -p udp --dport 53 -j REDIRECT --to-ports $PORT1
+sudo iptables-save | sudo tee /etc/iptables/rules.v4 >/dev/null
 
-defaults
-    mode tcp
-    timeout connect 10s
-    timeout client 1m
-    timeout server 1m
+# Optimisations kernel pour débit & stabilité (à ajouter une seule fois)
+sudo sysctl -w net.ipv4.ip_forward=1
+sudo sysctl -w net.core.rmem_max=26214400
+sudo sysctl -w net.core.wmem_max=26214400
+sudo sysctl -w net.ipv4.tcp_fastopen=3
+sudo sysctl -w net.ipv4.tcp_tw_reuse=1
 
-frontend slowdns_in
-    bind *:$VIP_PORT
-    mode tcp
-    default_backend slowdns_out
-
-backend slowdns_out
-    mode tcp
-    balance roundrobin
-    server s1 127.0.0.1:${UDP_PORTS[0]}
-    server s2 127.0.0.1:${UDP_PORTS[1]}
-    server s3 127.0.0.1:${UDP_PORTS[2]}
-EOL
-
-sudo systemctl restart haproxy
-
-# IPtables ports nécessaires
-for p in $VIP_PORT "${UDP_PORTS[@]}" "${SSH_PORTS[@]}"; do
-    sudo iptables -I INPUT -p udp --dport $p -j ACCEPT
-    sudo iptables -I INPUT -p tcp --dport $p -j ACCEPT
-done
-
-# Optimisations kernel réseau (toujours utile)
 for param in "net.ipv4.ip_forward=1" "net.core.rmem_max=26214400" "net.core.wmem_max=26214400" "net.ipv4.tcp_fastopen=3" "net.ipv4.tcp_tw_reuse=1"
 do
-    sudo sysctl -w ${param}
     if ! grep -q "$param" /etc/sysctl.conf; then
         echo "$param" | sudo tee -a /etc/sysctl.conf >/dev/null
     fi
 done
 
-# Firewall UFW (optionnel)
+# Firewall UFW
 if command -v ufw >/dev/null 2>&1; then
-    sudo ufw allow "$VIP_PORT"/udp
-    for p in "${UDP_PORTS[@]}"; do sudo ufw allow "$p"/udp; done
-    for p in "${SSH_PORTS[@]}"; do sudo ufw allow "$p"/tcp; done
+    sudo ufw allow "$PORT1"/udp
+    sudo ufw allow "$PORT2"/udp
     sudo ufw reload
 fi
 
-# Affichage et infos client
-PUB_KEY=$(cat "$SLOWDNS_DIR/server1.pub")
+# Lancement du serveur SlowDNS sur 2 ports pour multi-session (meilleure stabilité)
+sudo screen -dmS slowdns_1 $SLOWDNS_BIN -udp ":$PORT1" -privkey-file "$SERVER_KEY" "$NAMESERVER" 0.0.0.0:22
+sudo screen -dmS slowdns_2 $SLOWDNS_BIN -udp ":$PORT2" -privkey-file "$SERVER_KEY" "$NAMESERVER" 0.0.0.0:22
 
-echo "+--------------------------------------------+"
-echo "|      CONFIG SLOWDNS x3 BOOST + HAProxy     |"
-echo "+--------------------------------------------+"
-echo ""
-echo "Clé publique SlowDNS 1 :"
-echo "$PUB_KEY"
-echo ""
-echo "NameServer   : $NAMESERVER"
-echo ""
-echo "Port UDP     : $VIP_PORT (un seul profil côté client)"
-echo ""
-echo "Commande client Termux :"
-echo "curl -sO https://github.com/khaledagn/DNS-AGN/raw/main/files/slowdns && chmod +x slowdns"
-echo "./slowdns $NAMESERVER $PUB_KEY"
-echo ""
-echo "Tunnel boosté ! 1 profil client, 3 instances côté VPS pour plus de stabilité."
-echo ""
+sleep 3
 
-if pgrep -f "$SLOWDNS_BIN" > /dev/null; then
-    echo "Service SlowDNS X3 démarré avec succès & Load Balanced !"
+if pgrep -f "sldns-server" > /dev/null; then
+    echo "Service SlowDNS démarré avec succès sur les ports UDP $PORT1 et $PORT2."
 else
-    echo "ERREUR : Le service SlowDNS X3 n'a pas pu démarrer."
+    echo "ERREUR : Le service SlowDNS n'a pas pu démarrer."
     exit 1
 fi
+
+echo "+--------------------------------------------+"
+echo "|           CONFIG SLOWDNS RAPIDE           |"
+echo "+--------------------------------------------+"
+echo ""
+echo "Clé publique :"
+echo "$PUB_KEY"
+echo ""
+echo "NameServer  : $NAMESERVER"
+echo ""
+echo "Commande client Termux (modifiée pour la rapidité) :"
+echo "curl -sO https://github.com/khaledagn/DNS-AGN/raw/main/files/slowdns && chmod +x slowdns"
+echo "./slowdns $NAMESERVER $PUB_KEY" # à lancer sur chaque port pour multi-threading !
+echo ""
+echo "Ports utilisés : $PORT1 / $PORT2 UDP (multi processus)"
+echo ""
+echo "Installation et configuration SlowDNS optimisées, testez la vitesse et la stabilité !"
