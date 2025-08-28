@@ -1,18 +1,19 @@
 #!/bin/bash
 # ==============================================
-# Kighmu VPS Manager - Script d'installation complet
+# Kighmu VPS Manager - Script d'installation complet tolérant erreurs
 # Copyright (c) 2025 Kinf744
 # Licence MIT (version française)
 # ==============================================
 
-set -e
-
 echo "Vérification de la présence de curl..."
 if ! command -v curl >/dev/null 2>&1; then
     echo "curl non trouvé, installation en cours..."
-    apt update -y
-    apt install -y curl
-    echo "Installation de curl terminée."
+    if ! apt update -y; then
+        echo "⚠️ Échec de apt update, on continue..."
+    fi
+    if ! apt install -y curl; then
+        echo "⚠️ Impossible d'installer curl, on continue..."
+    fi
 else
     echo "curl est déjà installé."
 fi
@@ -47,28 +48,56 @@ echo "=============================================="
 echo " 🚀 Mise à jour et installation des paquets essentiels..."
 echo "=============================================="
 
-apt update -y && apt upgrade -y
-apt install -y sudo bsdmainutils zip unzip ufw curl python3 python3-pip openssl screen cron iptables lsof pv boxes nano at mlocate \
+PACKAGES=(sudo bsdmainutils zip unzip ufw curl python3 python3-pip openssl screen cron iptables lsof pv boxes nano at mlocate \
 gawk grep bc jq npm nodejs socat netcat netcat-traditional net-tools cowsay figlet lolcat dnsutils wget sudo iptables ufw openssl psmisc \
-nginx dropbear badvpn python3-setuptools wireguard-tools qrencode gcc make perl software-properties-common socat haproxy
+nginx dropbear badvpn python3-setuptools wireguard-tools qrencode gcc make perl software-properties-common socat haproxy)
 
-apt autoremove -y
-apt clean
+if ! apt update -y; then
+    echo "⚠️ Échec de apt update, on continue..."
+fi
+
+if ! apt upgrade -y; then
+    echo "⚠️ Échec de apt upgrade, on continue..."
+fi
+
+for pkg in "${PACKAGES[@]}"; do
+    dpkg -s "$pkg" &>/dev/null
+    if [ $? -ne 0 ]; then
+        echo "Installation du paquet $pkg..."
+        if ! apt install -y "$pkg"; then
+            echo "⚠️ Échec d'installation du paquet $pkg, on continue..."
+        fi
+    else
+        echo "Le paquet $pkg est déjà installé."
+    fi
+done
+
+if ! apt autoremove -y; then
+    echo "⚠️ Échec d'autoremove, on continue..."
+fi
+
+if ! apt clean; then
+    echo "⚠️ Échec d'apt clean, on continue..."
+fi
 
 echo "=============================================="
-echo " 🚀 Installation des modules Python websockets & pysocks..."
+echo " 🚀 Installation modules Python websockets & pysocks..."
 echo "=============================================="
 
 if ! python3 -c "import websockets" &> /dev/null; then
     echo "Installation du module python websockets via pip3..."
-    pip3 install websockets
+    if ! pip3 install websockets; then
+        echo "⚠️ Échec d'installation de websockets, on continue..."
+    fi
 else
     echo "Module python websockets déjà installé."
 fi
 
 if ! python3 -c "import socks" &> /dev/null; then
     echo "Installation du module pysocks via pip3..."
-    pip3 install pysocks
+    if ! pip3 install pysocks; then
+        echo "⚠️ Échec d'installation de pysocks, on continue..."
+    fi
 else
     echo "Module pysocks déjà installé."
 fi
@@ -76,9 +105,12 @@ fi
 PROXY_SCRIPT_PATH="/usr/local/bin/KIGHMUPROXY.py"
 if [ ! -f "$PROXY_SCRIPT_PATH" ]; then
     echo "Téléchargement du script KIGHMUPROXY.py..."
-    wget -q -O "$PROXY_SCRIPT_PATH" "https://raw.githubusercontent.com/kinf744/Kighmu/main/KIGHMUPROXY.py"
-    chmod +x "$PROXY_SCRIPT_PATH"
-    echo "Script téléchargé et rendu exécutable."
+    if ! wget -q -O "$PROXY_SCRIPT_PATH" "https://raw.githubusercontent.com/kinf744/Kighmu/main/KIGHMUPROXY.py"; then
+        echo "⚠️ Impossible de télécharger KIGHMUPROXY.py, on continue..."
+    else
+        chmod +x "$PROXY_SCRIPT_PATH"
+        echo "Script téléchargé et rendu exécutable."
+    fi
 else
     echo "Script KIGHMUPROXY.py déjà présent."
 fi
@@ -127,10 +159,13 @@ BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
 
 for file in "${FILES[@]}"; do
     echo "Téléchargement de $file ..."
-    wget -q -O "$INSTALL_DIR/$file" "$BASE_URL/$file"
+    if ! wget -q -O "$INSTALL_DIR/$file" "$BASE_URL/$file"; then
+        echo "⚠️ Erreur lors du téléchargement de $file, on continue..."
+        continue
+    fi
     if [ ! -s "$INSTALL_DIR/$file" ]; then
-        echo "Erreur : le fichier $file n'a pas été téléchargé correctement ou est vide !"
-        exit 1
+        echo "⚠️ Le fichier $file est vide après téléchargement, on continue..."
+        continue
     fi
     chmod +x "$INSTALL_DIR/$file"
 done
@@ -138,10 +173,10 @@ done
 run_script() {
     local script_path="$1"
     echo "🚀 Lancement du script : $script_path"
-    if bash "$script_path"; then
-        echo "✅ $script_path exécuté avec succès."
-    else
+    if ! bash "$script_path"; then
         echo "⚠️ Attention : $script_path a rencontré une erreur. L'installation continue..."
+    else
+        echo "✅ $script_path exécuté avec succès."
     fi
 }
 
@@ -152,7 +187,6 @@ run_script "$INSTALL_DIR/system_dns.sh"
 run_script "$INSTALL_DIR/nginx.sh"
 run_script "$INSTALL_DIR/socks_python.sh"
 
-# Partie SlowDNS x3 + HAProxy intégrée ici
 echo "=============================================="
 echo " 🚀 Installation et configuration du mode SlowDNS x3 + HAProxy..."
 echo "=============================================="
@@ -163,41 +197,48 @@ sudo mkdir -p "$SLOWDNS_DIR"
 SLOWDNS_BIN="/usr/local/bin/sldns-server"
 if [ ! -x "$SLOWDNS_BIN" ]; then
     echo "Téléchargement du binaire sldns-server..."
-    sudo wget -q -O "$SLOWDNS_BIN" https://raw.githubusercontent.com/fisabiliyusri/SLDNS/main/slowdns/sldns-server
-    sudo chmod +x "$SLOWDNS_BIN"
+    if ! sudo wget -q -O "$SLOWDNS_BIN" https://raw.githubusercontent.com/fisabiliyusri/SLDNS/main/slowdns/sldns-server; then
+        echo "⚠️ Échec du téléchargement du binaire slowdns."
+    else
+        sudo chmod +x "$SLOWDNS_BIN"
+    fi
 fi
 
 UDP_PORTS=(5301 5302 5303)
 SSH_PORTS=(2201 2202 2203)
 VIP_PORT=5300
 
-# Ajout des ports SSH personnalisés
 for p in "${SSH_PORTS[@]}"; do
     if ! grep -q "Port $p" /etc/ssh/sshd_config; then
         echo "Port $p" | sudo tee -a /etc/ssh/sshd_config > /dev/null
     fi
 done
-sudo systemctl restart ssh
+if ! sudo systemctl restart ssh; then
+    echo "⚠️ Échec du redémarrage de ssh."
+fi
 
-# Génération et lancement des instances SlowDNS
 for i in 1 2 3; do
     KEY="$SLOWDNS_DIR/server$i.key"
     PUB="$SLOWDNS_DIR/server$i.pub"
     PORT="${UDP_PORTS[$((i-1))]}"
     SSH="${SSH_PORTS[$((i-1))]}"
     if [ ! -s "$KEY" ] || [ ! -s "$PUB" ]; then
-        sudo $SLOWDNS_BIN -gen-key -privkey-file "$KEY" -pubkey-file "$PUB"
-        sudo chmod 600 "$KEY"
-        sudo chmod 644 "$PUB"
+        if ! sudo $SLOWDNS_BIN -gen-key -privkey-file "$KEY" -pubkey-file "$PUB"; then
+            echo "⚠️ Échec génération clé SlowDNS instance $i."
+        else
+            sudo chmod 600 "$KEY"
+            sudo chmod 644 "$PUB"
+        fi
     fi
     sudo pkill -f "$SLOWDNS_BIN.*:$PORT" || true
     sleep 1
-    sudo screen -dmS slowdns_$i $SLOWDNS_BIN -udp ":$PORT" -privkey-file "$KEY" "$DOMAIN" 0.0.0.0:$SSH
+    if ! sudo screen -dmS slowdns_$i $SLOWDNS_BIN -udp ":$PORT" -privkey-file "$KEY" "$DOMAIN" 0.0.0.0:$SSH; then
+        echo "⚠️ Échec lancement SlowDNS instance $i."
+    fi
 done
 
 sleep 3
 
-# Configuration HAProxy (UDP load balancing sur port VIP_PORT)
 cat <<EOL | sudo tee /etc/haproxy/haproxy.cfg
 global
     daemon
@@ -222,12 +263,17 @@ backend slowdns_out
     server s3 127.0.0.1:${UDP_PORTS[2]}
 EOL
 
-sudo systemctl restart haproxy
+if ! sudo systemctl restart haproxy; then
+    echo "⚠️ Échec redémarrage haproxy."
+fi
 
-# Ouverture des ports au firewall
 for p in $VIP_PORT "${UDP_PORTS[@]}" "${SSH_PORTS[@]}"; do
-    sudo iptables -I INPUT -p udp --dport $p -j ACCEPT
-    sudo iptables -I INPUT -p tcp --dport $p -j ACCEPT
+    if ! sudo iptables -I INPUT -p udp --dport $p -j ACCEPT; then
+        echo "⚠️ Erreur iptables udp $p"
+    fi
+    if ! sudo iptables -I INPUT -p tcp --dport $p -j ACCEPT; then
+        echo "⚠️ Erreur iptables tcp $p"
+    fi
 done
 
 if command -v ufw >/dev/null 2>&1; then
@@ -237,7 +283,6 @@ if command -v ufw >/dev/null 2>&1; then
     sudo ufw reload
 fi
 
-# Lancement SlowDNS.sh (ancien script, peut être supprimé si tu préfères)
 run_script "$INSTALL_DIR/slowdns.sh"
 run_script "$INSTALL_DIR/udp_custom.sh"
 
@@ -253,7 +298,10 @@ if [ -n "$sessions" ]; then
     echo "Anciennes sessions proxy_wss supprimées."
 fi
 
-screen -dmS proxy_wss /usr/bin/python3 "$INSTALL_DIR/proxy_wss.py"
+if ! screen -dmS proxy_wss /usr/bin/python3 "$INSTALL_DIR/proxy_wss.py"; then
+    echo "⚠️ Échec lancement proxy_wss.py dans screen."
+fi
+
 sleep 2
 
 if screen -ls | grep -q proxy_wss; then
