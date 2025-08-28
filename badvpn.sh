@@ -1,36 +1,31 @@
 #!/bin/bash
-# Installation compilée de badvpn (udpgw)
+# Installation automatique de badvpn-udpgw compilé
 
 set -e
 
-# Dépendances nécessaires
+echo "Installation des dépendances de compilation..."
 sudo apt update
 sudo apt install -y cmake build-essential git
 
-# Répertoire temporaire
 TMPDIR=$(mktemp -d)
-cd $TMPDIR
+echo "Téléchargement du dépôt badvpn dans $TMPDIR..."
+git clone https://github.com/ambrop72/badvpn.git "$TMPDIR/badvpn"
 
-echo "Téléchargement de badvpn ..."
-git clone https://github.com/ambrop72/badvpn.git
-cd badvpn
-
-# Compilation uniquement UDPGW (réduit les temps)
+cd "$TMPDIR/badvpn"
+echo "Compilation du module UDPGW..."
 cmake -DBUILD_NOTHING_BY_DEFAULT=1 -DBUILD_UDPGW=1 .
 make
 
-echo "Installation de badvpn-udpgw ..."
+echo "Copie du binaire badvpn-udpgw dans /usr/local/bin/..."
 sudo cp badvpn-udpgw /usr/local/bin/
 sudo chmod +x /usr/local/bin/badvpn-udpgw
 
 # Nettoyage
 cd ~
-rm -rf $TMPDIR
+rm -rf "$TMPDIR"
 
-# Lancement en background (exemple sur port 7300)
-echo "Lancement de badvpn-udpgw sur le port 7300 ..."
-nohup sudo badvpn-udpgw --listen-addr 0.0.0.0:7300 > /dev/null 2>&1 &
+echo "Lancement de badvpn-udpgw en background sur le port 7300..."
+nohup sudo badvpn-udpgw --listen-addr 0.0.0.0:7300 >/dev/null 2>&1 &
 
 echo "Installation terminée. badvpn-udpgw est opérationnel sur le port 7300."
-echo "Vous pouvez modifier le port ou lancer ce service dans un screen ou systemd si besoin."
-
+echo "Configure un screen ou systemd pour démarrer ce service automatiquement si besoin."
