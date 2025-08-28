@@ -1,11 +1,12 @@
 #!/bin/bash
 # ==============================================
-# Kighmu VPS Manager - Script d'installation
+# Kighmu VPS Manager - Script d'installation complet
 # Copyright (c) 2025 Kinf744
 # Licence MIT (version française)
 # ==============================================
 
-# Vérification de la présence de curl et installation si manquant
+set -e
+
 echo "Vérification de la présence de curl..."
 if ! command -v curl >/dev/null 2>&1; then
     echo "curl non trouvé, installation en cours..."
@@ -20,9 +21,7 @@ echo "+--------------------------------------------+"
 echo "|             INSTALLATION VPS               |"
 echo "+--------------------------------------------+"
 
-# Demander le nom de domaine qui pointe vers l’IP du serveur
 read -p "Veuillez entrer votre nom de domaine (doit pointer vers l'IP de ce serveur) : " DOMAIN
-
 if [ -z "$DOMAIN" ]; then
   echo "Erreur : vous devez entrer un nom de domaine valide."
   exit 1
@@ -49,31 +48,23 @@ echo " 🚀 Mise à jour et installation des paquets essentiels..."
 echo "=============================================="
 
 apt update -y && apt upgrade -y
-
-apt install -y \
-sudo bsdmainutils zip unzip ufw curl python3 python3-pip openssl screen cron iptables lsof pv boxes nano at mlocate \
-gawk grep bc jq npm nodejs socat netcat netcat-traditional net-tools cowsay figlet lolcat \
-dnsutils net-tools wget sudo iptables ufw openssl psmisc nginx dropbear badvpn \
-python3-setuptools wireguard-tools qrencode gcc make perl software-properties-common socat
+apt install -y sudo bsdmainutils zip unzip ufw curl python3 python3-pip openssl screen cron iptables lsof pv boxes nano at mlocate \
+gawk grep bc jq npm nodejs socat netcat netcat-traditional net-tools cowsay figlet lolcat dnsutils wget sudo iptables ufw openssl psmisc \
+nginx dropbear badvpn python3-setuptools wireguard-tools qrencode gcc make perl software-properties-common socat haproxy
 
 apt autoremove -y
 apt clean
 
 echo "=============================================="
-echo " 🚀 Préparation du mode HTTP/WS sans SSL..."
+echo " 🚀 Installation des modules Python websockets & pysocks..."
 echo "=============================================="
 
-# Installer le module python websockets si absent
 if ! python3 -c "import websockets" &> /dev/null; then
     echo "Installation du module python websockets via pip3..."
     pip3 install websockets
 else
     echo "Module python websockets déjà installé."
 fi
-
-echo "=============================================="
-echo " 🚀 Installation et configuration du module Python pysocks et du proxy SOCKS"
-echo "=============================================="
 
 if ! python3 -c "import socks" &> /dev/null; then
     echo "Installation du module pysocks via pip3..."
@@ -86,12 +77,8 @@ PROXY_SCRIPT_PATH="/usr/local/bin/KIGHMUPROXY.py"
 if [ ! -f "$PROXY_SCRIPT_PATH" ]; then
     echo "Téléchargement du script KIGHMUPROXY.py..."
     wget -q -O "$PROXY_SCRIPT_PATH" "https://raw.githubusercontent.com/kinf744/Kighmu/main/KIGHMUPROXY.py"
-    if [ $? -eq 0 ]; then
-        chmod +x "$PROXY_SCRIPT_PATH"
-        echo "Script téléchargé et rendu exécutable."
-    else
-        echo "Erreur: impossible de télécharger KIGHMUPROXY.py. Veuillez vérifier l'URL."
-    fi
+    chmod +x "$PROXY_SCRIPT_PATH"
+    echo "Script téléchargé et rendu exécutable."
 else
     echo "Script KIGHMUPROXY.py déjà présent."
 fi
@@ -103,11 +90,11 @@ ufw allow 443
 ufw --force enable
 
 echo "=============================================="
-echo " 🚀 Installation de Kighmu VPS Manager..."
+echo " 🚀 Installation des scripts Kighmu..."
 echo "=============================================="
 
 INSTALL_DIR="$HOME/Kighmu"
-mkdir -p "$INSTALL_DIR" || { echo "Erreur : impossible de créer le dossier $INSTALL_DIR"; exit 1; }
+mkdir -p "$INSTALL_DIR"
 
 FILES=(
     "install_kighmu.sh"
@@ -140,7 +127,7 @@ BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
 
 for file in "${FILES[@]}"; do
     echo "Téléchargement de $file ..."
-    wget -O "$INSTALL_DIR/$file" "$BASE_URL/$file"
+    wget -q -O "$INSTALL_DIR/$file" "$BASE_URL/$file"
     if [ ! -s "$INSTALL_DIR/$file" ]; then
         echo "Erreur : le fichier $file n'a pas été téléchargé correctement ou est vide !"
         exit 1
@@ -164,6 +151,93 @@ run_script "$INSTALL_DIR/badvpn.sh"
 run_script "$INSTALL_DIR/system_dns.sh"
 run_script "$INSTALL_DIR/nginx.sh"
 run_script "$INSTALL_DIR/socks_python.sh"
+
+# Partie SlowDNS x3 + HAProxy intégrée ici
+echo "=============================================="
+echo " 🚀 Installation et configuration du mode SlowDNS x3 + HAProxy..."
+echo "=============================================="
+
+SLOWDNS_DIR="/etc/slowdns"
+sudo mkdir -p "$SLOWDNS_DIR"
+
+SLOWDNS_BIN="/usr/local/bin/sldns-server"
+if [ ! -x "$SLOWDNS_BIN" ]; then
+    echo "Téléchargement du binaire sldns-server..."
+    sudo wget -q -O "$SLOWDNS_BIN" https://raw.githubusercontent.com/fisabiliyusri/SLDNS/main/slowdns/sldns-server
+    sudo chmod +x "$SLOWDNS_BIN"
+fi
+
+UDP_PORTS=(5301 5302 5303)
+SSH_PORTS=(2201 2202 2203)
+VIP_PORT=5300
+
+# Ajout des ports SSH personnalisés
+for p in "${SSH_PORTS[@]}"; do
+    if ! grep -q "Port $p" /etc/ssh/sshd_config; then
+        echo "Port $p" | sudo tee -a /etc/ssh/sshd_config > /dev/null
+    fi
+done
+sudo systemctl restart ssh
+
+# Génération et lancement des instances SlowDNS
+for i in 1 2 3; do
+    KEY="$SLOWDNS_DIR/server$i.key"
+    PUB="$SLOWDNS_DIR/server$i.pub"
+    PORT="${UDP_PORTS[$((i-1))]}"
+    SSH="${SSH_PORTS[$((i-1))]}"
+    if [ ! -s "$KEY" ] || [ ! -s "$PUB" ]; then
+        sudo $SLOWDNS_BIN -gen-key -privkey-file "$KEY" -pubkey-file "$PUB"
+        sudo chmod 600 "$KEY"
+        sudo chmod 644 "$PUB"
+    fi
+    sudo pkill -f "$SLOWDNS_BIN.*:$PORT" || true
+    sleep 1
+    sudo screen -dmS slowdns_$i $SLOWDNS_BIN -udp ":$PORT" -privkey-file "$KEY" "$DOMAIN" 0.0.0.0:$SSH
+done
+
+sleep 3
+
+# Configuration HAProxy (UDP load balancing sur port VIP_PORT)
+cat <<EOL | sudo tee /etc/haproxy/haproxy.cfg
+global
+    daemon
+    maxconn 4096
+
+defaults
+    mode tcp
+    timeout connect 10s
+    timeout client 1m
+    timeout server 1m
+
+frontend slowdns_in
+    bind *:$VIP_PORT
+    mode tcp
+    default_backend slowdns_out
+
+backend slowdns_out
+    mode tcp
+    balance roundrobin
+    server s1 127.0.0.1:${UDP_PORTS[0]}
+    server s2 127.0.0.1:${UDP_PORTS[1]}
+    server s3 127.0.0.1:${UDP_PORTS[2]}
+EOL
+
+sudo systemctl restart haproxy
+
+# Ouverture des ports au firewall
+for p in $VIP_PORT "${UDP_PORTS[@]}" "${SSH_PORTS[@]}"; do
+    sudo iptables -I INPUT -p udp --dport $p -j ACCEPT
+    sudo iptables -I INPUT -p tcp --dport $p -j ACCEPT
+done
+
+if command -v ufw >/dev/null 2>&1; then
+    sudo ufw allow "$VIP_PORT"/udp
+    for p in "${UDP_PORTS[@]}"; do sudo ufw allow "$p"/udp; done
+    for p in "${SSH_PORTS[@]}"; do sudo ufw allow "$p"/tcp; done
+    sudo ufw reload
+fi
+
+# Lancement SlowDNS.sh (ancien script, peut être supprimé si tu préfères)
 run_script "$INSTALL_DIR/slowdns.sh"
 run_script "$INSTALL_DIR/udp_custom.sh"
 
@@ -171,7 +245,6 @@ echo "=============================================="
 echo " 🚀 Lancement du mode HTTP/WS via screen..."
 echo "=============================================="
 
-# Nettoyer sessions écran existantes nommées proxy_wss
 sessions=$(screen -ls | grep proxy_wss | awk '{print $1}')
 if [ -n "$sessions" ]; then
     for session in $sessions; do
@@ -180,12 +253,9 @@ if [ -n "$sessions" ]; then
     echo "Anciennes sessions proxy_wss supprimées."
 fi
 
-# Lancer proxy_wss.py dans screen détaché
 screen -dmS proxy_wss /usr/bin/python3 "$INSTALL_DIR/proxy_wss.py"
-
 sleep 2
 
-# Vérifier que la session est bien lancée
 if screen -ls | grep -q proxy_wss; then
     echo "Le serveur WS est démarré et fonctionne dans screen."
 else
@@ -193,87 +263,9 @@ else
 fi
 
 echo "=============================================="
-echo " 🚀 Installation et configuration SlowDNS..."
-echo "=============================================="
-
-SLOWDNS_DIR="/etc/slowdns"
-mkdir -p "$SLOWDNS_DIR"
-
-DNS_BIN="/usr/local/bin/dns-server"
-if [ ! -x "$DNS_BIN" ]; then
-    echo "Téléchargement du binaire dns-server..."
-    wget -q -O "$DNS_BIN" https://github.com/sbatrow/DARKSSH-MANAGER/raw/main/Modulos/dns-server
-    chmod +x "$DNS_BIN"
-fi
-
-if [ ! -f "$SLOWDNS_DIR/server.key" ] || [ ! -f "$SLOWDNS_DIR/server.pub" ]; then
-    echo "Génération des clés SlowDNS..."
-    "$DNS_BIN" -gen-key -privkey-file "$SLOWDNS_DIR/server.key" -pubkey-file "$SLOWDNS_DIR/server.pub"
-    chmod 600 "$SLOWDNS_DIR/server.key"
-    chmod 644 "$SLOWDNS_DIR/server.pub"
-fi
-
-interface=$(ip a | awk '/state UP/{print $2}' | cut -d: -f1 | head -1)
-iptables -F
-iptables -I INPUT -p udp --dport 5300 -j ACCEPT
-iptables -t nat -I PREROUTING -i $interface -p udp --dport 53 -j REDIRECT --to-ports 5300
-
-ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
-screen -dmS slowdns "$DNS_BIN" -udp :5300 -privkey-file "$SLOWDNS_DIR/server.key" slowdns5.kighmup.ddns-ip.net 0.0.0.0:$ssh_port
-
-echo "+--------------------------------------------+"
-echo " SlowDNS installé et lancé avec succès !"
-echo " Clé publique (à utiliser côté client) :"
-cat "$SLOWDNS_DIR/server.pub"
-echo ""
-echo "Commande client SlowDNS à utiliser :"
-echo "curl -sO https://github.com/khaledagn/DNS-AGN/raw/main/files/slowdns && chmod +x slowdns && ./slowdns slowdns5.kighmup.ddns-ip.net $(cat $SLOWDNS_DIR/server.pub)"
-echo "+--------------------------------------------+"
-
-echo "🚀 Application de la configuration SSH personnalisée..."
-chmod +x "$INSTALL_DIR/setup_ssh_config.sh"
-run_script "$INSTALL_DIR/setup_ssh_config.sh"
-
-echo "🚀 Script de création utilisateur SSH disponible : $INSTALL_DIR/create_ssh_user.sh"
-echo "Tu peux le lancer manuellement quand tu veux."
-
-if ! grep -q "alias kighmu=" ~/.bashrc; then
-    echo "alias kighmu='$INSTALL_DIR/kighmu.sh'" >> ~/.bashrc
-    echo "Alias kighmu ajouté dans ~/.bashrc"
-else
-    echo "Alias kighmu déjà présent dans ~/.bashrc"
-fi
-
-if ! grep -q "/usr/local/bin" ~/.bashrc; then
-    echo 'export PATH=$PATH:/usr/local/bin' >> ~/.bashrc
-    echo "Ajout de /usr/local/bin au PATH dans ~/.bashrc"
-fi
-
-NS="slowdns5.kighmup.ddns-ip.net"
-
-SLOWDNS_PUBKEY="/etc/slowdns/server.pub"
-if [ -f "$SLOWDNS_PUBKEY" ]; then
-    PUBLIC_KEY=$(sed ':a;N;$!ba;s/\n/\\n/g' "$SLOWDNS_PUBKEY")
-else
-    PUBLIC_KEY="Clé publique SlowDNS non trouvée"
-fi
-
-cat > ~/.kighmu_info <<EOF
-DOMAIN=$DOMAIN
-NS=$NS
-PUBLIC_KEY="$PUBLIC_KEY"
-EOF
-
-chmod 600 ~/.kighmu_info
-echo "Fichier ~/.kighmu_info créé avec succès et prêt à être utilisé par les scripts."
-
-echo
-echo "=============================================="
 echo " ✅ Installation terminée !"
 echo " Pour lancer Kighmu, utilisez la commande : kighmu"
-echo
 echo " ⚠️ Pour que l'alias soit pris en compte :"
 echo " - Ouvre un nouveau terminal, ou"
 echo " - Exécutez manuellement : source ~/.bashrc"
-echo
 echo "=============================================="
