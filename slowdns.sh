@@ -16,8 +16,8 @@ SERVICE_FILE="/etc/systemd/system/slowdns.service"
 # Installation dépendances si manquantes
 install_dependencies() {
     sudo apt update
-    for pkg in iptables screen tcpdump; do
-        if ! command -v $pkg >/dev/null 2>&1; then
+    for pkg in iptables iptables-persistent screen tcpdump wget; do
+        if ! dpkg -s $pkg >/dev/null 2>&1; then
             echo "$pkg non trouvé. Installation en cours..."
             sudo apt install -y $pkg
         else
@@ -71,7 +71,8 @@ ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
 sudo tee $SERVICE_FILE > /dev/null << EOF
 [Unit]
 Description=SlowDNS Server Service
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
@@ -109,14 +110,19 @@ echo "Augmentation des buffers UDP..."
 sudo sysctl -w net.core.rmem_max=26214400
 sudo sysctl -w net.core.wmem_max=26214400
 
-# Réglage iptables
+# Application règles iptables pour SlowDNS
 sudo iptables -F
 sudo iptables -I INPUT -p udp --dport $PORT -j ACCEPT
 sudo iptables -t nat -I PREROUTING -i $interface -p udp --dport 53 -j REDIRECT --to-ports $PORT
 
-if command -v iptables-save >/dev/null 2>&1; then
-    sudo iptables-save | sudo tee /etc/iptables/rules.v4 >/dev/null
-fi
+# Créer le répertoire si non existant avant la sauvegarde des règles
+sudo mkdir -p /etc/iptables
+
+# Sauvegarde des règles iptables pour persistance au reboot
+sudo iptables-save | sudo tee /etc/iptables/rules.v4 >/dev/null
+
+# Chargement iptables-persistent (utile si déjà installé)
+sudo systemctl restart netfilter-persistent || true
 
 # Activation IP forwarding
 if [ "$(sysctl -n net.ipv4.ip_forward)" -ne 1 ]; then
