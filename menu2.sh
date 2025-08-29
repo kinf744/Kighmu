@@ -18,6 +18,14 @@ else
     SLOWDNS_KEY="Clé publique SlowDNS non trouvée!"
 fi
 
+# Charger le NameServer SlowDNS exact depuis le fichier de config
+if [ -f /etc/slowdns/ns.conf ]; then
+    SLOWDNS_NS=$(< /etc/slowdns/ns.conf)
+else
+    echo "Erreur : fichier /etc/slowdns/ns.conf introuvable."
+    exit 1
+fi
+
 # Fichiers et dossiers nécessaires
 USER_FILE="/etc/kighmu/users.list"
 mkdir -p /etc/kighmu
@@ -43,8 +51,8 @@ if id "$username" &>/dev/null; then
     exit 1
 fi
 
-read -s -p "Mot de passe : " password
-echo ""
+# Lecture mot de passe visible (non masqué)
+read -p "Mot de passe : " password
 if [[ -z "$password" ]]; then
     echo "Mot de passe vide, annulation."
     exit 1
@@ -73,7 +81,6 @@ expire_date=$(date -d "+$minutes minutes" '+%Y-%m-%d %H:%M:%S')
 
 # Récupération infos serveur
 HOST_IP=$(curl -s https://api.ipify.org)
-SLOWDNS_NS="${SLOWDNS_NS:-slowdns5.kighmup.ddns-ip.net}"
 
 # Sauvegarde des infos utilisateur dans le fichier
 echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
