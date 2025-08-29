@@ -55,10 +55,10 @@ install_badvpn() {
 
 install_http_ws() {
     echo "Installation HTTP WS (tunnel SSH WebSocket)..."
-    if [ -x "$HOME/Kighmu/install_proxy_wss.py" ]; then
-        python3 "$HOME/Kighmu/install_proxy_wss.py"
+    if [ -x "$HOME/Kighmu/proxy_wss.py" ]; then
+        python3 "$HOME/Kighmu/proxy_wss.py"
     else
-        echo "Script install_proxy_wss.py non trouvé ou non exécutable."
+        echo "Script proxy_wss.py non trouvé ou non exécutable."
     fi
 }
 
