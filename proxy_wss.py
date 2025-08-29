@@ -14,12 +14,6 @@ def run_command(command):
     else:
         print(result.stdout.strip())
 
-def install_python_packages():
-    """Install necessary Python packages."""
-    print("Installing required Python packages...")
-    run_command(f"{sys.executable} -m pip install --upgrade pip")
-    run_command(f"{sys.executable} -m pip install sshtunnel paramiko")
-
 def install_wstunnel_binary():
     """Download and install latest wstunnel binary for Linux x64."""
     url = "https://github.com/erebe/wstunnel/releases/download/v5.1/wstunnel-linux-x64"
@@ -37,35 +31,26 @@ def install_wstunnel_binary():
         sys.exit(1)
 
 def main():
-    # Mandatory domain input
     domain = input("Enter the domain (e.g., ws.example.com) for the SSH WebSocket tunnel (required): ").strip()
     if not domain:
         print("Error: A domain is required to continue installation.")
         sys.exit(1)
 
-    # Check for root privileges
     if os.geteuid() != 0:
         print("Error: This script must be run as root (use sudo).")
         sys.exit(1)
 
-    # Update and install system dependencies
     run_command("apt-get update -y")
-    run_command("apt-get install -y nodejs npm screen python3-pip wget")
+    run_command("apt-get install -y screen python3 wget")
 
-    # Install wstunnel binary
     install_wstunnel_binary()
-
-    # Install required Python packages
-    install_python_packages()
 
     # Terminate any existing screen session named sshws
     run_command("screen -S sshws -X quit || true")
 
     # Start SSH WebSocket tunnel in detached screen session on port 8880
-    # Correct latest wstunnel syntax without --restrict-to
-    run_command(f"screen -dmS sshws wstunnel --server ws://0.0.0.0:8880 -r localhost:22")
+    run_command("screen -dmS sshws /usr/local/bin/wstunnel --server ws://0.0.0.0:8880 -r localhost:22")
 
-    # Generate and display WebSocket payload
     payload = (
         "GET /socket HTTP/1.1[crlf]\n"
         f"Host: {domain}[crlf]\n"
@@ -78,8 +63,8 @@ def main():
     print("\nUse the following payload to connect over WebSocket SSH:\n")
     print(payload)
     print("\nTo attach to the screen session: screen -r sshws")
-    print("To manually restart the tunnel: screen -dmS sshws wstunnel --server ws://0.0.0.0:8880 -r localhost:22")
+    print("To manually restart the tunnel: screen -dmS sshws /usr/local/bin/wstunnel --server ws://0.0.0.0:8880 -r localhost:22")
 
 if __name__ == "__main__":
     main()
-        
+    
