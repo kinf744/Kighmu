@@ -29,8 +29,9 @@ if id "$username" &>/dev/null; then
     exit 1
 fi
 
-read -s -p "Mot de passe : " password
-echo ""
+# Lecture mot de passe visible (sans masquage)
+read -p "Mot de passe : " password
+
 read -p "Nombre d'appareils autorisés : " limite
 read -p "Durée de validité (en jours) : " days
 
@@ -57,6 +58,12 @@ touch "$USER_FILE"
 chmod 600 "$USER_FILE"
 
 HOST_IP=$(hostname -I | awk '{print $1}')
+
+# Vérification que SLOWDNS_NS est bien défini
+if [ -z "$SLOWDNS_NS" ]; then
+    echo "Erreur : variable SLOWDNS_NS non définie dans la configuration globale."
+    exit 1
+fi
 
 # Sauvegarder les infos utilisateur
 echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
