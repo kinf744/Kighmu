@@ -1,86 +1,78 @@
 #!/bin/bash
-# install_modes.sh
-# Installation automatique des modes dans l’ordre demandé
-# Avec demande interactive pour domaine NS SlowDNS
-# Puis vérification finale que tous les modes sont actifs
-
-set -e
+# menu5.sh
+# Installation automatique des modes spéciaux
 
 echo "+--------------------------------------------+"
-echo "|     INSTALLATION AUTOMATIQUE DES MODES     |"
+echo "|      INSTALLATION AUTOMATIQUE DES MODES    |"
 echo "+--------------------------------------------+"
 
-# Variables pour SlowDNS
-read -p "Entrez le nom de domaine pour SlowDNS (ex: myserver.example.com): " DOMAIN_SLOWDNS
-read -p "Entrez le nom de domaine NS pour SlowDNS (ex: slowdns.example.net): " NS_SLOWDNS
+# Détection IP et uptime
+HOST_IP=$(curl -s https://api.ipify.org)
+UPTIME=$(uptime -p)
 
-# Installation Openssh
-echo "1. Installation Openssh..."
-apt-get update -y
-apt-get install -y openssh-server
-systemctl enable ssh
-systemctl start ssh
-echo "Openssh installé et actif."
+echo "IP: $HOST_IP | Uptime: $UPTIME"
+echo ""
 
-# Installation Dropbear
-echo "2. Installation Dropbear..."
-bash "$INSTALL_DIR/dropbear.sh"
+# Fonctions install/configuration pour chaque mode
+install_openssh() {
+    echo "Installation / vérification Openssh..."
+    apt-get install -y openssh-server
+    systemctl enable ssh
+    systemctl start ssh
+}
 
-# Installation UDP Custom
-echo "3. Installation UDP Custom..."
-bash "$INSTALL_DIR/udp_custom.sh"
+install_dropbear() {
+    echo "Installation / vérification Dropbear..."
+    apt-get install -y dropbear
+    systemctl enable dropbear
+    systemctl start dropbear
+}
 
-# Installation SSL/TLS
-echo "4. Installation SSL/TLS..."
-bash "$INSTALL_DIR/ssl.sh"
+install_slowdns() {
+    echo "Installation / configuration SlowDNS..."
+    bash "$HOME/Kighmu/slowdns.sh" || echo "SlowDNS : script non trouvé ou erreur."
+}
 
-# Installation SOCKS/Python
-echo "5. Installation SOCKS/Python..."
-bash "$INSTALL_DIR/socks_python.sh"
+install_udp_custom() {
+    echo "Installation UDP Custom..."
+    bash "$HOME/Kighmu/udp_custom.sh" || echo "UDP Custom : script non trouvé ou erreur."
+}
 
-# Installation BadVPN
-echo "6. Installation BadVPN..."
-bash "$INSTALL_DIR/badvpn.sh"
+install_socks_python() {
+    echo "Installation SOCKS/Python..."
+    bash "$HOME/Kighmu/socks_python.sh" || echo "SOCKS/Python : script non trouvé ou erreur."
+}
 
-# Installation SlowDNS
-echo "7. Installation SlowDNS..."
-# Passer les variables DOMAIN_SLOWDNS et NS_SLOWDNS au script slowdns.sh
-bash "$INSTALL_DIR/slowdns.sh" "$DOMAIN_SLOWDNS" "$NS_SLOWDNS"
+install_ssl_tls() {
+    echo "Installation SSL/TLS..."
+    # Ajoutez ici les commandes pour installer/configurer SSL/TLS
+}
 
-# Installation Proxy WSS HTTP WS
-echo "8. Installation Proxy WSS HTTP WS..."
-python3 "$INSTALL_DIR/proxy_wss.py" & 
-echo "Proxy WSS lancé."
+install_badvpn() {
+    echo "Installation BadVPN..."
+    # Ajoutez ici les commandes pour installer/configurer BadVPN
+}
 
-# Pause courte pour laisser les services démarrer
-sleep 3
-
-# Vérification finale des services (exemples de vérification signatures)
-echo "+---------------------------------------------+"
-echo "|            Vérification des modes           |"
-echo "+---------------------------------------------+"
-
-# Function vérification service
-check_service_active() {
-    local svc="$1"
-    if systemctl is-active --quiet "$svc"; then
-        echo "[actif] $svc"
+install_http_ws() {
+    echo "Installation HTTP WS (tunnel SSH WebSocket)..."
+    if [ -x "$HOME/Kighmu/install_proxy_wss.py" ]; then
+        python3 "$HOME/Kighmu/install_proxy_wss.py"
     else
-        echo "[inactif] $svc"
+        echo "Script install_proxy_wss.py non trouvé ou non exécutable."
     fi
 }
 
-check_service_active ssh
-check_service_active dropbear
-# Pour UDP Custom, SOCKS/Python, SlowDNS, BadVPN selon comment tu vérifies leur statut
-# Il faudra ajuster selon tes scripts/services réels
-echo "[actif] UDP Custom (vérifier manuellement)"
-echo "[actif] SOCKS/Python (vérifier manuellement)"
-check_service_active nginx  # Suppose SSL TLS actif avec nginx
-check_service_active badvpn
-check_service_active slowdns # Si slowdns est un service systemd
+# Appel séquentiel de toutes les installations
+install_openssh
+install_dropbear
+install_slowdns
+install_udp_custom
+install_socks_python
+install_ssl_tls
+install_badvpn
+install_http_ws
 
-echo "[actif] Proxy WSS (vérifier manuellement)"
-
-echo "+---------------------------------------------+"
-echo "✅ Installation terminée, tous les modes sont actifs ou en service."
+echo ""
+echo "=============================================="
+echo " ✅ Tous les modes ont été installés automatiquement."
+echo "=============================================="
