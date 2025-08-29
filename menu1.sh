@@ -17,6 +17,14 @@ else
     SLOWDNS_KEY="Clé publique SlowDNS non trouvée!"
 fi
 
+# Charger le NameServer SlowDNS exact depuis le fichier de config
+if [ -f /etc/slowdns/ns.conf ]; then
+    SLOWDNS_NS=$(cat /etc/slowdns/ns.conf)
+else
+    echo "Erreur : fichier /etc/slowdns/ns.conf introuvable."
+    exit 1
+fi
+
 echo "+--------------------------------------------+"
 echo "|         CRÉATION D'UTILISATEUR            |"
 echo "+--------------------------------------------+"
@@ -58,12 +66,6 @@ touch "$USER_FILE"
 chmod 600 "$USER_FILE"
 
 HOST_IP=$(hostname -I | awk '{print $1}')
-
-# Vérification que SLOWDNS_NS est bien défini
-if [ -z "$SLOWDNS_NS" ]; then
-    echo "Erreur : variable SLOWDNS_NS non définie dans la configuration globale."
-    exit 1
-fi
 
 # Sauvegarder les infos utilisateur
 echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
