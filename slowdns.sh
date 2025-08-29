@@ -13,10 +13,10 @@ PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVICE_FILE="/etc/systemd/system/slowdns.service"
 
-# Installation dépendances si manquantes
+# Installation dépendances si manquantes, incluant psmisc pour fuser
 install_dependencies() {
     sudo apt update
-    for pkg in iptables iptables-persistent screen tcpdump wget; do
+    for pkg in iptables iptables-persistent screen tcpdump wget psmisc; do
         if ! dpkg -s $pkg >/dev/null 2>&1; then
             echo "$pkg non trouvé. Installation en cours..."
             sudo apt install -y $pkg
@@ -91,7 +91,7 @@ sudo systemctl daemon-reload
 # Activation du service au démarrage
 sudo systemctl enable slowdns.service
 
-# Arrêt de l’ancienne instance
+# Arrêt de l’ancienne instance (utilise fuser, à présent installé)
 if pgrep -f "sldns-server" >/dev/null; then
     echo "Arrêt de l'ancienne instance SlowDNS..."
     sudo fuser -k ${PORT}/udp || true
@@ -121,7 +121,7 @@ sudo mkdir -p /etc/iptables
 # Sauvegarde des règles iptables pour persistance au reboot
 sudo iptables-save | sudo tee /etc/iptables/rules.v4 >/dev/null
 
-# Chargement iptables-persistent (utile si déjà installé)
+# Recharge iptables-persistent si possible
 sudo systemctl restart netfilter-persistent || true
 
 # Activation IP forwarding
@@ -138,6 +138,7 @@ if systemctl is-active --quiet slowdns.service; then
     echo "SlowDNS démarré et activé au démarrage automatique."
 else
     echo "ERREUR : SlowDNS n'a pas pu démarrer via systemd."
+    echo "Consultez les logs avec : sudo journalctl -xe -u slowdns.service"
     exit 1
 fi
 
