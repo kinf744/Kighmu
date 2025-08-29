@@ -12,28 +12,34 @@ case "$confirm" in
     [oO][uU][iI]|[yY][eE][sS])
         echo "Désinstallation en cours..."
 
-        # Arrêt des services/processus de tunnel
-        echo "Arrêt des services de tunnel..."
+        echo "Arrêt et désactivation des services et processus..."
 
-        # Exemple d'arrêt de services systemd - adapter aux services réels
-        # systemctl stop slowdns.service
-        # systemctl stop proxy-socks.service
-        # systemctl stop udp-custom.service
+        # Stop et disable systemd services (ouvre ssh, dropbear)
+        systemctl stop ssh
+        systemctl disable ssh
+        systemctl stop dropbear
+        systemctl disable dropbear
 
-        # Ou tuer les processus s'ils ne sont pas gérés via systemd
-        killall slowdns 2>/dev/null
-        killall proxy-socks 2>/dev/null
-        killall udp-custom 2>/dev/null
+        # Tuer les processus lancés manuellement
+        pkill -f slowdns.sh 2>/dev/null
+        pkill -f udp_custom.sh 2>/dev/null
+        pkill -f socks_python.sh 2>/dev/null
+        pkill -f proxy_wss.py 2>/dev/null
 
-        echo "Services de tunnel arrêtés."
+        # Supprimer éventuelles tâches cron ou autre qui relanceraient ces processus au démarrage
+        # Exemple pour retirer une tâche cron (à adapter selon votre script d'installation)
+        crontab -l | grep -v 'slowdns.sh' | crontab -
+        crontab -l | grep -v 'udp_custom.sh' | crontab -
+        crontab -l | grep -v 'socks_python.sh' | crontab -
+        crontab -l | grep -v 'proxy_wss.py' | crontab -
 
-        # Supprimer tous les fichiers du script
+        # Supprimer le dossier du script (avec tous les fichiers)
         SCRIPT_DIR="$(dirname "$(realpath "$0")")"
         rm -rf "$SCRIPT_DIR"
 
         echo "Script désinstallé avec succès."
 
-        echo "Le serveur VPS va redémarrer automatiquement dans 2 secondes..."
+        echo "Redémarrage du VPS dans 2 secondes..."
         sleep 2
         reboot
         ;;
