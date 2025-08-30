@@ -3,13 +3,19 @@ import subprocess
 import shutil
 import sys
 
-# Fonction pour exécuter une commande shell
+# Fonction pour exécuter une commande shell avec gestion spécifique de l'erreur pkill
 def run(cmd):
     print(f"[*] Exécution : {cmd}")
-    result = subprocess.run(cmd, shell=True)
-    if result.returncode != 0:
-        print(f"Erreur lors de l'exécution : {cmd}")
-        sys.exit(1)
+    try:
+        result = subprocess.run(cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except subprocess.CalledProcessError as e:
+        # Ignorer l'erreur si pkill ne trouve aucun processus à tuer (code retour 1)
+        if "pkill" in cmd and e.returncode == 1:
+            print("[*] Aucun processus à tuer avec pkill, continuité du script.")
+        else:
+            print(f"Erreur lors de l'exécution : {cmd}")
+            print(e.stderr.decode())
+            sys.exit(1)
 
 # Demander l'adresse du serveur distant
 SERVER = input("Entrez le domaine ou IP du serveur distant : ").strip()
@@ -33,11 +39,12 @@ if not shutil.which("wstunnel"):
     run("wget https://github.com/erebe/wstunnel/releases/download/v4.6.3/wstunnel-linux-amd64 -O /usr/local/bin/wstunnel")
     run("chmod +x /usr/local/bin/wstunnel")
 
-# Stopper les anciens tunnels
+# Stopper les anciens tunnels sur le port local
 run(f"pkill -f 'wstunnel.*{LOCAL_PORT}'")
 
-# Démarrer le tunnel SSH via WebSocket
+# Démarrer le tunnel SSH via WebSocket en arrière-plan
 print(f"[*] Démarrage du tunnel SSH via WebSocket vers {SERVER}...")
 cmd = f"wstunnel -t 127.0.0.1:{LOCAL_PORT}:{SERVER}:22 -s ws://{SERVER}:{WS_PORT}/ &"
 run(cmd)
 print(f"[*] Tunnel actif sur 127.0.0.1:{LOCAL_PORT}")
+    
