@@ -1,22 +1,28 @@
-const WebSocket = require('ws');
+#!/bin/bash
 
-const wss = new WebSocket.Server({ port: 81 });
+# Vérifie si pm2 est installé, sinon l'installe
+if ! command -v pm2 &> /dev/null
+then
+    echo "Installation de pm2 ..."
+    npm install -g pm2
+fi
 
-wss.on('connection', (ws) => {
-  console.log('Un client WebSocket est connecté');
+# Remplacez ce chemin par celui de votre projet qui contient server.js
+PROJECT_DIR="/chemin/vers/votre/projet"
 
-  ws.on('message', (message) => {
-    console.log('Message reçu: %s', message);
-    // Renvoie en écho le message reçu
-    ws.send(`Echo: ${message}`);
-  });
+cd "$PROJECT_DIR"
 
-  ws.on('close', () => {
-    console.log('Client déconnecté');
-  });
+# Installer les dépendances Node.js depuis package.json
+npm install
 
-  // Message de bienvenue à la connexion
-  ws.send('Bienvenue sur le serveur WebSocket!');
-});
+# Démarrer le serveur avec pm2 ou le redémarrer s'il est déjà lancé
+pm2 start server.js --name websocket-server --watch
 
-console.log('Serveur WebSocket démarré et écoute sur le port 81');
+# Sauvegarder la configuration pm2 pour la restauration au démarrage
+pm2 save
+
+# Configurer pm2 pour démarrer automatiquement au boot système
+pm2 startup systemd -u $(whoami) --hp $HOME
+
+echo "Serveur Node.js démarré avec pm2 et configuré pour démarrage automatique."
+  
