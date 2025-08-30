@@ -1,69 +1,43 @@
 #!/usr/bin/env python3
-import os
 import subprocess
+import shutil
 import sys
-import urllib.request
-import stat
 
-def run_command(command):
-    print(f"Running: {command}")
-    result = subprocess.run(command, shell=True, text=True, capture_output=True)
+# Fonction pour exécuter une commande shell
+def run(cmd):
+    print(f"[*] Exécution : {cmd}")
+    result = subprocess.run(cmd, shell=True)
     if result.returncode != 0:
-        print(f"Error: {result.stderr.strip()}")
-    else:
-        print(result.stdout.strip())
-
-def install_wstunnel_binary():
-    url = "https://github.com/erebe/wstunnel/releases/download/v5.1/wstunnel-linux-x64"
-    dest = "/usr/local/bin/wstunnel"
-    try:
-        print("Downloading wstunnel binary...")
-        urllib.request.urlretrieve(url, "/tmp/wstunnel-linux-x64")
-        os.chmod("/tmp/wstunnel-linux-x64",
-                 stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR |
-                 stat.S_IRGRP | stat.S_IXGRP |
-                 stat.S_IROTH | stat.S_IXOTH)
-        run_command(f"mv /tmp/wstunnel-linux-x64 {dest}")
-        print("wstunnel installed successfully.")
-    except Exception as e:
-        print(f"Failed to install wstunnel: {e}")
+        print(f"Erreur lors de l'exécution : {cmd}")
         sys.exit(1)
 
-def main():
-    domain = input("Enter the domain (e.g., ws.example.com) for the SSH WebSocket tunnel (required): ").strip()
-    if not domain:
-        print("Error: A domain is required to continue installation.")
-        sys.exit(1)
+# Demander l'adresse du serveur distant
+SERVER = input("Entrez le domaine ou IP du serveur distant : ").strip()
+if not SERVER:
+    print("Erreur : vous devez entrer un domaine ou une IP.")
+    sys.exit(1)
 
-    if os.geteuid() != 0:
-        print("Error: This script must be run as root (use sudo).")
-        sys.exit(1)
+LOCAL_PORT = 8880
+WS_PORT = 80
 
-    run_command("apt-get update -y")
-    run_command("apt-get install -y screen python3 wget")
+# Vérifier les dépendances
+deps = ["wget", "curl", "ssh", "sshpass"]
+for dep in deps:
+    if not shutil.which(dep):
+        print(f"[*] Installation de {dep}...")
+        run(f"sudo apt update && sudo apt install -y {dep}")
 
-    install_wstunnel_binary()
+# Installer wstunnel si nécessaire
+if not shutil.which("wstunnel"):
+    print("[*] Installation de wstunnel...")
+    run("wget https://github.com/erebe/wstunnel/releases/download/v4.6.3/wstunnel-linux-amd64 -O /usr/local/bin/wstunnel")
+    run("chmod +x /usr/local/bin/wstunnel")
 
-    # Kill any previous screen session named sshws to avoid conflicts
-    run_command("screen -S sshws -X quit || true")
+# Stopper les anciens tunnels
+run(f"pkill -f 'wstunnel.*{LOCAL_PORT}'")
 
-    # Launch wstunnel inside screen with output logging for diagnostics
-    run_command("screen -dmS sshws /usr/local/bin/wstunnel --server ws://0.0.0.0:8880 -r localhost:22 > /tmp/wstunnel.log 2>&1")
-
-    payload = (
-        "GET /socket HTTP/1.1[crlf]\n"
-        f"Host: {domain}[crlf]\n"
-        "Upgrade: websocket[crlf]\n"
-        "Connection: Upgrade[crlf][crlf]"
-    )
-
-    print("\nInstallation completed successfully.")
-    print(f"SSH WebSocket tunnel is running on port 8880 with domain: {domain}")
-    print("\nUse the following payload to connect over WebSocket SSH:\n")
-    print(payload)
-    print("\nTo attach to the screen session: screen -r sshws")
-    print("Check log /tmp/wstunnel.log for detailed output or errors.")
-    print("To manually restart the tunnel: screen -dmS sshws /usr/local/bin/wstunnel --server ws://0.0.0.0:8880 -r localhost:22")
-
-if __name__ == "__main__":
-    main()
+# Démarrer le tunnel SSH via WebSocket
+print(f"[*] Démarrage du tunnel SSH via WebSocket vers {SERVER}...")
+cmd = f"wstunnel -t 127.0.0.1:{LOCAL_PORT}:{SERVER}:22 -s ws://{SERVER}:{WS_PORT}/ &"
+run(cmd)
+print(f"[*] Tunnel actif sur 127.0.0.1:{LOCAL_PORT}")
