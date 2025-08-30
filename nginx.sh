@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Demande du domaine à l'utilisateur
+# Demander le domaine à configurer
 read -p "Merci de saisir le domaine à configurer (exemple: monsite.exemple.com) : " DOMAIN
 
 if [ -z "$DOMAIN" ]; then
@@ -8,14 +8,14 @@ if [ -z "$DOMAIN" ]; then
   exit 1
 fi
 
-# Mise à jour et installation de nginx
+# Mise à jour du système et installation de nginx
 sudo apt update
 sudo apt install -y nginx
 
-# Création de la configuration nginx avec le domaine spécifié et proxy WebSocket sur port 81
+# Créer la configuration nginx pour écouter sur le port 81
 cat << EOF | sudo tee /etc/nginx/sites-available/$DOMAIN
 server {
-    listen 80;
+    listen 81;
     server_name $DOMAIN;
 
     location / {
@@ -33,13 +33,17 @@ server {
 }
 EOF
 
-# Activation de la configuration
-sudo ln -s /etc/nginx/sites-available/$DOMAIN /etc/nginx/sites-enabled/
+# Activer la configuration en créant un lien symbolique
+sudo ln -sf /etc/nginx/sites-available/$DOMAIN /etc/nginx/sites-enabled/
 
-# Test de la configuration nginx
+# Tester la configuration nginx
 sudo nginx -t
 
-# Reload nginx pour appliquer la configuration
+# Recharger nginx pour appliquer la nouvelle configuration
 sudo systemctl reload nginx
 
-echo "Nginx installé et configuré avec proxy WebSocket pour le domaine $DOMAIN sur le port 81."
+# Ouvrir le port 81 dans le firewall (si ufw est activé)
+sudo ufw allow 81/tcp
+
+echo "Nginx est installé et configuré pour écouter sur le port 81 avec proxy WebSocket pour le domaine $DOMAIN."
+echo "Note : Le port 80 est réservé à wstunnel/tunnel SSH WebSocket, donc nginx utilise le port 81."
