@@ -20,4 +20,3 @@ wss.on('connection', (ws) => {
 });
 
 console.log('Serveur WebSocket démarré et écoute sur le port 81');
-          
