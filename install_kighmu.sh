@@ -130,7 +130,6 @@ FILES=(
     "system_dns.sh"
     "install_modes.sh"
     "show_resources.sh"
-    "server.js"
     "nginx.sh"
     "setup_ssh_config.sh"
     "create_ssh_user.sh"
