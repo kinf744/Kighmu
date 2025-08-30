@@ -8,37 +8,72 @@ if [ -z "$DOMAIN" ]; then
   exit 1
 fi
 
-echo "Mise à jour du système et installation des prérequis..."
-sudo apt update
-sudo apt upgrade -y
-sudo apt install -y curl nginx ufw
+# Définir le chemin du dossier projet
+PROJECT_DIR="/home/$(whoami)/monprojet"
 
-echo "Installation de Node.js version 18 LTS..."
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt install -y nodejs
-
-echo "Installation de pm2 globalement..."
-sudo npm install -g pm2
-
-# Aller dans le dossier projet (à adapter)
-PROJECT_DIR="/home/ubuntu/projet_node"  # Remplacez ce chemin
-
+# Créer le dossier projet s'il n'existe pas
 if [ ! -d "$PROJECT_DIR" ]; then
-  echo "Erreur : le dossier projet $PROJECT_DIR n'existe pas."
-  exit 1
+  echo "Création du dossier projet $PROJECT_DIR"
+  mkdir -p "$PROJECT_DIR"
 fi
 
-cd "$PROJECT_DIR"
+# Aller dans le dossier projet
+cd "$PROJECT_DIR" || exit 1
+
+# Créer un exemple de fichier server.js (adapter selon votre code)
+cat > server.js << 'EOF'
+const WebSocket = require('ws');
+
+const wss = new WebSocket.Server({ port: 81 });
+
+wss.on('connection', (ws) => {
+  console.log('Un client WebSocket est connecté');
+
+  ws.on('message', (message) => {
+    console.log('Message reçu: %s', message);
+    ws.send(`Echo: ${message}`);
+  });
+
+  ws.on('close', () => {
+    console.log('Client déconnecté');
+  });
+
+  ws.send('Bienvenue sur le serveur WebSocket!');
+});
+
+console.log('Serveur WebSocket démarré et écoute sur le port 81');
+EOF
+
+# Créer un package.json simple avec dépendance ws
+cat > package.json << 'EOF'
+{
+  "name": "websocket-server",
+  "version": "1.0.0",
+  "description": "Serveur WebSocket Node.js",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.12.0"
+  }
+}
+EOF
 
 echo "Installation des dépendances Node.js..."
 npm install
 
-echo "Démarrage du serveur Node.js avec pm2..."
+echo "Installation de pm2 si nécessaire..."
+if ! command -v pm2 &> /dev/null; then
+  npm install -g pm2
+fi
+
+echo "Démarrage du serveur avec pm2..."
 pm2 start server.js --name websocket-server --watch
 pm2 save
 pm2 startup systemd -u $(whoami) --hp $HOME
 
-echo "Configuration de nginx pour proxy WebSocket sur le port 81..."
+echo "Configuration nginx pour le domaine $DOMAIN..."
 
 sudo tee /etc/nginx/sites-available/$DOMAIN > /dev/null <<EOF
 server {
@@ -76,5 +111,5 @@ sudo systemctl reload nginx
 echo "Ouverture du port 81 dans le firewall..."
 sudo ufw allow 81/tcp
 
-echo "Installation et configuration terminées."
-echo "Node.js écoute sur le port 81, nginx fait le proxy. Démarrez ou redémarrez votre VPS pour vérifier le démarrage automatique."
+echo "Installation, configuration et démarrage terminés."
+echo "Votre serveur WebSocket tourne avec pm2 et nginx fait le proxy au port 81."
