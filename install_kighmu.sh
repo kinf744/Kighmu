@@ -126,6 +126,8 @@ FILES=(
     "dropbear.sh"
     "ssl.sh"
     "proxy_wss.py"
+    "server.js"
+    "nginx.config"
     "badvpn.sh"
     "system_dns.sh"
     "install_modes.sh"
@@ -168,7 +170,17 @@ run_script "$INSTALL_DIR/slowdns.sh"
 run_script "$INSTALL_DIR/udp_custom.sh"
 
 echo "=============================================="
-echo " 🚀 Lancement du mode HTTP/WS via screen..."
+echo " 🚀 Déploiement et activation de la configuration Nginx pour WebSocket..."
+echo "=============================================="
+
+NGINX_CONF="/etc/nginx/sites-available/kighmu_ws.conf"
+cp "$INSTALL_DIR/nginx.config" "$NGINX_CONF" || { echo "Erreur : copie de nginx.config impossible!"; exit 1; }
+ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/kighmu_ws.conf
+
+nginx -t && systemctl reload nginx || { echo "Erreur de configuration nginx"; exit 1; }
+
+echo "=============================================="
+echo " 🚀 Lancement du serveur WS proxy (proxy_wss.py) dans screen..."
 echo "=============================================="
 
 # Nettoyer sessions écran existantes nommées proxy_wss
@@ -180,16 +192,37 @@ if [ -n "$sessions" ]; then
     echo "Anciennes sessions proxy_wss supprimées."
 fi
 
-# Lancer proxy_wss.py dans screen détaché
 screen -dmS proxy_wss /usr/bin/python3 "$INSTALL_DIR/proxy_wss.py"
 
 sleep 2
 
-# Vérifier que la session est bien lancée
 if screen -ls | grep -q proxy_wss; then
-    echo "Le serveur WS est démarré et fonctionne dans screen."
+    echo "Le serveur WS proxy_wss.py est démarré et fonctionne dans screen."
 else
-    echo "Erreur : le serveur WS n'a pas pu démarrer dans screen."
+    echo "Erreur : le serveur WS proxy_wss.py n'a pas pu démarrer dans screen."
+fi
+
+echo "=============================================="
+echo " 🚀 Lancement du serveur Node.js (server.js) dans screen..."
+echo "=============================================="
+
+# Nettoyer sessions écran existantes nommées serverjs
+sessions_node=$(screen -ls | grep serverjs | awk '{print $1}')
+if [ -n "$sessions_node" ]; then
+    for session in $sessions_node; do
+        screen -S "$session" -X quit
+    done
+    echo "Anciennes sessions server.js supprimées."
+fi
+
+screen -dmS serverjs node "$INSTALL_DIR/server.js"
+
+sleep 2
+
+if screen -ls | grep -q serverjs; then
+    echo "Le serveur Node.js server.js est démarré et fonctionne dans screen."
+else
+    echo "Erreur : le serveur Node.js server.js n'a pas pu démarrer dans screen."
 fi
 
 echo "=============================================="
@@ -273,7 +306,7 @@ echo " ✅ Installation terminée !"
 echo " Pour lancer Kighmu, utilisez la commande : kighmu"
 echo
 echo " ⚠️ Pour que l'alias soit pris en compte :"
-echo " - Ouvre un nouveau terminal, ou"
+echo " - Ouvrez un nouveau terminal, ou"
 echo " - Exécutez manuellement : source ~/.bashrc"
 echo
 echo "=============================================="
