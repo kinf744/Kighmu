@@ -61,47 +61,20 @@ fi
 echo "Ouverture du port UDP $UDP_PORT dans iptables..."
 iptables -I INPUT -p udp --dport $UDP_PORT -j ACCEPT
 
-# Création du fichier de service systemd pour udp-custom
-SERVICE_PATH="/etc/systemd/system/udp-custom.service"
-
-echo "Création du service systemd udp-custom..."
-
-cat > "$SERVICE_PATH" << EOF
-[Unit]
-Description=UDP Custom Service for HTTP Custom VPN
-After=network.target
-
-[Service]
-Type=simple
-User=root
-ExecStart=$BIN_PATH -c $CONFIG_FILE
-Restart=always
-RestartSec=5s
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Rechargement des services systemd pour prendre en compte le nouveau service
-systemctl daemon-reload
-
-# Activation du service au démarrage
-systemctl enable udp-custom.service
-
-# Démarrage immédiat du service
-systemctl start udp-custom.service
+# Démarrage du démon udp-custom en arrière-plan
+echo "Démarrage du démon udp-custom sur le port $UDP_PORT..."
+nohup "$BIN_PATH" -c "$CONFIG_FILE" > /var/log/udp_custom.log 2>&1 &
 
 sleep 3
 
-if systemctl is-active --quiet udp-custom.service; then
-    echo "UDP Custom démarré avec succès sur le port $UDP_PORT via systemd."
+if pgrep -f "udp-custom-linux-amd64" > /dev/null; then
+    echo "UDP Custom démarré avec succès sur le port $UDP_PORT."
 else
-    echo "Erreur: UDP Custom ne s'est pas lancé correctement via systemd."
+    echo "Erreur: UDP Custom ne s'est pas lancé correctement."
 fi
 
 echo "+--------------------------------------------+"
 echo "|          Configuration terminée            |"
 echo "|  Configure HTTP Custom avec IP du serveur, |"
 echo "|  port UDP $UDP_PORT, et activez UDP Custom |"
-echo "|  (service systemd activé pour démarrage)   |"
 echo "+--------------------------------------------+"
