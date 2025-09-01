@@ -2,16 +2,19 @@
 # encoding: utf-8
 import socket, threading, select, sys, time
 
+# Listen settings
 LISTENING_ADDR = '0.0.0.0'
-LISTENING_PORT = 80  # Port fixe 80 pour le tunnel WS SSH
-DEFAULT_SSH_HOST = '127.0.0.1'
-DEFAULT_SSH_PORT = 22
+LISTENING_PORT = 80  # Port fixé à 80 pour tunnel WS SSH
+PASS = ''
+# CONST
 BUFLEN = 4096 * 4
 TIMEOUT = 60
-STATUS_RESP = '101'
+DEFAULT_HOST = '127.0.0.1:22'
 MSG = 'Switching Protocols'
-FTAG = '\r\nContent-length: 0\r\n\r\nHTTP/1.1 200 WS By Proxy\r\n\r\n'
-RESPONSE = "HTTP/1.1 " + str(STATUS_RESP) + ' ' +  str(MSG) + ' ' +  str(FTAG)
+STATUS_RESP = '101'
+FTAG = '\r\nContent-length: 0\r\n\r\nHTTP/1.1 200 WS By Kighmu\r\n\r\n'
+RESPONSE = "HTTP/1.1 " + str(STATUS_RESP) + ' ' + str(MSG) + ' ' + str(FTAG)
+
 
 class Server(threading.Thread):
     def __init__(self, host, port):
@@ -21,25 +24,39 @@ class Server(threading.Thread):
         self.port = port
         self.threads = []
         self.threadsLock = threading.Lock()
+        self.logLock = threading.Lock()
 
     def run(self):
         self.soc = socket.socket(socket.AF_INET)
         self.soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.soc.settimeout(2)
         self.soc.bind((self.host, self.port))
-        self.soc.listen(5)
+        self.soc.listen(0)
         self.running = True
-        print(f"Listening on {self.host}:{self.port} for WebSocket SSH tunnels...")
 
         try:
             while self.running:
-                c, addr = self.soc.accept()
-                c.setblocking(1)
+                try:
+                    c, addr = self.soc.accept()
+                    c.setblocking(1)
+                except socket.timeout:
+                    continue
+
                 conn = ConnectionHandler(c, self, addr)
                 conn.start()
-                with self.threadsLock:
-                    self.threads.append(conn)
+                self.addConn(conn)
         finally:
+            self.running = False
             self.soc.close()
+
+    def printLog(self, log):
+        with self.logLock:
+            print(log)
+
+    def addConn(self, conn):
+        with self.threadsLock:
+            if self.running:
+                self.threads.append(conn)
 
     def removeConn(self, conn):
         with self.threadsLock:
@@ -49,18 +66,20 @@ class Server(threading.Thread):
     def close(self):
         self.running = False
         with self.threadsLock:
-            for conn in self.threads:
-                conn.close()
+            threads = list(self.threads)
+            for c in threads:
+                c.close()
+
 
 class ConnectionHandler(threading.Thread):
-    def __init__(self, client, server, addr):
+    def __init__(self, socClient, server, addr):
         threading.Thread.__init__(self)
-        self.client = client
-        self.server = server
-        self.addr = addr
         self.clientClosed = False
         self.targetClosed = True
-        self.target = None
+        self.client = socClient
+        self.client_buffer = b''
+        self.server = server
+        self.log = 'Connection: ' + str(addr)
 
     def close(self):
         try:
@@ -69,75 +88,170 @@ class ConnectionHandler(threading.Thread):
                 self.client.close()
         except:
             pass
-        self.clientClosed = True
+        finally:
+            self.clientClosed = True
 
         try:
-            if self.target and not self.targetClosed:
+            if not self.targetClosed and hasattr(self, 'target'):
                 self.target.shutdown(socket.SHUT_RDWR)
                 self.target.close()
         except:
             pass
-        self.targetClosed = True
+        finally:
+            self.targetClosed = True
 
     def run(self):
         try:
-            # Receive client handshake/request
-            data = self.client.recv(BUFLEN).decode('utf-8', errors='ignore')
+            self.client_buffer = self.client.recv(BUFLEN).decode(errors='ignore')
 
-            # Simple check for WebSocket handshake containing "Upgrade: websocket"
-            if "Upgrade: websocket" not in data.lower():
-                self.client.send(b"HTTP/1.1 400 Bad Request\r\n\r\n")
-                self.close()
-                self.server.removeConn(self)
-                return
+            hostPort = self.findHeader(self.client_buffer, 'X-Real-Host')
 
-            # Reply with WebSocket switching protocol response
-            self.client.send(RESPONSE.encode())
+            if hostPort == '':
+                hostPort = DEFAULT_HOST
 
-            # Connect to local SSH server
-            self.target = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.target.connect((DEFAULT_SSH_HOST, DEFAULT_SSH_PORT))
-            self.targetClosed = False
+            split = self.findHeader(self.client_buffer, 'X-Split')
 
-            # Start forwarding data between client and SSH server
-            self.do_tunnel()
+            if split != '':
+                self.client.recv(BUFLEN)
+
+            if hostPort != '':
+                passwd = self.findHeader(self.client_buffer, 'X-Pass')
+
+                if len(PASS) != 0 and passwd == PASS:
+                    self.method_CONNECT(hostPort)
+                elif len(PASS) != 0 and passwd != PASS:
+                    self.client.send(b'HTTP/1.1 400 WrongPass!\r\n\r\n')
+                elif hostPort.startswith('127.0.0.1') or hostPort.startswith('localhost'):
+                    self.method_CONNECT(hostPort)
+                else:
+                    self.client.send(b'HTTP/1.1 403 Forbidden!\r\n\r\n')
+            else:
+                print('- No X-Real-Host!')
+                self.client.send(b'HTTP/1.1 400 NoXRealHost!\r\n\r\n')
 
         except Exception as e:
-            print(f"Connection error from {self.addr}: {e}")
+            self.log += ' - error: ' + str(e)
+            self.server.printLog(self.log)
+            pass
         finally:
             self.close()
             self.server.removeConn(self)
 
-    def do_tunnel(self):
-        sockets = [self.client, self.target]
-        cyclic_timeout_counter = 0
+    def findHeader(self, head, header):
+        aux = head.find(header + ': ')
+
+        if aux == -1:
+            return ''
+
+        aux = head.find(':', aux)
+        head = head[aux+2:]
+        aux = head.find('\r\n')
+
+        if aux == -1:
+            return ''
+
+        return head[:aux]
+
+    def connect_target(self, host):
+        i = host.find(':')
+        if i != -1:
+            port = int(host[i+1:])
+            host = host[:i]
+        else:
+            port = 22
+
+        (soc_family, soc_type, proto, _, address) = socket.getaddrinfo(host, port)[0]
+
+        self.target = socket.socket(soc_family, soc_type, proto)
+        self.targetClosed = False
+        self.target.connect(address)
+
+    def method_CONNECT(self, path):
+        self.log += ' - CONNECT ' + path
+
+        self.connect_target(path)
+        self.client.sendall(RESPONSE.encode())
+        self.client_buffer = b''
+
+        self.server.printLog(self.log)
+        self.doCONNECT()
+
+    def doCONNECT(self):
+        socs = [self.client, self.target]
+        count = 0
+        error = False
         while True:
-            cyclic_timeout_counter += 1
-            readable, _, exceptional = select.select(sockets, [], sockets, 1)
-            if exceptional:
-                break
-            if readable:
-                for s in readable:
-                    other = self.target if s is self.client else self.client
+            count += 1
+            (recv, _, err) = select.select(socs, [], socs, 3)
+            if err:
+                error = True
+            if recv:
+                for in_ in recv:
                     try:
-                        data = s.recv(BUFLEN)
+                        data = in_.recv(BUFLEN)
                         if data:
-                            other.sendall(data)
+                            if in_ is self.target:
+                                self.client.send(data)
+                            else:
+                                while data:
+                                    byte = self.target.send(data)
+                                    data = data[byte:]
+
+                            count = 0
                         else:
-                            return
+                            break
                     except:
-                        return
-            if cyclic_timeout_counter > TIMEOUT:
+                        error = True
+                        break
+            if count == TIMEOUT:
+                error = True
+            if error:
                 break
 
-if __name__ == "__main__":
+
+def print_usage():
+    print('Usage: proxy.py -p <port>')
+    print('       proxy.py -b <bindAddr> -p <port>')
+    print('       proxy.py -b 0.0.0.0 -p 80')
+
+
+def parse_args(argv):
+    global LISTENING_ADDR
+    # port args ignored since port is fixed to 80
     try:
-        server = Server(LISTENING_ADDR, LISTENING_PORT)
-        server.start()
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        print("Stopping server...")
-        server.close()
-        sys.exit(0)
-        
+        opts, args = getopt.getopt(argv, "hb:", ["bind="])
+    except getopt.GetoptError:
+        print_usage()
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt == '-h':
+            print_usage()
+            sys.exit()
+        elif opt in ("-b", "--bind"):
+            global LISTENING_ADDR
+            LISTENING_ADDR = arg
+
+
+def main(host=LISTENING_ADDR, port=LISTENING_PORT):
+    print("\033[0;34m•"*8, "\033[1;32m PROXY PYTHON WEBSOCKET","\033[0;34m•"*8, "\n")
+    print("\033[1;33mIP:\033[1;32m " + LISTENING_ADDR)
+    print("\033[1;33mPORT:\033[1;32m 80\n")
+    print("\033[0;34m•"*10, "\033[1;32m ILYASS AUTO SCRIPT","\033[0;34m•\033[1;37m"*11, "\n")
+
+
+    server = Server(LISTENING_ADDR, 80)
+    server.start()
+
+    while True:
+        try:
+            time.sleep(2)
+        except KeyboardInterrupt:
+            print('Stopping...')
+            server.close()
+            break
+
+
+if __name__ == '__main__':
+    parse_args(sys.argv[1:])
+    main()
+    
