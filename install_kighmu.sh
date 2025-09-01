@@ -94,6 +94,11 @@ apt install -y gcc
 apt install -y make
 apt install -y perl
 apt install -y iptables-persistent
+apt install -y systemd
+apt install -y tcpdump
+apt install -y iptables
+apt install -y iproute2
+apt install -y net-tools
 apt install -y software-properties-common
 
 apt autoremove -y
