@@ -1,14 +1,16 @@
 const net = require('net');
 const stream = require('stream');
 const util = require('util');
+
 var dhost = "127.0.0.1";
 var dport = "";
 var mainPort = "";
 var outputFile = "outputFile.txt";
 var packetsToSkip = 0;
 var gcwarn = true;
-for(c = 0; c < process.argv.length; c++) {
-    switch(process.argv[c]) {
+
+for (var c = 0; c < process.argv.length; c++) {
+    switch (process.argv[c]) {
         case "-skip":
             packetsToSkip = process.argv[c + 1];
             break;
@@ -26,90 +28,93 @@ for(c = 0; c < process.argv.length; c++) {
             break;
     }
 }
+
+// Valeurs par défaut si dport ou mainPort ne sont pas définis
+if (dport === "" || isNaN(parseInt(dport))) dport = 8090;
+if (mainPort === "" || isNaN(parseInt(mainPort))) mainPort = 81;
+
+// Convertir en entier (important)
+dport = parseInt(dport);
+mainPort = parseInt(mainPort);
+
 function gcollector() {
-    if(!global.gc && gcwarn) {
+    if (!global.gc && gcwarn) {
         console.log("[WARNING] Garbage Collector isn't enabled! Memory leaks may occur.");
         gcwarn = false;
         return;
-    } else if(global.gc) {
+    } else if (global.gc) {
         global.gc();
         return;
     } else {
         return;
     }
 }
+
 function parseRemoteAddr(raddr) {
-    if(raddr.toString().indexOf("ffff") != -1) {
-        //is IPV4 address
+    if (raddr.toString().indexOf("ffff") != -1) {
+        // is IPV4 address
         return raddr.substring(7, raddr.length);
     } else {
         return raddr;
     }
 }
+
 setInterval(gcollector, 1000);
+
 const server = net.createServer();
-server.on('connection', function(socket) {
+server.on('connection', function (socket) {
     var packetCount = 0;
-    //var handshakeMade = false;
-    socket.write("HTTP/1.1 101 Autoscript By Gemilangkinasih࿐\r\nContent-Length: 1048576000000\r\n\r\n", function(err) {
-        if(err) {
+    socket.write("HTTP/1.1 101 Autoscript By Gemilangkinasih࿐\r\nContent-Length: 1048576000000\r\n\r\n", function (err) {
+        if (err) {
             console.log("[SWRITE] Failed to write response to " + socket.remoteAddress + ":" + socket.remotePort + ", error: " + err);
         }
     });
     console.log("[INFO] Connection received from " + socket.remoteAddress + ":" + socket.remotePort);
-    var conn = net.createConnection({host: dhost, port: dport});
-    socket.on('data', function(data) {
-        //pipe sucks
-        if(packetCount < packetsToSkip) {
-            //console.log("---c1");
+    var conn = net.createConnection({ host: dhost, port: dport });
+    socket.on('data', function (data) {
+        if (packetCount < packetsToSkip) {
             packetCount++;
-        } else if(packetCount == packetsToSkip) {
-            //console.log("---c2");
-            conn.write(data, function(err) {
-                if(err) {
+        } else if (packetCount == packetsToSkip) {
+            conn.write(data, function (err) {
+                if (err) {
                     console.log("[EWRITE] Failed to write to external socket! - " + err);
                 }
             });
         }
-        if(packetCount > packetsToSkip) {
-            //console.log("---c3");
+        if (packetCount > packetsToSkip) {
             packetCount = packetsToSkip;
         }
-        //conn.write(data);
     });
-    conn.on('data', function(data) {
-        //pipe sucks x2
-        socket.write(data, function(err) {
-            if(err) {
+    conn.on('data', function (data) {
+        socket.write(data, function (err) {
+            if (err) {
                 console.log("[SWRITE2] Failed to write response to " + socket.remoteAddress + ":" + socket.remotePort + ", error: " + err);
             }
         });
     });
-    socket.once('data', function(data) {
-        /*
-        * Nota para mas tarde, resolver que diferencia hay entre .on y .once
-        */
-    });
-    socket.on('error', function(error) {
+    socket.on('error', function (error) {
         console.log("[SOCKET] read " + error + " from " + socket.remoteAddress + ":" + socket.remotePort);
         conn.destroy();
     });
-    conn.on('error', function(error) {
+    conn.on('error', function (error) {
         console.log("[REMOTE] read " + error);
         socket.destroy();
     });
-    socket.on('close', function() {
+    socket.on('close', function () {
         console.log("[INFO] Connection terminated for " + socket.remoteAddress + ":" + socket.remotePort);
         conn.destroy();
     });
 });
-server.on("error", function(error) {
+
+server.on("error", function (error) {
     console.log("[SRV] Error " + error + ", this may be unrecoverable");
 });
-server.on("close", function() {
-    //conection closed idk, maybe i should not capture this
+server.on("close", function () {
+    // connection closed; possible handling
 });
-server.listen(mainPort, function(){
+
+server.listen(mainPort, function () {
     console.log("[INFO] Server started on port: " + mainPort);
     console.log("[INFO] Redirecting requests to: " + dhost + " at port " + dport);
 });
+        
