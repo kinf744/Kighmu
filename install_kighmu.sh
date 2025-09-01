@@ -101,7 +101,7 @@ FILES=(
     "udp_custom.sh"
     "dropbear.sh"
     "ssl.sh"
-    "proxy_wss_async.py"      # Utilisation du proxy WebSocket Python asynchrone
+    "proxy_wss.py"      # Utilisation du proxy WebSocket Python asynchrone
     "server.js"
     "nginx.config"
     "badvpn.sh"
@@ -200,11 +200,11 @@ echo "=============================================="
 echo " 🚀 Lancement du proxy WebSocket Python asynchrone dans screen..."
 echo "=============================================="
 
-screen -dmS proxy_wss_async python3 "$INSTALL_DIR/proxy_wss_async.py"
+screen -dmS proxy_wss python3 "$INSTALL_DIR/proxy_wss.py"
 
 sleep 2
 
-if screen -ls | grep -q proxy_wss_async; then
+if screen -ls | grep -q proxy_wss; then
     echo "Proxy WebSocket python asynchrone lancé avec succès."
 else
     echo "Erreur : le proxy WebSocket python asynchrone n'a pas pu démarrer."
