@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 # encoding: utf-8
 import socket, threading, select, sys, time
-import getopt  # <---- Import ajouté
+import getopt  # import ajouté ici
 
 # Listen settings
 LISTENING_ADDR = '0.0.0.0'
-LISTENING_PORT = 80  # Port fixé à 80 pour tunnel WS SSH
+LISTENING_PORT = 8090  # Port modifié à 8090 pour correspondre à Nginx
 PASS = ''
 # CONST
 BUFLEN = 4096 * 4
@@ -234,10 +234,10 @@ def parse_args(argv):
 def main(host=LISTENING_ADDR, port=LISTENING_PORT):
     print("\033[0;34m•"*8, "\033[1;32m PROXY PYTHON WEBSOCKET","\033[0;34m•"*8, "\n")
     print("\033[1;33mIP:\033[1;32m " + LISTENING_ADDR)
-    print("\033[1;33mPORT:\033[1;32m 80\n")
+    print("\033[1;33mPORT:\033[1;32m " + str(LISTENING_PORT) + "\n")
     print("\033[0;34m•"*10, "\033[1;32m ILYASS AUTO SCRIPT","\033[0;34m•\033[1;37m"*11, "\n")
 
-    server = Server(LISTENING_ADDR, 80)
+    server = Server(LISTENING_ADDR, LISTENING_PORT)
     server.start()
 
     while True:
@@ -252,4 +252,4 @@ def main(host=LISTENING_ADDR, port=LISTENING_PORT):
 if __name__ == '__main__':
     parse_args(sys.argv[1:])
     main()
-    
+        
