@@ -93,6 +93,7 @@ apt install -y qrencode
 apt install -y gcc
 apt install -y make
 apt install -y perl
+apt install -y iptables-persistent
 apt install -y software-properties-common
 
 apt autoremove -y
