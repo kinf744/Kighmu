@@ -4,7 +4,6 @@
 # Copyright (c) 2025 Kinf744
 # Licence MIT (version française)
 # ==============================================
-
 # Vérification de la présence de curl et installation si manquant
 echo "Vérification de la présence de curl..."
 if ! command -v curl >/dev/null 2>&1; then
@@ -50,8 +49,7 @@ echo "=============================================="
 
 apt update -y && apt upgrade -y
 
-apt install -y \
-sudo bsdmainutils zip unzip ufw curl python3 python3-pip openssl screen cron iptables lsof pv boxes nano at mlocate \
+apt install -y sudo bsdmainutils zip unzip ufw curl python3 python3-pip openssl screen cron iptables lsof pv boxes nano at mlocate \
 gawk grep bc jq npm nodejs socat netcat netcat-traditional net-tools cowsay figlet lolcat \
 dnsutils net-tools wget sudo iptables ufw openssl psmisc nginx dropbear badvpn \
 python3-setuptools wireguard-tools qrencode gcc make perl software-properties-common socat
@@ -101,7 +99,7 @@ FILES=(
     "udp_custom.sh"
     "dropbear.sh"
     "ssl.sh"
-    "proxy_wss.py"      # Utilisation du proxy WebSocket Python asynchrone
+    "proxy_wss.py"
     "server.js"
     "nginx.config"
     "badvpn.sh"
@@ -146,7 +144,7 @@ run_script "$INSTALL_DIR/slowdns.sh"
 run_script "$INSTALL_DIR/udp_custom.sh"
 
 echo "=============================================="
-echo " 🚀 Déploiement et activation de la configuration Nginx pour WebSocket asynchrone..."
+echo " 🚀 Déploiement et activation de la configuration Nginx pour WebSocket..."
 echo "=============================================="
 
 LISTEN_PORT=81
@@ -189,15 +187,22 @@ fi
 
 sudo systemctl reload nginx
 
+# Installer et activer ufw si nécessaire
+if ! command -v ufw >/dev/null 2>&1; then
+    echo "Installation de ufw..."
+    sudo apt install -y ufw
+    sudo ufw enable
+fi
+
 sudo ufw allow $LISTEN_PORT/tcp
 
-# Nettoyer les anciennes sessions screen du proxy WebSocket python asynchrone
-for session in $(screen -ls | grep proxy_wss_async | awk '{print $1}'); do
+# Nettoyer anciennes sessions screen proxy_wss
+for session in $(screen -ls | grep proxy_wss | awk '{print $1}'); do
     screen -S "$session" -X quit
 done
 
 echo "=============================================="
-echo " 🚀 Lancement du proxy WebSocket Python asynchrone dans screen..."
+echo " 🚀 Lancement du proxy WebSocket Python dans screen..."
 echo "=============================================="
 
 screen -dmS proxy_wss python3 "$INSTALL_DIR/proxy_wss.py"
@@ -205,16 +210,16 @@ screen -dmS proxy_wss python3 "$INSTALL_DIR/proxy_wss.py"
 sleep 2
 
 if screen -ls | grep -q proxy_wss; then
-    echo "Proxy WebSocket python asynchrone lancé avec succès."
+    echo "Le proxy WebSocket python a démarré avec succès."
 else
-    echo "Erreur : le proxy WebSocket python asynchrone n'a pas pu démarrer."
+    echo "Erreur : le proxy WebSocket python n'a pas pu démarrer."
 fi
 
 echo "=============================================="
 echo " 🚀 Lancement du serveur Node.js (server.js) dans screen..."
 echo "=============================================="
 
-# Nettoyer sessions écran existantes nommées serverjs
+# Nettoyer anciennes sessions screen serverjs
 for session in $(screen -ls | grep serverjs | awk '{print $1}'); do
     screen -S "$session" -X quit
 done
@@ -229,7 +234,7 @@ else
     echo "Erreur : le serveur Node.js server.js n'a pas pu démarrer."
 fi
 
-# Le reste de votre script (SlowDNS, config ssh, alias, etc.) reste inchangé
+# Suite de votre script inchangée (SlowDNS, SSH config, alias, etc.)
 
 echo "=============================================="
 echo " ✅ Installation terminée !"
