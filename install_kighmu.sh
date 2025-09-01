@@ -100,6 +100,9 @@ apt install -y iptables
 apt install -y iproute2
 apt install -y net-tools
 apt install -y tmux
+apt install -y git
+apt install -y build-essential
+apt install -y libssl-dev
 apt install -y software-properties-common
 
 apt autoremove -y
