@@ -42,7 +42,6 @@ if [ "$DOMAIN_IP" != "$IP_PUBLIC" ]; then
   fi
 fi
 
-# Exporter la variable pour que les scripts enfants y aient accès
 export DOMAIN
 
 echo "=============================================="
@@ -52,13 +51,25 @@ echo "=============================================="
 apt update -y && apt upgrade -y
 
 apt install -y \
-sudo bsdmainutils zip unzip ufw curl python python3 python3-pip openssl screen cron iptables lsof pv boxes nano at mlocate \
+sudo bsdmainutils zip unzip ufw curl python3 python3-pip openssl screen cron iptables lsof pv boxes nano at mlocate \
 gawk grep bc jq npm nodejs socat netcat netcat-traditional net-tools cowsay figlet lolcat \
-dnsutils net-tools wget sudo iptables ufw openssl openssl-blacklist psmisc nginx certbot python3-certbot-nginx dropbear badvpn \
+dnsutils net-tools wget sudo iptables ufw openssl psmisc nginx dropbear badvpn \
 python3-setuptools wireguard-tools qrencode gcc make perl software-properties-common socat
 
 apt autoremove -y
 apt clean
+
+echo "=============================================="
+echo " 🚀 Préparation du mode HTTP/WS sans SSL..."
+echo "=============================================="
+
+# Installer le module python websockets si absent
+if ! python3 -c "import websockets" &> /dev/null; then
+    echo "Installation du module python websockets via pip3..."
+    pip3 install websockets
+else
+    echo "Module python websockets déjà installé."
+fi
 
 echo "=============================================="
 echo " 🚀 Installation et configuration du module Python pysocks et du proxy SOCKS"
@@ -114,6 +125,7 @@ FILES=(
     "udp_custom.sh"
     "dropbear.sh"
     "ssl.sh"
+    "proxy_wss.py"
     "badvpn.sh"
     "system_dns.sh"
     "install_modes.sh"
@@ -121,6 +133,7 @@ FILES=(
     "nginx.sh"
     "setup_ssh_config.sh"
     "create_ssh_user.sh"
+    "menu2_et_expire.sh"
 )
 
 BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
@@ -153,6 +166,31 @@ run_script "$INSTALL_DIR/nginx.sh"
 run_script "$INSTALL_DIR/socks_python.sh"
 run_script "$INSTALL_DIR/slowdns.sh"
 run_script "$INSTALL_DIR/udp_custom.sh"
+
+echo "=============================================="
+echo " 🚀 Lancement du mode HTTP/WS via screen..."
+echo "=============================================="
+
+# Nettoyer sessions écran existantes nommées proxy_wss
+sessions=$(screen -ls | grep proxy_wss | awk '{print $1}')
+if [ -n "$sessions" ]; then
+    for session in $sessions; do
+        screen -S "$session" -X quit
+    done
+    echo "Anciennes sessions proxy_wss supprimées."
+fi
+
+# Lancer proxy_wss.py dans screen détaché
+screen -dmS proxy_wss /usr/bin/python3 "$INSTALL_DIR/proxy_wss.py"
+
+sleep 2
+
+# Vérifier que la session est bien lancée
+if screen -ls | grep -q proxy_wss; then
+    echo "Le serveur WS est démarré et fonctionne dans screen."
+else
+    echo "Erreur : le serveur WS n'a pas pu démarrer dans screen."
+fi
 
 echo "=============================================="
 echo " 🚀 Installation et configuration SlowDNS..."
@@ -194,7 +232,7 @@ echo "+--------------------------------------------+"
 
 echo "🚀 Application de la configuration SSH personnalisée..."
 chmod +x "$INSTALL_DIR/setup_ssh_config.sh"
-run_script "sudo $INSTALL_DIR/setup_ssh_config.sh"
+run_script "$INSTALL_DIR/setup_ssh_config.sh"
 
 echo "🚀 Script de création utilisateur SSH disponible : $INSTALL_DIR/create_ssh_user.sh"
 echo "Tu peux le lancer manuellement quand tu veux."
@@ -236,8 +274,6 @@ echo " Pour lancer Kighmu, utilisez la commande : kighmu"
 echo
 echo " ⚠️ Pour que l'alias soit pris en compte :"
 echo " - Ouvre un nouveau terminal, ou"
-echo " - Exécute manuellement : source ~/.bashrc"
+echo " - Exécutez manuellement : source ~/.bashrc"
 echo
-echo "Tentative de rechargement automatique de ~/.bashrc dans cette session..."
-source ~/.bashrc || echo "Le rechargement automatique a échoué, merci de le faire manuellement."
 echo "=============================================="
