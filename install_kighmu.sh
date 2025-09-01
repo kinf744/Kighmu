@@ -50,11 +50,50 @@ echo "=============================================="
 
 apt update -y && apt upgrade -y
 
-apt install -y \
-sudo bsdmainutils zip unzip ufw curl python3 python3-pip openssl screen cron iptables lsof pv boxes nano at mlocate \
-gawk grep bc jq npm nodejs socat netcat netcat-traditional net-tools cowsay figlet lolcat \
-dnsutils net-tools wget sudo iptables ufw openssl psmisc nginx dropbear badvpn \
-python3-setuptools wireguard-tools qrencode gcc make perl software-properties-common socat
+apt install -y sudo
+apt install -y bsdmainutils
+apt install -y zip
+apt install -y unzip
+apt install -y ufw
+apt install -y curl
+apt install -y python3
+apt install -y python3-pip
+apt install -y openssl
+apt install -y screen
+apt install -y cron
+apt install -y iptables
+apt install -y lsof
+apt install -y pv
+apt install -y boxes
+apt install -y nano
+apt install -y at
+apt install -y mlocate
+apt install -y gawk
+apt install -y grep
+apt install -y bc
+apt install -y jq
+apt install -y npm
+apt install -y nodejs
+apt install -y socat
+apt install -y netcat
+apt install -y netcat-traditional
+apt install -y net-tools
+apt install -y cowsay
+apt install -y figlet
+apt install -y lolcat
+apt install -y dnsutils
+apt install -y wget
+apt install -y psmisc
+apt install -y nginx
+apt install -y dropbear
+apt install -y badvpn
+apt install -y python3-setuptools
+apt install -y wireguard-tools
+apt install -y qrencode
+apt install -y gcc
+apt install -y make
+apt install -y perl
+apt install -y software-properties-common
 
 apt autoremove -y
 apt clean
