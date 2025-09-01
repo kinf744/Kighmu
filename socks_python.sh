@@ -1,6 +1,6 @@
 #!/bin/bash
 # socks_python.sh
-# Activation du SOCKS Python avec persistance via systemd
+# Activation du SOCKS Python avec configuration simple
 
 echo "+--------------------------------------------+"
 echo "|             CONFIG SOCKS/PYTHON            |"
@@ -21,7 +21,6 @@ case "$confirm" in
         PROXY_PORT=8080
         SCRIPT_PATH="/usr/local/bin/KIGHMUPROXY.py"
         LOG_FILE="/var/log/socks_python.log"
-        SERVICE_FILE="/etc/systemd/system/socks_python.service"
 
         echo "Vérification du port $PROXY_PORT..."
         if sudo lsof -i :$PROXY_PORT >/dev/null; then
@@ -29,37 +28,17 @@ case "$confirm" in
             exit 1
         fi
 
-        # Création du fichier service systemd
-        sudo tee $SERVICE_FILE > /dev/null << EOF
-[Unit]
-Description=SOCKS Python Proxy Service
-After=network.target
+        echo "Démarrage du proxy SOCKS/Python sur le port $PROXY_PORT..."
+        nohup python3 "$SCRIPT_PATH" "$PROXY_PORT" > "$LOG_FILE" 2>&1 &
 
-[Service]
-Type=simple
-ExecStart=/usr/bin/env python3 $SCRIPT_PATH $PROXY_PORT
-Restart=always
-RestartSec=5
-User=root
-StandardOutput=append:$LOG_FILE
-StandardError=append:$LOG_FILE
+        sleep 3
 
-[Install]
-WantedBy=multi-user.target
-EOF
-
-        # Recharge systemd, active et démarre le service
-        sudo systemctl daemon-reload
-        sudo systemctl enable socks_python.service
-        sudo systemctl start socks_python.service
-
-        # Vérification du démarrage
-        if systemctl is-active --quiet socks_python.service; then
-            echo "Proxy SOCKS Python démarré et activé au démarrage automatique."
+        if pgrep -f "python3 $SCRIPT_PATH" > /dev/null; then
+            echo "Proxy SOCKS/Python démarré sur le port $PROXY_PORT."
             echo "Logs disponibles dans $LOG_FILE"
         else
-            echo "ERREUR : Le proxy SOCKS Python n'a pas pu démarrer via systemd."
-            exit 1
+            echo "Échec du démarrage du proxy SOCKS/Python."
+            echo "Consultez les logs : $LOG_FILE"
         fi
         ;;
     [nN][oO]|[nN])
