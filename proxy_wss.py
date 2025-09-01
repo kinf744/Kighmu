@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # encoding: utf-8
 import socket, threading, select, sys, time
+import getopt  # <---- Import ajouté
 
 # Listen settings
 LISTENING_ADDR = '0.0.0.0'
@@ -217,7 +218,6 @@ def print_usage():
 
 def parse_args(argv):
     global LISTENING_ADDR
-    # port args ignored since port is fixed to 80
     try:
         opts, args = getopt.getopt(argv, "hb:", ["bind="])
     except getopt.GetoptError:
@@ -228,7 +228,6 @@ def parse_args(argv):
             print_usage()
             sys.exit()
         elif opt in ("-b", "--bind"):
-            global LISTENING_ADDR
             LISTENING_ADDR = arg
 
 
@@ -237,7 +236,6 @@ def main(host=LISTENING_ADDR, port=LISTENING_PORT):
     print("\033[1;33mIP:\033[1;32m " + LISTENING_ADDR)
     print("\033[1;33mPORT:\033[1;32m 80\n")
     print("\033[0;34m•"*10, "\033[1;32m ILYASS AUTO SCRIPT","\033[0;34m•\033[1;37m"*11, "\n")
-
 
     server = Server(LISTENING_ADDR, 80)
     server.start()
