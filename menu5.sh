@@ -16,6 +16,7 @@ echo ""
 # Fonctions install/configuration pour chaque mode
 install_openssh() {
     echo "Installation / vérification Openssh..."
+    # commandes d'installation Openssh ici, par exemple :
     apt-get install -y openssh-server
     systemctl enable ssh
     systemctl start ssh
@@ -23,6 +24,7 @@ install_openssh() {
 
 install_dropbear() {
     echo "Installation / vérification Dropbear..."
+    # commandes d'installation Dropbear ici
     apt-get install -y dropbear
     systemctl enable dropbear
     systemctl start dropbear
@@ -30,6 +32,7 @@ install_dropbear() {
 
 install_slowdns() {
     echo "Installation / configuration SlowDNS..."
+    # Exécution du script slowdns.sh si présent
     bash "$HOME/Kighmu/slowdns.sh" || echo "SlowDNS : script non trouvé ou erreur."
 }
 
@@ -45,21 +48,12 @@ install_socks_python() {
 
 install_ssl_tls() {
     echo "Installation SSL/TLS..."
-    # Ajoutez ici les commandes pour installer/configurer SSL/TLS
+    # Ajoute ici les commandes pour installer/configurer SSL/TLS
 }
 
 install_badvpn() {
     echo "Installation BadVPN..."
-    # Ajoutez ici les commandes pour installer/configurer BadVPN
-}
-
-install_http_ws() {
-    echo "Installation HTTP WS (tunnel SSH WebSocket)..."
-    if [ -x "$HOME/Kighmu/proxy_wss.py" ]; then
-        python3 "$HOME/Kighmu/proxy_wss.py"
-    else
-        echo "Script proxy_wss.py non trouvé ou non exécutable."
-    fi
+    # Ajoute ici les commandes pour installer/configurer BadVPN
 }
 
 # Appel séquentiel de toutes les installations
@@ -70,7 +64,6 @@ install_udp_custom
 install_socks_python
 install_ssl_tls
 install_badvpn
-install_http_ws
 
 echo ""
 echo "=============================================="
