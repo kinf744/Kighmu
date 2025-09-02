@@ -1,57 +1,25 @@
 #!/usr/bin/env python3
-import subprocess
+# encoding: utf-8
+# KIGHMUPROXY - Proxy TCP SOCKS inspiré DarkSSH (version corrigée)
+
 import socket
 import threading
 import select
 import sys
 import time
 
-# Configuration proxy local
 IP = '0.0.0.0'
 try:
-    PROXY_PORT = int(sys.argv[1])
+    PORT = int(sys.argv[1])
 except:
-    PROXY_PORT = 8080
+    PORT = 8080
 
-# Configuration SSH tunnel
-SSH_USER = "user"           # Remplace par ton utilisateur SSH
-SSH_HOST = "remotehost"     # Remplace par ton serveur distant
-SSH_PORT = 22               # Port SSH
-SSH_SOCKS_PORT = 1080       # Port local pour SSH SOCKS tunnel
-
-PASS = ''
-BUFLEN = 8192 * 8
+PASS = ''  # Mot de passe optionnel
+BUFLEN = 8196 * 8
 TIMEOUT = 60
 MSG = 'KIGHMUPROXY'
+RESPONSE = "HTTP/1.1 200 OK\r\n\r\n"
 DEFAULT_HOST = '0.0.0.0:22'
-RESPONSE = f"HTTP/1.1 200 {MSG}\r\n\r\n"
-
-class SSHTunnel:
-    def __init__(self, user, host, ssh_port=22, socks_port=1080):
-        self.user = user
-        self.host = host
-        self.ssh_port = ssh_port
-        self.socks_port = socks_port
-        self.process = None
-
-    def start(self):
-        cmd = [
-            "ssh",
-            "-N",
-            "-C",
-            "-q",
-            "-p", str(self.ssh_port),
-            "-D", str(self.socks_port),
-            f"{self.user}@{self.host}"
-        ]
-        self.process = subprocess.Popen(cmd)
-        print(f"Tunnel SSH SOCKS lancé sur le port {self.socks_port}")
-
-    def stop(self):
-        if self.process:
-            self.process.terminate()
-            self.process.wait()
-            print("Tunnel SSH SOCKS arrêté")
 
 class Server(threading.Thread):
     def __init__(self, host, port):
@@ -64,44 +32,50 @@ class Server(threading.Thread):
         self.logLock = threading.Lock()
 
     def run(self):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as soc:
-            soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            soc.settimeout(2)
-            soc.bind((self.host, self.port))
-            soc.listen()
-            self.running = True
-            self.log(f"KIGHMUPROXY démarré sur {self.host}:{self.port}")
+        self.soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.soc.settimeout(2)
+        self.soc.bind((self.host, self.port))
+        self.soc.listen(0)
+        self.running = True
+        self.print_log(f"KIGHMUPROXY démarré sur {self.host}:{self.port}")
 
+        try:
             while self.running:
                 try:
-                    c, addr = soc.accept()
-                    c.setblocking(True)
-                    conn = ConnectionHandler(c, self, addr)
-                    conn.start()
-                    self.addConn(conn)
+                    c, addr = self.soc.accept()
+                    c.setblocking(1)
                 except socket.timeout:
                     continue
 
-    def log(self, msg):
+                conn = ConnectionHandler(c, self, addr)
+                conn.start()
+                self.add_conn(conn)
+        finally:
+            self.running = False
+            self.soc.close()
+
+    def print_log(self, msg):
         with self.logLock:
             print(msg)
 
-    def addConn(self, conn):
+    def add_conn(self, conn):
         with self.threadsLock:
             if self.running:
                 self.threads.append(conn)
 
-    def removeConn(self, conn):
+    def remove_conn(self, conn):
         with self.threadsLock:
             if conn in self.threads:
                 self.threads.remove(conn)
 
     def close(self):
+        self.print_log("Fermeture du proxy et des connexions...")
         self.running = False
         with self.threadsLock:
-            threads_copy = list(self.threads)
-        for conn in threads_copy:
-            conn.close()
+            threads = list(self.threads)
+            for c in threads:
+                c.close()
 
 class ConnectionHandler(threading.Thread):
     def __init__(self, client_socket, server, addr):
@@ -109,50 +83,55 @@ class ConnectionHandler(threading.Thread):
         self.client = client_socket
         self.server = server
         self.addr = addr
-        self.clientClosed = False
-        self.targetClosed = True
-        self.target = None
+        self.client_closed = False
+        self.target_closed = True
 
     def close(self):
         try:
-            if not self.clientClosed:
+            if not self.client_closed:
                 self.client.shutdown(socket.SHUT_RDWR)
                 self.client.close()
         except:
             pass
         finally:
-            self.clientClosed = True
+            self.client_closed = True
 
         try:
-            if not self.targetClosed and self.target:
+            if not self.target_closed and hasattr(self, 'target'):
                 self.target.shutdown(socket.SHUT_RDWR)
                 self.target.close()
         except:
             pass
         finally:
-            self.targetClosed = True
+            self.target_closed = True
 
     def run(self):
         try:
-            data = self.client.recv(BUFLEN)
-            host_port = self.findHeader(data, 'X-Real-Host') or DEFAULT_HOST
+            client_buffer = self.client.recv(BUFLEN)
+            host_port = self.find_header(client_buffer, 'X-Real-Host')
 
-            passwd = self.findHeader(data, 'X-Pass')
+            if not host_port:
+                host_port = DEFAULT_HOST
+
+            passwd = self.find_header(client_buffer, 'X-Pass')
+
             if PASS and passwd != PASS:
                 self.client.send(b"HTTP/1.1 400 WrongPass!\r\n\r\n")
+                self.close()
                 return
 
             if host_port.startswith(IP) or not PASS:
-                self.method_CONNECT(host_port)
+                self.method_connect(host_port)
             else:
                 self.client.send(b"HTTP/1.1 403 Forbidden!\r\n\r\n")
+
         except Exception as e:
-            self.server.log(f"[{self.addr}] Erreur: {e}")
+            self.server.print_log(f"[{self.addr}] Erreur : {e}")
         finally:
             self.close()
-            self.server.removeConn(self)
+            self.server.remove_conn(self)
 
-    def findHeader(self, data, header):
+    def find_header(self, data, header):
         try:
             data_str = data.decode(errors='ignore')
             start = data_str.find(header + ": ")
@@ -160,14 +139,16 @@ class ConnectionHandler(threading.Thread):
                 return ''
             start += len(header) + 2
             end = data_str.find('\r\n', start)
-            return data_str[start:end].strip() if end != -1 else ''
+            if end == -1:
+                return ''
+            return data_str[start:end].strip()
         except:
             return ''
 
     def connect_target(self, host_port):
         i = host_port.find(':')
         if i != -1:
-            port = int(host_port[i + 1:])
+            port = int(host_port[i+1:])
             host = host_port[:i]
         else:
             port = 22
@@ -177,62 +158,61 @@ class ConnectionHandler(threading.Thread):
         soc_family, soc_type, proto, _, addr = info
 
         self.target = socket.socket(soc_family, soc_type, proto)
-        self.targetClosed = False
+        self.target_closed = False
         self.target.connect(addr)
 
-    def method_CONNECT(self, host_port):
-        self.server.log(f"[{self.addr}] CONNECT vers {host_port}")
+    def method_connect(self, host_port):
+        self.server.print_log(f"[{self.addr}] CONNECT vers {host_port}")
         self.connect_target(host_port)
         self.client.sendall(RESPONSE.encode())
-        self.do_CONNECT()
+        self.do_connect()
 
-    def do_CONNECT(self):
+    def do_connect(self):
         socks = [self.client, self.target]
-        count = 0
+        timeout_counter = 0
         error = False
-
         while True:
             try:
                 recv, _, err = select.select(socks, [], socks, 3)
-                if err:
-                    error = True
-                if recv:
-                    for s in recv:
-                        try:
-                            data = s.recv(BUFLEN)
-                            if data:
-                                if s is self.target:
-                                    self.client.send(data)
-                                else:
-                                    while data:
-                                        sent = self.target.send(data)
-                                        data = data[sent:]
-                                count = 0
-                            else:
-                                error = True
-                        except:
-                            error = True
-                            break
-            except:
+            except Exception:
+                break
+
+            if err:
                 error = True
-            count += 1
-            if count >= TIMEOUT or error:
+
+            if recv:
+                for s in recv:
+                    try:
+                        data = s.recv(BUFLEN)
+                        if data:
+                            if s is self.target:
+                                self.client.send(data)
+                            else:
+                                while data:
+                                    sent = self.target.send(data)
+                                    data = data[sent:]
+                            timeout_counter = 0
+                        else:
+                            error = True
+                    except Exception:
+                        error = True
+                        break
+
+            timeout_counter += 1
+            if timeout_counter >= TIMEOUT or error:
                 break
 
 def main():
-    ssh_tunnel = SSHTunnel(SSH_USER, SSH_HOST, ssh_port=SSH_PORT, socks_port=SSH_SOCKS_PORT)
-    ssh_tunnel.start()
-
-    server = Server(IP, PROXY_PORT)
+    print("KIGHMUPROXY - tunnel SSH proxy SOCKS type DarkSSH\n")
+    server = Server(IP, PORT)
     server.start()
-
     try:
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        print("Arrêt du proxy et du tunnel SSH")
+        print("\nArrêt du proxy...")
         server.close()
-        ssh_tunnel.stop()
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
+                
