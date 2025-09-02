@@ -42,6 +42,7 @@ if [ "$DOMAIN_IP" != "$IP_PUBLIC" ]; then
   fi
 fi
 
+# Exporter la variable pour que les scripts enfants y aient accès
 export DOMAIN
 
 echo "=============================================="
@@ -50,75 +51,14 @@ echo "=============================================="
 
 apt update -y && apt upgrade -y
 
-apt install -y sudo
-apt install -y bsdmainutils
-apt install -y zip
-apt install -y unzip
-apt install -y ufw
-apt install -y curl
-apt install -y python3
-apt install -y python3-pip
-apt install -y openssl
-apt install -y screen
-apt install -y cron
-apt install -y iptables
-apt install -y lsof
-apt install -y pv
-apt install -y boxes
-apt install -y nano
-apt install -y at
-apt install -y mlocate
-apt install -y gawk
-apt install -y grep
-apt install -y bc
-apt install -y jq
-apt install -y npm
-apt install -y nodejs
-apt install -y socat
-apt install -y netcat
-apt install -y netcat-traditional
-apt install -y net-tools
-apt install -y cowsay
-apt install -y figlet
-apt install -y lolcat
-apt install -y dnsutils
-apt install -y wget
-apt install -y psmisc
-apt install -y nginx
-apt install -y dropbear
-apt install -y badvpn
-apt install -y python3-setuptools
-apt install -y wireguard-tools
-apt install -y qrencode
-apt install -y gcc
-apt install -y make
-apt install -y perl
-apt install -y iptables-persistent
-apt install -y systemd
-apt install -y tcpdump
-apt install -y iptables
-apt install -y iproute2
-apt install -y net-tools
-apt install -y tmux
-apt install -y git
-apt install -y build-essential
-apt install -y libssl-dev
-apt install -y software-properties-common
+apt install -y \
+sudo bsdmainutils zip unzip ufw curl python python3 python3-pip openssl screen cron iptables lsof pv boxes nano at mlocate \
+gawk grep bc jq npm nodejs socat netcat netcat-traditional net-tools cowsay figlet lolcat \
+dnsutils net-tools wget sudo iptables ufw openssl openssl-blacklist psmisc nginx certbot python3-certbot-nginx dropbear badvpn \
+python3-setuptools wireguard-tools qrencode gcc make perl software-properties-common socat
 
 apt autoremove -y
 apt clean
-
-echo "=============================================="
-echo " 🚀 Préparation du mode HTTP/WS sans SSL..."
-echo "=============================================="
-
-# Installer le module python websockets si absent
-if ! python3 -c "import websockets" &> /dev/null; then
-    echo "Installation du module python websockets via pip3..."
-    pip3 install websockets
-else
-    echo "Module python websockets déjà installé."
-fi
 
 echo "=============================================="
 echo " 🚀 Installation et configuration du module Python pysocks et du proxy SOCKS"
@@ -174,7 +114,6 @@ FILES=(
     "udp_custom.sh"
     "dropbear.sh"
     "ssl.sh"
-    "proxy_wss.py"
     "badvpn.sh"
     "system_dns.sh"
     "install_modes.sh"
@@ -182,7 +121,6 @@ FILES=(
     "nginx.sh"
     "setup_ssh_config.sh"
     "create_ssh_user.sh"
-    "menu2_et_expire.sh"
 )
 
 BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
@@ -215,31 +153,6 @@ run_script "$INSTALL_DIR/nginx.sh"
 run_script "$INSTALL_DIR/socks_python.sh"
 run_script "$INSTALL_DIR/slowdns.sh"
 run_script "$INSTALL_DIR/udp_custom.sh"
-
-echo "=============================================="
-echo " 🚀 Lancement du mode HTTP/WS via screen..."
-echo "=============================================="
-
-# Nettoyer sessions écran existantes nommées proxy_wss
-sessions=$(screen -ls | grep proxy_wss | awk '{print $1}')
-if [ -n "$sessions" ]; then
-    for session in $sessions; do
-        screen -S "$session" -X quit
-    done
-    echo "Anciennes sessions proxy_wss supprimées."
-fi
-
-# Lancer proxy_wss.py dans screen détaché
-screen -dmS proxy_wss /usr/bin/python3 "$INSTALL_DIR/proxy_wss.py"
-
-sleep 2
-
-# Vérifier que la session est bien lancée
-if screen -ls | grep -q proxy_wss; then
-    echo "Le serveur WS est démarré et fonctionne dans screen."
-else
-    echo "Erreur : le serveur WS n'a pas pu démarrer dans screen."
-fi
 
 echo "=============================================="
 echo " 🚀 Installation et configuration SlowDNS..."
@@ -281,7 +194,7 @@ echo "+--------------------------------------------+"
 
 echo "🚀 Application de la configuration SSH personnalisée..."
 chmod +x "$INSTALL_DIR/setup_ssh_config.sh"
-run_script "$INSTALL_DIR/setup_ssh_config.sh"
+run_script "sudo $INSTALL_DIR/setup_ssh_config.sh"
 
 echo "🚀 Script de création utilisateur SSH disponible : $INSTALL_DIR/create_ssh_user.sh"
 echo "Tu peux le lancer manuellement quand tu veux."
@@ -323,6 +236,8 @@ echo " Pour lancer Kighmu, utilisez la commande : kighmu"
 echo
 echo " ⚠️ Pour que l'alias soit pris en compte :"
 echo " - Ouvre un nouveau terminal, ou"
-echo " - Exécutez manuellement : source ~/.bashrc"
+echo " - Exécute manuellement : source ~/.bashrc"
 echo
+echo "Tentative de rechargement automatique de ~/.bashrc dans cette session..."
+source ~/.bashrc || echo "Le rechargement automatique a échoué, merci de le faire manuellement."
 echo "=============================================="
