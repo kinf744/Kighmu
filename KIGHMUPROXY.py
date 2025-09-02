@@ -5,25 +5,26 @@ import threading
 import select
 import sys
 import time
-import signal
 
+# Configuration proxy local
 IP = '0.0.0.0'
 try:
-    PORT = int(sys.argv[1])
-except Exception:
-    PORT = 8080
+    PROXY_PORT = int(sys.argv[1])
+except:
+    PROXY_PORT = 8080
+
+# Configuration SSH tunnel
+SSH_USER = "user"           # Remplace par ton utilisateur SSH
+SSH_HOST = "remotehost"     # Remplace par ton serveur distant
+SSH_PORT = 22               # Port SSH
+SSH_SOCKS_PORT = 1080       # Port local pour SSH SOCKS tunnel
 
 PASS = ''
-BUFLEN = 8196 * 8
+BUFLEN = 8192 * 8
 TIMEOUT = 60
 MSG = 'KIGHMUPROXY'
 DEFAULT_HOST = '0.0.0.0:22'
 RESPONSE = f"HTTP/1.1 200 {MSG}\r\n\r\n"
-
-SSH_USER = "user"           # Modifier avec ton utilisateur SSH
-SSH_HOST = "remotehost"     # Modifier avec ton serveur SSH distant
-SSH_PORT = 22               # Port SSH distant, généralement 22
-SSH_SOCKS_PORT = 1080       # Port local pour le tunnel SSH SOCKS
 
 class SSHTunnel:
     def __init__(self, user, host, ssh_port=22, socks_port=1080):
@@ -37,10 +38,10 @@ class SSHTunnel:
         cmd = [
             "ssh",
             "-N",
-            "-D", str(self.socks_port),
             "-C",
             "-q",
             "-p", str(self.ssh_port),
+            "-D", str(self.socks_port),
             f"{self.user}@{self.host}"
         ]
         self.process = subprocess.Popen(cmd)
@@ -80,8 +81,6 @@ class Server(threading.Thread):
                     self.addConn(conn)
                 except socket.timeout:
                     continue
-                except Exception as e:
-                    self.log(f"Erreur accept: {e}")
 
     def log(self, msg):
         with self.logLock:
@@ -119,7 +118,7 @@ class ConnectionHandler(threading.Thread):
             if not self.clientClosed:
                 self.client.shutdown(socket.SHUT_RDWR)
                 self.client.close()
-        except Exception:
+        except:
             pass
         finally:
             self.clientClosed = True
@@ -128,7 +127,7 @@ class ConnectionHandler(threading.Thread):
             if not self.targetClosed and self.target:
                 self.target.shutdown(socket.SHUT_RDWR)
                 self.target.close()
-        except Exception:
+        except:
             pass
         finally:
             self.targetClosed = True
@@ -162,7 +161,7 @@ class ConnectionHandler(threading.Thread):
             start += len(header) + 2
             end = data_str.find('\r\n', start)
             return data_str[start:end].strip() if end != -1 else ''
-        except Exception:
+        except:
             return ''
 
     def connect_target(self, host_port):
@@ -214,7 +213,7 @@ class ConnectionHandler(threading.Thread):
                         except:
                             error = True
                             break
-            except Exception:
+            except:
                 error = True
             count += 1
             if count >= TIMEOUT or error:
@@ -224,7 +223,7 @@ def main():
     ssh_tunnel = SSHTunnel(SSH_USER, SSH_HOST, ssh_port=SSH_PORT, socks_port=SSH_SOCKS_PORT)
     ssh_tunnel.start()
 
-    server = Server(IP, PORT)
+    server = Server(IP, PROXY_PORT)
     server.start()
 
     try:
@@ -237,4 +236,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-        
