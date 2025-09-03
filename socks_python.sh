@@ -1,6 +1,6 @@
 #!/bin/bash
 # socks_python.sh
-# Activation du SOCKS Python avec configuration simple
+# Activation du SOCKS Python avec nettoyage des anciennes instances
 
 echo "+--------------------------------------------+"
 echo "|             CONFIG SOCKS/PYTHON            |"
@@ -13,7 +13,12 @@ case "$confirm" in
         echo "Vérification du module pysocks..."
         if ! python3 -c "import socks" &> /dev/null; then
             echo "Module pysocks non trouvé, installation en cours..."
-            sudo pip3 install pysocks python-socks
+            sudo pip3 install --upgrade pip
+            sudo pip3 install pysocks python-socks requests[socks]
+            if [ $? -ne 0 ]; then
+                echo "Erreur lors de l'installation des modules Python. Abandon."
+                exit 1
+            fi
         else
             echo "Module pysocks déjà installé."
         fi
@@ -21,6 +26,22 @@ case "$confirm" in
         PROXY_PORT=8080
         SCRIPT_PATH="/usr/local/bin/KIGHMUPROXY.py"
         LOG_FILE="/var/log/socks_python.log"
+
+        if [ ! -f "$SCRIPT_PATH" ]; then
+            echo "Le script proxy $SCRIPT_PATH est introuvable. Veuillez vérifier son emplacement."
+            exit 1
+        fi
+
+        echo "Recherche d'instances précédentes du proxy SOCKS à arrêter..."
+        PIDS=$(pgrep -f "python3 $SCRIPT_PATH")
+        if [ -n "$PIDS" ]; then
+            echo "Arrêt des instances proxy existantes (PID: $PIDS)..."
+            kill $PIDS
+            sleep 3
+            echo "Instances précédentes arrêtées."
+        else
+            echo "Aucune instance précédente détectée."
+        fi
 
         echo "Vérification du port $PROXY_PORT..."
         if sudo lsof -i :$PROXY_PORT >/dev/null; then
