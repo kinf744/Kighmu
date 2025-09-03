@@ -1,6 +1,7 @@
 #!/bin/bash
-# menu2.sh
-# Créer un utilisateur test avec sauvegarde dans users.list
+# ===============================================
+# Kighmu VPS Manager - Création Utilisateur Test
+# ===============================================
 
 # Charger les infos globales Kighmu
 if [ -f ~/.kighmu_info ]; then
@@ -12,80 +13,127 @@ fi
 
 # Charger la clé publique SlowDNS
 if [ -f /etc/slowdns/server.pub ]; then
-    SLOWDNS_KEY=$(cat /etc/slowdns/server.pub)
+    SLOWDNS_KEY=$(< /etc/slowdns/server.pub)
 else
     SLOWDNS_KEY="Clé publique SlowDNS non trouvée!"
 fi
+
+# Charger le NameServer SlowDNS exact depuis le fichier de config
+if [ -f /etc/slowdns/ns.conf ]; then
+    SLOWDNS_NS=$(< /etc/slowdns/ns.conf)
+else
+    echo "Erreur : fichier /etc/slowdns/ns.conf introuvable."
+    exit 1
+fi
+
+# Fichiers et dossiers nécessaires
+USER_FILE="/etc/kighmu/users.list"
+mkdir -p /etc/kighmu
+touch "$USER_FILE"
+chmod 600 "$USER_FILE"
+
+TEST_DIR="/etc/kighmu/userteste"
+mkdir -p "$TEST_DIR"
 
 echo "+--------------------------------------------+"
 echo "|         CRÉATION D'UTILISATEUR TEST       |"
 echo "+--------------------------------------------+"
 
-# Demander les informations
+# Lecture des informations
 read -p "Nom d'utilisateur : " username
-read -s -p "Mot de passe : " password
-echo ""
+if [[ -z "$username" ]]; then
+    echo "Nom d'utilisateur vide, annulation."
+    exit 1
+fi
+
+if id "$username" &>/dev/null; then
+    echo "Cet utilisateur existe déjà."
+    exit 1
+fi
+
+# Lecture mot de passe visible (non masqué)
+read -p "Mot de passe : " password
+if [[ -z "$password" ]]; then
+    echo "Mot de passe vide, annulation."
+    exit 1
+fi
+
 read -p "Nombre d'appareils autorisés : " limite
+if ! [[ "$limite" =~ ^[0-9]+$ ]]; then
+    echo "Limite invalide, annulation."
+    exit 1
+fi
+
 read -p "Durée de validité (en minutes) : " minutes
+if ! [[ "$minutes" =~ ^[0-9]+$ ]]; then
+    echo "Durée invalide, annulation."
+    exit 1
+fi
 
-# Calculer la date d'expiration
-expire_date=$(date -d "+$minutes minutes" '+%Y-%m-%d %H:%M:%S')
+# Création utilisateur système sans home ni shell interactif
+useradd -M -s /bin/false "$username" || { echo "Erreur lors de la création du compte"; exit 1; }
 
-# Créer l'utilisateur système
-useradd -M -s /bin/false "$username"
+# Définition du mot de passe
 echo "$username:$password" | chpasswd
 
-# Définir les ports et services (exemple)
-SSH_PORT=22
-SYSTEM_DNS=53
-SOCKS_PORT=8080
-WEB_NGINX=81
-DROPBEAR=90
-SSL_PORT=443
-BADVPN1=7200
-BADVPN2=7300
-SLOWDNS_PORT=5300
-UDP_CUSTOM="1-65535"
+# Calcul de la date d'expiration rigoureuse au format ISO 8601
+expire_date=$(date -d "+$minutes minutes" '+%Y-%m-%d %H:%M:%S')
 
+# Récupération infos serveur
 HOST_IP=$(curl -s https://api.ipify.org)
 
-# Remplacer NS par celui chargé des infos globales si vide
-SLOWDNS_NS="${SLOWDNS_NS:-slowdns5.kighmup.ddns-ip.net}"
-
-# Sauvegarder les infos utilisateur dans le fichier dédié
-USER_FILE="/etc/kighmu/users.list"
-mkdir -p /etc/kighmu
-touch "$USER_FILE"
-chmod 600 "$USER_FILE"
+# Sauvegarde des infos utilisateur dans le fichier
 echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
 
+# Création du script de suppression automatique
+CLEAN_SCRIPT="$TEST_DIR/$username-clean.sh"
+cat > "$CLEAN_SCRIPT" <<EOF
+#!/bin/bash
+pkill -f "$username"
+userdel --force "$username"
+grep -v "^$username|" $USER_FILE > /tmp/users.tmp && mv /tmp/users.tmp $USER_FILE
+rm -f "$CLEAN_SCRIPT"
+exit 0
+EOF
+chmod +x "$CLEAN_SCRIPT"
+
+# Vérifier que 'at' est installé
+if ! command -v at >/dev/null 2>&1; then
+    echo "La commande 'at' n'est pas installée. Veuillez l'installer pour que la suppression automatique fonctionne."
+else
+    # Planification suppression avec at
+    echo "bash $CLEAN_SCRIPT" | at now + "$minutes" minutes 2>/dev/null
+fi
+
 # Affichage résumé
-echo ""
-echo "*NOUVEAU UTILISATEUR CRÉÉ*"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "∘ SSH: $SSH_PORT            ∘ System-DNS: $SYSTEM_DNS"
-echo "∘ SOCKS/PYTHON: $SOCKS_PORT   ∘ WEB-NGINX: $WEB_NGINX"
-echo "∘ DROPBEAR: $DROPBEAR       ∘ SSL: $SSL_PORT"
-echo "∘ BadVPN: $BADVPN1       ∘ BadVPN: $BADVPN2"
-echo "∘ SlowDNS: $SLOWDNS_PORT      ∘ UDP-Custom: $UDP_CUSTOM"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "DOMAIN        : $DOMAIN"
-echo "Host/IP-Address : $HOST_IP"
-echo "UTILISATEUR   : $username"
-echo "MOT DE PASSE  : $password"
-echo "LIMITE       : $limite"
-echo "DATE EXPIRÉE : $expire_date"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "En APPS comme HTTP Injector, CUSTOM, KPN Rev, etc."
-echo ""
-echo "🙍 HTTP-Direct  : $HOST_IP:90@$username:$password"
-echo "🙍 SSL/TLS(SNI) : $HOST_IP:443@$username:$password"
-echo "🙍 Proxy(WS)    : $DOMAIN:8080@$username:$password"
-echo "🙍 SSH UDP     : $HOST_IP:1-65535@$username:$password"
-echo ""
-echo "━━━━━━━━━━━  CONFIGS SLOWDNS PORT 22 ━━━━━━━━━━━"
-echo "Pub KEY :"
-echo "$SLOWDNS_KEY"
-echo "NameServer (NS) : $SLOWDNS_NS"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Compte créé avec succès"
+cat <<EOF
+
+*NOUVEAU UTILISATEUR CRÉÉ*
+──────────────────────────────────────────────
+DOMAIN        : $DOMAIN
+Adresse IP    : $HOST_IP
+Utilisateur   : $username
+Mot de passe  : $password
+Limite       : $limite
+Date d'expire : $expire_date
+──────────────────────────────────────────────
+En APPS comme HTTP Injector, KPN Rev, etc.
+
+🙍 HTTP-Direct  : $HOST_IP:90@$username:$password
+🙍 SSL/TLS(SNI) : $HOST_IP:443@$username:$password
+🙍 Proxy(WS)    : $DOMAIN:8080@$username:$password
+🙍 SSH UDP     : $HOST_IP:1-65535@$username:$password
+
+──────────────────── CONFIG SLOWDNS ───────────────
+Pub Key :
+$SLOWDNS_KEY
+NameServer (NS) : $SLOWDNS_NS
+──────────────────────────────────────────────
+
+Le compte sera supprimé automatiquement après $minutes minutes.
+
+Compte créé avec succès.
+
+EOF
+
+exit 0
