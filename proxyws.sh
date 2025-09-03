@@ -1,85 +1,68 @@
-#!/bin/bash
+#!/usr/bin/env python3
+import socket
+import threading
 
-if [[ $EUID -ne 0 ]]; then
-   echo "Ce script doit être exécuté avec sudo ou root."
-   exit 1
-fi
+LISTEN_ADDR = '127.0.0.1'
+LISTEN_PORT = 80
 
-read -p "Entrez le domaine/IP public pour le tunnel SSH HTTP WS (ex: exemple.com) : " DOMAIN
-if [[ -z "$DOMAIN" ]]; then
-  echo "Erreur : domaine obligatoire."
-  exit 1
-fi
+# Payload HTTP custom pour le handshake WebSocket / tunnel HTTP
+CUSTOM_PAYLOAD = (
+    "GET /ws/ HTTP/1.1\r\n"
+    "Host: example.com\r\n"
+    "User-Agent: CustomClient/1.0\r\n"
+    "Upgrade: websocket\r\n"
+    "Connection: Upgrade\r\n"
+    "Sec-WebSocket-Key: x3JJHMbDL1EzLkh9GBhXDw==\r\n"
+    "Sec-WebSocket-Version: 13\r\n"
+    "\r\n"
+)
 
-SCRIPT_PATH="./ws_proxy.py"
-SCRIPT_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main/ws_proxy_custom.py"  # Adaptez cette URL à votre script custom
-NGINX_CONF="/etc/nginx/sites-available/ssh_ws_proxy"
-NGINX_ENABLED="/etc/nginx/sites-enabled/ssh_ws_proxy"
-NGINX_MAIN_CONF="/etc/nginx/nginx.conf"
+class ProxyThread(threading.Thread):
+    def __init__(self, client_socket, remote_host='127.0.0.1', remote_port=22):
+        threading.Thread.__init__(self)
+        self.client_socket = client_socket
+        self.remote_host = remote_host
+        self.remote_port = remote_port
 
-# Télécharger script Python proxy custom
-if [ ! -f "$SCRIPT_PATH" ]; then
-  echo "Script $SCRIPT_PATH introuvable. Téléchargement..."
-  curl -fsSL -o "$SCRIPT_PATH" "$SCRIPT_URL" || { echo "Erreur téléchargement."; exit 1; }
-  chmod +x "$SCRIPT_PATH"
-fi
+    def run(self):
+        remote_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        remote_socket.connect((self.remote_host, self.remote_port))
 
-# Arrêt des processus sur port 80
-pids=$(lsof -ti tcp:80)
-if [ -n "$pids" ]; then
-  echo "Arrêt des processus sur port 80: $pids"
-  kill -9 $pids
-fi
+        # Envoi du payload custom HTTP (handshake)
+        remote_socket.sendall(CUSTOM_PAYLOAD.encode())
 
-# Ajout de la map Connection dans nginx.conf si pas déjà présente
-if ! grep -q "map \$http_upgrade \$connection_upgrade" "$NGINX_MAIN_CONF"; then
-  echo "Ajout de la map \$connection_upgrade dans $NGINX_MAIN_CONF"
-  sed -i '/http {/a \
-map $http_upgrade $connection_upgrade {\n\
-    default upgrade;\n\
-    ""      close;\n\
-}\n' "$NGINX_MAIN_CONF"
-fi
+        def relay(source, target):
+            try:
+                while True:
+                    data = source.recv(4096)
+                    if not data:
+                        break
+                    target.sendall(data)
+            except:
+                pass
 
-# Création fichier config NGINX
-cat > $NGINX_CONF << EOF
-server {
-    listen 80;
-    server_name $DOMAIN;
+        thread1 = threading.Thread(target=relay, args=(self.client_socket, remote_socket))
+        thread2 = threading.Thread(target=relay, args=(remote_socket, self.client_socket))
+        thread1.start()
+        thread2.start()
+        thread1.join()
+        thread2.join()
 
-    location /ws/ {
-        proxy_pass http://127.0.0.1:80;
-        proxy_http_version 1.1;
+        self.client_socket.close()
+        remote_socket.close()
 
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection \$connection_upgrade;
+def main():
+    sock_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock_server.bind((LISTEN_ADDR, LISTEN_PORT))
+    sock_server.listen(5)
+    print(f"Proxy websocket custom HTTP à l'écoute sur {LISTEN_ADDR}:{LISTEN_PORT}")
 
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+    while True:
+        client_sock, addr = sock_server.accept()
+        print(f"Connexion reçue de {addr}")
+        proxy_thread = ProxyThread(client_sock)
+        proxy_thread.start()
 
-        proxy_buffering off;
-        proxy_read_timeout 86400;
-        proxy_send_timeout 86400;
-    }
-}
-EOF
-
-ln -sf $NGINX_CONF $NGINX_ENABLED
-
-# Vérifier et recharger nginx
-nginx -t || { echo "Erreur dans la configuration de NGINX"; exit 1; }
-if systemctl is-active --quiet nginx; then
-  systemctl reload nginx
-else
-  systemctl start nginx
-fi
-
-# Démarrer le script python proxy custom
-nohup python3 "$SCRIPT_PATH" > proxyws.log 2>&1 &
-
-sleep 2
-
-echo "Tunnel SSH HTTP WS custom payload actif sur ws://$DOMAIN/ws/"
-echo "Consultez proxyws.log pour les logs."
+if __name__ == '__main__':
+    main()
+    
