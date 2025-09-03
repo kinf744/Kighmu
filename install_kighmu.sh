@@ -211,8 +211,6 @@ echo "Tu peux le lancer manuellement quand tu veux."
 if ! grep -q "alias kighmu=" ~/.bashrc; then
   echo "alias kighmu='$INSTALL_DIR/kighmu.sh'" >> ~/.bashrc
   echo "Alias kighmu ajouté dans ~/.bashrc"
-else
-  echo "Alias kighmu déjà présent dans ~/.bashrc"
 fi
 
 if ! grep -q "/usr/local/bin" ~/.bashrc; then
@@ -220,8 +218,11 @@ if ! grep -q "/usr/local/bin" ~/.bashrc; then
   echo "Ajout de /usr/local/bin au PATH dans ~/.bashrc"
 fi
 
+# Création du script kighmu-panel.sh dans /usr/local/bin
 cat > /usr/local/bin/kighmu-panel.sh << 'EOF'
 #!/bin/bash
+
+clear
 
 BLUE='\033[0;34m'
 YELLOW='\033[0;33m'
@@ -245,8 +246,10 @@ EOF
 
 chmod +x /usr/local/bin/kighmu-panel.sh
 
-if ! grep -q "/usr/local/bin/kighmu-panel.sh" ~/.bashrc; then
-  echo -e "\n# Affichage automatique du panneau KIGHMU\nif [ -x /usr/local/bin/kighmu-panel.sh ]; then\n    /usr/local/bin/kighmu-panel.sh\nfi\n" >> ~/.bashrc
+# Ajout automatique au démarrage du shell du panneau avec nettoyage écran
+if ! grep -q "kighmu-panel.sh" ~/.bashrc; then
+  echo -e "\n# Affichage automatique du panneau KIGHMU au démarrage\nclear\n/usr/local/bin/kighmu-panel.sh\n" >> ~/.bashrc
 fi
 
+# Lancement immédiat une fois après installation
 /usr/local/bin/kighmu-panel.sh
