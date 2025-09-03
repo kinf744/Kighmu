@@ -66,10 +66,10 @@ map $http_upgrade $connection_upgrade {\n\
 }\n' "$NGINX_MAIN_CONF"
 fi
 
-# Écrire config NGINX pour proxy WebSocket HTTP custom
+# Écrire config NGINX pour proxy WebSocket HTTP custom sur port 81
 cat > $NGINX_CONF << EOF
 server {
-    listen 80;
+    listen 81;
     server_name $DOMAIN;
 
     location /ws/ {
@@ -104,6 +104,6 @@ fi
 # Lancer le proxy Python du dépôt
 nohup python3 "$APP_DIR/main.py" > "$APP_DIR/proxyws.log" 2>&1 &
 
-echo "Tunnel SSH HTTP WS custom payload actif sur ws://$DOMAIN/ws/"
+echo "Tunnel SSH HTTP WS custom payload actif sur ws://$DOMAIN:81/ws/"
 echo "Consultez $APP_DIR/proxyws.log pour les logs."
 echo "N'oubliez pas de modifier 'votre_utilisateur' et 'votre_mot_de_passe' dans $APP_DIR/config.py"
