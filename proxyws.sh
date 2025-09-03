@@ -23,8 +23,8 @@ else
   cd "$APP_DIR" && git pull
 fi
 
-# Installer dépendances Python
-pip3 install --upgrade -r "$APP_DIR/requirements.txt"
+# Installer dépendances Python manuellement
+pip3 install --upgrade paramiko websocket-client
 
 # Arrêter processus sur port 80
 pids=$(lsof -ti tcp:80)
