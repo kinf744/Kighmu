@@ -84,14 +84,14 @@ while true; do
     echo -e "${CYAN} CPU fréquence: ${YELLOW}$CPU_FREQ${RESET}"
     printf " RAM utilisée: ${GREEN}%-6s${RESET} | CPU utilisé: ${YELLOW}%-6s${RESET}\n" "$RAM_USAGE" "$CPU_USAGE"
 
-    echo -e "${CYAN}+--------------------------------------------------+${RESET}"
+    echo -e "${CYAN}+==================================================+${RESET}"
 
     printf " Utilisateurs SSH: ${BLUE}%-4d${RESET} | Appareils connectés: ${MAGENTA}%-4d${RESET}\n" "$SSH_USERS_COUNT" "$total_connected"
 
-    echo -e "${CYAN}+--------------------------------------------------+${RESET}"
+    echo -e "${CYAN}+==================================================+${RESET}"
 
     echo -e "${BOLD}${YELLOW}|                  MENU PRINCIPAL:                 |${RESET}"
-    echo -e "${CYAN}+--------------------------------------------------+${RESET}"
+    echo -e "${CYAN}+==================================================+${RESET}"
     echo -e "${GREEN}[01]${RESET} Créer un utilisateur SSH"
     echo -e "${GREEN}[02]${RESET} Créer un test utilisateur"
     echo -e "${GREEN}[03]${RESET} Voir les utilisateurs en ligne"
