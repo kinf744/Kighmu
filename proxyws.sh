@@ -15,7 +15,7 @@ if [[ -z "$DOMAIN" ]]; then
 fi
 
 SCRIPT_PATH="./ws_proxy.py"
-SCRIPT_URL="https://raw.githubusercontent.com/votreuser/votre-repo/main/ws_proxy.py"
+SCRIPT_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main/ws_proxy.py"
 NGINX_CONF="/etc/nginx/sites-available/ssh_ws_proxy"
 NGINX_ENABLED="/etc/nginx/sites-enabled/ssh_ws_proxy"
 
