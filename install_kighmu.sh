@@ -94,7 +94,6 @@ apt install -y qrencode
 apt install -y gcc
 apt install -y make
 apt install -y perl
-apt install -y iptables-persistent
 apt install -y systemd
 apt install -y tcpdump
 apt install -y iptables
