@@ -15,6 +15,7 @@ SCRIPT_PATH="./ws_proxy.py"
 SCRIPT_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main/ws_proxy.py"
 NGINX_CONF="/etc/nginx/sites-available/ssh_ws_proxy"
 NGINX_ENABLED="/etc/nginx/sites-enabled/ssh_ws_proxy"
+NGINX_CONF_MAIN="/etc/nginx/nginx.conf"
 
 # Téléchargement script Python
 if [ ! -f "$SCRIPT_PATH" ]; then
@@ -30,7 +31,17 @@ if [ -n "$pids" ]; then
   kill -9 $pids
 fi
 
-# Ecriture config NGINX
+# Ajout de la map pour gérer le header Connection dans nginx.conf s'il n'existe pas déjà
+if ! grep -q "map \$http_upgrade \$connection_upgrade" "$NGINX_CONF_MAIN"; then
+  echo "Ajout de la map \$connection_upgrade dans $NGINX_CONF_MAIN"
+  sed -i '/http {/a \
+map $http_upgrade $connection_upgrade {\n\
+    default upgrade;\n\
+    ""      close;\n\
+}\n' "$NGINX_CONF_MAIN"
+fi
+
+# Ecriture config NGINX pour le reverse proxy WebSocket
 cat > $NGINX_CONF << EOF
 server {
     listen 80;
@@ -41,7 +52,7 @@ server {
         proxy_http_version 1.1;
 
         proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "Upgrade";
+        proxy_set_header Connection \$connection_upgrade;
 
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
