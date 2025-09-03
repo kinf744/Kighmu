@@ -33,7 +33,12 @@
  apt-get update && apt-get upgrade -y && update-grub && reboot
   ```
  <img src="https://img.shields.io/badge/Install All-VPN%20Batch-green"></img>
- ```html
+ 
+ ## Installation rapide
+
+Pour installer Kighmu Manager automatiquement sur votre VPS :
+
+ ```bash
  apt-get update -y && apt-get upgrade -y && wget https://raw.githubusercontent.com/kinf744/Kighmu/main/install_kighmu.sh -O install_kighmu.sh && chmod +x install_kighmu.sh && bash install_kighmu.sh
 
 
@@ -48,7 +53,7 @@ Il offre une interface simple et des scripts automatisés pour créer, supprimer
 - Affichage des utilisateurs connectés et nombre de connexions par utilisateur
 - Gestion des modules : OpenSSH,
 - Dropbear,
-- SOCKS/Python,
+- TCP TUNNEL,
 - DNSTT, BadVPN,
 - SSL/TLS,
 - UDP-Custom
@@ -57,10 +62,3 @@ Il offre une interface simple et des scripts automatisés pour créer, supprimer
 - Affichage de configurations pour applications comme HTTP Injector, SSH Custom, etc.
 
 ---
-
-## Installation rapide
-
-Pour installer Kighmu Manager automatiquement sur votre VPS :
-
-```bash
-apt-get update -y && apt-get upgrade -y && wget https://raw.githubusercontent.com/kinf744/Kighmu/main/install_kighmu.sh -O install_kighmu.sh && chmod +x install_kighmu.sh && bash install_kighmu.sh
