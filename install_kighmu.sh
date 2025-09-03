@@ -1,27 +1,37 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # ==============================================
 # Kighmu VPS Manager - Script d'installation
 # Copyright (c) 2025 Kinf744
 # Licence MIT (version française)
 # ==============================================
 
-echo "Vérification de la présence de curl..."
-if ! command -v curl >/dev/null 2>&1; then
-    echo "curl non trouvé, installation en cours..."
-    apt update
-    apt install -y curl
-    echo "Installation de curl terminée."
-else
-    echo "curl est déjà installé."
-fi
+set -o errexit
+set -o nounset
+set -o pipefail
+
+echo "Vérification et installation de curl si nécessaire..."
+
+install_package_if_missing() {
+  local pkg=$1
+  if ! dpkg -s "$pkg" >/dev/null 2>&1; then
+    echo "Installation du paquet manquant : $pkg"
+    apt-get install -y "$pkg"
+  else
+    echo "Le paquet $pkg est déjà installé."
+  fi
+}
+
+apt-get update -y
+
+install_package_if_missing "curl"
 
 echo "+--------------------------------------------+"
 echo "|             INSTALLATION VPS               |"
 echo "+--------------------------------------------+"
 
-read -p "Veuillez entrer votre nom de domaine (doit pointer vers l'IP de ce serveur) : " DOMAIN
+read -r -p "Veuillez entrer votre nom de domaine (doit pointer vers l'IP de ce serveur) : " DOMAIN
 
-if [ -z "$DOMAIN" ]; then
+if [[ -z "$DOMAIN" ]]; then
   echo "Erreur : vous devez entrer un nom de domaine valide."
   exit 1
 fi
@@ -30,10 +40,10 @@ IP_PUBLIC=$(curl -s https://api.ipify.org)
 echo "Votre IP publique détectée est : $IP_PUBLIC"
 
 DOMAIN_IP=$(dig +short "$DOMAIN" | tail -n1)
-if [ "$DOMAIN_IP" != "$IP_PUBLIC" ]; then
+if [[ "$DOMAIN_IP" != "$IP_PUBLIC" ]]; then
   echo "Attention : le domaine $DOMAIN ne pointe pas vers l’IP $IP_PUBLIC."
   echo "Assurez-vous que le domaine est correctement configuré avant de continuer."
-  read -p "Voulez-vous continuer quand même ? [oui/non] : " choix
+  read -r -p "Voulez-vous continuer quand même ? [oui/non] : " choix
   if [[ ! "$choix" =~ ^(o|oui)$ ]]; then
     echo "Installation arrêtée."
     exit 1
@@ -116,7 +126,7 @@ echo " 🚀 Installation de Kighmu VPS Manager..."
 echo "=============================================="
 
 INSTALL_DIR="$HOME/Kighmu"
-mkdir -p "$INSTALL_DIR" || { echo "Erreur : impossible de créer le dossier $INSTALL_DIR"; exit 1; }
+mkdir -p "$INSTALL_DIR"
 
 FILES=(
   "install_kighmu.sh"
@@ -148,18 +158,43 @@ BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
 
 for file in "${FILES[@]}"; do
   echo "Téléchargement de $file ..."
-  wget -O "$INSTALL_DIR/$file" "$BASE_URL/$file"
-  if [ ! -s "$INSTALL_DIR/$file" ]; then
+  wget -q --show-progress -O "$INSTALL_DIR/$file" "$BASE_URL/$file"
+  if [[ ! -s "$INSTALL_DIR/$file" ]]; then
     echo "Erreur : le fichier $file n'a pas été téléchargé correctement ou est vide !"
     exit 1
   fi
   chmod +x "$INSTALL_DIR/$file"
 done
 
+# Récupération dynamique du NS depuis la configuration DNS locale du système
+NS=$(awk '/^nameserver/ {print $2; exit}' /etc/resolv.conf)
+if [[ -z "$NS" ]]; then
+  echo "Erreur : aucun serveur DNS trouvé dans /etc/resolv.conf, le script ne peut continuer."
+  exit 1
+fi
+
+# Lecture et formatage de la clé publique SlowDNS
+SLOWDNS_PUBKEY="/etc/slowdns/server.pub"
+if [[ -f "$SLOWDNS_PUBKEY" ]]; then
+  PUBLIC_KEY=$(sed ':a;N;$!ba;s/\n/\\n/g' "$SLOWDNS_PUBKEY")
+else
+  PUBLIC_KEY="Clé publique SlowDNS non trouvée"
+fi
+
+# Création du fichier ~/.kighmu_info avec les infos globales nécessaires
+cat > ~/.kighmu_info <<EOF
+DOMAIN=$DOMAIN
+NS=$NS
+PUBLIC_KEY="$PUBLIC_KEY"
+EOF
+
+chmod 600 ~/.kighmu_info
+echo "Fichier ~/.kighmu_info créé avec succès et permissions sécurisées."
+
 run_script() {
-  local script_path="$1"
+  local script_path=$1
   echo "🚀 Lancement du script : $script_path"
-  if bash "$script_path"; then
+  if bash $script_path; then
     echo "✅ $script_path exécuté avec succès."
   else
     echo "⚠️ Attention : $script_path a rencontré une erreur. L'installation continue..."
@@ -176,6 +211,8 @@ echo "Tu peux le lancer manuellement quand tu veux."
 if ! grep -q "alias kighmu=" ~/.bashrc; then
   echo "alias kighmu='$INSTALL_DIR/kighmu.sh'" >> ~/.bashrc
   echo "Alias kighmu ajouté dans ~/.bashrc"
+else
+  echo "Alias kighmu déjà présent dans ~/.bashrc"
 fi
 
 if ! grep -q "/usr/local/bin" ~/.bashrc; then
