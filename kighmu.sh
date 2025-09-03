@@ -100,7 +100,7 @@ while true; do
     echo -e "${GREEN}[03]${RESET} Voir les utilisateurs en ligne"
     echo -e "${GREEN}[04]${RESET} Modifier durée / mot de passe utilisateur"
     echo -e "${GREEN}[05]${RESET} Supprimer un utilisateur"
-    echo -e "${GREEN}[06]${RESET} Banner"
+    echo -e "${GREEN}[06]${RESET} Message du serveur"
     echo -e "${GREEN}[07]${RESET} Installation de mode"
     echo -e "${GREEN}[08]${RESET} V2ray slowdns mode"
     echo -e "${GREEN}[09]${RESET} Désinstaller le script"
