@@ -1,18 +1,13 @@
 #!/bin/bash
 set -euo pipefail
 
-# ==============================================
-# slowdns.sh - Installation et configuration SlowDNS avec stockage NS
-# Optimisé pour performances et stabilité
-# ==============================================
-
 SLOWDNS_DIR="/etc/slowdns"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 SERVER_PUB="$SLOWDNS_DIR/server.pub"
 SLOWDNS_BIN="/usr/local/bin/sldns-server"
 PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
-MTU_VALUE=1400  # Ajuster si besoin
+MTU_VALUE=1400
 
 log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
@@ -39,7 +34,6 @@ install_dependencies() {
 }
 
 get_active_interface() {
-  # Retourne la 1ère interface UP non virtuelle et non loopback
   ip -o link show up | awk -F': ' '{print $2}' | grep -v '^lo$' | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' | head -n1
 }
 
@@ -60,9 +54,15 @@ stop_old_instance() {
     fuser -k "${PORT}/udp" || true
     sleep 2
   fi
+  # Nettoyer règles iptables existantes pour port 5300
+  iptables -D INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || true
+  iptables -t nat -D PREROUTING -p udp --dport 53 -j REDIRECT --to-ports "$PORT" 2>/dev/null || true
 }
 
 setup_iptables() {
+  # Création du dossier iptables si manquant
+  mkdir -p /etc/iptables
+
   log "Sauvegarde des règles iptables existantes dans /etc/iptables/rules.v4.bak"
   iptables-save > /etc/iptables/rules.v4.bak || true
 
@@ -72,10 +72,8 @@ setup_iptables() {
   log "Redirection DNS UDP port 53 vers $PORT sur interface $1"
   iptables -t nat -I PREROUTING -i "$1" -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
 
-  if command -v iptables-save >/dev/null 2>&1; then
-    log "Sauvegarde des règles mises à jour dans /etc/iptables/rules.v4"
-    iptables-save > /etc/iptables/rules.v4
-  fi
+  log "Sauvegarde des règles mises à jour dans /etc/iptables/rules.v4"
+  iptables-save > /etc/iptables/rules.v4
 }
 
 enable_ip_forwarding() {
@@ -93,10 +91,9 @@ enable_ip_forwarding() {
 main() {
   check_root
   install_dependencies
-
   mkdir -p "$SLOWDNS_DIR"
+  stop_old_instance
 
-  # Demande toujours du NameServer à chaque installation (ne lit plus le fichier)
   read -rp "Entrez le NameServer (NS) (ex: ns.example.com) : " NAMESERVER
   if [[ -z "$NAMESERVER" ]]; then
     echo "NameServer invalide." >&2
@@ -110,14 +107,20 @@ main() {
     log "Téléchargement du binaire SlowDNS..."
     wget -q -O "$SLOWDNS_BIN" https://raw.githubusercontent.com/fisabiliyusri/SLDNS/main/slowdns/sldns-server
     chmod +x "$SLOWDNS_BIN"
+    if [ ! -x "$SLOWDNS_BIN" ]; then
+      echo "ERREUR : Échec du téléchargement ou permissions du binaire SlowDNS." >&2
+      exit 1
+    fi
   fi
 
   generate_keys
   PUB_KEY=$(cat "$SERVER_PUB")
 
-  stop_old_instance
-
-  interface=$(get_active_interface)
+  local interface=$(get_active_interface)
+  if [ -z "$interface" ]; then
+    echo "Échec détection interface réseau. Veuillez spécifier manuellement." >&2
+    exit 1
+  fi
   log "Interface réseau détectée : $interface"
 
   log "Réglage MTU sur interface $interface à $MTU_VALUE..."
