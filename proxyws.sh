@@ -1,38 +1,31 @@
 #!/bin/bash
 
-if [[ $EUID -ne 0 ]]; then
-   echo "Ce script doit être exécuté en root ou avec sudo."
-   exit 1
-fi
-
-read -p "Entrez le domaine/IP public pour le tunnel SSH HTTP WS (ex: exemple.com) : " DOMAIN
-if [[ -z "$DOMAIN" ]]; then
-  echo "Erreur : domaine obligatoire."
-  exit 1
-fi
-
+DOMAIN="votre.domaine.com"
+PROXY_PORT=80
+NGINX_PORT=81
 APP_DIR="/root/custom-http"
-NGINX_CONF="/etc/nginx/sites-available/ssh_ws_proxy"
-NGINX_ENABLED="/etc/nginx/sites-enabled/ssh_ws_proxy"
-NGINX_MAIN_CONF="/etc/nginx/nginx.conf"
 
-# Cloner ou mettre à jour dépôt
+# Installer dépendances
+apt update && apt install -y python3 python3-pip nginx git
+pip3 install --upgrade paramiko websocket-client
+
+# Cloner ou mettre à jour le dépôt proxy
 if [ ! -d "$APP_DIR" ]; then
   git clone https://github.com/tavgar/Custom-http.git "$APP_DIR"
 else
   cd "$APP_DIR" && git pull
 fi
 
-# Créer le fichier config.py corrigé
+# Créer le fichier de config personnalisé
 cat > "$APP_DIR/config.py" << EOF
 CONFIG = {
     'DOMAIN': '$DOMAIN',
     'PROXY_HOST': '0.0.0.0',
-    'PROXY_PORT': 80,
+    'PROXY_PORT': $PROXY_PORT,
     'SSH_HOST': '127.0.0.1',
     'SSH_PORT': 22,
-    'SSH_USER': 'votre_utilisateur',
-    'SSH_PASS': 'votre_mot_de_passe',
+    'SSH_USER': 'utilisateur_ssh',
+    'SSH_PASS': 'motdepasse_ssh',
     'PAYLOAD_TEMPLATE': (
         "GET /ws/ HTTP/1.1\\r\\n"
         "Host: $DOMAIN\\r\\n"
@@ -47,36 +40,14 @@ CONFIG = {
 }
 EOF
 
-# Installer dépendances Python manuellement (silencieux)
-pip3 install --upgrade paramiko websocket-client >/dev/null 2>&1 || {
-  echo "Erreur lors de l'installation des dépendances Python"
-  exit 1
-}
-
-# Arrêter processus sur port 80 (proxy Python)
-pids=$(lsof -ti tcp:80)
-if [ -n "$pids" ]; then
-  echo "Arrêt des processus sur port 80 : $pids"
-  kill -9 $pids
-fi
-
-# Ajouter map connection_upgrade dans /etc/nginx/nginx.conf si absente
-if ! grep -q "map \$http_upgrade \$connection_upgrade" "$NGINX_MAIN_CONF"; then
-  sed -i '/http {/a \
-map $http_upgrade $connection_upgrade {\n\
-    default upgrade;\n\
-    ""      close;\n\
-}\n' "$NGINX_MAIN_CONF"
-fi
-
-# Écrire config NGINX pour proxy WebSocket HTTP custom sur port 81
-cat > $NGINX_CONF << EOF
+# Configurer NGINX en reverse proxy websocket sur le port 81
+cat > /etc/nginx/sites-available/ssh_ws_proxy << EOF
 server {
-    listen 81;
+    listen $NGINX_PORT;
     server_name $DOMAIN;
 
     location /ws/ {
-        proxy_pass http://127.0.0.1:80;
+        proxy_pass http://127.0.0.1:$PROXY_PORT;
         proxy_http_version 1.1;
 
         proxy_set_header Upgrade \$http_upgrade;
@@ -94,19 +65,22 @@ server {
 }
 EOF
 
-ln -sf $NGINX_CONF $NGINX_ENABLED
+ln -sf /etc/nginx/sites-available/ssh_ws_proxy /etc/nginx/sites-enabled/ssh_ws_proxy
 
-# Tester et recharger NGINX
-nginx -t || { echo "Erreur config nginx"; exit 1; }
-if systemctl is-active --quiet nginx; then
-  systemctl reload nginx
-else
-  systemctl start nginx
+# Assurer le paramètre map dans nginx.conf
+if ! grep -q "map \$http_upgrade \$connection_upgrade" /etc/nginx/nginx.conf; then
+  sed -i '/http {/a \
+map $http_upgrade $connection_upgrade {\n\
+    default upgrade;\n\
+    ""      close;\n\
+}' /etc/nginx/nginx.conf
 fi
 
-# Lancer le proxy Python du dépôt en arrière-plan
+# Tester et recharger nginx
+nginx -t && systemctl reload nginx
+
+# Lancer le proxy Python en arrière-plan
 nohup python3 "$APP_DIR/main.py" > "$APP_DIR/proxyws.log" 2>&1 &
 
-echo "Tunnel SSH HTTP WS custom payload actif sur ws://$DOMAIN:81/ws/"
-echo "Consultez $APP_DIR/proxyws.log pour les logs."
-echo "N'oubliez pas de modifier 'votre_utilisateur' et 'votre_mot_de_passe' dans $APP_DIR/config.py"
+echo "Tunnel SSH HTTP WS personnalisé actif sur ws://$DOMAIN:$NGINX_PORT/ws/"
+echo "Modifiez utilisateur_ssh et motdepasse_ssh dans $APP_DIR/config.py"
