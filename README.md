@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="KIGHMU%20MANAGER.jpg" alt="Kighmu Manager" width="600">
+</p>
+
 # Kighmu Manager
 
 **Kighmu Manager** est un panneau de contrôle pour VPS permettant de gérer des utilisateurs SSH, SOCKS/Python, Dropbear, SlowDNS, BadVPN, SSL/TLS, UDP-Custom et plus encore.  
