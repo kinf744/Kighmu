@@ -23,13 +23,37 @@ else
   cd "$APP_DIR" && git pull
 fi
 
+# Créer le fichier config.py corrigé
+cat > "$APP_DIR/config.py" << EOF
+CONFIG = {
+    'DOMAIN': '$DOMAIN',
+    'PROXY_HOST': '0.0.0.0',
+    'PROXY_PORT': 80,
+    'SSH_HOST': '127.0.0.1',
+    'SSH_PORT': 22,
+    'SSH_USER': 'votre_utilisateur',
+    'SSH_PASS': 'votre_mot_de_passe',
+    'PAYLOAD_TEMPLATE': (
+        "GET /ws/ HTTP/1.1\\r\\n"
+        "Host: $DOMAIN\\r\\n"
+        "User-Agent: CustomClient/1.0\\r\\n"
+        "Upgrade: websocket\\r\\n"
+        "Connection: Upgrade\\r\\n"
+        "Sec-WebSocket-Key: x3JJHMbDL1EzLkh9GBhXDw==\\r\\n"
+        "Sec-WebSocket-Version: 13\\r\\n"
+        "\\r\\n"
+    ),
+    'SOCKS_LOCAL_PORT': 1080,
+}
+EOF
+
 # Installer dépendances Python manuellement
 pip3 install --upgrade paramiko websocket-client
 
 # Arrêter processus sur port 80
 pids=$(lsof -ti tcp:80)
 if [ -n "$pids" ]; then
-  echo "Arrêt des processus sur port 80: $pids"
+  echo "Arrêt des processus sur port 80 : $pids"
   kill -9 $pids
 fi
 
@@ -82,3 +106,4 @@ nohup python3 "$APP_DIR/main.py" > "$APP_DIR/proxyws.log" 2>&1 &
 
 echo "Tunnel SSH HTTP WS custom payload actif sur ws://$DOMAIN/ws/"
 echo "Consultez $APP_DIR/proxyws.log pour les logs."
+echo "N'oubliez pas de modifier 'votre_utilisateur' et 'votre_mot_de_passe' dans $APP_DIR/config.py"
