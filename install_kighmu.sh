@@ -131,6 +131,7 @@ FILES=(
   "menu7.sh"
   "slowdns.sh"
   "socks_python.sh"
+  "KIGHMUPROXY.py"
   "udp_custom.sh"
   "dropbear.sh"
   "ssl.sh"
