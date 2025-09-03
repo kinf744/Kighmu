@@ -13,12 +13,15 @@ echo "Vérification et installation de curl si nécessaire..."
 
 install_package_if_missing() {
   local pkg=$1
-  if ! dpkg -s "$pkg" >/dev/null 2>&1; then
-    echo "Installation du paquet manquant : $pkg"
-    apt-get install -y "$pkg"
+  echo "Installation de $pkg..."
+  set +e
+  apt-get install -y "$pkg"
+  if [[ $? -ne 0 ]]; then
+    echo "⚠️ Attention : échec de l'installation du paquet $pkg, le script continue..."
   else
-    echo "Le paquet $pkg est déjà installé."
+    echo "Le paquet $pkg a été installé avec succès."
   fi
+  set -e
 }
 
 apt-get update -y
@@ -114,6 +117,7 @@ apt install -y software-properties-common
 apt autoremove -y
 apt clean
 
+# Configuration ufw
 ufw allow OpenSSH
 ufw allow 22
 ufw allow 80
@@ -159,17 +163,16 @@ for file in "${FILES[@]}"; do
   echo "Téléchargement de $file ..."
   wget -q --show-progress -O "$INSTALL_DIR/$file" "$BASE_URL/$file"
   if [[ ! -s "$INSTALL_DIR/$file" ]]; then
-    echo "Erreur : le fichier $file n'a pas été téléchargé correctement ou est vide !"
-    exit 1
+    echo "⚠️ Erreur : le fichier $file n'a pas été téléchargé correctement ou est vide, mais le script continue..."
+  else
+    chmod +x "$INSTALL_DIR/$file"
   fi
-  chmod +x "$INSTALL_DIR/$file"
 done
 
 # Récupération dynamique du NS depuis la configuration DNS locale du système
 NS=$(awk '/^nameserver/ {print $2; exit}' /etc/resolv.conf)
 if [[ -z "$NS" ]]; then
-  echo "Erreur : aucun serveur DNS trouvé dans /etc/resolv.conf, le script ne peut continuer."
-  exit 1
+  echo "⚠️ Erreur : aucun serveur DNS trouvé dans /etc/resolv.conf, continuez prudemment."
 fi
 
 # Lecture et formatage de la clé publique SlowDNS
@@ -193,11 +196,14 @@ echo "Fichier ~/.kighmu_info créé avec succès et permissions sécurisées."
 run_script() {
   local script_path=$1
   echo "🚀 Lancement du script : $script_path"
-  if bash $script_path; then
-    echo "✅ $script_path exécuté avec succès."
+  set +e
+  bash "$script_path"
+  if [[ $? -ne 0 ]]; then
+    echo "⚠️ Attention : $script_path a rencontré une erreur, mais l'installation continue..."
   else
-    echo "⚠️ Attention : $script_path a rencontré une erreur. L'installation continue..."
+    echo "✅ $script_path exécuté avec succès."
   fi
+  set -e
 }
 
 echo "🚀 Application de la configuration SSH personnalisée..."
