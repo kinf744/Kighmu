@@ -17,64 +17,75 @@ else
     SLOWDNS_KEY="Clé publique SlowDNS non trouvée!"
 fi
 
+# Charger le NameServer SlowDNS exact depuis le fichier de config
+if [ -f /etc/slowdns/ns.conf ]; then
+    SLOWDNS_NS=$(cat /etc/slowdns/ns.conf)
+else
+    echo "Erreur : fichier /etc/slowdns/ns.conf introuvable."
+    exit 1
+fi
+
 echo "+--------------------------------------------+"
 echo "|         CRÉATION D'UTILISATEUR            |"
 echo "+--------------------------------------------+"
 
 # Demander les informations
 read -p "Nom d'utilisateur : " username
-read -s -p "Mot de passe : " password
-echo ""
+
+if id "$username" &>/dev/null; then
+    echo "L'utilisateur existe déjà."
+    exit 1
+fi
+
+# Lecture mot de passe visible (sans masquage)
+read -p "Mot de passe : " password
+
 read -p "Nombre d'appareils autorisés : " limite
 read -p "Durée de validité (en jours) : " days
+
+# Validation simple
+if ! [[ "$limite" =~ ^[0-9]+$ ]] || ! [[ "$days" =~ ^[0-9]+$ ]]; then
+    echo "Nombre d'appareils ou durée non valides."
+    exit 1
+fi
 
 # Calculer la date d'expiration
 expire_date=$(date -d "+$days days" '+%Y-%m-%d')
 
-# Créer l'utilisateur système
-useradd -M -s /bin/false "$username"
+# Création utilisateur sans home et shell bloqué
+useradd -M -s /bin/false "$username" || { echo "Erreur lors de la création"; exit 1; }
 echo "$username:$password" | chpasswd
 
-# Définir les ports et variables personnalisés
-SSH_PORT=22
-SYSTEM_DNS=53
-SOCKS_PORT=8080
-WEB_NGINX=81
-DROPBEAR=90
-SSL_PORT=443
-BADVPN1=7200
-BADVPN2=7300
-SLOWDNS_PORT=5300
-UDP_CUSTOM="1-65535"
+# Appliquer la date d'expiration du compte
+chage -E "$expire_date" "$username"
 
-HOST_IP=$(curl -s https://api.ipify.org)
-
-# SlowDNS NS récupéré depuis fichier global
-SLOWDNS_NS="${SLOWDNS_NS:-slowdns5.kighmup.ddns-ip.net}"
-
-# Sauvegarder les infos utilisateur dans un fichier dédié
+# Préparer fichier d'utilisateurs
 USER_FILE="/etc/kighmu/users.list"
 mkdir -p /etc/kighmu
 touch "$USER_FILE"
 chmod 600 "$USER_FILE"
+
+HOST_IP=$(hostname -I | awk '{print $1}')
+
+# Sauvegarder les infos utilisateur
 echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
 
-# Affichage résumé
+# Afficher résumé
 echo ""
 echo "*NOUVEAU UTILISATEUR CRÉÉ*"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "∘ SSH: $SSH_PORT            ∘ System-DNS: $SYSTEM_DNS"
-echo "∘ SOCKS/PYTHON: $SOCKS_PORT   ∘ WEB-NGINX: $WEB_NGINX"
-echo "∘ DROPBEAR: $DROPBEAR       ∘ SSL: $SSL_PORT"
-echo "∘ BadVPN: $BADVPN1       ∘ BadVPN: $BADVPN2"
-echo "∘ SlowDNS: $SLOWDNS_PORT      ∘ UDP-Custom: $UDP_CUSTOM"
+echo "∘ SSH: 22                  ∘ System-DNS: 53"
+echo "∘ SOCKS/PYTHON: 8080       ∘ WEB-NGINX: 81"
+echo "∘ DROPBEAR: 90             ∘ SSL: 443"
+echo "∘ BadVPN: 7200             ∘ BadVPN: 7300"
+echo "∘ SlowDNS: 5300            ∘ UDP-Custom: 1-65535"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "DOMAIN        : $DOMAIN"
-echo "Host/IP-Address : $HOST_IP"
-echo "UTILISATEUR   : $username"
-echo "MOT DE PASSE  : $password"
-echo "LIMITE       : $limite"
-echo "DATE EXPIRÉE : $expire_date"
+echo "DOMAIN         : $DOMAIN"
+echo "Host/IP-Address: $HOST_IP"
+echo "UTILISATEUR    : $username"
+echo "MOT DE PASSE   : $password"
+echo "LIMITE         : $limite"
+echo "DATE EXPIRÉE   : $expire_date"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "En APPS comme HTTP Injector, CUSTOM, KPN Rev, etc."
 echo ""
