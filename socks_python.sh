@@ -1,6 +1,6 @@
 #!/bin/bash
 # socks_python.sh
-# Activation du SOCKS Python avec nettoyage des anciennes instances
+# Activation du SOCKS Python avec nettoyage des anciennes instances et configuration UFW
 
 echo "+--------------------------------------------+"
 echo "|             CONFIG SOCKS/PYTHON            |"
@@ -27,6 +27,11 @@ case "$confirm" in
         SCRIPT_PATH="/usr/local/bin/KIGHMUPROXY.py"
         SCRIPT_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main/KIGHMUPROXY.py"
         LOG_FILE="/var/log/socks_python.log"
+
+        # Configuration du firewall UFW pour autoriser le port 8080
+        echo "Configuration du firewall UFW pour autoriser le port $PROXY_PORT..."
+        sudo ufw allow $PROXY_PORT/tcp
+        echo "Port $PROXY_PORT autorisé dans UFW."
 
         # Télécharger le script proxy s'il manque ou plus vieux d'un jour
         DOWNLOAD_SCRIPT=false
