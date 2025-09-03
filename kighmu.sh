@@ -42,13 +42,37 @@ while true; do
     # Utilisation CPU en pourcentage (moyenne simple)
     CPU_USAGE=$(grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf "%.2f%%", usage}')
     
-    SSH_USERS_COUNT=$(get_ssh_users_count)
+    # Sécurisation des appels aux fonctions
     
-    # Nombre total d'appareils connectés
-    mapfile -t ssh_ips < <(get_user_ips_by_service 22)
-    mapfile -t dropbear_ips < <(get_dropbear_user_ips)
-    mapfile -t openvpn_ips < <(get_openvpn_user_ips)
-    mapfile -t wireguard_ips < <(get_wireguard_user_ips)
+    if declare -f get_ssh_users_count > /dev/null; then
+        SSH_USERS_COUNT=$(get_ssh_users_count 2>/dev/null || echo 0)
+    else
+        SSH_USERS_COUNT=0
+    fi
+
+    if declare -f get_user_ips_by_service > /dev/null; then
+        mapfile -t ssh_ips < <(get_user_ips_by_service 22 2>/dev/null || echo "")
+    else
+        ssh_ips=()
+    fi
+
+    if declare -f get_dropbear_user_ips > /dev/null; then
+        mapfile -t dropbear_ips < <(get_dropbear_user_ips 2>/dev/null || echo "")
+    else
+        dropbear_ips=()
+    fi
+
+    if declare -f get_openvpn_user_ips > /dev/null; then
+        mapfile -t openvpn_ips < <(get_openvpn_user_ips 2>/dev/null || echo "")
+    else
+        openvpn_ips=()
+    fi
+
+    if declare -f get_wireguard_user_ips > /dev/null; then
+        mapfile -t wireguard_ips < <(get_wireguard_user_ips 2>/dev/null || echo "")
+    else
+        wireguard_ips=()
+    fi
 
     all_ips=("${ssh_ips[@]}" "${dropbear_ips[@]}" "${openvpn_ips[@]}" "${wireguard_ips[@]}")
     total_connected=$(printf "%s\n" "${all_ips[@]}" | awk '{print $2}' | sort -u | wc -l)
