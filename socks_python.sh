@@ -28,54 +28,70 @@ case "$confirm" in
         SCRIPT_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main/KIGHMUPROXY.py"
         LOG_FILE="/var/log/socks_python.log"
 
-        # Vérifier si le script proxy est présent, sinon le télécharger
+        # Télécharger le script proxy s'il manque ou plus vieux d'un jour
+        DOWNLOAD_SCRIPT=false
         if [ ! -f "$SCRIPT_PATH" ]; then
-            echo "Le script proxy $SCRIPT_PATH est introuvable. Téléchargement en cours..."
+            echo "Script proxy absent, téléchargement en cours..."
+            DOWNLOAD_SCRIPT=true
+        else
+            FILE_AGE=$(( $(date +%s) - $(stat -c %Y "$SCRIPT_PATH") ))
+            if [ $FILE_AGE -ge 86400 ]; then
+                echo "Script proxy date dépassée (plus d'un jour), re-téléchargement..."
+                DOWNLOAD_SCRIPT=true
+            fi
+        fi
+
+        if $DOWNLOAD_SCRIPT; then
             sudo wget -q -O "$SCRIPT_PATH" "$SCRIPT_URL"
             if [ $? -ne 0 ]; then
-                echo "Erreur : impossible de télécharger le script proxy. Abandon."
+                echo "Erreur : téléchargement du script proxy échoué."
                 exit 1
             fi
             sudo chmod +x "$SCRIPT_PATH"
             echo "Script proxy téléchargé et rendu exécutable."
         else
-            echo "Script proxy trouvé : $SCRIPT_PATH"
+            echo "Script proxy trouvé et valide : $SCRIPT_PATH"
         fi
 
         echo "Recherche d'instances précédentes du proxy SOCKS à arrêter..."
         PIDS=$(pgrep -f "python3 $SCRIPT_PATH")
         if [ -n "$PIDS" ]; then
-            echo "Arrêt des instances proxy existantes (PID: $PIDS)..."
-            sudo kill $PIDS
-            sleep 3
-            echo "Instances précédentes arrêtées."
+            echo "Arrêt des instances proxy (PID: $PIDS)..."
+            sudo kill -9 $PIDS
+            sleep 5
+            # Vérification post-kill
+            if pgrep -f "python3 $SCRIPT_PATH" > /dev/null; then
+                echo "Certaines instances n'ont pas été arrêtées, veuillez vérifier."
+                exit 1
+            fi
+            echo "Instances arrêtées."
         else
             echo "Aucune instance précédente détectée."
         fi
 
         echo "Vérification du port $PROXY_PORT..."
         if sudo lsof -i :$PROXY_PORT >/dev/null; then
-            echo "Port $PROXY_PORT occupé, veuillez libérer ce port ou modifier le script pour utiliser un autre port."
+            echo "Le port $PROXY_PORT est occupé. Veuillez libérer ce port ou modifier la configuration."
             exit 1
         fi
 
         echo "Démarrage du proxy SOCKS/Python sur le port $PROXY_PORT..."
         nohup sudo python3 "$SCRIPT_PATH" "$PROXY_PORT" > "$LOG_FILE" 2>&1 &
 
-        sleep 3
+        sleep 4
 
         if pgrep -f "python3 $SCRIPT_PATH" > /dev/null; then
             echo "Proxy SOCKS/Python démarré sur le port $PROXY_PORT."
-            echo "Logs disponibles dans $LOG_FILE"
+            echo "Vérifiez les logs dans : $LOG_FILE"
         else
             echo "Échec du démarrage du proxy SOCKS/Python."
-            echo "Consultez les logs : $LOG_FILE"
+            echo "Consultez les logs pour diagnostic : $LOG_FILE"
         fi
         ;;
     [nN][oO]|[nN])
         echo "Démarrage annulé."
         ;;
     *)
-        echo "Réponse invalide. Annulation."
+        echo "Réponse invalide. Abandon."
         ;;
 esac
