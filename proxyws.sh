@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# proxyws.sh - Tunnel SSH WebSocket avec arrêt port 80, config NGINX, demande domaine
+# proxyws.sh - Tunnel SSH WebSocket avec arrêt port 81, config NGINX sur port 81, demande domaine
 
 if [[ $EUID -ne 0 ]]; then
    echo "Ce script doit être exécuté avec sudo ou root."
@@ -31,21 +31,32 @@ if [ ! -f "$SCRIPT_PATH" ]; then
   echo "Téléchargement terminé."
 fi
 
-# Arrêter tous les processus utilisant le port 80
-echo "Arrêt de tous les processus sur le port 80..."
-pids=$(lsof -ti tcp:80)
+# Arrêt des processus utilisant le port 81 (car NGINX va écouter sur 81)
+echo "Arrêt de tous les processus sur le port 81..."
+pids=$(lsof -ti tcp:81)
 if [ -n "$pids" ]; then
-  echo "Processus détectés: $pids"
+  echo "Processus détectés sur port 81: $pids"
   kill -9 $pids
-  echo "Processus arrêtés."
+  echo "Processus arrêtés sur port 81."
+else
+  echo "Aucun processus sur le port 81."
+fi
+
+# Arrêt des processus sur le port 80 (car tunnel Python va écouter sur 80)
+echo "Arrêt de tous les processus sur le port 80..."
+pids80=$(lsof -ti tcp:80)
+if [ -n "$pids80" ]; then
+  echo "Processus détectés sur port 80: $pids80"
+  kill -9 $pids80
+  echo "Processus arrêtés sur port 80."
 else
   echo "Aucun processus sur le port 80."
 fi
 
-# Création configuration NGINX
+# Création configuration NGINX sur port 81 qui proxifie vers le port 80 local (Python)
 cat > $NGINX_CONF << EOF
 server {
-    listen 80;
+    listen 81;
     server_name $DOMAIN;
 
     location /ws/ {
@@ -58,7 +69,7 @@ server {
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_buffering off;
 
-        proxy_pass http://127.0.0.1:8765;
+        proxy_pass http://127.0.0.1:80;
     }
 }
 EOF
@@ -72,10 +83,10 @@ nginx -t || { echo "Erreur configuration NGINX"; exit 1; }
 echo "Reload NGINX..."
 systemctl reload nginx
 
-# Lancer le serveur Python SSH WebSocket
-nohup python3 "$SCRIPT_PATH" -b 127.0.0.1 -p 8765 > proxyws.log 2>&1 &
+# Lancer le serveur Python SSH WebSocket sur le port 80 local (bind sur localhost)
+nohup python3 "$SCRIPT_PATH" -b 127.0.0.1 -p 80 > proxyws.log 2>&1 &
 
 sleep 2
 
-echo "Tunnel SSH WebSocket actif sur ws://$DOMAIN/ws/"
+echo "Tunnel SSH WebSocket actif sur ws://$DOMAIN:81/ws/"
 echo "Logs : proxyws.log"
