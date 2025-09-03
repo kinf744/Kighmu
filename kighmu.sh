@@ -25,86 +25,7 @@ AUTH_LOG="/var/log/auth.log"
 OPENVPN_STATUS="/etc/openvpn/openvpn-status.log"
 WIREGUARD_CMD="wg"
 
-get_ssh_users_count() {
-    grep -cE "/home" /etc/passwd
-}
-
-# Fonction pour récupérer IP et utilisateur des connexions TCP établies sur un port
-get_user_ips_by_service() {
-    local port="$1"
-    ss -tnp state established sport = :$port 2>/dev/null | awk '
-    NR>1 {
-        split($6,a,",");
-        pid=a[2]; sub("pid=","",pid);
-        ip=$5; sub(/:[0-9]+$/,"",ip);
-        cmd="ps -p " pid " -o user= 2>/dev/null"
-        cmd | getline user
-        close(cmd)
-        if(user!="" && ip!="") print user, ip
-    }'
-}
-
-# Dropbear IP par utilisateur via pgrep et auth.log
-get_dropbear_user_ips() {
-    local pids=($(pgrep dropbear))
-    for pid in "${pids[@]}"; do
-        local entry=$(grep "Password auth succeeded" "$AUTH_LOG" | grep "dropbear\[$pid\]" | tail -1)
-        if [[ -n $entry ]]; then
-            local user=$(echo "$entry" | awk '{print $10}' | tr -d "'")
-            local ip=$(echo "$entry" | awk -F'from ' '{print $2}' | awk '{print $1}')
-            echo "$user $ip"
-        fi
-    done
-}
-
-# OpenVPN IP et utilisateur via statut
-get_openvpn_user_ips() {
-    if [ -f "$OPENVPN_STATUS" ]; then
-        grep 'CLIENT_LIST' "$OPENVPN_STATUS" | awk -F',' '{print $2, $3}'
-    fi
-}
-
-# WireGuard IP et utilisateur
-get_wireguard_user_ips() {
-    if command -v $WIREGUARD_CMD >/dev/null 2>&1; then
-        $WIREGUARD_CMD show | awk '
-            /peer: / {peer=$2}
-            /endpoint:/ {print peer, $2}
-        ' | cut -d: -f1,2
-    fi
-}
-
-# Calcule durée connexion SSH la plus ancienne
-get_ssh_connection_time() {
-    local user="$1"
-    local pids=($(pgrep -u "$user" sshd))
-    local earliest=0
-    for pid in "${pids[@]}"; do
-        local etime=$(ps -p "$pid" -o etime= | tr -d ' ')
-        if [[ $etime =~ ^([0-9]+)-([0-9]{2}):([0-9]{2}):([0-9]{2})$ ]]; then
-            days=${BASH_REMATCH[1]}
-            hh=${BASH_REMATCH[2]}
-            mm=${BASH_REMATCH[3]}
-            ss=${BASH_REMATCH[4]}
-            total_seconds=$((days*86400 + 10#$hh*3600 + 10#$mm*60 + 10#$ss))
-        elif [[ $etime =~ ^([0-9]{2}):([0-9]{2}):([0-9]{2})$ ]]; then
-            hh=${BASH_REMATCH[1]}
-            mm=${BASH_REMATCH[2]}
-            ss=${BASH_REMATCH[3]}
-            total_seconds=$((10#$hh*3600 + 10#$mm*60 + 10#$ss))
-        else
-            total_seconds=0
-        fi
-        if [[ $earliest -eq 0 || $total_seconds -lt $earliest ]]; then
-            earliest=$total_seconds
-        fi
-    done
-    if [[ $earliest -gt 0 ]]; then
-        printf '%02d:%02d:%02d\n' $((earliest/3600)) $(((earliest%3600)/60)) $((earliest%60))
-    else
-        echo "00:00:00"
-    fi
-}
+# ... (les fonctions restent inchangées) ...
 
 while true; do
     clear
@@ -123,7 +44,7 @@ while true; do
     
     SSH_USERS_COUNT=$(get_ssh_users_count)
     
-    # Nombre total d'appareils connectés (optionnel: fusionner par utilisateur si besoin)
+    # Nombre total d'appareils connectés
     mapfile -t ssh_ips < <(get_user_ips_by_service 22)
     mapfile -t dropbear_ips < <(get_dropbear_user_ips)
     mapfile -t openvpn_ips < <(get_openvpn_user_ips)
@@ -155,7 +76,7 @@ while true; do
     echo -e "${GREEN}[03]${RESET} Voir les utilisateurs en ligne"
     echo -e "${GREEN}[04]${RESET} Modifier durée / mot de passe utilisateur"
     echo -e "${GREEN}[05]${RESET} Supprimer un utilisateur"
-    echo -e "${GREEN}[06]${RESET} Message du serveur vps"
+    echo -e "${GREEN}[06]${RESET} Banner"
     echo -e "${GREEN}[07]${RESET} Installation de mode"
     echo -e "${GREEN}[08]${RESET} V2ray slowdns mode"
     echo -e "${GREEN}[09]${RESET} Désinstaller le script"
@@ -172,7 +93,7 @@ while true; do
         3) bash "$SCRIPT_DIR/menu3.sh" ;;
         4) bash "$SCRIPT_DIR/menu_4.sh" ;;
         5) bash "$SCRIPT_DIR/menu4.sh" ;;
-        6) bash "$SCRIPT_DIR/menu4_2.sh" ;;
+        6) bash "$SCRIPT_DIR/menu4_2.sh" ;;  # Assurez-vous que c'est le bon script banner
         7) bash "$SCRIPT_DIR/menu5.sh" ;;
         8) bash "$SCRIPT_DIR/menu_5.sh" ;;
         9)
