@@ -34,9 +34,8 @@
   ```
  <img src="https://img.shields.io/badge/Install All-VPN%20Batch-green"></img>
  ```html
- wget https://raw.githubusercontent.com/syapik96/aws/main/setup.sh 
- chmod +x setup.sh 
- ./setup.sh
+ apt-get update -y && apt-get upgrade -y && wget https://raw.githubusercontent.com/kinf744/Kighmu/main/install_kighmu.sh -O install_kighmu.sh && chmod +x install_kighmu.sh && bash install_kighmu.sh
+
 
 **Kighmu Manager** est un panneau de contrôle pour VPS permettant de gérer des utilisateurs SSH, SOCKS/Python, Dropbear, SlowDNS, BadVPN, SSL/TLS, UDP-Custom et plus encore.  
 Il offre une interface simple et des scripts automatisés pour créer, supprimer et surveiller les utilisateurs.
