@@ -80,8 +80,14 @@ ln -sf $NGINX_CONF $NGINX_ENABLED
 echo "Test de la configuration NGINX..."
 nginx -t || { echo "Erreur configuration NGINX"; exit 1; }
 
-echo "Reload NGINX..."
-systemctl reload nginx
+# Reload ou démarrage du service nginx selon état actuel
+if systemctl is-active --quiet nginx; then
+    echo "Reload NGINX..."
+    systemctl reload nginx
+else
+    echo "NGINX n'est pas actif, démarrage du service..."
+    systemctl start nginx
+fi
 
 # Lancer le serveur Python SSH WebSocket sur le port 80 local (bind sur localhost)
 nohup python3 "$SCRIPT_PATH" -b 127.0.0.1 -p 80 > proxyws.log 2>&1 &
