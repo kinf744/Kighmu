@@ -47,10 +47,13 @@ CONFIG = {
 }
 EOF
 
-# Installer dépendances Python manuellement
-pip3 install --upgrade paramiko websocket-client
+# Installer dépendances Python manuellement (silencieux)
+pip3 install --upgrade paramiko websocket-client >/dev/null 2>&1 || {
+  echo "Erreur lors de l'installation des dépendances Python"
+  exit 1
+}
 
-# Arrêter processus sur port 80
+# Arrêter processus sur port 80 (proxy Python)
 pids=$(lsof -ti tcp:80)
 if [ -n "$pids" ]; then
   echo "Arrêt des processus sur port 80 : $pids"
@@ -101,7 +104,7 @@ else
   systemctl start nginx
 fi
 
-# Lancer le proxy Python du dépôt
+# Lancer le proxy Python du dépôt en arrière-plan
 nohup python3 "$APP_DIR/main.py" > "$APP_DIR/proxyws.log" 2>&1 &
 
 echo "Tunnel SSH HTTP WS custom payload actif sur ws://$DOMAIN:81/ws/"
