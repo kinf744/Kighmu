@@ -105,6 +105,19 @@ else
     echo "bash $CLEAN_SCRIPT" | at now + "$minutes" minutes 2>/dev/null
 fi
 
+# Ajout automatique de l'affichage du banner personnalisé au login shell
+BANNER_PATH="/etc/ssh/sshd_banner"  # Adaptez ce chemin si nécessaire
+
+echo "
+# Affichage du banner Kighmu VPS Manager
+if [ -f $BANNER_PATH ]; then
+    cat \$BANNER_PATH
+fi
+" >> /home/"$username"/.bashrc
+
+chown "$username":"$username" /home/"$username"/.bashrc
+chmod 644 /home/"$username"/.bashrc
+
 # Affichage résumé
 cat <<EOF
 
