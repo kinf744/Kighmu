@@ -10,7 +10,12 @@
 
 <h2 align="center">Distribution Linux compatible</h2>
 
-<p align="center"><img src="https://img.shields.io/static/v1?style=for-the-badge&logo=debian&label=Debian%209 & 2010&message=Stretch&color=red"> <img src="https://img.shields.io/static/v1?style=for-the-badge&logo=debian&label=Debian%2011&message=Ubuntu_20.04&color=red"> <img src="https://img.shields.io/static/v1?style=for-the-badge&logo=ubuntu&label=Ubuntu%2018&message=18.04 LTS&color=red"> <img src="https://img.shields.io/static/v1?style=for-the-badge&logo=ubuntu&label=Ubuntu%2020&message=20.04 LTS&color=red"></p>
+<p align="center">
+  <img src="https://img.shields.io/static/v1?style=for-the-badge&logo=debian&label=Debian%209%20%26%202010&message=Stretch&color=red" alt="Debian 9 & 2010 Stretch" />
+  <img src="https://img.shields.io/static/v1?style=for-the-badge&logo=debian&label=Debian%2011&message=Bullseye&color=red" alt="Debian 11 Bullseye" />
+  <img src="https://img.shields.io/static/v1?style=for-the-badge&logo=ubuntu&label=Ubuntu%2018&message=18.04 LTS&color=red" alt="Ubuntu 18.04 LTS" />
+  <img src="https://img.shields.io/static/v1?style=for-the-badge&logo=ubuntu&label=Ubuntu%2020&message=20.04 LTS&color=red" alt="Ubuntu 20.04 LTS" />
+</p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Service-OpenSSH-success.svg">  
