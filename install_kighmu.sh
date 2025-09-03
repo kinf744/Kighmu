@@ -243,7 +243,7 @@ K  K    I  G   G H   H M   M U   U
 K   K  III  GGG  H   H M   M  UUU
 ${NC}"
 
-echo -e "${YELLOW}KIGHMU${NC}"
+echo -e "Saisir et valider: ${YELLOW}source ~/.bashrc${NC}"
 
 echo -e "${GREEN}Version du script : 2.5${NC}"
 echo
