@@ -251,7 +251,7 @@ echo
 echo -e "Saisir et valider: ${YELLOW}source ~/.bashrc${NC}"
 
 echo -e "${GREEN}Version du script : 2.5${NC}"
-echo -e "${BLUE}Inbox Telegramme : @KIGHMU${NC}"
+echo -e "${PURPLE}Inbox Telegramme :{NC}${BLUE}Inbox @KIGHMU${NC}"
 echo
 echo -e "Pour ouvrir le panneau de contrôle principal, tapez : ${YELLOW}kighmu${NC}"
 echo
