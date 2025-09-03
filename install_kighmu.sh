@@ -94,7 +94,6 @@ apt install -y wget
 apt install -y psmisc
 apt install -y nginx
 apt install -y dropbear
-apt install -y badvpn
 apt install -y python3-setuptools
 apt install -y wireguard-tools
 apt install -y qrencode
