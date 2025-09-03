@@ -103,7 +103,7 @@ while true; do
     echo -e "${GREEN}[09]${RESET} Désinstaller le script"
     echo -e "${GREEN}[10]${RESET} Blocage de torrents"
     echo -e "${RED}[00] Quitter${RESET}"
-    echo -e "${CYAN}+--------------------------------------------------+${RESET}"
+    echo -e "${CYAN}+==================================================+${RESET}"
     echo -ne "${BOLD}${YELLOW} Entrez votre choix [1-10]: ${RESET}"
     read -r choix
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
