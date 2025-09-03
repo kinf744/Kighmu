@@ -6,7 +6,7 @@
   <img src="KIGHMU%20MANAGER.jpg" alt="Kighmu Manager" width="600">
 </p>
 
-# Kighmu Manager
+# Kighmu Manager V2.5
 
 <h2 align="center">Distribution Linux compatible</h2>
 
