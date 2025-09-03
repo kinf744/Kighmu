@@ -13,9 +13,9 @@ UPTIME=$(uptime -p)
 echo "IP: $HOST_IP | Uptime: $UPTIME"
 echo ""
 
-# =====================================================
+# ================================================
 # Fonctions spécifiques tunnel SSH HTTP WS
-# =====================================================
+# ================================================
 install_ssh_ws_tunnel() {
     echo ">>> Installation du tunnel SSH HTTP WS..."
     PROXYWS_PATH="$(dirname "$0")/proxyws.sh"
@@ -30,7 +30,6 @@ install_ssh_ws_tunnel() {
 
 uninstall_ssh_ws_tunnel() {
     echo ">>> Désinstallation du tunnel SSH HTTP WS..."
-    # Arrêt des processus associés au tunnel
     pids=$(lsof -ti tcp:80)
     if [ -n "$pids" ]; then
       kill -9 $pids
@@ -39,7 +38,6 @@ uninstall_ssh_ws_tunnel() {
       echo "Aucun processus sur port 80."
     fi
 
-    # Désactivation de la config NGINX spécifique si elle existe
     if [ -f /etc/nginx/sites-enabled/ssh_ws_proxy ]; then
       rm /etc/nginx/sites-enabled/ssh_ws_proxy
       echo "Configuration NGINX désactivée."
@@ -48,9 +46,9 @@ uninstall_ssh_ws_tunnel() {
     echo "[OK] Tunnel SSH HTTP WS désinstallé."
 }
 
-# =====================================================
-# Fonction générique pour le sous-menu tunnel SSH WS
-# =====================================================
+# ================================================
+# Sous-menu tunnel SSH HTTP WS
+# ================================================
 manage_ssh_ws_tunnel() {
     while true; do
         echo ""
@@ -73,9 +71,9 @@ manage_ssh_ws_tunnel() {
     done
 }
 
-# =====================================================
-# Fonctions déjà existantes
-# (exemple OpenSSH)
+# ================================================
+# Fonctions existantes (OpenSSH, Dropbear, etc.)
+# ================================================
 install_openssh() {
     echo ">>> Installation d'OpenSSH..."
     apt-get install -y openssh-server
@@ -91,11 +89,11 @@ uninstall_openssh() {
     echo "[OK] OpenSSH supprimé."
 }
 
-# (Autres fonctions identiques, non répétées ici...)
+# Ajoutez vos autres fonctions install/uninstall ici (Dropbear, SlowDNS, etc.)
 
-# =====================================================
-# Menu principal avec ajout du tunnel SSH HTTP WS
-# =====================================================
+# ================================================
+# Menu principal
+# ================================================
 while true; do
     echo ""
     echo "+================ MENU PRINCIPAL =================+"
@@ -125,3 +123,31 @@ while true; do
         *) echo "❌ Option invalide, réessayez." ;;
     esac
 done
+
+
+# Fonction générique manage_mode (si nécessaire)
+manage_mode() {
+    local mode_name="$1"
+    local install_func="$2"
+    local uninstall_func="$3"
+
+    while true; do
+        echo ""
+        echo "+--------------------------------------------+"
+        echo "   Gestion du mode : $mode_name"
+        echo "+--------------------------------------------+"
+        echo " [1] Installer"
+        echo " [2] Désinstaller"
+        echo " [0] Retour"
+        echo "----------------------------------------------"
+        echo -n "👉 Choisissez une action : "
+        read action
+
+        case $action in
+            1) $install_func ;;
+            2) $uninstall_func ;;
+            0) break ;;
+            *) echo "❌ Mauvais choix, réessayez." ;;
+        esac
+    done
+}
