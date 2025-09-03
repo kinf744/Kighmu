@@ -40,6 +40,7 @@ Pour installer Kighmu Manager automatiquement sur votre VPS :
 
  ```bash
  apt-get update -y && apt-get upgrade -y && wget https://raw.githubusercontent.com/kinf744/Kighmu/main/install_kighmu.sh -O install_kighmu.sh && chmod +x install_kighmu.sh && bash install_kighmu.sh
+```
 
 
 **Kighmu Manager** est un panneau de contrôle pour VPS permettant de gérer des utilisateurs SSH, SOCKS/Python, Dropbear, SlowDNS, BadVPN, SSL/TLS, UDP-Custom et plus encore.  
