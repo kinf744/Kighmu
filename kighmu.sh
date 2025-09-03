@@ -155,11 +155,12 @@ while true; do
     echo -e "${GREEN}[03]${RESET} Voir les utilisateurs en ligne"
     echo -e "${GREEN}[04]${RESET} Modifier durée / mot de passe utilisateur"
     echo -e "${GREEN}[05]${RESET} Supprimer un utilisateur"
-    echo -e "${GREEN}[06]${RESET} Installation de mode"
-    echo -e "${GREEN}[07]${RESET} V2ray slowdns mode"
-    echo -e "${GREEN}[08]${RESET} Désinstaller le script"
-    echo -e "${GREEN}[09]${RESET} Blocage de torrents"
-    echo -e "${RED}[10] Quitter${RESET}"
+    echo -e "${GREEN}[06]${RESET} Message du serveur vps"
+    echo -e "${GREEN}[07]${RESET} Installation de mode"
+    echo -e "${GREEN}[08]${RESET} V2ray slowdns mode"
+    echo -e "${GREEN}[09]${RESET} Désinstaller le script"
+    echo -e "${GREEN}[10]${RESET} Blocage de torrents"
+    echo -e "${RED}[00] Quitter${RESET}"
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
     echo -ne "${BOLD}${YELLOW} Entrez votre choix [1-10]: ${RESET}"
     read -r choix
@@ -171,9 +172,10 @@ while true; do
         3) bash "$SCRIPT_DIR/menu3.sh" ;;
         4) bash "$SCRIPT_DIR/menu_4.sh" ;;
         5) bash "$SCRIPT_DIR/menu4.sh" ;;
-        6) bash "$SCRIPT_DIR/menu5.sh" ;;
-        7) bash "$SCRIPT_DIR/menu_5.sh" ;;
-        8)
+        6) bash "$SCRIPT_DIR/menu4_2.sh" ;;
+        7) bash "$SCRIPT_DIR/menu5.sh" ;;
+        8) bash "$SCRIPT_DIR/menu_5.sh" ;;
+        9)
             echo -e "${YELLOW}⚠️  Vous êtes sur le point de désinstaller le script.${RESET}"
             read -p "Voulez-vous vraiment continuer ? (o/N): " confirm
             if [[ "$confirm" =~ ^[Oo]$ ]]; then
@@ -187,8 +189,8 @@ while true; do
                 echo -e "${GREEN}Opération annulée, retour au menu...${RESET}"
             fi
             ;;
-        9) bash "$SCRIPT_DIR/menu7.sh" ;;
-        10)
+        10) bash "$SCRIPT_DIR/menu7.sh" ;;
+        00)
             clear
             echo -e "${RED}Au revoir !${RESET}"
             exit 0
