@@ -1,22 +1,25 @@
 #!/usr/bin/env python3
 # encoding: utf-8
-# KIGHMUPROXY - Proxy TCP SOCKS inspiré DarkSSH (version améliorée)
+# KIGHMUPROXY - Proxy TCP SOCKS inspiré DarkSSH (version corrigée)
 
 import socket
 import threading
 import select
 import sys
 import time
-import datetime
 
 IP = '0.0.0.0'
+try:
+    PORT = int(sys.argv[1])
+except:
+    PORT = 8080
+
 PASS = ''  # Mot de passe optionnel
 BUFLEN = 8196 * 8
 TIMEOUT = 60
 MSG = 'KIGHMUPROXY'
 RESPONSE = "HTTP/1.1 200 OK\r\n\r\n"
 DEFAULT_HOST = '0.0.0.0:22'
-
 
 class Server(threading.Thread):
     def __init__(self, host, port):
@@ -35,7 +38,7 @@ class Server(threading.Thread):
         self.soc.bind((self.host, self.port))
         self.soc.listen(0)
         self.running = True
-        self.print_log(f"KIGHMUPROXY démarré sur {self.host}:{self.port}", level="INFO")
+        self.print_log(f"KIGHMUPROXY démarré sur {self.host}:{self.port}")
 
         try:
             while self.running:
@@ -52,10 +55,9 @@ class Server(threading.Thread):
             self.running = False
             self.soc.close()
 
-    def print_log(self, msg, level="INFO"):
+    def print_log(self, msg):
         with self.logLock:
-            now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            print(f"[{now}] [{level}] {msg}")
+            print(msg)
 
     def add_conn(self, conn):
         with self.threadsLock:
@@ -68,13 +70,12 @@ class Server(threading.Thread):
                 self.threads.remove(conn)
 
     def close(self):
-        self.print_log("Fermeture du proxy et des connexions...", level="INFO")
+        self.print_log("Fermeture du proxy et des connexions...")
         self.running = False
         with self.threadsLock:
             threads = list(self.threads)
             for c in threads:
                 c.close()
-
 
 class ConnectionHandler(threading.Thread):
     def __init__(self, client_socket, server, addr):
@@ -116,19 +117,16 @@ class ConnectionHandler(threading.Thread):
 
             if PASS and passwd != PASS:
                 self.client.send(b"HTTP/1.1 400 WrongPass!\r\n\r\n")
-                self.server.print_log(f"{self.addr} Mot de passe invalide", level="ERROR")
                 self.close()
                 return
 
             if host_port.startswith(IP) or not PASS:
-                self.server.print_log(f"{self.addr} CONNECT vers {host_port}", level="CONN")
                 self.method_connect(host_port)
             else:
                 self.client.send(b"HTTP/1.1 403 Forbidden!\r\n\r\n")
-                self.server.print_log(f"{self.addr} Accès refusé", level="ERROR")
 
         except Exception as e:
-            self.server.print_log(f"{self.addr} Erreur : {e}", level="ERROR")
+            self.server.print_log(f"[{self.addr}] Erreur : {e}")
         finally:
             self.close()
             self.server.remove_conn(self)
@@ -164,7 +162,7 @@ class ConnectionHandler(threading.Thread):
         self.target.connect(addr)
 
     def method_connect(self, host_port):
-        self.server.print_log(f"{self.addr} Ouverture de tunnel vers {host_port}", level="INFO")
+        self.server.print_log(f"[{self.addr}] CONNECT vers {host_port}")
         self.connect_target(host_port)
         self.client.sendall(RESPONSE.encode())
         self.do_connect()
@@ -204,37 +202,17 @@ class ConnectionHandler(threading.Thread):
             if timeout_counter >= TIMEOUT or error:
                 break
 
-
 def main():
     print("KIGHMUPROXY - tunnel SSH proxy SOCKS type DarkSSH\n")
-
-    # Demande systématique du port à chaque démarrage
-    while True:
-        try:
-            port_input = input("Veuillez saisir le port sur lequel démarrer le proxy : ")
-            port = int(port_input)
-            if port < 1 or port > 65535:
-                print("❌ Veuillez entrer un numéro de port valide (1-65535).")
-                continue
-            break
-        except ValueError:
-            print("❌ Entrée invalide. Veuillez entrer un numéro de port valide (ex. 8080).")
-
-    # Confirmation lisible
-    print(f"✅ Le proxy sera démarré sur {IP}:{port}\n")
-
-    # Lancer le serveur proxy
-    server = Server(IP, port)
+    server = Server(IP, PORT)
     server.start()
-
     try:
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        print("\n⏹️  Arrêt du proxy...")
+        print("\nArrêt du proxy...")
         server.close()
-
 
 if __name__ == '__main__':
     main()
-                        
+                
