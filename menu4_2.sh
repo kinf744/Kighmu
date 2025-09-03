@@ -1,5 +1,5 @@
 #!/bin/bash
-# banner.sh - Gestion complète du banner personnalisé Kighmu VPS Manager
+# menu4_2.sh - Gestion complète du banner personnalisé Kighmu VPS Manager
 
 BANNER_DIR="$HOME/.kighmu"
 BANNER_FILE="$BANNER_DIR/banner.txt"
@@ -11,7 +11,6 @@ show_banner() {
     if [ -f "$BANNER_FILE" ]; then
         echo -e "\e[36m+--------------------------------------------------+\e[0m"
         while IFS= read -r line; do
-            # Interpréter les codes ANSI pour couleur et style
             echo -e "$line"
         done < "$BANNER_FILE"
         echo -e "\e[36m+--------------------------------------------------+\e[0m"
