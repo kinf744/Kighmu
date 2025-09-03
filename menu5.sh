@@ -1,10 +1,10 @@
 #!/bin/bash
 # menu5.sh
-# Panneau de contrôle pour installation des modes
+# Panneau de contrôle installation/désinstallation
 
 clear
 echo "+--------------------------------------------+"
-echo "|      PANNEAU DE CONTROLE D'INSTALLATION    |"
+echo "|      PANNEAU DE CONTROLE DES MODES         |"
 echo "+--------------------------------------------+"
 
 # Détection IP et uptime
@@ -13,76 +13,124 @@ UPTIME=$(uptime -p)
 echo "IP: $HOST_IP | Uptime: $UPTIME"
 echo ""
 
-# ==========================
-# Définition des fonctions
-# ==========================
+# =====================================================
+# Fonctions pour OpenSSH
+# =====================================================
 install_openssh() {
-    echo ">>> Installation / vérification Openssh..."
+    echo ">>> Installation d'OpenSSH..."
     apt-get install -y openssh-server
     systemctl enable ssh
     systemctl start ssh
-    echo ">>> [OK] OpenSSH installé."
+    echo "[OK] OpenSSH installé."
 }
 
+uninstall_openssh() {
+    echo ">>> Désinstallation d'OpenSSH..."
+    apt-get remove -y openssh-server
+    systemctl disable ssh
+    echo "[OK] OpenSSH supprimé."
+}
+
+# =====================================================
+# Fonctions pour Dropbear
+# =====================================================
 install_dropbear() {
-    echo ">>> Installation / vérification Dropbear..."
+    echo ">>> Installation de Dropbear..."
     apt-get install -y dropbear
     systemctl enable dropbear
     systemctl start dropbear
-    echo ">>> [OK] Dropbear installé."
+    echo "[OK] Dropbear installé."
 }
 
+uninstall_dropbear() {
+    echo ">>> Désinstallation de Dropbear..."
+    apt-get remove -y dropbear
+    systemctl disable dropbear
+    echo "[OK] Dropbear supprimé."
+}
+
+# =====================================================
+# Fonctions pour SlowDNS
+# =====================================================
 install_slowdns() {
-    echo ">>> Installation / configuration SlowDNS..."
-    bash "$HOME/Kighmu/slowdns.sh" || echo "SlowDNS : script non trouvé ou erreur."
+    echo ">>> Installation/configuration de SlowDNS..."
+    bash "$HOME/Kighmu/slowdns.sh" || echo "SlowDNS : script introuvable."
 }
 
-install_udp_custom() {
-    echo ">>> Installation UDP Custom..."
-    bash "$HOME/Kighmu/udp_custom.sh" || echo "UDP Custom : script non trouvé ou erreur."
+uninstall_slowdns() {
+    echo ">>> Désinstallation de SlowDNS..."
+    pkill -f slowdns || true
+    echo "[OK] SlowDNS désinstallé (processus tués)."
 }
 
-install_socks_python() {
-    echo ">>> Installation SOCKS/Python..."
-    bash "$HOME/Kighmu/socks_python.sh" || echo "SOCKS/Python : script non trouvé ou erreur."
+# Les autres modes (udp, socks, ssl/tls, badvpn) :
+install_udp_custom() { bash "$HOME/Kighmu/udp_custom.sh" || echo "Script introuvable."; }
+uninstall_udp_custom() { pkill -f udp_custom || echo "UDP Custom déjà arrêté."; }
+
+install_socks_python() { bash "$HOME/Kighmu/socks_python.sh" || echo "Script introuvable."; }
+uninstall_socks_python() { pkill -f socks_python || echo "SOCKS déjà arrêté."; }
+
+install_ssl_tls() { echo ">>> Installation SSL/TLS (à compléter)"; }
+uninstall_ssl_tls() { echo ">>> Désinstallation SSL/TLS (à compléter)"; }
+
+install_badvpn() { echo ">>> Installation BadVPN (à compléter)"; }
+uninstall_badvpn() { echo ">>> Désinstallation BadVPN (à compléter)"; }
+
+# =====================================================
+# Fonction générique qui affiche le sous-menu
+# =====================================================
+manage_mode() {
+    MODE_NAME=$1
+    INSTALL_FUNC=$2
+    UNINSTALL_FUNC=$3
+
+    while true; do
+        echo ""
+        echo "+--------------------------------------------+"
+        echo "   Gestion du mode : $MODE_NAME"
+        echo "+--------------------------------------------+"
+        echo " [1] Installer"
+        echo " [2] Désinstaller"
+        echo " [0] Retour"
+        echo "----------------------------------------------"
+        echo -n "👉 Choisissez une action : "
+        read action
+
+        case $action in
+            1) $INSTALL_FUNC ;;
+            2) $UNINSTALL_FUNC ;;
+            0) break ;;
+            *) echo "❌ Mauvais choix, réessayez." ;;
+        esac
+    done
 }
 
-install_ssl_tls() {
-    echo ">>> Installation SSL/TLS..."
-    # Ajoute tes commandes ici
-}
-
-install_badvpn() {
-    echo ">>> Installation BadVPN..."
-    # Ajoute tes commandes ici
-}
-
-# ==========================
-# Menu dynamique
-# ==========================
+# =====================================================
+# Menu principal
+# =====================================================
 while true; do
     echo ""
-    echo "+================ MENU INSTALLATION ================+"
-    echo " [1] Installer OpenSSH"
-    echo " [2] Installer Dropbear"
-    echo " [3] Installer SlowDNS"
-    echo " [4] Installer UDP Custom"
-    echo " [5] Installer SOCKS/Python"
-    echo " [6] Installer SSL/TLS"
-    echo " [7] Installer BadVPN"
+    echo "+================ MENU PRINCIPAL =================+"
+    echo " [1] OpenSSH"
+    echo " [2] Dropbear"
+    echo " [3] SlowDNS"
+    echo " [4] UDP Custom"
+    echo " [5] SOCKS/Python"
+    echo " [6] SSL/TLS"
+    echo " [7] BadVPN"
     echo " [0] Quitter"
-    echo "+==================================================+"
-    echo -n "👉 Choisissez une option : "
+    echo "+================================================+"
+    echo -n "👉 Choisissez un mode : "
     read choix
 
     case $choix in
-        1) install_openssh ;;
-        2) install_dropbear ;;
-        3) install_slowdns ;;
-        4) install_udp_custom ;;
-        5) install_socks_python ;;
-        6) install_ssl_tls ;;
-        7) install_badvpn ;;
+        1) manage_mode "OpenSSH" install_openssh uninstall_openssh ;;
+        2) manage_mode "Dropbear" install_dropbear uninstall_dropbear ;;
+        3) manage_mode "SlowDNS" install_slowdns uninstall_slowdns ;;
+        4) manage_mode "UDP Custom" install_udp_custom uninstall_udp_custom ;;
+        5) manage_mode "SOCKS/Python" install_socks_python uninstall_socks_python ;;
+        6) manage_mode "SSL/TLS" install_ssl_tls uninstall_ssl_tls ;;
+        7) manage_mode "BadVPN" install_badvpn uninstall_badvpn ;;
         0) echo "🚪 Sortie du panneau de contrôle." ; exit 0 ;;
         *) echo "❌ Option invalide, réessayez." ;;
     esac
