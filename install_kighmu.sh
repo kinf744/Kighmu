@@ -160,6 +160,7 @@ FILES=(
   "create_ssh_user.sh"
   "menu4_2.sh"
   "proxyws.sh"
+  "ws_proxy.py"
 )
 
 BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
