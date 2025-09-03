@@ -110,12 +110,20 @@ while true; do
     clear
     OS_INFO=$(if [ -f /etc/os-release ]; then . /etc/os-release; echo "$NAME $VERSION_ID"; else uname -s; fi)
     IP=$(hostname -I | awk '{print $1}')
+    
+    # Taille RAM exacte en Mo
+    TOTAL_RAM=$(free -m | awk 'NR==2{print $2 " Mo"}')
+    # Fréquence CPU en MHz (première ligne MHz trouvée)
+    CPU_FREQ=$(lscpu | grep "MHz" | head -1 | awk '{print $3 " MHz"}')
+    
+    # Utilisation RAM en pourcentage
     RAM_USAGE=$(free -m | awk 'NR==2{printf "%.2f%%", $3*100/$2}')
+    # Utilisation CPU en pourcentage (moyenne simple)
     CPU_USAGE=$(grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf "%.2f%%", usage}')
+    
     SSH_USERS_COUNT=$(get_ssh_users_count)
     
     # Nombre total d'appareils connectés (optionnel: fusionner par utilisateur si besoin)
-    # Ici on affiche la somme sur tous les services (simple version)
     mapfile -t ssh_ips < <(get_user_ips_by_service 22)
     mapfile -t dropbear_ips < <(get_dropbear_user_ips)
     mapfile -t openvpn_ips < <(get_openvpn_user_ips)
@@ -129,7 +137,9 @@ while true; do
     echo -e "${CYAN}+==================================================+${RESET}"
 
     printf " OS: %-20s | IP: %-15s\n" "$OS_INFO" "$IP"
-
+    
+    echo -e "${CYAN} Taille RAM: ${GREEN}$TOTAL_RAM${RESET}"
+    echo -e "${CYAN} CPU fréquence: ${YELLOW}$CPU_FREQ${RESET}"
     printf " RAM utilisée: ${GREEN}%-6s${RESET} | CPU utilisé: ${YELLOW}%-6s${RESET}\n" "$RAM_USAGE" "$CPU_USAGE"
 
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
