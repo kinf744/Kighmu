@@ -51,59 +51,16 @@ echo "=============================================="
 
 apt update -y && apt upgrade -y
 
-apt install -y sudo
-apt install -y bsdmainutils
-apt install -y zip
-apt install -y unzip
-apt install -y ufw
-apt install -y curl
-apt install -y python3
-apt install -y python3-pip
-apt install -y openssl
-apt install -y screen
-apt install -y cron
-apt install -y iptables
-apt install -y lsof
-apt install -y pv
-apt install -y boxes
-apt install -y nano
-apt install -y at
-apt install -y mlocate
-apt install -y gawk
-apt install -y grep
-apt install -y bc
-apt install -y jq
-apt install -y npm
-apt install -y nodejs
-apt install -y socat
-apt install -y netcat
-apt install -y netcat-traditional
-apt install -y net-tools
-apt install -y cowsay
-apt install -y figlet
-apt install -y lolcat
-apt install -y dnsutils
-apt install -y wget
-apt install -y psmisc
-apt install -y nginx
-apt install -y dropbear
-apt install -y badvpn
-apt install -y python3-setuptools
-apt install -y wireguard-tools
-apt install -y qrencode
-apt install -y gcc
-apt install -y make
-apt install -y perl
-apt install -y systemd
-apt install -y tcpdump
-apt install -y iptables
-apt install -y iproute2
-apt install -y net-tools
-apt install -y tmux
-apt install -y git
-apt install -y build-essential
-apt install -y libssl-dev
-apt install -y software-properties-common
+# Installation des paquets essentiels (liste complète)
+packages=(
+  sudo bsdmainutils zip unzip ufw curl python3 python3-pip openssl screen cron iptables
+  lsof pv boxes nano at mlocate gawk grep bc jq npm nodejs socat netcat netcat-traditional
+  net-tools cowsay figlet lolcat dnsutils wget psmisc nginx dropbear badvpn python3-setuptools
+  wireguard-tools qrencode gcc make perl systemd tcpdump iproute2 tmux git build-essential
+  libssl-dev software-properties-common
+)
+
+apt install -y "${packages[@]}"
 
 # Activer et configurer UFW
 ufw allow OpenSSH
@@ -122,58 +79,54 @@ mkdir -p "$INSTALL_DIR" || { echo "Erreur : impossible de créer le dossier $INS
 
 # Liste des fichiers à télécharger
 FILES=(
-    "install_kighmu.sh"
-    "kighmu-manager.sh"
-    "kighmu.sh"
-    "menu1.sh"
-    "menu2.sh"
-    "menu3.sh"
-    "menu4.sh"
-    "menu5.sh"
-    "menu6.sh"
-    "menu7.sh"
-    "slowdns.sh"
-    "socks_python.sh"
-    "udp_custom.sh"
-    "dropbear.sh"
-    "ssl.sh"
-    "badvpn.sh"
-    "system_dns.sh"
-    "install_modes.sh"
-    "show_resources.sh"
-    "nginx.sh"
-    "setup_ssh_config.sh"
-    "create_ssh_user.sh"
+  "install_kighmu.sh"
+  "kighmu-manager.sh"
+  "kighmu.sh"
+  "menu1.sh"
+  "menu2.sh"
+  "menu3.sh"
+  "menu4.sh"
+  "menu5.sh"
+  "menu6.sh"
+  "menu7.sh"
+  "slowdns.sh"
+  "socks_python.sh"
+  "udp_custom.sh"
+  "dropbear.sh"
+  "ssl.sh"
+  "badvpn.sh"
+  "system_dns.sh"
+  "install_modes.sh"
+  "show_resources.sh"
+  "nginx.sh"
+  "setup_ssh_config.sh"
+  "create_ssh_user.sh"
 )
 
-# URL de base du dépôt GitHub
 BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
 
-# Téléchargement et vérification de chaque fichier
 for file in "${FILES[@]}"; do
-    echo "Téléchargement de $file ..."
-    wget -O "$INSTALL_DIR/$file" "$BASE_URL/$file"
-    if [ ! -s "$INSTALL_DIR/$file" ]; then
-        echo "Erreur : le fichier $file n'a pas été téléchargé correctement ou est vide !"
-        exit 1
-    fi
-    chmod +x "$INSTALL_DIR/$file"
+  echo "Téléchargement de $file ..."
+  wget -O "$INSTALL_DIR/$file" "$BASE_URL/$file"
+  if [ ! -s "$INSTALL_DIR/$file" ]; then
+    echo "Erreur : le fichier $file n'a pas été téléchargé correctement ou est vide !"
+    exit 1
+  fi
+  chmod +x "$INSTALL_DIR/$file"
 done
 
 # Fonction pour exécuter un script avec gestion d’erreur
 run_script() {
-    local script_path="$1"
-    echo "🚀 Lancement du script : $script_path"
-    if bash "$script_path"; then
-        echo "✅ $script_path exécuté avec succès."
-    else
-        echo "⚠️ Attention : $script_path a rencontré une erreur. L'installation continue..."
-    fi
+  local script_path="$1"
+  echo "🚀 Lancement du script : $script_path"
+  if bash "$script_path"; then
+    echo "✅ $script_path exécuté avec succès."
+  else
+    echo "⚠️ Attention : $script_path a rencontré une erreur. L'installation continue..."
+  fi
 }
 
-# Ne lance aucun script automatiquement ici
-
-# Ajout de l'exécution du script de configuration SSH
+# Lancer le script configuration SSH personnalisé si présent
 echo "🚀 Application de la configuration SSH personnalisée..."
 chmod +x "$INSTALL_DIR/setup_ssh_config.sh"
 run_script "sudo $INSTALL_DIR/setup_ssh_config.sh"
@@ -183,19 +136,17 @@ echo "Tu peux le lancer manuellement quand tu veux."
 
 # Ajout alias kighmu dans ~/.bashrc s'il n'existe pas déjà
 if ! grep -q "alias kighmu=" ~/.bashrc; then
-    echo "alias kighmu='$INSTALL_DIR/kighmu.sh'" >> ~/.bashrc
-    echo "Alias kighmu ajouté dans ~/.bashrc"
-else
-    echo "Alias kighmu déjà présent dans ~/.bashrc"
+  echo "alias kighmu='$INSTALL_DIR/kighmu.sh'" >> ~/.bashrc
+  echo "Alias kighmu ajouté dans ~/.bashrc"
 fi
 
 # Ajouter /usr/local/bin au PATH si non présent dans ~/.bashrc
 if ! grep -q "/usr/local/bin" ~/.bashrc; then
-    echo 'export PATH=$PATH:/usr/local/bin' >> ~/.bashrc
-    echo "Ajout de /usr/local/bin au PATH dans ~/.bashrc"
+  echo 'export PATH=$PATH:/usr/local/bin' >> ~/.bashrc
+  echo "Ajout de /usr/local/bin au PATH dans ~/.bashrc"
 fi
 
-# Création du script du panneau KIGHMU qui s'affichera automatiquement à la connexion
+# Création du script d'affichage du panneau KIGHMU
 cat > /usr/local/bin/kighmu-panel.sh << 'EOF'
 #!/bin/bash
 
@@ -214,19 +165,10 @@ EOF
 
 chmod +x /usr/local/bin/kighmu-panel.sh
 
-# Ajout dans ~/.bashrc de la commande pour afficher le panneau automatiquement à chaque connexion
+# Ajout au ~/.bashrc pour exécuter automatiquement le panneau à chaque connexion
 if ! grep -q "/usr/local/bin/kighmu-panel.sh" ~/.bashrc; then
-    echo -e "\n# Affichage automatique du panneau Kighmu\nif [ -x /usr/local/bin/kighmu-panel.sh ]; then\n    /usr/local/bin/kighmu-panel.sh\nfi\n" >> ~/.bashrc
+  echo -e "\n# Affichage automatique du panneau KIGHMU\nif [ -x /usr/local/bin/kighmu-panel.sh ]; then\n    /usr/local/bin/kighmu-panel.sh\nfi\n" >> ~/.bashrc
 fi
 
-echo
-echo "=============================================="
-echo " ✅ Installation terminée !"
-echo
-echo " ⚠️ Pour que l'alias soit pris en compte :"
-echo " - Ouvre un nouveau terminal, ou"
-echo " - Exécute manuellement : source ~/.bashrc"
-echo
-echo "Tentative de rechargement automatique de ~/.bashrc dans cette session..."
-source ~/.bashrc || echo "Le rechargement automatique a échoué, merci de le faire manuellement."
-echo "=============================================="
+# Affichage immédiat du panneau ASCII KIGHMU à la fin de l'installation
+/usr/local/bin/kighmu-panel.sh
