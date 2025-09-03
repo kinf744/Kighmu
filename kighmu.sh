@@ -27,11 +27,6 @@ WIREGUARD_CMD="wg"
 
 # ... (les fonctions restent inchangées) ...
 
-# Fonction pour lister dynamiquement les utilisateurs SSH (home dans /home)
-get_ssh_user_list() {
-    awk -F: '/\/home\// {print $1}' /etc/passwd
-}
-
 while true; do
     clear
     OS_INFO=$(if [ -f /etc/os-release ]; then . /etc/os-release; echo "$NAME $VERSION_ID"; else uname -s; fi)
@@ -47,12 +42,7 @@ while true; do
     # Utilisation CPU en pourcentage (moyenne simple)
     CPU_USAGE=$(grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf "%.2f%%", usage}')
     
-    # Protection des appels aux fonctions (pour éviter erreurs)
-    if declare -f get_ssh_users_count > /dev/null; then
-        SSH_USERS_COUNT=$(get_ssh_users_count 2>/dev/null || echo 0)
-    else
-        SSH_USERS_COUNT=0
-    fi
+    # Sécurisation des appels aux fonctions pour éviter erreurs
 
     if declare -f get_user_ips_by_service > /dev/null; then
         mapfile -t ssh_ips < <(get_user_ips_by_service 22 2>/dev/null || echo "")
@@ -81,6 +71,9 @@ while true; do
     all_ips=("${ssh_ips[@]}" "${dropbear_ips[@]}" "${openvpn_ips[@]}" "${wireguard_ips[@]}")
     total_connected=$(printf "%s\n" "${all_ips[@]}" | awk '{print $2}' | sort -u | wc -l)
 
+    # Calcul uniquement du nombre d’utilisateurs SSH créés avec home dans /home
+    SSH_USERS_COUNT=$(awk -F: '/\/home\// {print $1}' /etc/passwd | wc -l)
+
     echo -e "${CYAN}+==================================================+${RESET}"
     echo -e "${BOLD}${MAGENTA}|                🚀 KIGHMU MANAGER 🇨🇲 🚀           |${RESET}"
     echo -e "${CYAN}+==================================================+${RESET}"
@@ -93,17 +86,7 @@ while true; do
 
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
 
-    # Affichage dynamique des utilisateurs SSH
-    echo -e "${CYAN}+------------------- Utilisateurs SSH -------------------+${RESET}"
-    SSH_USERS_LIST=$(get_ssh_user_list)
-    SSH_USERS_COUNT=$(echo "$SSH_USERS_LIST" | wc -l)
-    printf " Utilisateurs SSH (%d):\n" "$SSH_USERS_COUNT"
-    echo "$SSH_USERS_LIST" | while read -r user; do
-        echo -e "  - ${GREEN}${user}${RESET}"
-    done
-    echo -e "${CYAN}+--------------------------------------------------------+${RESET}"
-
-    printf " Appareils connectés: ${MAGENTA}%-4d${RESET}\n" "$total_connected"
+    printf " Utilisateurs SSH: ${BLUE}%-4d${RESET} | Appareils connectés: ${MAGENTA}%-4d${RESET}\n" "$SSH_USERS_COUNT" "$total_connected"
 
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
 
@@ -131,7 +114,7 @@ while true; do
         3) bash "$SCRIPT_DIR/menu3.sh" ;;
         4) bash "$SCRIPT_DIR/menu_4.sh" ;;
         5) bash "$SCRIPT_DIR/menu4.sh" ;;
-        6) bash "$SCRIPT_DIR/menu4_2.sh" ;;  # Vérifiez le script du banner
+        6) bash "$SCRIPT_DIR/menu4_2.sh" ;;  # Assurez-vous que c'est le bon script banner
         7) bash "$SCRIPT_DIR/menu5.sh" ;;
         8) bash "$SCRIPT_DIR/menu_5.sh" ;;
         9)
