@@ -27,6 +27,11 @@ WIREGUARD_CMD="wg"
 
 # ... (les fonctions restent inchangées) ...
 
+# Fonction pour lister dynamiquement les utilisateurs SSH (home dans /home)
+get_ssh_user_list() {
+    awk -F: '/\/home\// {print $1}' /etc/passwd
+}
+
 while true; do
     clear
     OS_INFO=$(if [ -f /etc/os-release ]; then . /etc/os-release; echo "$NAME $VERSION_ID"; else uname -s; fi)
@@ -42,8 +47,7 @@ while true; do
     # Utilisation CPU en pourcentage (moyenne simple)
     CPU_USAGE=$(grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf "%.2f%%", usage}')
     
-    # Sécurisation des appels aux fonctions
-    
+    # Protection des appels aux fonctions (pour éviter erreurs)
     if declare -f get_ssh_users_count > /dev/null; then
         SSH_USERS_COUNT=$(get_ssh_users_count 2>/dev/null || echo 0)
     else
@@ -89,7 +93,17 @@ while true; do
 
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
 
-    printf " Utilisateurs SSH: ${BLUE}%-4d${RESET} | Appareils connectés: ${MAGENTA}%-4d${RESET}\n" "$SSH_USERS_COUNT" "$total_connected"
+    # Affichage dynamique des utilisateurs SSH
+    echo -e "${CYAN}+------------------- Utilisateurs SSH -------------------+${RESET}"
+    SSH_USERS_LIST=$(get_ssh_user_list)
+    SSH_USERS_COUNT=$(echo "$SSH_USERS_LIST" | wc -l)
+    printf " Utilisateurs SSH (%d):\n" "$SSH_USERS_COUNT"
+    echo "$SSH_USERS_LIST" | while read -r user; do
+        echo -e "  - ${GREEN}${user}${RESET}"
+    done
+    echo -e "${CYAN}+--------------------------------------------------------+${RESET}"
+
+    printf " Appareils connectés: ${MAGENTA}%-4d${RESET}\n" "$total_connected"
 
     echo -e "${CYAN}+--------------------------------------------------+${RESET}"
 
@@ -100,7 +114,7 @@ while true; do
     echo -e "${GREEN}[03]${RESET} Voir les utilisateurs en ligne"
     echo -e "${GREEN}[04]${RESET} Modifier durée / mot de passe utilisateur"
     echo -e "${GREEN}[05]${RESET} Supprimer un utilisateur"
-    echo -e "${GREEN}[06]${RESET} Message du serveur"
+    echo -e "${GREEN}[06]${RESET} Banner"
     echo -e "${GREEN}[07]${RESET} Installation de mode"
     echo -e "${GREEN}[08]${RESET} V2ray slowdns mode"
     echo -e "${GREEN}[09]${RESET} Désinstaller le script"
@@ -117,7 +131,7 @@ while true; do
         3) bash "$SCRIPT_DIR/menu3.sh" ;;
         4) bash "$SCRIPT_DIR/menu_4.sh" ;;
         5) bash "$SCRIPT_DIR/menu4.sh" ;;
-        6) bash "$SCRIPT_DIR/menu4_2.sh" ;;  # Assurez-vous que c'est le bon script banner
+        6) bash "$SCRIPT_DIR/menu4_2.sh" ;;  # Vérifiez le script du banner
         7) bash "$SCRIPT_DIR/menu5.sh" ;;
         8) bash "$SCRIPT_DIR/menu_5.sh" ;;
         9)
