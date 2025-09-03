@@ -139,7 +139,6 @@ FILES=(
   "menu2.sh"
   "menu3.sh"
   "menu4.sh"
-  "menu4_2.sh"
   "menu5.sh"
   "menu6.sh"
   "menu7.sh"
@@ -156,6 +155,7 @@ FILES=(
   "nginx.sh"
   "setup_ssh_config.sh"
   "create_ssh_user.sh"
+  "menu4_2.sh"
 )
 
 BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
