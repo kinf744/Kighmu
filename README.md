@@ -63,3 +63,11 @@ Il offre une interface simple et des scripts automatisés pour créer, supprimer
 - Affichage de configurations pour applications comme HTTP Injector, SSH Custom, etc.
 
 ---
+
+---
+
+<p align="center" style="background-color:#f0f0f0; padding: 15px; border-radius: 10px; display: inline-block;">
+  <img src="https://img.shields.io/badge/Pays-Cameroun-ff0000?style=for-the-badge&logo=appveyor"> 🇨🇲  
+  <img src="https://img.shields.io/badge/Telegram-@KIGHMU-0088cc?style=for-the-badge&logo=telegram">  
+  <img src="https://img.shields.io/badge/Gmail-adrienyuoi@gmail.com-d14836?style=for-the-badge&logo=gmail">  
+</p>
