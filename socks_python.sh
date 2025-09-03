@@ -25,18 +25,28 @@ case "$confirm" in
 
         PROXY_PORT=8080
         SCRIPT_PATH="/usr/local/bin/KIGHMUPROXY.py"
+        SCRIPT_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main/KIGHMUPROXY.py"
         LOG_FILE="/var/log/socks_python.log"
 
+        # Vérifier si le script proxy est présent, sinon le télécharger
         if [ ! -f "$SCRIPT_PATH" ]; then
-            echo "Le script proxy $SCRIPT_PATH est introuvable. Veuillez vérifier son emplacement."
-            exit 1
+            echo "Le script proxy $SCRIPT_PATH est introuvable. Téléchargement en cours..."
+            sudo wget -q -O "$SCRIPT_PATH" "$SCRIPT_URL"
+            if [ $? -ne 0 ]; then
+                echo "Erreur : impossible de télécharger le script proxy. Abandon."
+                exit 1
+            fi
+            sudo chmod +x "$SCRIPT_PATH"
+            echo "Script proxy téléchargé et rendu exécutable."
+        else
+            echo "Script proxy trouvé : $SCRIPT_PATH"
         fi
 
         echo "Recherche d'instances précédentes du proxy SOCKS à arrêter..."
         PIDS=$(pgrep -f "python3 $SCRIPT_PATH")
         if [ -n "$PIDS" ]; then
             echo "Arrêt des instances proxy existantes (PID: $PIDS)..."
-            kill $PIDS
+            sudo kill $PIDS
             sleep 3
             echo "Instances précédentes arrêtées."
         else
@@ -50,7 +60,7 @@ case "$confirm" in
         fi
 
         echo "Démarrage du proxy SOCKS/Python sur le port $PROXY_PORT..."
-        nohup python3 "$SCRIPT_PATH" "$PROXY_PORT" > "$LOG_FILE" 2>&1 &
+        nohup sudo python3 "$SCRIPT_PATH" "$PROXY_PORT" > "$LOG_FILE" 2>&1 &
 
         sleep 3
 
