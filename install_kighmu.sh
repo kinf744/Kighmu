@@ -24,9 +24,20 @@ install_package_if_missing() {
   set -e
 }
 
+echo "Mise à jour de la liste des paquets..."
 apt-get update -y
-apt-get install dnsutils -y
 
+# Attente si un autre processus dpkg est actif (verrou)
+while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do
+  echo "Attente du déverrouillage de dpkg..."
+  sleep 2
+done
+
+echo "Vérification des paquets cassés et configuration en attente..."
+sudo dpkg --configure -a || true
+sudo apt-get install -f -y || true
+
+apt-get install dnsutils -y
 install_package_if_missing "curl"
 
 echo "+--------------------------------------------+"
@@ -60,60 +71,12 @@ echo "=============================================="
 echo " 🚀 Installation des paquets essentiels..."
 echo "=============================================="
 
+# Mise à jour et upgrade du système
 apt update -y && apt upgrade -y
 
-apt install -y sudo
-apt install -y bsdmainutils
-apt install -y zip
-apt install -y unzip
-apt install -y ufw
-apt install -y curl
-apt install -y python3
-apt install -y python3-pip
-apt install -y openssl
-apt install -y screen
-apt install -y cron
-apt install -y iptables
-apt install -y lsof
-apt install -y pv
-apt install -y boxes
-apt install -y nano
-apt install -y at
-apt install -y mlocate
-apt install -y gawk
-apt install -y grep
-apt install -y bc
-apt install -y jq
-apt install -y npm
-apt install -y nodejs
-apt install -y socat
-apt install -y netcat
-apt install -y netcat-traditional
-apt install -y net-tools
-apt install -y cowsay
-apt install -y figlet
-apt install -y lolcat
-apt install -y dnsutils
-apt install -y wget
-apt install -y psmisc
-apt install -y nginx
-apt install -y dropbear
-apt install -y python3-setuptools
-apt install -y wireguard-tools
-apt install -y qrencode
-apt install -y gcc
-apt install -y make
-apt install -y perl
-apt install -y systemd
-apt install -y tcpdump
-apt install -y iptables
-apt install -y iproute2
-apt install -y net-tools
-apt install -y tmux
-apt install -y git
-apt install -y build-essential
-apt install -y libssl-dev
-apt install -y software-properties-common
+for pkg in sudo bsdmainutils zip unzip ufw curl python3 python3-pip openssl screen cron iptables lsof pv boxes nano at mlocate gawk grep bc jq npm nodejs socat netcat netcat-traditional net-tools cowsay figlet lolcat dnsutils wget psmisc nginx dropbear python3-setuptools wireguard-tools qrencode gcc make perl systemd tcpdump iproute2 tmux git build-essential libssl-dev software-properties-common; do
+  apt install -y "$pkg"
+done
 
 apt autoremove -y
 apt clean
@@ -174,13 +137,11 @@ for file in "${FILES[@]}"; do
   fi
 done
 
-# Récupération dynamique du NS depuis la configuration DNS locale du système
 NS=$(awk '/^nameserver/ {print $2; exit}' /etc/resolv.conf)
 if [[ -z "$NS" ]]; then
   echo "⚠️ Erreur : aucun serveur DNS trouvé dans /etc/resolv.conf, continuez prudemment."
 fi
 
-# Lecture et formatage de la clé publique SlowDNS
 SLOWDNS_PUBKEY="/etc/slowdns/server.pub"
 if [[ -f "$SLOWDNS_PUBKEY" ]]; then
   PUBLIC_KEY=$(sed ':a;N;$!ba;s/\n/\\n/g' "$SLOWDNS_PUBKEY")
@@ -188,7 +149,6 @@ else
   PUBLIC_KEY="Clé publique SlowDNS non trouvée"
 fi
 
-# Création du fichier ~/.kighmu_info avec les infos globales nécessaires
 cat > ~/.kighmu_info <<EOF
 DOMAIN=$DOMAIN
 NS=$NS
@@ -228,7 +188,6 @@ if ! grep -q "/usr/local/bin" ~/.bashrc; then
   echo "Ajout de /usr/local/bin au PATH dans ~/.bashrc"
 fi
 
-# Création du script kighmu-panel.sh dans /usr/local/bin
 cat > /usr/local/bin/kighmu-panel.sh << 'EOF'
 #!/bin/bash
 
@@ -259,10 +218,8 @@ EOF
 
 chmod +x /usr/local/bin/kighmu-panel.sh
 
-# Ajout automatique au démarrage du shell du panneau avec nettoyage écran
 if ! grep -q "kighmu-panel.sh" ~/.bashrc; then
   echo -e "\n# Affichage automatique du panneau KIGHMU au démarrage\nclear\n/usr/local/bin/kighmu-panel.sh\n" >> ~/.bashrc
 fi
 
-# Lancement immédiat une fois après installation
 /usr/local/bin/kighmu-panel.sh
