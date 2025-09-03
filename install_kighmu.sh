@@ -248,7 +248,9 @@ echo -e "Saisir et valider: ${YELLOW}source ~/.bashrc${NC}"
 
 echo -e "${GREEN}Version du script : 2.5${NC}"
 echo
-echo "Pour ouvrir le panneau de contrôle principal, tapez : ${YELLOW}kighmu${NC}"
+echo -e "Pour ouvrir le panneau de contrôle principal, tapez : ${YELLOW}kighmu${NC}"
+echo
+echo
 EOF
 
 chmod +x /usr/local/bin/kighmu-panel.sh
