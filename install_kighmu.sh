@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================
 # Kighmu VPS Manager - Script d'installation
-# Copyright (c) 2025 Kinf744
+# Adapté pour Ubuntu 14.04
 # Licence MIT (version française)
 # ==============================================
 
@@ -11,74 +11,21 @@ set -o pipefail
 
 echo "Vérification et installation de curl si nécessaire..."
 
-install_package_ignore_error() {
+install_package_if_missing() {
   local pkg=$1
   echo "Installation de $pkg..."
   set +e
   apt-get install -y "$pkg"
-  local status=$?
-  set -e
-  if [[ $status -ne 0 ]]; then
-    echo "⚠️ Attention : échec de l'installation du paquet $pkg, mais le script continue..."
+  if [[ $? -ne 0 ]]; then
+    echo "⚠️ Attention : échec de l'installation du paquet $pkg, le script continue..."
   else
     echo "Le paquet $pkg a été installé avec succès."
   fi
-  return $status
+  set -e
 }
 
-echo "Mise à jour de la liste des paquets..."
 apt-get update -y
-
-# Attente du déverrouillage dpkg s'il est actif
-while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do
-  echo "Attente du déverrouillage de dpkg..."
-  sleep 2
-done
-
-echo "Vérification des paquets cassés et configuration en attente..."
-set +e
-sudo dpkg --configure -a
-sudo apt-get install -f -y
-set -e
-
-install_package_ignore_error dnsutils
-install_package_ignore_error curl
-
-echo "Conversion des clés OpenSSH au format compatible Dropbear..."
-
-convert_key_if_exists() {
-  local key_type=$1
-  local openssh_key="/etc/ssh/ssh_host_${key_type}_key"
-  local dropbear_key="/etc/dropbear/dropbear_${key_type}_host_key"
-  if [[ -f $openssh_key ]]; then
-    echo "Conversion de la clé $openssh_key..."
-    set +e
-    ssh-keygen -p -m PEM -f "$openssh_key" -N ""
-    dropbearconvert openssh dropbear "$openssh_key" "$dropbear_key"
-    local status=$?
-    set -e
-    if [[ $status -ne 0 ]]; then
-      echo "Erreur conversion clé $key_type, génération d'une nouvelle clé Dropbear..."
-      dropbearkey -t "$key_type" -f "$dropbear_key"
-    fi
-  else
-    echo "Clé $openssh_key non trouvée, génération d'une nouvelle clé Dropbear..."
-    dropbearkey -t "$key_type" -f "$dropbear_key"
-  fi
-}
-
-convert_key_if_exists "rsa"
-convert_key_if_exists "ecdsa"
-convert_key_if_exists "ed25519"
-
-set +e
-sudo dpkg-reconfigure openssh-server
-sudo dpkg-reconfigure dropbear
-set -e
-
-echo "+--------------------------------------------+"
-echo "|             INSTALLATION VPS               |"
-echo "+--------------------------------------------+"
+apt-get install -y dnsutils curl wget
 
 read -r -p "Veuillez entrer votre nom de domaine (doit pointer vers l'IP de ce serveur) : " DOMAIN
 
@@ -107,23 +54,15 @@ echo "=============================================="
 echo " 🚀 Installation des paquets essentiels..."
 echo "=============================================="
 
-apt update -y && apt upgrade -y
+apt-get update -y && apt-get upgrade -y
 
-# Liste des paquets essentiels
-PACKAGES=(
-  sudo bsdmainutils zip unzip ufw curl python3 python3-pip openssl screen cron iptables lsof pv boxes nano at mlocate gawk grep bc jq npm nodejs socat netcat netcat-traditional net-tools cowsay figlet lolcat dnsutils wget psmisc nginx dropbear python3-setuptools wireguard-tools qrencode gcc make perl systemd tcpdump iproute2 tmux git build-essential libssl-dev software-properties-common
-)
+# Installation de paquets principaux compatibles Ubuntu 14.04
+apt-get install -y sudo bsdmainutils zip unzip ufw curl python3 python3-pip openssl screen cron iptables lsof pv boxes nano at mlocate gawk grep bc jq npm nodejs socat netcat netcat-traditional net-tools cowsay figlet ruby dnsutils wget psmisc nginx dropbear python3-setuptools wireguard qrencode gcc make perl tcpdump iproute2 tmux git build-essential libssl-dev software-properties-common
 
-for pkg in "${PACKAGES[@]}"; do
-  install_package_ignore_error "$pkg"
-done
+apt-get autoremove -y
+apt-get clean
 
-apt autoremove -y
-apt clean
-
-echo "Configuration du pare-feu ufw..."
-
-set +e
+# Configuration ufw (versions plus anciennes gèrent bien les règles basiques)
 ufw allow OpenSSH
 ufw allow 22
 ufw allow 80
@@ -132,7 +71,6 @@ ufw allow 5300
 ufw allow 54000
 ufw allow 8080
 ufw --force enable
-set -e
 
 echo "=============================================="
 echo " 🚀 Installation de Kighmu VPS Manager..."
@@ -172,19 +110,21 @@ BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
 
 for file in "${FILES[@]}"; do
   echo "Téléchargement de $file ..."
-  wget -q --show-progress -O "$INSTALL_DIR/$file" "$BASE_URL/$file" || echo "⚠️ Erreur téléchargement $file"
+  wget -q --show-progress -O "$INSTALL_DIR/$file" "$BASE_URL/$file"
   if [[ ! -s "$INSTALL_DIR/$file" ]]; then
-    echo "⚠️ Le fichier $file est vide ou absent, mais le script continue..."
+    echo "⚠️ Erreur : le fichier $file n'a pas été téléchargé correctement ou est vide, mais le script continue..."
   else
     chmod +x "$INSTALL_DIR/$file"
   fi
 done
 
+# Récupération dynamique du NS depuis la configuration DNS locale du système
 NS=$(awk '/^nameserver/ {print $2; exit}' /etc/resolv.conf)
 if [[ -z "$NS" ]]; then
-  echo "⚠️ Aucun serveur DNS trouvé dans /etc/resolv.conf"
+  echo "⚠️ Erreur : aucun serveur DNS trouvé dans /etc/resolv.conf, continuez prudemment."
 fi
 
+# Lecture et formatage de la clé publique SlowDNS
 SLOWDNS_PUBKEY="/etc/slowdns/server.pub"
 if [[ -f "$SLOWDNS_PUBKEY" ]]; then
   PUBLIC_KEY=$(sed ':a;N;$!ba;s/\n/\\n/g' "$SLOWDNS_PUBKEY")
@@ -206,14 +146,12 @@ run_script() {
   echo "🚀 Lancement du script : $script_path"
   set +e
   bash "$script_path"
-  local status=$?
-  set -e
-  if [[ $status -ne 0 ]]; then
-    echo "⚠️ Attention : $script_path a rencontré une erreur, mais le script continue..."
+  if [[ $? -ne 0 ]]; then
+    echo "⚠️ Attention : $script_path a rencontré une erreur, mais l'installation continue..."
   else
     echo "✅ $script_path exécuté avec succès."
   fi
-  return $status
+  set -e
 }
 
 echo "🚀 Application de la configuration SSH personnalisée..."
@@ -263,8 +201,10 @@ EOF
 
 chmod +x /usr/local/bin/kighmu-panel.sh
 
+# Ajout automatique au démarrage du shell du panneau avec nettoyage écran
 if ! grep -q "kighmu-panel.sh" ~/.bashrc; then
   echo -e "\n# Affichage automatique du panneau KIGHMU au démarrage\nclear\n/usr/local/bin/kighmu-panel.sh\n" >> ~/.bashrc
 fi
 
+# Lancement immédiat une fois après installation
 /usr/local/bin/kighmu-panel.sh
