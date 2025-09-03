@@ -1,68 +1,84 @@
-#!/usr/bin/env python3
-import socket
-import threading
+#!/bin/bash
 
-LISTEN_ADDR = '127.0.0.1'
-LISTEN_PORT = 80
+if [[ $EUID -ne 0 ]]; then
+   echo "Ce script doit être exécuté en root ou avec sudo."
+   exit 1
+fi
 
-# Payload HTTP custom pour le handshake WebSocket / tunnel HTTP
-CUSTOM_PAYLOAD = (
-    "GET /ws/ HTTP/1.1\r\n"
-    "Host: example.com\r\n"
-    "User-Agent: CustomClient/1.0\r\n"
-    "Upgrade: websocket\r\n"
-    "Connection: Upgrade\r\n"
-    "Sec-WebSocket-Key: x3JJHMbDL1EzLkh9GBhXDw==\r\n"
-    "Sec-WebSocket-Version: 13\r\n"
-    "\r\n"
-)
+read -p "Entrez le domaine/IP public pour le tunnel SSH HTTP WS (ex: exemple.com) : " DOMAIN
+if [[ -z "$DOMAIN" ]]; then
+  echo "Erreur : domaine obligatoire."
+  exit 1
+fi
 
-class ProxyThread(threading.Thread):
-    def __init__(self, client_socket, remote_host='127.0.0.1', remote_port=22):
-        threading.Thread.__init__(self)
-        self.client_socket = client_socket
-        self.remote_host = remote_host
-        self.remote_port = remote_port
+APP_DIR="/root/custom-http"
+NGINX_CONF="/etc/nginx/sites-available/ssh_ws_proxy"
+NGINX_ENABLED="/etc/nginx/sites-enabled/ssh_ws_proxy"
+NGINX_MAIN_CONF="/etc/nginx/nginx.conf"
 
-    def run(self):
-        remote_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        remote_socket.connect((self.remote_host, self.remote_port))
+# Cloner ou mettre à jour dépôt
+if [ ! -d "$APP_DIR" ]; then
+  git clone https://github.com/tavgar/Custom-http.git "$APP_DIR"
+else
+  cd "$APP_DIR" && git pull
+fi
 
-        # Envoi du payload custom HTTP (handshake)
-        remote_socket.sendall(CUSTOM_PAYLOAD.encode())
+# Installer dépendances Python
+pip3 install --upgrade -r "$APP_DIR/requirements.txt"
 
-        def relay(source, target):
-            try:
-                while True:
-                    data = source.recv(4096)
-                    if not data:
-                        break
-                    target.sendall(data)
-            except:
-                pass
+# Arrêter processus sur port 80
+pids=$(lsof -ti tcp:80)
+if [ -n "$pids" ]; then
+  echo "Arrêt des processus sur port 80: $pids"
+  kill -9 $pids
+fi
 
-        thread1 = threading.Thread(target=relay, args=(self.client_socket, remote_socket))
-        thread2 = threading.Thread(target=relay, args=(remote_socket, self.client_socket))
-        thread1.start()
-        thread2.start()
-        thread1.join()
-        thread2.join()
+# Ajouter map connection_upgrade dans /etc/nginx/nginx.conf si absente
+if ! grep -q "map \$http_upgrade \$connection_upgrade" "$NGINX_MAIN_CONF"; then
+  sed -i '/http {/a \
+map $http_upgrade $connection_upgrade {\n\
+    default upgrade;\n\
+    ""      close;\n\
+}\n' "$NGINX_MAIN_CONF"
+fi
 
-        self.client_socket.close()
-        remote_socket.close()
+# Écrire config NGINX pour proxy WebSocket HTTP custom
+cat > $NGINX_CONF << EOF
+server {
+    listen 80;
+    server_name $DOMAIN;
 
-def main():
-    sock_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock_server.bind((LISTEN_ADDR, LISTEN_PORT))
-    sock_server.listen(5)
-    print(f"Proxy websocket custom HTTP à l'écoute sur {LISTEN_ADDR}:{LISTEN_PORT}")
+    location /ws/ {
+        proxy_pass http://127.0.0.1:80;
+        proxy_http_version 1.1;
 
-    while True:
-        client_sock, addr = sock_server.accept()
-        print(f"Connexion reçue de {addr}")
-        proxy_thread = ProxyThread(client_sock)
-        proxy_thread.start()
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection \$connection_upgrade;
 
-if __name__ == '__main__':
-    main()
-    
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+
+        proxy_buffering off;
+        proxy_read_timeout 86400;
+        proxy_send_timeout 86400;
+    }
+}
+EOF
+
+ln -sf $NGINX_CONF $NGINX_ENABLED
+
+# Tester et recharger NGINX
+nginx -t || { echo "Erreur config nginx"; exit 1; }
+if systemctl is-active --quiet nginx; then
+  systemctl reload nginx
+else
+  systemctl start nginx
+fi
+
+# Lancer le proxy Python du dépôt
+nohup python3 "$APP_DIR/main.py" > "$APP_DIR/proxyws.log" 2>&1 &
+
+echo "Tunnel SSH HTTP WS custom payload actif sur ws://$DOMAIN/ws/"
+echo "Consultez $APP_DIR/proxyws.log pour les logs."
