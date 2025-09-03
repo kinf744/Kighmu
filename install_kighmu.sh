@@ -122,6 +122,8 @@ ufw allow OpenSSH
 ufw allow 22
 ufw allow 80
 ufw allow 443
+ufw allow 5300
+ufw allow 8080
 ufw --force enable
 
 echo "=============================================="
