@@ -11,46 +11,70 @@ set -o pipefail
 
 echo "Vérification et installation de curl si nécessaire..."
 
-install_package_if_missing() {
+install_package_ignore_error() {
   local pkg=$1
   echo "Installation de $pkg..."
   set +e
   apt-get install -y "$pkg"
-  if [[ $? -ne 0 ]]; then
-    echo "⚠️ Attention : échec de l'installation du paquet $pkg, le script continue..."
+  local status=$?
+  set -e
+  if [[ $status -ne 0 ]]; then
+    echo "⚠️ Attention : échec de l'installation du paquet $pkg, mais le script continue..."
   else
     echo "Le paquet $pkg a été installé avec succès."
   fi
-  set -e
+  return $status
 }
 
 echo "Mise à jour de la liste des paquets..."
 apt-get update -y
 
-# Attente si un autre processus dpkg est actif (verrou)
+# Attente du déverrouillage dpkg s'il est actif
 while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do
   echo "Attente du déverrouillage de dpkg..."
   sleep 2
 done
 
 echo "Vérification des paquets cassés et configuration en attente..."
-sudo dpkg --configure -a || true
-sudo apt-get install -f -y || true
+set +e
+sudo dpkg --configure -a
+sudo apt-get install -f -y
+set -e
 
-apt-get install dnsutils -y
-install_package_if_missing "curl"
+install_package_ignore_error dnsutils
+install_package_ignore_error curl
 
-# Correction spécifique erreur Dropbear : regénération des clés SSH
-if [[ -f /etc/ssh/ssh_host_rsa_key ]]; then
-  echo "Vérification et correction des clés SSH pour Dropbear..."
-  sudo rm -f /etc/ssh/ssh_host_*
-  sudo dpkg-reconfigure openssh-server
-  sudo dpkg-reconfigure dropbear || {
-    echo "Regénération manuelle de la clé host Dropbear..."
-    sudo dropbearkey -t rsa -f /etc/dropbear/dropbear_rsa_host_key
-    sudo dpkg --configure -a || true
-  }
-fi
+echo "Conversion des clés OpenSSH au format compatible Dropbear..."
+
+convert_key_if_exists() {
+  local key_type=$1
+  local openssh_key="/etc/ssh/ssh_host_${key_type}_key"
+  local dropbear_key="/etc/dropbear/dropbear_${key_type}_host_key"
+  if [[ -f $openssh_key ]]; then
+    echo "Conversion de la clé $openssh_key..."
+    set +e
+    ssh-keygen -p -m PEM -f "$openssh_key" -N ""
+    dropbearconvert openssh dropbear "$openssh_key" "$dropbear_key"
+    local status=$?
+    set -e
+    if [[ $status -ne 0 ]]; then
+      echo "Erreur conversion clé $key_type, génération d'une nouvelle clé Dropbear..."
+      dropbearkey -t "$key_type" -f "$dropbear_key"
+    fi
+  else
+    echo "Clé $openssh_key non trouvée, génération d'une nouvelle clé Dropbear..."
+    dropbearkey -t "$key_type" -f "$dropbear_key"
+  fi
+}
+
+convert_key_if_exists "rsa"
+convert_key_if_exists "ecdsa"
+convert_key_if_exists "ed25519"
+
+set +e
+sudo dpkg-reconfigure openssh-server
+sudo dpkg-reconfigure dropbear
+set -e
 
 echo "+--------------------------------------------+"
 echo "|             INSTALLATION VPS               |"
@@ -83,17 +107,23 @@ echo "=============================================="
 echo " 🚀 Installation des paquets essentiels..."
 echo "=============================================="
 
-# Mise à jour et upgrade du système
 apt update -y && apt upgrade -y
 
-for pkg in sudo bsdmainutils zip unzip ufw curl python3 python3-pip openssl screen cron iptables lsof pv boxes nano at mlocate gawk grep bc jq npm nodejs socat netcat netcat-traditional net-tools cowsay figlet lolcat dnsutils wget psmisc nginx dropbear python3-setuptools wireguard-tools qrencode gcc make perl systemd tcpdump iproute2 tmux git build-essential libssl-dev software-properties-common; do
-  apt install -y "$pkg"
+# Liste des paquets essentiels
+PACKAGES=(
+  sudo bsdmainutils zip unzip ufw curl python3 python3-pip openssl screen cron iptables lsof pv boxes nano at mlocate gawk grep bc jq npm nodejs socat netcat netcat-traditional net-tools cowsay figlet lolcat dnsutils wget psmisc nginx dropbear python3-setuptools wireguard-tools qrencode gcc make perl systemd tcpdump iproute2 tmux git build-essential libssl-dev software-properties-common
+)
+
+for pkg in "${PACKAGES[@]}"; do
+  install_package_ignore_error "$pkg"
 done
 
 apt autoremove -y
 apt clean
 
-# Configuration ufw
+echo "Configuration du pare-feu ufw..."
+
+set +e
 ufw allow OpenSSH
 ufw allow 22
 ufw allow 80
@@ -102,6 +132,7 @@ ufw allow 5300
 ufw allow 54000
 ufw allow 8080
 ufw --force enable
+set -e
 
 echo "=============================================="
 echo " 🚀 Installation de Kighmu VPS Manager..."
@@ -141,9 +172,9 @@ BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
 
 for file in "${FILES[@]}"; do
   echo "Téléchargement de $file ..."
-  wget -q --show-progress -O "$INSTALL_DIR/$file" "$BASE_URL/$file"
+  wget -q --show-progress -O "$INSTALL_DIR/$file" "$BASE_URL/$file" || echo "⚠️ Erreur téléchargement $file"
   if [[ ! -s "$INSTALL_DIR/$file" ]]; then
-    echo "⚠️ Erreur : le fichier $file n'a pas été téléchargé correctement ou est vide, mais le script continue..."
+    echo "⚠️ Le fichier $file est vide ou absent, mais le script continue..."
   else
     chmod +x "$INSTALL_DIR/$file"
   fi
@@ -151,7 +182,7 @@ done
 
 NS=$(awk '/^nameserver/ {print $2; exit}' /etc/resolv.conf)
 if [[ -z "$NS" ]]; then
-  echo "⚠️ Erreur : aucun serveur DNS trouvé dans /etc/resolv.conf, continuez prudemment."
+  echo "⚠️ Aucun serveur DNS trouvé dans /etc/resolv.conf"
 fi
 
 SLOWDNS_PUBKEY="/etc/slowdns/server.pub"
@@ -175,12 +206,14 @@ run_script() {
   echo "🚀 Lancement du script : $script_path"
   set +e
   bash "$script_path"
-  if [[ $? -ne 0 ]]; then
-    echo "⚠️ Attention : $script_path a rencontré une erreur, mais l'installation continue..."
+  local status=$?
+  set -e
+  if [[ $status -ne 0 ]]; then
+    echo "⚠️ Attention : $script_path a rencontré une erreur, mais le script continue..."
   else
     echo "✅ $script_path exécuté avec succès."
   fi
-  set -e
+  return $status
 }
 
 echo "🚀 Application de la configuration SSH personnalisée..."
