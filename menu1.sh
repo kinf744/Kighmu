@@ -70,6 +70,19 @@ HOST_IP=$(hostname -I | awk '{print $1}')
 # Sauvegarder les infos utilisateur
 echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
 
+# Ajout automatique de l'affichage du banner personnalisé au login shell
+BANNER_PATH="/etc/ssh/sshd_banner"  # Chemin vers le fichier banner, à adapter si besoin
+
+echo "
+# Affichage du banner Kighmu VPS Manager
+if [ -f $BANNER_PATH ]; then
+    cat \$BANNER_PATH
+fi
+" >> /home/"$username"/.bashrc
+
+chown "$username":"$username" /home/"$username"/.bashrc
+chmod 644 /home/"$username"/.bashrc
+
 # Afficher résumé
 echo ""
 echo "*NOUVEAU UTILISATEUR CRÉÉ*"
