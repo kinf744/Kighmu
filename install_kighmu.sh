@@ -5,7 +5,6 @@
 # Licence MIT (version française)
 # ==============================================
 
-# Vérification de la présence de curl et installation si manquant
 echo "Vérification de la présence de curl..."
 if ! command -v curl >/dev/null 2>&1; then
     echo "curl non trouvé, installation en cours..."
@@ -20,7 +19,6 @@ echo "+--------------------------------------------+"
 echo "|             INSTALLATION VPS               |"
 echo "+--------------------------------------------+"
 
-# Demander le nom de domaine qui pointe vers l’IP du serveur
 read -p "Veuillez entrer votre nom de domaine (doit pointer vers l'IP de ce serveur) : " DOMAIN
 
 if [ -z "$DOMAIN" ]; then
@@ -42,7 +40,6 @@ if [ "$DOMAIN_IP" != "$IP_PUBLIC" ]; then
   fi
 fi
 
-# Exporter la variable pour que les scripts enfants y aient accès
 export DOMAIN
 
 echo "=============================================="
@@ -51,65 +48,16 @@ echo "=============================================="
 
 apt update -y && apt upgrade -y
 
-apt install -y sudo
-apt install -y bsdmainutils
-apt install -y zip
-apt install -y unzip
-apt install -y ufw
-apt install -y curl
-apt install -y python3
-apt install -y python3-pip
-apt install -y openssl
-apt install -y screen
-apt install -y cron
-apt install -y iptables
-apt install -y lsof
-apt install -y pv
-apt install -y boxes
-apt install -y nano
-apt install -y at
-apt install -y mlocate
-apt install -y gawk
-apt install -y grep
-apt install -y bc
-apt install -y jq
-apt install -y npm
-apt install -y nodejs
-apt install -y socat
-apt install -y netcat
-apt install -y netcat-traditional
-apt install -y net-tools
-apt install -y cowsay
-apt install -y figlet
-apt install -y lolcat
-apt install -y dnsutils
-apt install -y wget
-apt install -y psmisc
-apt install -y nginx
-apt install -y dropbear
-apt install -y badvpn
-apt install -y python3-setuptools
-apt install -y wireguard-tools
-apt install -y qrencode
-apt install -y gcc
-apt install -y make
-apt install -y perl
-apt install -y iptables-persistent
-apt install -y systemd
-apt install -y tcpdump
-apt install -y iptables
-apt install -y iproute2
-apt install -y net-tools
-apt install -y tmux
-apt install -y git
-apt install -y build-essential
-apt install -y libssl-dev
-apt install -y software-properties-common
+packages=(
+  sudo bsdmainutils zip unzip ufw curl python3 python3-pip openssl screen cron iptables
+  lsof pv boxes nano at mlocate gawk grep bc jq npm nodejs socat netcat netcat-traditional
+  net-tools cowsay figlet lolcat dnsutils wget psmisc nginx dropbear badvpn python3-setuptools
+  wireguard-tools qrencode gcc make perl systemd tcpdump iproute2 tmux git build-essential
+  libssl-dev software-properties-common
+)
 
-apt autoremove -y
-apt clean
+apt install -y "${packages[@]}"
 
-# Activer et configurer UFW
 ufw allow OpenSSH
 ufw allow 22
 ufw allow 80
@@ -120,11 +68,9 @@ echo "=============================================="
 echo " 🚀 Installation de Kighmu VPS Manager..."
 echo "=============================================="
 
-# Création du dossier d'installation
 INSTALL_DIR="$HOME/Kighmu"
 mkdir -p "$INSTALL_DIR" || { echo "Erreur : impossible de créer le dossier $INSTALL_DIR"; exit 1; }
 
-# Liste des fichiers à télécharger
 FILES=(
   "install_kighmu.sh"
   "kighmu-manager.sh"
@@ -162,7 +108,6 @@ for file in "${FILES[@]}"; do
   chmod +x "$INSTALL_DIR/$file"
 done
 
-# Fonction pour exécuter un script avec gestion d’erreur
 run_script() {
   local script_path="$1"
   echo "🚀 Lancement du script : $script_path"
@@ -173,7 +118,6 @@ run_script() {
   fi
 }
 
-# Lancer le script configuration SSH personnalisé si présent
 echo "🚀 Application de la configuration SSH personnalisée..."
 chmod +x "$INSTALL_DIR/setup_ssh_config.sh"
 run_script "sudo $INSTALL_DIR/setup_ssh_config.sh"
@@ -181,29 +125,24 @@ run_script "sudo $INSTALL_DIR/setup_ssh_config.sh"
 echo "🚀 Script de création utilisateur SSH disponible : $INSTALL_DIR/create_ssh_user.sh"
 echo "Tu peux le lancer manuellement quand tu veux."
 
-# Ajout alias kighmu dans ~/.bashrc si absent
 if ! grep -q "alias kighmu=" ~/.bashrc; then
   echo "alias kighmu='$INSTALL_DIR/kighmu.sh'" >> ~/.bashrc
   echo "Alias kighmu ajouté dans ~/.bashrc"
 fi
 
-# Ajouter /usr/local/bin au PATH si absent
 if ! grep -q "/usr/local/bin" ~/.bashrc; then
   echo 'export PATH=$PATH:/usr/local/bin' >> ~/.bashrc
   echo "Ajout de /usr/local/bin au PATH dans ~/.bashrc"
 fi
 
-# Création du script d'affichage coloré du panneau KIGHMU
 cat > /usr/local/bin/kighmu-panel.sh << 'EOF'
 #!/bin/bash
 
-# Définition des couleurs ANSI
-BLUE='\033[0;34m'    # Bleu
-YELLOW='\033[0;33m'  # Jaune
-GREEN='\033[0;32m'   # Vert
-NC='\033[0m'         # No Color (reset)
+BLUE='\033[0;34m'
+YELLOW='\033[0;33m'
+GREEN='\033[0;32m'
+NC='\033[0m'
 
-# Affichage du panneau KIGHMU avec couleurs
 echo -e "${BLUE}
 K   K  III  GGG  H   H M   M U   U
 K  K    I  G     H   H MM MM U   U
@@ -221,10 +160,8 @@ EOF
 
 chmod +x /usr/local/bin/kighmu-panel.sh
 
-# Ajout automatique de l'affichage du panneau à chaque session
 if ! grep -q "/usr/local/bin/kighmu-panel.sh" ~/.bashrc; then
   echo -e "\n# Affichage automatique du panneau KIGHMU\nif [ -x /usr/local/bin/kighmu-panel.sh ]; then\n    /usr/local/bin/kighmu-panel.sh\nfi\n" >> ~/.bashrc
 fi
 
-# Affichage immédiat du panneau à la fin de l'installation
 /usr/local/bin/kighmu-panel.sh
