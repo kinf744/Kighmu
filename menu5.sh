@@ -1,71 +1,89 @@
 #!/bin/bash
 # menu5.sh
-# Installation automatique des modes spéciaux
+# Panneau de contrôle pour installation des modes
 
+clear
 echo "+--------------------------------------------+"
-echo "|      INSTALLATION AUTOMATIQUE DES MODES    |"
+echo "|      PANNEAU DE CONTROLE D'INSTALLATION    |"
 echo "+--------------------------------------------+"
 
 # Détection IP et uptime
 HOST_IP=$(curl -s https://api.ipify.org)
 UPTIME=$(uptime -p)
-
 echo "IP: $HOST_IP | Uptime: $UPTIME"
 echo ""
 
-# Fonctions install/configuration pour chaque mode
+# ==========================
+# Définition des fonctions
+# ==========================
 install_openssh() {
-    echo "Installation / vérification Openssh..."
-    # commandes d'installation Openssh ici, par exemple :
+    echo ">>> Installation / vérification Openssh..."
     apt-get install -y openssh-server
     systemctl enable ssh
     systemctl start ssh
+    echo ">>> [OK] OpenSSH installé."
 }
 
 install_dropbear() {
-    echo "Installation / vérification Dropbear..."
-    # commandes d'installation Dropbear ici
+    echo ">>> Installation / vérification Dropbear..."
     apt-get install -y dropbear
     systemctl enable dropbear
     systemctl start dropbear
+    echo ">>> [OK] Dropbear installé."
 }
 
 install_slowdns() {
-    echo "Installation / configuration SlowDNS..."
-    # Exécution du script slowdns.sh si présent
+    echo ">>> Installation / configuration SlowDNS..."
     bash "$HOME/Kighmu/slowdns.sh" || echo "SlowDNS : script non trouvé ou erreur."
 }
 
 install_udp_custom() {
-    echo "Installation UDP Custom..."
+    echo ">>> Installation UDP Custom..."
     bash "$HOME/Kighmu/udp_custom.sh" || echo "UDP Custom : script non trouvé ou erreur."
 }
 
 install_socks_python() {
-    echo "Installation SOCKS/Python..."
+    echo ">>> Installation SOCKS/Python..."
     bash "$HOME/Kighmu/socks_python.sh" || echo "SOCKS/Python : script non trouvé ou erreur."
 }
 
 install_ssl_tls() {
-    echo "Installation SSL/TLS..."
-    # Ajoute ici les commandes pour installer/configurer SSL/TLS
+    echo ">>> Installation SSL/TLS..."
+    # Ajoute tes commandes ici
 }
 
 install_badvpn() {
-    echo "Installation BadVPN..."
-    # Ajoute ici les commandes pour installer/configurer BadVPN
+    echo ">>> Installation BadVPN..."
+    # Ajoute tes commandes ici
 }
 
-# Appel séquentiel de toutes les installations
-install_openssh
-install_dropbear
-install_slowdns
-install_udp_custom
-install_socks_python
-install_ssl_tls
-install_badvpn
+# ==========================
+# Menu dynamique
+# ==========================
+while true; do
+    echo ""
+    echo "+================ MENU INSTALLATION ================+"
+    echo " [1] Installer OpenSSH"
+    echo " [2] Installer Dropbear"
+    echo " [3] Installer SlowDNS"
+    echo " [4] Installer UDP Custom"
+    echo " [5] Installer SOCKS/Python"
+    echo " [6] Installer SSL/TLS"
+    echo " [7] Installer BadVPN"
+    echo " [0] Quitter"
+    echo "+==================================================+"
+    echo -n "👉 Choisissez une option : "
+    read choix
 
-echo ""
-echo "=============================================="
-echo " ✅ Tous les modes ont été installés automatiquement."
-echo "=============================================="
+    case $choix in
+        1) install_openssh ;;
+        2) install_dropbear ;;
+        3) install_slowdns ;;
+        4) install_udp_custom ;;
+        5) install_socks_python ;;
+        6) install_ssl_tls ;;
+        7) install_badvpn ;;
+        0) echo "🚪 Sortie du panneau de contrôle." ; exit 0 ;;
+        *) echo "❌ Option invalide, réessayez." ;;
+    esac
+done
