@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="KIGHMU%20MANAGER.jpg" alt="Kighmu Manager" width="600">
+  <img src="PAGE%20KIGHMU.jpg" alt="Page Kighmu" width="600">
 </p>
 
 <p align="center">
-  <img src="PAGE%20KIGHMU.jpg" alt="Page Kighmu" width="600">
+  <img src="KIGHMU%20MANAGER.jpg" alt="Kighmu Manager" width="600">
 </p>
 
 # Kighmu Manager
