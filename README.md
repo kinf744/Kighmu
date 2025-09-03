@@ -32,7 +32,7 @@
  ```html
  apt-get update && apt-get upgrade -y && update-grub && reboot
   ```
- <img src="https://img.shields.io/badge/Install All-VPN%20Batch-green"></img>
+ <img src="https://img.shields.io/badge/Installation Du-Script%20VPS-green"></img>
  
  ## Installation rapide
  
