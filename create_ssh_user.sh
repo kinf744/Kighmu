@@ -41,6 +41,18 @@ else
     echo "Aucune clé publique SSH ajoutée."
 fi
 
+# Ajout automatique de l'affichage du banner personnalisé au login shell
+BANNER_PATH="$HOME/.kighmu/banner.txt"  # Adaptez ce chemin si nécessaire
+
+echo "
+# Affichage du banner Kighmu VPS Manager
+if [ -f $BANNER_PATH ]; then
+    cat $BANNER_PATH
+fi
+" >> /home/"$USERNAME"/.bashrc
+
+chown "$USERNAME":"$USERNAME" /home/"$USERNAME"/.bashrc
+
 echo
 echo "+--------------------------------------------+"
 echo "|        UTILISATEUR SSH CRÉÉ AVEC SUCCÈS   |"
