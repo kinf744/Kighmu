@@ -63,16 +63,33 @@ uninstall_slowdns() {
     echo "[OK] SlowDNS désinstallé (processus tués)."
 }
 
-# Les autres modes (udp, socks, ssl/tls, badvpn) :
+# =====================================================
+# Fonctions pour UDP Custom
+# =====================================================
 install_udp_custom() { bash "$HOME/Kighmu/udp_custom.sh" || echo "Script introuvable."; }
 uninstall_udp_custom() { pkill -f udp_custom || echo "UDP Custom déjà arrêté."; }
 
+# =====================================================
+# Fonctions pour UDP Request (ajouté)
+# =====================================================
+install_udp_request() { bash "$HOME/Kighmu/udp_request.sh" || echo "Script introuvable."; }
+uninstall_udp_request() { pkill -f udp_request || echo "UDP Request déjà arrêté."; }
+
+# =====================================================
+# Fonctions pour SOCKS/Python
+# =====================================================
 install_socks_python() { bash "$HOME/Kighmu/socks_python.sh" || echo "Script introuvable."; }
 uninstall_socks_python() { pkill -f socks_python || echo "SOCKS déjà arrêté."; }
 
+# =====================================================
+# Fonctions pour SSL/TLS
+# =====================================================
 install_ssl_tls() { echo ">>> Installation SSL/TLS (à compléter)"; }
 uninstall_ssl_tls() { echo ">>> Désinstallation SSL/TLS (à compléter)"; }
 
+# =====================================================
+# Fonctions pour BadVPN
+# =====================================================
 install_badvpn() { echo ">>> Installation BadVPN (à compléter)"; }
 uninstall_badvpn() { echo ">>> Désinstallation BadVPN (à compléter)"; }
 
@@ -115,9 +132,10 @@ while true; do
     echo " [2] Dropbear"
     echo " [3] SlowDNS"
     echo " [4] UDP Custom"
-    echo " [5] SOCKS/Python"
-    echo " [6] SSL/TLS"
-    echo " [7] BadVPN"
+    echo " [5] UDP Request"
+    echo " [6] SOCKS/Python"
+    echo " [7] SSL/TLS"
+    echo " [8] BadVPN"
     echo " [0] Quitter"
     echo "+================================================+"
     echo -n "👉 Choisissez un mode : "
@@ -128,9 +146,10 @@ while true; do
         2) manage_mode "Dropbear" install_dropbear uninstall_dropbear ;;
         3) manage_mode "SlowDNS" install_slowdns uninstall_slowdns ;;
         4) manage_mode "UDP Custom" install_udp_custom uninstall_udp_custom ;;
-        5) manage_mode "SOCKS/Python" install_socks_python uninstall_socks_python ;;
-        6) manage_mode "SSL/TLS" install_ssl_tls uninstall_ssl_tls ;;
-        7) manage_mode "BadVPN" install_badvpn uninstall_badvpn ;;
+        5) manage_mode "UDP Request" install_udp_request uninstall_udp_request ;;
+        6) manage_mode "SOCKS/Python" install_socks_python uninstall_socks_python ;;
+        7) manage_mode "SSL/TLS" install_ssl_tls uninstall_ssl_tls ;;
+        8) manage_mode "BadVPN" install_badvpn uninstall_badvpn ;;
         0) echo "🚪 Sortie du panneau de contrôle." ; exit 0 ;;
         *) echo "❌ Option invalide, réessayez." ;;
     esac
