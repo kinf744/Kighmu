@@ -3,11 +3,11 @@
 # -------- Paramètres --------
 UDP_BIN='/usr/bin/udpServer'
 UDP_BIN_URL='https://bitbucket.org/iopmx/udprequestserver/downloads/udpServer'
-PORT=7400
+PORT=36712  # Changement ici du port 7400 vers 36712
 
-# -------- Fonction pour tuer les processus UDPserver utilisant le port 7400 --------
+# -------- Fonction pour tuer les processus UDPserver utilisant le port --------
 kill_port_processes() {
-  # Récupère les pids qui écoutent sur le port UDP 7400
+  # Récupère les pids qui écoutent sur le port UDP 36712
   pids=$(ss -nlup | grep ":$PORT " | awk '{print $6}' | cut -d',' -f2 | cut -d'=' -f2)
   if [[ -n "$pids" ]]; then
     echo "Suppression des processus utilisant le port UDP $PORT : $pids"
@@ -19,7 +19,7 @@ kill_port_processes() {
   fi
 }
 
-# -------- Ouvrir le port UDP 7400 dans UFW --------
+# -------- Ouvrir le port UDP dans UFW --------
 open_ufw_port() {
   echo "Configuration du firewall UFW pour autoriser le port UDP $PORT..."
   # Vérifier si ufw est installé
