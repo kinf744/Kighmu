@@ -33,28 +33,67 @@ echo "+--------------------------------------------+"
 echo "|             INSTALLATION VPS               |"
 echo "+--------------------------------------------+"
 
-read -r -p "Veuillez entrer votre nom de domaine (doit pointer vers l'IP de ce serveur) : " DOMAIN
+# Demande soit domaine soit IP
+read -r -p "Veuillez entrer votre nom de domaine ou l'adresse IP du serveur VPS : " INPUT
 
-if [[ -z "$DOMAIN" ]]; then
-  echo "Erreur : vous devez entrer un nom de domaine valide."
+if [[ -z "$INPUT" ]]; then
+  echo "Erreur : vous devez entrer un nom de domaine ou une adresse IP valide."
   exit 1
 fi
 
 IP_PUBLIC=$(curl -s https://api.ipify.org)
 echo "Votre IP publique détectée est : $IP_PUBLIC"
 
-DOMAIN_IP=$(dig +short "$DOMAIN" | tail -n1)
-if [[ "$DOMAIN_IP" != "$IP_PUBLIC" ]]; then
-  echo "Attention : le domaine $DOMAIN ne pointe pas vers l’IP $IP_PUBLIC."
-  echo "Assurez-vous que le domaine est correctement configuré avant de continuer."
-  read -r -p "Voulez-vous continuer quand même ? [oui/non] : " choix
-  if [[ ! "$choix" =~ ^(o|oui)$ ]]; then
-    echo "Installation arrêtée."
+# Fonction simple pour vérifier si c’est une IP valide
+is_valid_ip() {
+  local ip=$1
+  if [[ $ip =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+    IFS='.' read -r -a octets <<< "$ip"
+    for octet in "${octets[@]}"; do
+      if ((octet < 0 || octet > 255)); then
+        return 1
+      fi
+    done
+    return 0
+  else
+    return 1
+  fi
+}
+
+if is_valid_ip "$INPUT"; then
+  # Si l'entrée est une IP, on vérifie qu'elle corresponde à l'IP publique
+  if [[ "$INPUT" != "$IP_PUBLIC" ]]; then
+    echo "Attention : l'adresse IP saisie ($INPUT) ne correspond pas à l'IP publique détectée ($IP_PUBLIC)."
+    read -r -p "Voulez-vous continuer quand même ? [oui/non] : " choix
+    if [[ ! "$choix" =~ ^(o|oui)$ ]]; then
+      echo "Installation arrêtée."
+      exit 1
+    fi
+  fi
+  TARGET=$INPUT
+else
+  # Si c'est un nom de domaine, on récupère l'IP associée
+  DOMAIN=$INPUT
+  DOMAIN_IP=$(dig +short "$DOMAIN" | tail -n1)
+
+  if [[ -z "$DOMAIN_IP" ]]; then
+    echo "Erreur : impossible de résoudre le domaine $DOMAIN."
     exit 1
   fi
+
+  if [[ "$DOMAIN_IP" != "$IP_PUBLIC" ]]; then
+    echo "Attention : le domaine $DOMAIN ne pointe pas vers l’IP $IP_PUBLIC."
+    read -r -p "Voulez-vous continuer quand même ? [oui/non] : " choix
+    if [[ ! "$choix" =~ ^(o|oui)$ ]]; then
+      echo "Installation arrêtée."
+      exit 1
+    fi
+  fi
+  TARGET=$DOMAIN
 fi
 
-export DOMAIN
+export TARGET
+echo "Vous avez saisi : $TARGET"
 
 echo "=============================================="
 echo " 🚀 Installation des paquets essentiels..."
@@ -62,58 +101,7 @@ echo "=============================================="
 
 apt update -y && apt upgrade -y
 
-apt install -y sudo
-apt install -y bsdmainutils
-apt install -y zip
-apt install -y unzip
-apt install -y ufw
-apt install -y curl
-apt install -y python3
-apt install -y python3-pip
-apt install -y openssl
-apt install -y screen
-apt install -y cron
-apt install -y iptables
-apt install -y lsof
-apt install -y pv
-apt install -y boxes
-apt install -y nano
-apt install -y at
-apt install -y mlocate
-apt install -y gawk
-apt install -y grep
-apt install -y bc
-apt install -y jq
-apt install -y npm
-apt install -y nodejs
-apt install -y socat
-apt install -y netcat
-apt install -y netcat-traditional
-apt install -y net-tools
-apt install -y cowsay
-apt install -y figlet
-apt install -y lolcat
-apt install -y dnsutils
-apt install -y wget
-apt install -y psmisc
-apt install -y nginx
-apt install -y dropbear
-apt install -y python3-setuptools
-apt install -y wireguard-tools
-apt install -y qrencode
-apt install -y gcc
-apt install -y make
-apt install -y perl
-apt install -y systemd
-apt install -y tcpdump
-apt install -y iptables
-apt install -y iproute2
-apt install -y net-tools
-apt install -y tmux
-apt install -y git
-apt install -y build-essential
-apt install -y libssl-dev
-apt install -y software-properties-common
+apt install -y sudo bsdmainutils zip unzip ufw curl python3 python3-pip openssl screen cron iptables lsof pv boxes nano at mlocate gawk grep bc jq npm nodejs socat netcat netcat-traditional net-tools cowsay figlet lolcat dnsutils wget psmisc nginx dropbear python3-setuptools wireguard-tools qrencode gcc make perl systemd tcpdump iproute2 tmux git build-essential libssl-dev software-properties-common
 
 apt autoremove -y
 apt clean
@@ -126,7 +114,6 @@ ufw allow 443
 ufw allow 5300
 ufw allow 54000
 ufw allow 8080
-ufw allow 36712
 ufw --force enable
 
 echo "=============================================="
@@ -192,7 +179,7 @@ fi
 
 # Création du fichier ~/.kighmu_info avec les infos globales nécessaires
 cat > ~/.kighmu_info <<EOF
-DOMAIN=$DOMAIN
+TARGET=$TARGET
 NS=$NS
 PUBLIC_KEY="$PUBLIC_KEY"
 EOF
