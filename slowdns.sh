@@ -60,7 +60,6 @@ stop_old_instance() {
 }
 
 setup_iptables() {
-  # Création du dossier iptables si manquant
   mkdir -p /etc/iptables
 
   log "Sauvegarde des règles iptables existantes dans /etc/iptables/rules.v4.bak"
@@ -86,6 +85,38 @@ enable_ip_forwarding() {
   else
     log "Routage IP déjà activé."
   fi
+}
+
+create_systemd_service() {
+  SERVICE_PATH="/etc/systemd/system/slowdns.service"
+
+  log "Création du fichier systemd slowdns.service..."
+
+  cat <<EOF > "$SERVICE_PATH"
+[Unit]
+Description=SlowDNS Server Tunnel
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=$SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY \$(cat $CONFIG_FILE) 0.0.0.0:$ssh_port
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=slowdns-server
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  log "Recharge systemd et activation du service slowdns..."
+  systemctl daemon-reload
+  systemctl enable slowdns.service
+  systemctl restart slowdns.service
+  log "Service slowdns activé et démarré via systemd."
 }
 
 main() {
@@ -151,6 +182,9 @@ main() {
     echo "ERREUR : SlowDNS n'a pas pu démarrer." >&2
     exit 1
   fi
+
+  # Création et activation du service systemd à partir du script
+  create_systemd_service
 
   if command -v ufw >/dev/null 2>&1; then
     log "Ouverture du port UDP $PORT avec UFW."
