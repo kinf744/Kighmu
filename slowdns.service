@@ -1,0 +1,17 @@
+[Unit]
+Description=SlowDNS Server Tunnel
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/sldns-server -udp :5300 -privkey-file /etc/slowdns/server.key $(cat /etc/slowdns/ns.conf) 0.0.0.0:22
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=slowdns-server
+
+[Install]
+WantedBy=multi-user.target
