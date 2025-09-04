@@ -126,7 +126,7 @@ ufw allow 443
 ufw allow 5300
 ufw allow 54000
 ufw allow 8080
-ufw allow 7400
+ufw allow 36712
 ufw --force enable
 
 echo "=============================================="
