@@ -33,67 +33,28 @@ echo "+--------------------------------------------+"
 echo "|             INSTALLATION VPS               |"
 echo "+--------------------------------------------+"
 
-# Demande soit domaine soit IP
-read -r -p "Veuillez entrer votre nom de domaine ou l'adresse IP du serveur VPS : " INPUT
+read -r -p "Veuillez entrer votre nom de domaine (doit pointer vers l'IP de ce serveur) : " DOMAIN
 
-if [[ -z "$INPUT" ]]; then
-  echo "Erreur : vous devez entrer un nom de domaine ou une adresse IP valide."
+if [[ -z "$DOMAIN" ]]; then
+  echo "Erreur : vous devez entrer un nom de domaine valide."
   exit 1
 fi
 
 IP_PUBLIC=$(curl -s https://api.ipify.org)
 echo "Votre IP publique détectée est : $IP_PUBLIC"
 
-# Fonction simple pour vérifier si c’est une IP valide
-is_valid_ip() {
-  local ip=$1
-  if [[ $ip =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
-    IFS='.' read -r -a octets <<< "$ip"
-    for octet in "${octets[@]}"; do
-      if ((octet < 0 || octet > 255)); then
-        return 1
-      fi
-    done
-    return 0
-  else
-    return 1
-  fi
-}
-
-if is_valid_ip "$INPUT"; then
-  # Si l'entrée est une IP, on vérifie qu'elle corresponde à l'IP publique
-  if [[ "$INPUT" != "$IP_PUBLIC" ]]; then
-    echo "Attention : l'adresse IP saisie ($INPUT) ne correspond pas à l'IP publique détectée ($IP_PUBLIC)."
-    read -r -p "Voulez-vous continuer quand même ? [oui/non] : " choix
-    if [[ ! "$choix" =~ ^(o|oui)$ ]]; then
-      echo "Installation arrêtée."
-      exit 1
-    fi
-  fi
-  TARGET=$INPUT
-else
-  # Si c'est un nom de domaine, on récupère l'IP associée
-  DOMAIN=$INPUT
-  DOMAIN_IP=$(dig +short "$DOMAIN" | tail -n1)
-
-  if [[ -z "$DOMAIN_IP" ]]; then
-    echo "Erreur : impossible de résoudre le domaine $DOMAIN."
+DOMAIN_IP=$(dig +short "$DOMAIN" | tail -n1)
+if [[ "$DOMAIN_IP" != "$IP_PUBLIC" ]]; then
+  echo "Attention : le domaine $DOMAIN ne pointe pas vers l’IP $IP_PUBLIC."
+  echo "Assurez-vous que le domaine est correctement configuré avant de continuer."
+  read -r -p "Voulez-vous continuer quand même ? [oui/non] : " choix
+  if [[ ! "$choix" =~ ^(o|oui)$ ]]; then
+    echo "Installation arrêtée."
     exit 1
   fi
-
-  if [[ "$DOMAIN_IP" != "$IP_PUBLIC" ]]; then
-    echo "Attention : le domaine $DOMAIN ne pointe pas vers l’IP $IP_PUBLIC."
-    read -r -p "Voulez-vous continuer quand même ? [oui/non] : " choix
-    if [[ ! "$choix" =~ ^(o|oui)$ ]]; then
-      echo "Installation arrêtée."
-      exit 1
-    fi
-  fi
-  TARGET=$DOMAIN
 fi
 
-export TARGET
-echo "Vous avez saisi : $TARGET"
+export DOMAIN
 
 echo "=============================================="
 echo " 🚀 Installation des paquets essentiels..."
@@ -199,7 +160,6 @@ FILES=(
   "setup_ssh_config.sh"
   "create_ssh_user.sh"
   "menu4_2.sh"
-  "udp_request.sh"
 )
 
 BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
@@ -230,7 +190,7 @@ fi
 
 # Création du fichier ~/.kighmu_info avec les infos globales nécessaires
 cat > ~/.kighmu_info <<EOF
-TARGET=$TARGET
+DOMAIN=$DOMAIN
 NS=$NS
 PUBLIC_KEY="$PUBLIC_KEY"
 EOF
@@ -291,7 +251,7 @@ echo
 echo -e "Saisir et valider: ${YELLOW}source ~/.bashrc${NC}"
 
 echo -e "${GREEN}Version du script : 2.5${NC}"
-echo -e "${YELLOW}Inbox Telegramme :${BLUE} @KIGHMU${NC}"
+echo -e "${BLUE}Inbox Telegramme : @KIGHMU${NC}"
 echo
 echo -e "Pour ouvrir le panneau de contrôle principal, tapez : ${YELLOW}kighmu${NC}"
 echo
