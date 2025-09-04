@@ -10,7 +10,7 @@ echo -e "\e[34m+--------------------------------------------+\e[0m"
 # Détection IP et uptime
 HOST_IP=$(curl -s https://api.ipify.org)
 UPTIME=$(uptime -p)
-echo "IP: $HOST_IP | Uptime: $UPTIME"
+echo "IP: $HOST_IP | time: $UPTIME"
 echo ""
 
 # =====================================================
@@ -136,6 +136,7 @@ while true; do
     echo " [6] SOCKS/Python"
     echo " [7] SSL/TLS"
     echo " [8] BadVPN"
+    echo " [0] Retour"
     echo -e "\e[34m+================================================+\e[0m"
     echo -n "👉 Choisissez un mode : "
     read choix
