@@ -1,90 +1,82 @@
 #!/bin/bash
+# udp_request.sh
+# Installation et configuration UDP Request pour SocksIP Tunnel VPN
 
-# -------- Paramètres --------
-UDP_BIN='/usr/bin/udpServer'
-UDP_BIN_URL='https://bitbucket.org/iopmx/udprequestserver/downloads/udpServer'
-PORT=36712  # Changement ici du port 7400 vers 36712
+set -e
 
-# -------- Fonction pour tuer les processus UDPserver utilisant le port --------
-kill_port_processes() {
-  # Récupère les pids qui écoutent sur le port UDP 36712
-  pids=$(ss -nlup | grep ":$PORT " | awk '{print $6}' | cut -d',' -f2 | cut -d'=' -f2)
-  if [[ -n "$pids" ]]; then
-    echo "Suppression des processus utilisant le port UDP $PORT : $pids"
-    for pid in $pids; do
-      kill -9 $pid && echo "Processus $pid tué" || echo "Échec de tuer $pid"
-    done
-  else
-    echo "Aucun processus sur le port UDP $PORT"
-  fi
+INSTALL_DIR="/root/udp-request"
+CONFIG_FILE="$INSTALL_DIR/config/config.json"
+BIN_PATH="$INSTALL_DIR/bin/udp-request-linux-amd64"
+UDP_PORT=36712
+
+echo "+--------------------------------------------+"
+echo "|           INSTALLATION UDP REQUEST          |"
+echo "+--------------------------------------------+"
+
+echo "Installation des dépendances..."
+apt-get update
+apt-get install -y git curl build-essential libssl-dev jq iptables
+
+# Clonage ou mise à jour du dépôt udp-request (changer URL si besoin)
+if [ ! -d "$INSTALL_DIR" ]; then
+    echo "Clonage du dépôt udp-request..."
+    git clone https://github.com/user/udp-request.git "$INSTALL_DIR"
+else
+    echo "udp-request déjà présent, mise à jour..."
+    cd "$INSTALL_DIR"
+    git pull
+fi
+
+cd "$INSTALL_DIR"
+
+# Vérification et permission du binaire
+if [ ! -x "$BIN_PATH" ]; then
+    echo "Le binaire $BIN_PATH n'est pas exécutable, changement de permission..."
+    chmod +x "$BIN_PATH"
+fi
+
+if [ ! -x "$BIN_PATH" ]; then
+    echo "Erreur: Le binaire $BIN_PATH est manquant ou non exécutable."
+    exit 1
+fi
+
+# Création ou modification de la config JSON spécifique UDP Request
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "Création du fichier de configuration UDP Request..."
+    mkdir -p "$(dirname "$CONFIG_FILE")"
+    cat > "$CONFIG_FILE" << EOF
+{
+  "server_port": $UDP_PORT,
+  "port_range_start": $UDP_PORT,
+  "port_range_end": $((UDP_PORT + 100)),  
+  "udp_timeout": 600,
+  "dns_cache": true
 }
+EOF
+else
+    echo "Modification des ports dans la configuration existante..."
+    jq ".server_port = $UDP_PORT | .port_range_start = $UDP_PORT | .port_range_end = ($UDP_PORT + 100)" "$CONFIG_FILE" > "$CONFIG_FILE.tmp" && mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
+fi
 
-# -------- Ouvrir le port UDP dans UFW --------
-open_ufw_port() {
-  echo "Configuration du firewall UFW pour autoriser le port UDP $PORT..."
-  # Vérifier si ufw est installé
-  if ! command -v ufw &> /dev/null; then
-    echo "UFW n'est pas installé. Installation en cours..."
-    apt-get update && apt-get install -y ufw
-  fi
-  # Autoriser le port UDP (ajoute la règle si elle n'existe pas déjà)
-  ufw status | grep -qw "$PORT/udp"
-  if [ $? -ne 0 ]; then
-    ufw allow $PORT/udp
-    echo "Port UDP $PORT autorisé dans UFW."
-  else
-    echo "Port UDP $PORT est déjà autorisé dans UFW."
-  fi
-  # Activer ufw s'il ne l'est pas
-  ufw status | grep -qw 'Status: active'
-  if [ $? -ne 0 ]; then
-    echo "Activation d'UFW..."
-    ufw --force enable
-  fi
-}
+# Ouverture du port UDP principal et de la plage dans iptables
+echo "Ouverture du port UDP $UDP_PORT et plage $UDP_PORT-$((UDP_PORT+100)) dans iptables..."
+iptables -I INPUT -p udp --dport $UDP_PORT -j ACCEPT
+iptables -I INPUT -p udp --dport $UDP_PORT:$((UDP_PORT+100)) -j ACCEPT
 
-# -------- Exécuter l'ouverture du port UFW avant l'installation --------
-open_ufw_port
+# Démarrage du serveur UDP Request en arrière-plan
+echo "Démarrage du démon udp-request sur le port $UDP_PORT..."
+nohup "$BIN_PATH" -c "$CONFIG_FILE" > /var/log/udp_request.log 2>&1 &
 
-# -------- Arrêt des processus existants --------
-kill_port_processes
-sleep 1
+sleep 3
 
-# -------- Téléchargement et installation du binaire --------
-echo "Téléchargement de UDPserver..."
-wget -O "$UDP_BIN" "$UDP_BIN_URL" --quiet
-chmod +x "$UDP_BIN"
+if pgrep -f "udp-request-linux-amd64" > /dev/null; then
+    echo "UDP Request démarré avec succès sur le port $UDP_PORT."
+else
+    echo "Erreur: UDP Request ne s'est pas lancé correctement."
+fi
 
-# -------- Détection IP publique et interface réseau --------
-IP_PUBLIC=$(wget -qO- https://ipinfo.io/ip)
-IFACE=$(ip route get 8.8.8.8 | awk '{print $5}' | head -1)
-
-echo "Interface détectée : $IFACE"
-echo "Adresse IP publique : $IP_PUBLIC"
-
-# -------- Lancement automatique en arrière-plan --------
-echo "Démarrage du tunnel UDP request sur ${IP_PUBLIC}:$PORT ..."
-echo "Commande : $UDP_BIN -ip=$IP_PUBLIC -net=$IFACE -port=$PORT -mode=system"
-
-nohup $UDP_BIN -ip=$IP_PUBLIC -net=$IFACE -port=$PORT -mode=system >/dev/null 2>&1 &
-
-# -------- Message encadré de confirmation --------
-msg1="Tunnel UDP request installé avec succès !"
-msg2="Fonctionne avec des applications comme SocksIP Tunnel VPN."
-
-max_len=${#msg1}
-(( ${#msg2} > max_len )) && max_len=${#msg2}
-pad=4
-total_width=$((max_len + pad))
-
-border=$(printf '%*s' "$total_width" '' | tr ' ' '=')
-
-echo -e "\n$border"
-printf "= %-${max_len}s =\n" "$msg1"
-printf "= %-${max_len}s =\n" "$msg2"
-echo -e "$border\n"
-
-echo "Serveur public : $IP_PUBLIC:$PORT (UDP)"
-echo "Le port UDP $PORT est ouvert dans le firewall UFW."
-echo "Pour arrêter le tunnel : pkill -f udpServer"
-echo "Le port UDP est toujours forcé à $PORT dans ce script."
+echo "+--------------------------------------------+"
+echo "|          Configuration terminée            |"
+echo "|  Configure SocksIP Tunnel avec IP serveur  |"
+echo "|  port UDP $UDP_PORT et activez UDP Request |"
+echo "+--------------------------------------------+"
