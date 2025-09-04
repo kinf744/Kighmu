@@ -3,9 +3,9 @@
 # Panneau de contrôle installation/désinstallation
 
 clear
-echo "+--------------------------------------------+"
-echo "|      PANNEAU DE CONTROLE DES MODES         |"
-echo "+--------------------------------------------+"
+echo -e "\e[34m+--------------------------------------------+\e[0m"
+echo -e "\e[34m|      PANNEAU DE CONTROLE DES MODES         |\e[0m"
+echo -e "\e[34m+--------------------------------------------+\e[0m"
 
 # Détection IP et uptime
 HOST_IP=$(curl -s https://api.ipify.org)
@@ -103,13 +103,13 @@ manage_mode() {
 
     while true; do
         echo ""
-        echo "+--------------------------------------------+"
-        echo "   Gestion du mode : $MODE_NAME"
-        echo "+--------------------------------------------+"
+        echo -e "\e[34m+--------------------------------------------+\e[0m"
+        echo -e "\e[34m   Gestion du mode : $MODE_NAME\e[0m"
+        echo -e "\e[34m+--------------------------------------------+\e[0m"
         echo " [1] Installer"
         echo " [2] Désinstaller"
         echo " [0] Retour"
-        echo "----------------------------------------------"
+        echo -e "\e[34m----------------------------------------------\e[0m"
         echo -n "👉 Choisissez une action : "
         read action
 
@@ -127,7 +127,7 @@ manage_mode() {
 # =====================================================
 while true; do
     echo ""
-    echo "+================ MENU PRINCIPAL =================+"
+    echo -e "\e[34m+================ MENU PRINCIPAL =================+\e[0m"
     echo " [1] OpenSSH"
     echo " [2] Dropbear"
     echo " [3] SlowDNS"
@@ -136,8 +136,7 @@ while true; do
     echo " [6] SOCKS/Python"
     echo " [7] SSL/TLS"
     echo " [8] BadVPN"
-    echo " [0] Quitter"
-    echo "+================================================+"
+    echo -e "\e[34m+================================================+\e[0m"
     echo -n "👉 Choisissez un mode : "
     read choix
 
