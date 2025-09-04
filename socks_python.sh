@@ -1,10 +1,44 @@
 #!/bin/bash
 # socks_python.sh
-# Activation du SOCKS Python avec nettoyage des anciennes instances et configuration UFW
+# Activation du SOCKS Python avec nettoyage des anciennes instances, configuration UFW et service systemd
 
 echo "+--------------------------------------------+"
 echo "|             CONFIG SOCKS/PYTHON            |"
 echo "+--------------------------------------------+"
+
+create_systemd_service() {
+  SERVICE_PATH="/etc/systemd/system/socks_python.service"
+  PROXY_PORT=8080
+  SCRIPT_PATH="/usr/local/bin/KIGHMUPROXY.py"
+
+  echo "Création du fichier systemd socks_python.service..."
+
+  sudo tee "$SERVICE_PATH" > /dev/null <<EOF
+[Unit]
+Description=Proxy SOCKS Python
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/python3 $SCRIPT_PATH $PROXY_PORT
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=socks-python-proxy
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  echo "Reload systemd, enable and start the service socks_python..."
+  sudo systemctl daemon-reload
+  sudo systemctl enable socks_python.service
+  sudo systemctl restart socks_python.service
+  echo "Service socks_python activé et démarré."
+}
 
 read -p "Voulez-vous démarrer le proxy SOCKS/Python ? [oui/non] : " confirm
 
@@ -28,12 +62,10 @@ case "$confirm" in
         SCRIPT_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main/KIGHMUPROXY.py"
         LOG_FILE="/var/log/socks_python.log"
 
-        # Configuration du firewall UFW pour autoriser le port 8080
         echo "Configuration du firewall UFW pour autoriser le port $PROXY_PORT..."
         sudo ufw allow $PROXY_PORT/tcp
         echo "Port $PROXY_PORT autorisé dans UFW."
 
-        # Télécharger le script proxy s'il manque ou plus vieux d'un jour
         DOWNLOAD_SCRIPT=false
         if [ ! -f "$SCRIPT_PATH" ]; then
             echo "Script proxy absent, téléchargement en cours..."
@@ -64,7 +96,6 @@ case "$confirm" in
             echo "Arrêt des instances proxy (PID: $PIDS)..."
             sudo kill -9 $PIDS
             sleep 5
-            # Vérification post-kill
             if pgrep -f "python3 $SCRIPT_PATH" > /dev/null; then
                 echo "Certaines instances n'ont pas été arrêtées, veuillez vérifier."
                 exit 1
@@ -88,6 +119,7 @@ case "$confirm" in
         if pgrep -f "python3 $SCRIPT_PATH" > /dev/null; then
             echo "Proxy SOCKS/Python démarré sur le port $PROXY_PORT."
             echo "Vérifiez les logs dans : $LOG_FILE"
+            create_systemd_service
         else
             echo "Échec du démarrage du proxy SOCKS/Python."
             echo "Consultez les logs pour diagnostic : $LOG_FILE"
