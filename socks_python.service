@@ -1,0 +1,17 @@
+[Unit]
+Description=Proxy SOCKS Python
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/bin/bash /chemin/vers/socks_python.sh
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=socks-python-proxy
+
+[Install]
+WantedBy=multi-user.target
