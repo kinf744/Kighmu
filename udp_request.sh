@@ -59,9 +59,14 @@ chmod +x "$UDP_BIN"
 IP_PUBLIC=$(wget -qO- https://ipinfo.io/ip)
 IFACE=$(ip route get 8.8.8.8 | awk '{print $5}' | head -1)
 
+echo "Interface détectée : $IFACE"
+echo "Adresse IP publique : $IP_PUBLIC"
+
 # -------- Lancement automatique en arrière-plan --------
 echo "Démarrage du tunnel UDP request sur ${IP_PUBLIC}:$PORT ..."
-nohup $UDP_BIN -ip=$IP_PUBLIC -net=${IFACE}$PORT -mode=system >/dev/null 2>&1 &
+echo "Commande : $UDP_BIN -ip=$IP_PUBLIC -net=$IFACE -port=$PORT -mode=system"
+
+nohup $UDP_BIN -ip=$IP_PUBLIC -net=$IFACE -port=$PORT -mode=system >/dev/null 2>&1 &
 
 # -------- Message encadré de confirmation --------
 msg1="Tunnel UDP request installé avec succès !"
