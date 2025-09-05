@@ -11,7 +11,7 @@ MTU_VALUE=1400
 # Ports utilisés
 PORT_SSH=5300
 PORT_V2RAY=5301
-V2RAY_PORT=1080   # Port où tourne V2Ray (modifiable si besoin)
+V2RAY_PORT=1080   # Port où tourne V2Ray (modifiable)
 
 log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
@@ -27,7 +27,7 @@ check_root() {
 install_dependencies() {
   log "Mise à jour des paquets et installation des dépendances..."
   apt-get update -q
-  for pkg in iptables screen tcpdump; do
+  for pkg in iptables screen tcpdump wget curl; do
     if ! command -v "$pkg" &> /dev/null; then
       log "$pkg non trouvé, installation..."
       apt-get install -y "$pkg"
@@ -59,7 +59,7 @@ kill_ports() {
       # Tenter d'arrêter un service systemd correspondant
       SERVICES=$(systemctl list-units --type=service --all | grep -i slowdns | awk '{print $1}')
       for svc in $SERVICES; do
-        echo "Stopping service $svc..."
+        log "Stopping service $svc..."
         systemctl stop "$svc" || true
         systemctl disable "$svc" || true
       done
@@ -76,10 +76,19 @@ kill_ports() {
 
 setup_iptables() {
   local iface=$1
-  for port in $PORT_SSH $PORT_V2RAY; do
-    iptables -I INPUT -p udp --dport "$port" -j ACCEPT
-    iptables -t nat -I PREROUTING -i "$iface" -p udp --dport 53 -j REDIRECT --to-ports "$port"
-  done
+  # Supprimer anciennes règles conflit potentielles
+  iptables -t nat -D PREROUTING -i "$iface" -p udp --dport 53 -j REDIRECT --to-ports $PORT_SSH 2>/dev/null || true
+  iptables -D INPUT -p udp --dport $PORT_SSH -j ACCEPT 2>/dev/null || true
+  iptables -t nat -D PREROUTING -i "$iface" -p udp --dport $PORT_V2RAY -j REDIRECT --to-ports $V2RAY_PORT 2>/dev/null || true
+  iptables -D INPUT -p udp --dport $PORT_V2RAY -j ACCEPT 2>/dev/null || true
+
+  # Ajouter règles iptables correctes
+  iptables -t nat -I PREROUTING -i "$iface" -p udp --dport 53 -j REDIRECT --to-ports $PORT_SSH
+  iptables -I INPUT -p udp --dport $PORT_SSH -j ACCEPT
+
+  iptables -t nat -I PREROUTING -i "$iface" -p udp --dport $PORT_V2RAY -j REDIRECT --to-ports $V2RAY_PORT
+  iptables -I INPUT -p udp --dport $PORT_V2RAY -j ACCEPT
+
   iptables-save > /etc/iptables/rules.v4
   log "Règles iptables mises à jour."
 }
@@ -97,7 +106,6 @@ enable_ip_forwarding() {
 }
 
 create_systemd_services() {
-  # Service SlowDNS SSH
   cat <<EOF > /etc/systemd/system/slowdns-ssh.service
 [Unit]
 Description=SlowDNS SSH Tunnel
@@ -105,7 +113,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=$SLOWDNS_BIN -udp :$PORT_SSH -privkey-file $SERVER_KEY \$(cat $CONFIG_FILE) 0.0.0.0:$1
+ExecStart=$SLOWDNS_BIN -udp :$PORT_SSH -privkey-file $SERVER_KEY \$(cat $CONFIG_FILE) 0.0.0.0:$SSH_PORT
 Restart=always
 RestartSec=5
 
@@ -113,7 +121,6 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
-  # Service SlowDNS V2Ray
   cat <<EOF > /etc/systemd/system/slowdns-v2ray.service
 [Unit]
 Description=SlowDNS V2Ray Tunnel
@@ -142,7 +149,6 @@ main() {
   install_dependencies
   mkdir -p "$SLOWDNS_DIR"
 
-  # --- Tuer les services/processus sur les ports 5300 et 5301 ---
   kill_ports
 
   read -rp "Entrez le NameServer (NS) (ex: ns.example.com) : " NAMESERVER
@@ -168,7 +174,7 @@ main() {
     ssh_port=22
   fi
 
-  create_systemd_services "$ssh_port"
+  create_systemd_services
 
   echo ""
   echo "+--------------------------------------------+"
@@ -180,9 +186,9 @@ main() {
   echo ""
   echo "NameServer : $NAMESERVER"
   echo ""
-  echo "Ports :"
-  echo "  - SSH   : $PORT_SSH"
-  echo "  - V2Ray : $PORT_V2RAY (redirige vers $V2RAY_PORT)"
+  echo "Ports utilisés :"
+  echo "  - SlowDNS SSH : UDP $PORT_SSH -> TCP $ssh_port"
+  echo "  - SlowDNS V2Ray : UDP $PORT_V2RAY -> TCP $V2RAY_PORT"
   echo ""
   echo "Commandes utiles :"
   echo "  systemctl status slowdns-ssh"
