@@ -126,6 +126,7 @@ ufw allow 80
 ufw allow 443
 ufw allow 5300
 ufw allow 5301
+ufw allow 1080
 ufw allow 54000
 ufw allow 8080
 ufw --force enable
