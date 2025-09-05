@@ -125,8 +125,6 @@ ufw allow 22
 ufw allow 80
 ufw allow 443
 ufw allow 5300
-ufw allow 5301
-ufw allow 1080
 ufw allow 54000
 ufw allow 8080
 ufw --force enable
@@ -163,8 +161,6 @@ FILES=(
   "setup_ssh_config.sh"
   "create_ssh_user.sh"
   "menu4_2.sh"
-  "v2ray_slowdns_install.sh"
-  "v2ray_slowdns.sh"
 )
 
 BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
