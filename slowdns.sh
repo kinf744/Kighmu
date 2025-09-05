@@ -56,14 +56,12 @@ kill_ports() {
   for port in $PORT_SSH $PORT_V2RAY; do
     if lsof -iUDP:$port -t >/dev/null 2>&1; then
       log "Port $port occupé. Arrêt des services/processus..."
-      # Tenter d'arrêter un service systemd correspondant
       SERVICES=$(systemctl list-units --type=service --all | grep -i slowdns | awk '{print $1}')
       for svc in $SERVICES; do
         log "Stopping service $svc..."
         systemctl stop "$svc" || true
         systemctl disable "$svc" || true
       done
-      # Kill tout processus restant sur le port
       PIDS=$(lsof -iUDP:$port -t)
       for pid in $PIDS; do
         log "Killing process $pid sur le port $port"
@@ -76,13 +74,11 @@ kill_ports() {
 
 setup_iptables() {
   local iface=$1
-  # Supprimer anciennes règles conflit potentielles
   iptables -t nat -D PREROUTING -i "$iface" -p udp --dport 53 -j REDIRECT --to-ports $PORT_SSH 2>/dev/null || true
   iptables -D INPUT -p udp --dport $PORT_SSH -j ACCEPT 2>/dev/null || true
   iptables -t nat -D PREROUTING -i "$iface" -p udp --dport $PORT_V2RAY -j REDIRECT --to-ports $V2RAY_PORT 2>/dev/null || true
   iptables -D INPUT -p udp --dport $PORT_V2RAY -j ACCEPT 2>/dev/null || true
 
-  # Ajouter règles iptables correctes
   iptables -t nat -I PREROUTING -i "$iface" -p udp --dport 53 -j REDIRECT --to-ports $PORT_SSH
   iptables -I INPUT -p udp --dport $PORT_SSH -j ACCEPT
 
@@ -106,6 +102,8 @@ enable_ip_forwarding() {
 }
 
 create_systemd_services() {
+  local ssh_port="$1"
+
   cat <<EOF > /etc/systemd/system/slowdns-ssh.service
 [Unit]
 Description=SlowDNS SSH Tunnel
@@ -113,7 +111,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=$SLOWDNS_BIN -udp :$PORT_SSH -privkey-file $SERVER_KEY \$(cat $CONFIG_FILE) 0.0.0.0:$SSH_PORT
+ExecStart=$SLOWDNS_BIN -udp :$PORT_SSH -privkey-file $SERVER_KEY \$(cat $CONFIG_FILE) 0.0.0.0:$ssh_port
 Restart=always
 RestartSec=5
 
@@ -174,7 +172,7 @@ main() {
     ssh_port=22
   fi
 
-  create_systemd_services
+  create_systemd_services "$ssh_port"
 
   echo ""
   echo "+--------------------------------------------+"
