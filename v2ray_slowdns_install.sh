@@ -1,15 +1,19 @@
 #!/bin/bash
 # ==============================================
-# v2ray_slowdns_install.sh - Installation et configuration V2Ray SlowDNS
+# v2ray_slowdns_install.sh - Installation et configuration V2Ray + SlowDNS
 # ==============================================
 
 INSTALL_DIR="$HOME/Kighmu"
 CONFIG_PATH="/usr/local/etc/v2ray_slowdns/config.json"
 SERVICE_NAME="v2ray-slowdns"
-PORT=5304
+
+# Ports SlowDNS/V2Ray
+SLOWDNS_PORT=5301        # port du tunnel SlowDNS pour V2Ray
+V2RAY_PORT=1080          # port interne de V2Ray
+WS_PATH="/kighmu"        # chemin WebSocket
 
 SLOWDNS_DIR="/etc/slowdns"
-NS_FILE="$SLOWDNS_DIR/ns.txt"
+NS_FILE="$SLOWDNS_DIR/ns.conf"
 PUB_KEY_FILE="$SLOWDNS_DIR/server.pub"
 UUID_FILE="$INSTALL_DIR/v2ray_uuid.txt"
 
@@ -25,19 +29,19 @@ fi
 
 # Lire Namespace
 if [ ! -f "$NS_FILE" ]; then
-    echo "Namespace SlowDNS introuvable ($NS_FILE). Assurez-vous que le script principal a été exécuté."
+    echo "Namespace SlowDNS introuvable ($NS_FILE). Exécute d'abord le script SlowDNS principal."
     exit 1
 fi
 NS=$(cat "$NS_FILE")
 
 # Lire clé publique SlowDNS
 if [ ! -f "$PUB_KEY_FILE" ]; then
-    echo "Clé publique SlowDNS introuvable ($PUB_KEY_FILE). Assurez-vous que le script principal a été exécuté."
+    echo "Clé publique SlowDNS introuvable ($PUB_KEY_FILE). Exécute d'abord le script SlowDNS principal."
     exit 1
 fi
 PUB_KEY=$(cat "$PUB_KEY_FILE")
 
-# Utiliser UUID stable, généré une fois
+# UUID stable
 if [ ! -f "$UUID_FILE" ]; then
     UUID=$(cat /proc/sys/kernel/random/uuid)
     echo "$UUID" > "$UUID_FILE"
@@ -53,7 +57,7 @@ else
     echo "V2Ray déjà installé."
 fi
 
-# Création fichier config V2Ray SlowDNS avec domaine saisi par l'utilisateur
+# Création du fichier config V2Ray
 mkdir -p "$(dirname "$CONFIG_PATH")"
 cat > "$CONFIG_PATH" <<EOF
 {
@@ -64,7 +68,7 @@ cat > "$CONFIG_PATH" <<EOF
   },
   "inbounds": [
     {
-      "port": $PORT,
+      "port": $V2RAY_PORT,
       "protocol": "vmess",
       "settings": {
         "clients": [
@@ -78,7 +82,7 @@ cat > "$CONFIG_PATH" <<EOF
       "streamSettings": {
         "network": "ws",
         "wsSettings": {
-          "path": "/kighmu",
+          "path": "$WS_PATH",
           "headers": {
             "Host": "$DOMAIN"
           }
@@ -117,8 +121,18 @@ EOL
     systemctl start "$SERVICE_NAME"
 fi
 
-echo "Installation et configuration du tunnel V2Ray SlowDNS (WS TCP port $PORT)"
-echo "Namespace : $NS"
+echo ""
+echo "✅ Installation et configuration terminées."
+echo "-------------------------------------------"
+echo "Service V2Ray SlowDNS : $SERVICE_NAME"
 echo "UUID : $UUID"
+echo "Chemin WebSocket : $WS_PATH"
+echo "Namespace : $NS"
 echo "Clé publique SlowDNS : $PUB_KEY"
+echo "Port SlowDNS : $SLOWDNS_PORT"
+echo "Port interne V2Ray : $V2RAY_PORT"
 echo "Domaine utilisé : $DOMAIN"
+echo ""
+echo "⚠️ Assure-toi que le service slowdns-v2ray (créé par le script principal)"
+echo "   redirige bien UDP $SLOWDNS_PORT -> 127.0.0.1:$V2RAY_PORT"
+echo ""
