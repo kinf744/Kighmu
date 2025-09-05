@@ -20,6 +20,26 @@ UUID_FILE="$INSTALL_DIR/v2ray_uuid.txt"
 mkdir -p "$(dirname "$CONFIG_PATH")"
 mkdir -p "$INSTALL_DIR"
 
+# --- Nouvelle section pour tuer les services sur le port 1080 ---
+if lsof -iTCP:$V2RAY_PORT -sTCP:LISTEN -t >/dev/null 2>&1; then
+    echo "Un service écoute déjà sur le port $V2RAY_PORT. Arrêt en cours..."
+    # Trouver le PID
+    PIDS=$(lsof -iTCP:$V2RAY_PORT -sTCP:LISTEN -t)
+    for pid in $PIDS; do
+        # Tenter de trouver le service systemd associé
+        SERVICE=$(systemctl list-units --type=service --all | grep -i v2ray | awk '{print $1}' | head -n1)
+        if [[ -n "$SERVICE" ]]; then
+            echo "Arrêt du service $SERVICE..."
+            systemctl stop "$SERVICE"
+            systemctl disable "$SERVICE"
+        fi
+        echo "Killing process $pid sur le port $V2RAY_PORT..."
+        kill -9 "$pid"
+    done
+    echo "Port $V2RAY_PORT libéré."
+fi
+# -------------------------------------------------------------------
+
 # Demande interactive du nom de domaine
 read -p "Entrez le nom de domaine à utiliser (ex: sv2.kighmup.ddns-ip.net) : " DOMAIN
 if [ -z "$DOMAIN" ]; then
