@@ -7,11 +7,8 @@ CONFIG_PATH="/usr/local/etc/v2ray_slowdns/config.json"
 SERVICE_NAME="v2ray-slowdns"
 
 # Fichiers du SSH SlowDNS pour NS et clé publique
-SSH_NS_FILE="/etc/slowdns/ns.txt"
+SSH_NS_FILE="/etc/slowdns/ns.conf"
 SSH_PUB_KEY_FILE="/etc/slowdns/server.pub"
-
-# Domaine fixe utilisé pour tous les utilisateurs
-DOMAIN="sv2.kighmup.ddns-ip.net"
 
 # Couleurs
 RESET="\e[0m"
@@ -26,13 +23,14 @@ if ! command -v jq &> /dev/null; then
     exit 1
 fi
 
-# Extraction UUID, PORT, WS_PATH depuis config.json V2Ray
-UUID=$(jq -r '.inbounds[0].settings.clients.id' "$CONFIG_PATH")
-PORT=$(jq -r '.inbounds.port' "$CONFIG_PATH")
-WS_PATH=$(jq -r '.inbounds.streamSettings.wsSettings.path' "$CONFIG_PATH")
+# Extraction UUID, PORT, WS_PATH, DOMAIN depuis config.json V2Ray
+UUID=$(jq -r '.inbounds[0].settings.clients[0].id' "$CONFIG_PATH")
+PORT=$(jq -r '.inbounds[0].port' "$CONFIG_PATH")
+WS_PATH=$(jq -r '.inbounds[0].streamSettings.wsSettings.path' "$CONFIG_PATH")
+DOMAIN=$(jq -r '.inbounds[0].streamSettings.wsSettings.headers.Host' "$CONFIG_PATH")
 
-if [[ -z "$UUID" || -z "$PORT" || -z "$WS_PATH" || "$UUID" == "null" || "$PORT" == "null" || "$WS_PATH" == "null" ]]; then
-    echo -e "${RED}Impossible d'extraire UUID, PORT ou WS PATH depuis $CONFIG_PATH.${RESET}"
+if [[ -z "$UUID" || -z "$PORT" || -z "$WS_PATH" || -z "$DOMAIN" || "$UUID" == "null" || "$PORT" == "null" || "$WS_PATH" == "null" || "$DOMAIN" == "null" ]]; then
+    echo -e "${RED}Impossible d'extraire UUID, PORT, WS PATH ou DOMAIN depuis $CONFIG_PATH.${RESET}"
     exit 1
 fi
 
@@ -89,28 +87,27 @@ while true; do
             fi
             read -p "Durée (jours) : " duration
             read -p "Limite (ex: 7 connexions) : " limit
-            domain="$DOMAIN"
 
             expiry=$(date -d "+$duration days" +"%Y-%m-%d")
             user_uuid=$(cat /proc/sys/kernel/random/uuid)
 
             # Ajouter dans users.txt
-            echo "$username:$duration:$limit:$domain:$expiry:$user_uuid:$PORT:$NS:$PUB_KEY" >> "$USERS_FILE"
+            echo "$username:$duration:$limit:$DOMAIN:$expiry:$user_uuid:$PORT:$NS:$PUB_KEY" >> "$USERS_FILE"
 
             # Ajouter dans config.json
             tmp=$(mktemp)
-            jq ".inbounds[0].settings.clients += [{\"id\":\"$user_uuid\",\"alterId\":0,\"email\":\"$username@$domain\"}]" "$CONFIG_PATH" > "$tmp" && mv "$tmp" "$CONFIG_PATH"
+            jq ".inbounds[0].settings.clients += [{\"id\":\"$user_uuid\",\"alterId\":0,\"email\":\"$username@$DOMAIN\"}]" "$CONFIG_PATH" > "$tmp" && mv "$tmp" "$CONFIG_PATH"
 
             restart_service
 
             # Générer vmess link dynamique
-            vmess_link=$(echo -n "{\"v\":\"2\",\"ps\":\"$username\",\"add\":\"$domain\",\"port\":\"$PORT\",\"id\":\"$user_uuid\",\"aid\":\"0\",\"net\":\"ws\",\"type\":\"none\",\"host\":\"$domain\",\"path\":\"$WS_PATH\",\"tls\":\"none\"}" | base64 -w0)
+            vmess_link=$(echo -n "{\"v\":\"2\",\"ps\":\"$username\",\"add\":\"$DOMAIN\",\"port\":\"$PORT\",\"id\":\"$user_uuid\",\"aid\":\"0\",\"net\":\"ws\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"$WS_PATH\",\"tls\":\"none\"}" | base64 -w0)
             vmess_link="vmess://$vmess_link"
 
             clear
             echo -e "*NOUVEAU UTILISATEUR V2RAY SLOWDNS CRÉÉ*"
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "DOMAIN        : $domain"
+            echo "DOMAIN        : $DOMAIN"
             echo "UTILISATEUR   : $username"
             echo "UUID          : $user_uuid"
             echo "LIMITE        : $limit"
