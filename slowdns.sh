@@ -5,9 +5,13 @@ SLOWDNS_DIR="/etc/slowdns"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 SERVER_PUB="$SLOWDNS_DIR/server.pub"
 SLOWDNS_BIN="/usr/local/bin/sldns-server"
-PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 MTU_VALUE=1400
+
+# Ports utilisés
+PORT_SSH=5300
+PORT_V2RAY=5301
+V2RAY_PORT=1080   # Port où tourne V2Ray (modifiable si besoin)
 
 log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
@@ -48,31 +52,36 @@ generate_keys() {
   fi
 }
 
-stop_old_instance() {
-  if pgrep -f "sldns-server" >/dev/null; then
-    log "Arrêt de l'ancienne instance SlowDNS..."
-    fuser -k "${PORT}/udp" || true
-    sleep 2
-  fi
-  # Nettoyer règles iptables existantes pour port 5300
-  iptables -D INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || true
-  iptables -t nat -D PREROUTING -p udp --dport 53 -j REDIRECT --to-ports "$PORT" 2>/dev/null || true
+kill_ports() {
+  for port in $PORT_SSH $PORT_V2RAY; do
+    if lsof -iUDP:$port -t >/dev/null 2>&1; then
+      log "Port $port occupé. Arrêt des services/processus..."
+      # Tenter d'arrêter un service systemd correspondant
+      SERVICES=$(systemctl list-units --type=service --all | grep -i slowdns | awk '{print $1}')
+      for svc in $SERVICES; do
+        echo "Stopping service $svc..."
+        systemctl stop "$svc" || true
+        systemctl disable "$svc" || true
+      done
+      # Kill tout processus restant sur le port
+      PIDS=$(lsof -iUDP:$port -t)
+      for pid in $PIDS; do
+        log "Killing process $pid sur le port $port"
+        kill -9 "$pid"
+      done
+      log "Port $port libéré."
+    fi
+  done
 }
 
 setup_iptables() {
-  mkdir -p /etc/iptables
-
-  log "Sauvegarde des règles iptables existantes dans /etc/iptables/rules.v4.bak"
-  iptables-save > /etc/iptables/rules.v4.bak || true
-
-  log "Ajout règle iptables pour autoriser UDP port $PORT"
-  iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
-
-  log "Redirection DNS UDP port 53 vers $PORT sur interface $1"
-  iptables -t nat -I PREROUTING -i "$1" -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
-
-  log "Sauvegarde des règles mises à jour dans /etc/iptables/rules.v4"
+  local iface=$1
+  for port in $PORT_SSH $PORT_V2RAY; do
+    iptables -I INPUT -p udp --dport "$port" -j ACCEPT
+    iptables -t nat -I PREROUTING -i "$iface" -p udp --dport 53 -j REDIRECT --to-ports "$port"
+  done
   iptables-save > /etc/iptables/rules.v4
+  log "Règles iptables mises à jour."
 }
 
 enable_ip_forwarding() {
@@ -87,127 +96,98 @@ enable_ip_forwarding() {
   fi
 }
 
-create_systemd_service() {
-  SERVICE_PATH="/etc/systemd/system/slowdns.service"
-
-  log "Création du fichier systemd slowdns.service..."
-
-  cat <<EOF > "$SERVICE_PATH"
+create_systemd_services() {
+  # Service SlowDNS SSH
+  cat <<EOF > /etc/systemd/system/slowdns-ssh.service
 [Unit]
-Description=SlowDNS Server Tunnel
+Description=SlowDNS SSH Tunnel
 After=network.target
-Wants=network.target
 
 [Service]
 Type=simple
-User=root
-ExecStart=$SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY \$(cat $CONFIG_FILE) 0.0.0.0:$ssh_port
+ExecStart=$SLOWDNS_BIN -udp :$PORT_SSH -privkey-file $SERVER_KEY \$(cat $CONFIG_FILE) 0.0.0.0:$1
 Restart=always
 RestartSec=5
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=slowdns-server
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-  log "Recharge systemd et activation du service slowdns..."
+  # Service SlowDNS V2Ray
+  cat <<EOF > /etc/systemd/system/slowdns-v2ray.service
+[Unit]
+Description=SlowDNS V2Ray Tunnel
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=$SLOWDNS_BIN -udp :$PORT_V2RAY -privkey-file $SERVER_KEY \$(cat $CONFIG_FILE) 0.0.0.0:$V2RAY_PORT
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  log "Services systemd créés : slowdns-ssh et slowdns-v2ray"
   systemctl daemon-reload
-  systemctl enable slowdns.service
-  systemctl restart slowdns.service
-  log "Service slowdns activé et démarré via systemd."
+  systemctl enable slowdns-ssh.service
+  systemctl enable slowdns-v2ray.service
+  systemctl restart slowdns-ssh.service
+  systemctl restart slowdns-v2ray.service
 }
 
 main() {
   check_root
   install_dependencies
   mkdir -p "$SLOWDNS_DIR"
-  stop_old_instance
+
+  # --- Tuer les services/processus sur les ports 5300 et 5301 ---
+  kill_ports
 
   read -rp "Entrez le NameServer (NS) (ex: ns.example.com) : " NAMESERVER
-  if [[ -z "$NAMESERVER" ]]; then
-    echo "NameServer invalide." >&2
-    exit 1
-  fi
   echo "$NAMESERVER" > "$CONFIG_FILE"
-  log "NameServer enregistré dans $CONFIG_FILE"
 
   if [ ! -x "$SLOWDNS_BIN" ]; then
-    mkdir -p /usr/local/bin
     log "Téléchargement du binaire SlowDNS..."
     wget -q -O "$SLOWDNS_BIN" https://raw.githubusercontent.com/fisabiliyusri/SLDNS/main/slowdns/sldns-server
     chmod +x "$SLOWDNS_BIN"
-    if [ ! -x "$SLOWDNS_BIN" ]; then
-      echo "ERREUR : Échec du téléchargement ou permissions du binaire SlowDNS." >&2
-      exit 1
-    fi
   fi
 
   generate_keys
   PUB_KEY=$(cat "$SERVER_PUB")
 
-  local interface=$(get_active_interface)
-  if [ -z "$interface" ]; then
-    echo "Échec détection interface réseau. Veuillez spécifier manuellement." >&2
-    exit 1
-  fi
-  log "Interface réseau détectée : $interface"
+  local iface=$(get_active_interface)
+  log "Interface réseau détectée : $iface"
 
-  log "Réglage MTU sur interface $interface à $MTU_VALUE..."
-  ip link set dev "$interface" mtu "$MTU_VALUE"
-
-  log "Augmentation des buffers UDP..."
-  sysctl -w net.core.rmem_max=26214400
-  sysctl -w net.core.wmem_max=26214400
-
-  setup_iptables "$interface"
+  setup_iptables "$iface"
   enable_ip_forwarding
 
   ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
   if [ -z "$ssh_port" ]; then
-    log "Impossible de détecter le port SSH, utilisation du port 22 par défaut."
     ssh_port=22
   fi
 
-  log "Démarrage SlowDNS sur UDP port $PORT avec NS $NAMESERVER..."
-  screen -dmS slowdns_session "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NAMESERVER" 0.0.0.0:"$ssh_port"
-
-  sleep 3
-
-  if pgrep -f "sldns-server" >/dev/null; then
-    log "SlowDNS démarré avec succès sur UDP port $PORT."
-    log "Pour les logs : screen -r slowdns_session"
-  else
-    echo "ERREUR : SlowDNS n'a pas pu démarrer." >&2
-    exit 1
-  fi
-
-  # Création et activation du service systemd à partir du script
-  create_systemd_service
-
-  if command -v ufw >/dev/null 2>&1; then
-    log "Ouverture du port UDP $PORT avec UFW."
-    ufw allow "$PORT"/udp
-    ufw reload
-  else
-    log "UFW non installé. Veuillez vérifier manuellement l'ouverture du port UDP $PORT."
-  fi
+  create_systemd_services "$ssh_port"
 
   echo ""
   echo "+--------------------------------------------+"
-  echo "|               CONFIG SLOWDNS               |"
+  echo "|        CONFIG SLOWDNS (SSH + V2RAY)        |"
   echo "+--------------------------------------------+"
   echo ""
   echo "Clé publique :"
   echo "$PUB_KEY"
   echo ""
-  echo "NameServer  : $NAMESERVER"
+  echo "NameServer : $NAMESERVER"
   echo ""
-  echo "Commande client (termux) :"
-  echo "curl -sO https://github.com/khaledagn/DNS-AGN/raw/main/files/slowdns && chmod +x slowdns && ./slowdns $NAMESERVER $PUB_KEY"
+  echo "Ports :"
+  echo "  - SSH   : $PORT_SSH"
+  echo "  - V2Ray : $PORT_V2RAY (redirige vers $V2RAY_PORT)"
   echo ""
-  log "Installation et configuration SlowDNS terminées."
+  echo "Commandes utiles :"
+  echo "  systemctl status slowdns-ssh"
+  echo "  systemctl status slowdns-v2ray"
+  echo ""
 }
 
 main "$@"
