@@ -9,20 +9,13 @@ PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 MTU_VALUE=1400
 
-FIXED_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
-MIIBVwIBADANBgkqhkiG9w0BAQEFAASCAT8wggE7AgEAAkEAxZQx6VkBbZg0Rlzi
-... (contenu tronqué, insérer la vraie clé privée) ...
------END PRIVATE KEY-----"
-
-FIXED_PUBLIC_KEY="7fbd1f8aa0abfe15a7903e837f78aba39cf61d36f183bd604daa2fe4ef3b7b59"
-
 log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
 }
 
 check_root() {
   if [ "$EUID" -ne 0 ]; then
-    echo "Ce script doit être exécuté en root ou via sudo." >&2
+    echo "Ce script doit être executé en root ou via sudo." >&2
     exit 1
   fi
 }
@@ -30,7 +23,7 @@ check_root() {
 install_dependencies() {
   log "Mise à jour des paquets et installation des dépendances..."
   apt-get update -q
-  for pkg in iptables screen tcpdump wget; do
+  for pkg in iptables screen tcpdump; do
     if ! command -v "$pkg" &> /dev/null; then
       log "$pkg non trouvé, installation..."
       apt-get install -y "$pkg"
@@ -44,17 +37,15 @@ get_active_interface() {
   ip -o link show up | awk -F': ' '{print $2}' | grep -v '^lo$' | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' | head -n1
 }
 
-write_fixed_keys() {
-  log "Écriture de la clé privée fixe..."
-  mkdir -p "$SLOWDNS_DIR"
-  cat > "$SERVER_KEY" <<EOF
-$FIXED_PRIVATE_KEY
-EOF
-  chmod 600 "$SERVER_KEY"
-
-  log "Écriture de la clé publique fixe..."
-  echo "$FIXED_PUBLIC_KEY" > "$SERVER_PUB"
-  chmod 644 "$SERVER_PUB"
+generate_keys() {
+  if [ ! -s "$SERVER_KEY" ] || [ ! -s "$SERVER_PUB" ]; then
+    log "Génération des clés SlowDNS..."
+    "$SLOWDNS_BIN" -gen-key -privkey-file "$SERVER_KEY" -pubkey-file "$SERVER_PUB"
+    chmod 600 "$SERVER_KEY"
+    chmod 644 "$SERVER_PUB"
+  else
+    log "Clés SlowDNS déjà présentes."
+  fi
 }
 
 stop_old_instance() {
@@ -105,11 +96,12 @@ create_systemd_service() {
 [Unit]
 Description=SlowDNS Server Tunnel
 After=network.target
+Wants=network.target
 
 [Service]
 Type=simple
 User=root
-ExecStart=$SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY \$(cat $CONFIG_FILE) 0.0.0.0:\$(ss -tlnp | grep sshd | head -1 | awk '{print \$4}' | cut -d: -f2)
+ExecStart=$SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY \$(cat $CONFIG_FILE) 0.0.0.0:$ssh_port
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -124,19 +116,13 @@ EOF
   systemctl daemon-reload
   systemctl enable slowdns.service
   systemctl restart slowdns.service
-
-  sleep 3
-  if systemctl is-active --quiet slowdns.service; then
-    log "Service slowdns démarré avec succès."
-  else
-    log "Erreur lors du démarrage du service slowdns. Voir journal avec : journalctl -u slowdns.service"
-    exit 1
-  fi
+  log "Service slowdns activé et démarré via systemd."
 }
 
 main() {
   check_root
   install_dependencies
+  mkdir -p "$SLOWDNS_DIR"
   stop_old_instance
 
   read -rp "Entrez le NameServer (NS) (ex: ns.example.com) : " NAMESERVER
@@ -158,11 +144,10 @@ main() {
     fi
   fi
 
-  write_fixed_keys
+  generate_keys
   PUB_KEY=$(cat "$SERVER_PUB")
 
-  local interface
-  interface=$(get_active_interface)
+  local interface=$(get_active_interface)
   if [ -z "$interface" ]; then
     echo "Échec détection interface réseau. Veuillez spécifier manuellement." >&2
     exit 1
@@ -170,7 +155,7 @@ main() {
   log "Interface réseau détectée : $interface"
 
   log "Réglage MTU sur interface $interface à $MTU_VALUE..."
-  ip link set dev "$interface" mtu "$MTU_VALUE" || log "Attention : échec du réglage MTU."
+  ip link set dev "$interface" mtu "$MTU_VALUE"
 
   log "Augmentation des buffers UDP..."
   sysctl -w net.core.rmem_max=26214400
@@ -186,18 +171,19 @@ main() {
   fi
 
   log "Démarrage SlowDNS sur UDP port $PORT avec NS $NAMESERVER..."
-
   screen -dmS slowdns_session "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NAMESERVER" 0.0.0.0:"$ssh_port"
+
   sleep 3
 
   if pgrep -f "sldns-server" >/dev/null; then
     log "SlowDNS démarré avec succès sur UDP port $PORT."
-    log "Pour voir les logs : screen -r slowdns_session"
+    log "Pour les logs : screen -r slowdns_session"
   else
     echo "ERREUR : SlowDNS n'a pas pu démarrer." >&2
     exit 1
   fi
 
+  # Création et activation du service systemd à partir du script
   create_systemd_service
 
   if command -v ufw >/dev/null 2>&1; then
@@ -218,7 +204,7 @@ main() {
   echo ""
   echo "NameServer  : $NAMESERVER"
   echo ""
-  echo "Commande client (exemple Termux) :"
+  echo "Commande client (termux) :"
   echo "curl -sO https://github.com/khaledagn/DNS-AGN/raw/main/files/slowdns && chmod +x slowdns && ./slowdns $NAMESERVER $PUB_KEY"
   echo ""
   log "Installation et configuration SlowDNS terminées."
