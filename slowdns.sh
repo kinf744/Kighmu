@@ -9,11 +9,10 @@ PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 MTU_VALUE=1400
 
-FIXED_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
-MIIBVwIBADANBgkqhkiG9w0BAQEFAASCAT8wggE7AgEAAkEAxZQx6VkBbZg0Rlzi
-... (votre clé privée complète ici) ...
------END PRIVATE KEY-----"
+# Clé privée base64 sur une seule ligne : REMPLACEZ PAR VOTRE VRAIE CLE
+FIXED_PRIVATE_KEY="MIIBVwIBADANBgkqhkiG9w0BAQEFAASCAT8wggE7AgEAAkEAxZQx6VkBbZg0Rlzi..."
 
+# Clé publique (toujours sur une seule ligne Base64)
 FIXED_PUBLIC_KEY="7fbd1f8aa0abfe15a7903e837f78aba39cf61d36f183bd604daa2fe4ef3b7b59"
 
 log() {
@@ -22,7 +21,7 @@ log() {
 
 check_root() {
   if [ "$EUID" -ne 0 ]; then
-    echo "Ce script doit être exécuté en root ou via sudo." >&2
+    echo "Ce script doit être executé en root ou via sudo." >&2
     exit 1
   fi
 }
