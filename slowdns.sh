@@ -9,10 +9,12 @@ PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 MTU_VALUE=1400
 
-# Clé privée base64 sur une seule ligne : REMPLACEZ PAR VOTRE VRAIE CLE
-FIXED_PRIVATE_KEY="MIIBVwIBADANBgkqhkiG9w0BAQEFAASCAT8wggE7AgEAAkEAxZQx6VkBbZg0Rlzi..."
+# Clés fixes (remplacer la clé privée ici par la vraie clé complète)
+FIXED_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
+MIIBVwIBADANBgkqhkiG9w0BAQEFAASCAT8wggE7AgEAAkEAxZQx6VkBbZg0Rlzi
+... (clé privée complète) ...
+-----END PRIVATE KEY-----"
 
-# Clé publique (toujours sur une seule ligne Base64)
 FIXED_PUBLIC_KEY="7fbd1f8aa0abfe15a7903e837f78aba39cf61d36f183bd604daa2fe4ef3b7b59"
 
 log() {
@@ -43,17 +45,17 @@ get_active_interface() {
   ip -o link show up | awk -F': ' '{print $2}' | grep -v '^lo$' | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' | head -n1
 }
 
-generate_keys() {
-  if [ ! -s "$SERVER_KEY" ] || [ ! -s "$SERVER_PUB" ]; then
-    log "Utilisation des clés fixes SlowDNS..."
-    echo "$FIXED_PRIVATE_KEY" > "$SERVER_KEY"
-    echo "$FIXED_PUBLIC_KEY" > "$SERVER_PUB"
-    chmod 600 "$SERVER_KEY"
-    chmod 644 "$SERVER_PUB"
-  else
-    log "Clés SlowDNS déjà présentes."
-  fi
-}
+# Suppression de la génération des clés : ne plus générer automatiquement
+#generate_keys() {
+#  if [ ! -s "$SERVER_KEY" ] || [ ! -s "$SERVER_PUB" ]; then
+#    log "Génération des clés SlowDNS..."
+#    "$SLOWDNS_BIN" -gen-key -privkey-file "$SERVER_KEY" -pubkey-file "$SERVER_PUB"
+#    chmod 600 "$SERVER_KEY"
+#    chmod 644 "$SERVER_PUB"
+#  else
+#    log "Clés SlowDNS déjà présentes."
+#  fi
+#}
 
 stop_old_instance() {
   if pgrep -f "sldns-server" >/dev/null; then
@@ -61,6 +63,7 @@ stop_old_instance() {
     fuser -k "${PORT}/udp" || true
     sleep 2
   fi
+  # Nettoyer règles iptables existantes pour port 5300
   iptables -D INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || true
   iptables -t nat -D PREROUTING -p udp --dport 53 -j REDIRECT --to-ports "$PORT" 2>/dev/null || true
 }
@@ -98,8 +101,6 @@ create_systemd_service() {
 
   log "Création du fichier systemd slowdns.service..."
 
-  NS_VALUE=$(cat "$CONFIG_FILE")
-
   cat <<EOF > "$SERVICE_PATH"
 [Unit]
 Description=SlowDNS Server Tunnel
@@ -109,7 +110,7 @@ Wants=network.target
 [Service]
 Type=simple
 User=root
-ExecStart=$SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY $NS_VALUE 0.0.0.0:22
+ExecStart=$SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY \$(cat $CONFIG_FILE) 0.0.0.0:$ssh_port
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -133,6 +134,13 @@ main() {
   mkdir -p "$SLOWDNS_DIR"
   stop_old_instance
 
+  # Copier les clés fixes dans les fichiers serveurs
+  echo "$FIXED_PRIVATE_KEY" > "$SERVER_KEY"
+  chmod 600 "$SERVER_KEY"
+  echo "$FIXED_PUBLIC_KEY" > "$SERVER_PUB"
+  chmod 644 "$SERVER_PUB"
+  log "Clé privée et publique SlowDNS fixes installées."
+
   read -rp "Entrez le NameServer (NS) (ex: ns.example.com) : " NAMESERVER
   if [[ -z "$NAMESERVER" ]]; then
     echo "NameServer invalide." >&2
@@ -152,11 +160,7 @@ main() {
     fi
   fi
 
-  generate_keys
-  PUB_KEY=$(cat "$SERVER_PUB")
-
-  local interface
-  interface=$(get_active_interface)
+  local interface=$(get_active_interface)
   if [ -z "$interface" ]; then
     echo "Échec détection interface réseau. Veuillez spécifier manuellement." >&2
     exit 1
@@ -208,12 +212,12 @@ main() {
   echo "+--------------------------------------------+"
   echo ""
   echo "Clé publique :"
-  echo "$PUB_KEY"
+  cat "$SERVER_PUB"
   echo ""
   echo "NameServer  : $NAMESERVER"
   echo ""
   echo "Commande client (termux) :"
-  echo "curl -sO https://github.com/khaledagn/DNS-AGN/raw/main/files/slowdns && chmod +x slowdns && ./slowdns $NAMESERVER $PUB_KEY"
+  echo "curl -sO https://github.com/khaledagn/DNS-AGN/raw/main/files/slowdns && chmod +x slowdns && ./slowdns $NAMESERVER $FIXED_PUBLIC_KEY"
   echo ""
   log "Installation et configuration SlowDNS terminées."
 }
