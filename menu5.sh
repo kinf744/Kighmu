@@ -58,9 +58,33 @@ install_slowdns() {
 }
 
 uninstall_slowdns() {
-    echo ">>> Désinstallation de SlowDNS..."
-    pkill -f slowdns || true
-    echo "[OK] SlowDNS désinstallé (processus tués)."
+    echo ">>> Désinstallation complète de SlowDNS..."
+
+    # Arrêter et désactiver systemd slowdns
+    systemctl stop slowdns.service || true
+    systemctl disable slowdns.service || true
+    rm -f /etc/systemd/system/slowdns.service
+    systemctl daemon-reload
+
+    # Tuer tous les processus SlowDNS
+    pkill -f sldns-server || true
+
+    # Nettoyer règles iptables (UDP 5300, nat PREROUTING 53)
+    iptables -D INPUT -p udp --dport 5300 -j ACCEPT 2>/dev/null || true
+    iptables -t nat -D PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 5300 2>/dev/null || true
+    iptables-save > /etc/iptables/rules.v4
+
+    # Supprimer fichiers et dossiers SlowDNS
+    rm -rf /etc/slowdns
+    rm -f /usr/local/bin/sldns-server
+
+    # Fermer port avec UFW si actif
+    if command -v ufw >/dev/null 2>&1; then
+      ufw delete allow 5300/udp || true
+      ufw reload
+    fi
+
+    echo "[OK] SlowDNS désinstallé et nettoyé."
 }
 
 # =====================================================
