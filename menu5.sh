@@ -3,14 +3,14 @@
 # Panneau de contrôle installation/désinstallation
 
 clear
-echo -e "\e[34m+--------------------------------------------+\e[0m"
-echo -e "\e[34m|      PANNEAU DE CONTROLE DES MODES         |\e[0m"
-echo -e "\e[34m+--------------------------------------------+\e[0m"
+echo "+--------------------------------------------+"
+echo "|      PANNEAU DE CONTROLE DES MODES         |"
+echo "+--------------------------------------------+"
 
 # Détection IP et uptime
 HOST_IP=$(curl -s https://api.ipify.org)
 UPTIME=$(uptime -p)
-echo "IP: $HOST_IP | time: $UPTIME"
+echo "IP: $HOST_IP | Uptime: $UPTIME"
 echo ""
 
 # =====================================================
@@ -54,63 +54,25 @@ uninstall_dropbear() {
 # =====================================================
 install_slowdns() {
     echo ">>> Installation/configuration de SlowDNS..."
-    bash "/root/Kighmu/slowdns.sh" > /tmp/slowdns_install.log 2>&1 || { echo "SlowDNS : script introuvable ou erreur."; tail -n 20 /tmp/slowdns_install.log; }
+    bash "$HOME/Kighmu/slowdns.sh" || echo "SlowDNS : script introuvable."
 }
 
 uninstall_slowdns() {
-    echo ">>> Désinstallation complète de SlowDNS..."
-
-    systemctl stop slowdns.service || true
-    systemctl disable slowdns.service || true
-    rm -f /etc/systemd/system/slowdns.service
-    systemctl daemon-reload
-
-    pkill -f sldns-server || true
-
-    iptables -D INPUT -p udp --dport 5300 -j ACCEPT 2>/dev/null || true
-    iptables -t nat -D PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 5300 2>/dev/null || true
-    iptables-save > /etc/iptables/rules.v4
-
-    rm -rf /etc/slowdns
-    rm -f /usr/local/bin/sldns-server
-
-    if command -v ufw >/dev/null 2>&1; then
-      ufw delete allow 5300/udp || true
-      ufw reload
-    fi
-
-    echo "[OK] SlowDNS désinstallé et nettoyé."
+    echo ">>> Désinstallation de SlowDNS..."
+    pkill -f slowdns || true
+    echo "[OK] SlowDNS désinstallé (processus tués)."
 }
 
-# =====================================================
-# Fonctions pour UDP Custom
-# =====================================================
-install_udp_custom() {
-    echo ">>> Installation UDP Custom..."
-    bash "/root/Kighmu/udp_custom.sh" > /tmp/udp_custom_install.log 2>&1 || { echo "UDP Custom : script introuvable ou erreur."; tail -n 20 /tmp/udp_custom_install.log; }
-}
-
+# Les autres modes (udp, socks, ssl/tls, badvpn) :
+install_udp_custom() { bash "$HOME/Kighmu/udp_custom.sh" || echo "Script introuvable."; }
 uninstall_udp_custom() { pkill -f udp_custom || echo "UDP Custom déjà arrêté."; }
 
-# =====================================================
-# Fonctions pour SOCKS/Python
-# =====================================================
-install_socks_python() {
-    echo ">>> Installation SOCKS Python..."
-    bash "/root/Kighmu/socks_python.sh" > /tmp/socks_python_install.log 2>&1 || { echo "SOCKS Python : script introuvable ou erreur."; tail -n 20 /tmp/socks_python_install.log; }
-}
-
+install_socks_python() { bash "$HOME/Kighmu/socks_python.sh" || echo "Script introuvable."; }
 uninstall_socks_python() { pkill -f socks_python || echo "SOCKS déjà arrêté."; }
 
-# =====================================================
-# Fonctions pour SSL/TLS
-# =====================================================
 install_ssl_tls() { echo ">>> Installation SSL/TLS (à compléter)"; }
 uninstall_ssl_tls() { echo ">>> Désinstallation SSL/TLS (à compléter)"; }
 
-# =====================================================
-# Fonctions pour BadVPN
-# =====================================================
 install_badvpn() { echo ">>> Installation BadVPN (à compléter)"; }
 uninstall_badvpn() { echo ">>> Désinstallation BadVPN (à compléter)"; }
 
@@ -124,13 +86,13 @@ manage_mode() {
 
     while true; do
         echo ""
-        echo -e "\e[34m+--------------------------------------------+\e[0m"
-        echo -e "\e[34m   Gestion du mode : $MODE_NAME\e[0m"
-        echo -e "\e[34m+--------------------------------------------+\e[0m"
+        echo "+--------------------------------------------+"
+        echo "   Gestion du mode : $MODE_NAME"
+        echo "+--------------------------------------------+"
         echo " [1] Installer"
         echo " [2] Désinstaller"
         echo " [0] Retour"
-        echo -e "\e[34m----------------------------------------------\e[0m"
+        echo "----------------------------------------------"
         echo -n "👉 Choisissez une action : "
         read action
 
@@ -148,7 +110,7 @@ manage_mode() {
 # =====================================================
 while true; do
     echo ""
-    echo -e "\e[34m+================ MENU PRINCIPAL =================+\e[0m"
+    echo "+================ MENU PRINCIPAL =================+"
     echo " [1] OpenSSH"
     echo " [2] Dropbear"
     echo " [3] SlowDNS"
@@ -156,8 +118,8 @@ while true; do
     echo " [5] SOCKS/Python"
     echo " [6] SSL/TLS"
     echo " [7] BadVPN"
-    echo " [0] Retour"
-    echo -e "\e[34m+================================================+\e[0m"
+    echo " [0] Quitter"
+    echo "+================================================+"
     echo -n "👉 Choisissez un mode : "
     read choix
 
