@@ -22,7 +22,7 @@ log() {
 
 check_root() {
   if [ "$EUID" -ne 0 ]; then
-    echo "Ce script doit être exécuté en root ou via sudo." >&2
+    echo "Ce script doit être executé en root ou via sudo." >&2
     exit 1
   fi
 }
@@ -99,6 +99,9 @@ create_systemd_service() {
 
   log "Création du fichier systemd slowdns.service..."
 
+  # Lecture préalable du contenu du fichier de config (NameServer)
+  NS_VALUE=$(cat "$CONFIG_FILE")
+
   cat <<EOF > "$SERVICE_PATH"
 [Unit]
 Description=SlowDNS Server Tunnel
@@ -108,7 +111,7 @@ Wants=network.target
 [Service]
 Type=simple
 User=root
-ExecStart=$SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY \$(cat $CONFIG_FILE) 0.0.0.0:$ssh_port
+ExecStart=$SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY $NS_VALUE 0.0.0.0:22
 Restart=always
 RestartSec=5
 StandardOutput=journal
