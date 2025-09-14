@@ -54,31 +54,26 @@ uninstall_dropbear() {
 # =====================================================
 install_slowdns() {
     echo ">>> Installation/configuration de SlowDNS..."
-    bash "$HOME/Kighmu/slowdns.sh" || echo "SlowDNS : script introuvable."
+    bash "/root/Kighmu/slowdns.sh" > /tmp/slowdns_install.log 2>&1 || { echo "SlowDNS : script introuvable ou erreur."; tail -n 20 /tmp/slowdns_install.log; }
 }
 
 uninstall_slowdns() {
     echo ">>> Désinstallation complète de SlowDNS..."
 
-    # Arrêter et désactiver systemd slowdns
     systemctl stop slowdns.service || true
     systemctl disable slowdns.service || true
     rm -f /etc/systemd/system/slowdns.service
     systemctl daemon-reload
 
-    # Tuer tous les processus SlowDNS
     pkill -f sldns-server || true
 
-    # Nettoyer règles iptables (UDP 5300, nat PREROUTING 53)
     iptables -D INPUT -p udp --dport 5300 -j ACCEPT 2>/dev/null || true
     iptables -t nat -D PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 5300 2>/dev/null || true
     iptables-save > /etc/iptables/rules.v4
 
-    # Supprimer fichiers et dossiers SlowDNS
     rm -rf /etc/slowdns
     rm -f /usr/local/bin/sldns-server
 
-    # Fermer port avec UFW si actif
     if command -v ufw >/dev/null 2>&1; then
       ufw delete allow 5300/udp || true
       ufw reload
@@ -90,13 +85,21 @@ uninstall_slowdns() {
 # =====================================================
 # Fonctions pour UDP Custom
 # =====================================================
-install_udp_custom() { bash "$HOME/Kighmu/udp_custom.sh" || echo "Script introuvable."; }
+install_udp_custom() {
+    echo ">>> Installation UDP Custom..."
+    bash "/root/Kighmu/udp_custom.sh" > /tmp/udp_custom_install.log 2>&1 || { echo "UDP Custom : script introuvable ou erreur."; tail -n 20 /tmp/udp_custom_install.log; }
+}
+
 uninstall_udp_custom() { pkill -f udp_custom || echo "UDP Custom déjà arrêté."; }
 
 # =====================================================
 # Fonctions pour SOCKS/Python
 # =====================================================
-install_socks_python() { bash "$HOME/Kighmu/socks_python.sh" || echo "Script introuvable."; }
+install_socks_python() {
+    echo ">>> Installation SOCKS Python..."
+    bash "/root/Kighmu/socks_python.sh" > /tmp/socks_python_install.log 2>&1 || { echo "SOCKS Python : script introuvable ou erreur."; tail -n 20 /tmp/socks_python_install.log; }
+}
+
 uninstall_socks_python() { pkill -f socks_python || echo "SOCKS déjà arrêté."; }
 
 # =====================================================
