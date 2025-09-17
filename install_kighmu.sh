@@ -90,7 +90,6 @@ apt install -y netcat-traditional
 apt install -y net-tools
 apt install -y cowsay
 apt install -y figlet
-apt install -y lolcat
 apt install -y dnsutils
 apt install -y wget
 apt install -y psmisc
