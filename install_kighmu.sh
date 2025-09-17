@@ -76,10 +76,8 @@ apt install -y cron
 apt install -y iptables
 apt install -y lsof
 apt install -y pv
-apt install -y boxes
 apt install -y nano
 apt install -y at
-apt install -y mlocate
 apt install -y gawk
 apt install -y grep
 apt install -y bc
@@ -96,10 +94,7 @@ apt install -y lolcat
 apt install -y dnsutils
 apt install -y wget
 apt install -y psmisc
-apt install -y nginx
-apt install -y dropbear
 apt install -y python3-setuptools
-apt install -y wireguard-tools
 apt install -y qrencode
 apt install -y gcc
 apt install -y make
