@@ -1,5 +1,5 @@
 #!/bin/bash
-# menu5.sh - Panneau de contrôle complet et sécurisé multi modes
+# menu5.sh - Panneau de contrôle installation/désinstallation amélioré
 
 clear
 echo "+--------------------------------------------+"
@@ -13,7 +13,7 @@ echo "IP: $HOST_IP | Uptime: $UPTIME"
 echo ""
 
 # =====================================================
-# Fonctions pour SlowDNS
+# Fonctions SlowDNS améliorées
 # =====================================================
 install_slowdns() {
     echo ">>> Nettoyage avant installation SlowDNS..."
@@ -46,14 +46,10 @@ uninstall_slowdns() {
 }
 
 # =====================================================
-# Fonctions pour OpenSSH
+# Fonctions OpenSSH
 # =====================================================
 install_openssh() {
-    echo ">>> Nettoyage avant installation OpenSSH..."
-    pkill -f sshd || true
-    systemctl stop ssh 2>/dev/null || true
-    systemctl disable ssh 2>/dev/null || true
-    apt-get remove -y openssh-server
+    echo ">>> Installation d'OpenSSH..."
     apt-get install -y openssh-server
     systemctl enable ssh
     systemctl start ssh
@@ -61,22 +57,17 @@ install_openssh() {
 }
 
 uninstall_openssh() {
-    echo ">>> Désinstallation d'OpenSSH complète..."
-    systemctl stop ssh 2>/dev/null || true
-    systemctl disable ssh 2>/dev/null || true
+    echo ">>> Désinstallation d'OpenSSH..."
     apt-get remove -y openssh-server
-    echo "[OK] OpenSSH désinstallé."
+    systemctl disable ssh
+    echo "[OK] OpenSSH supprimé."
 }
 
 # =====================================================
-# Fonctions pour Dropbear
+# Fonctions Dropbear
 # =====================================================
 install_dropbear() {
-    echo ">>> Nettoyage avant installation Dropbear..."
-    pkill -f dropbear || true
-    systemctl stop dropbear 2>/dev/null || true
-    systemctl disable dropbear 2>/dev/null || true
-    apt-get remove -y dropbear
+    echo ">>> Installation de Dropbear..."
     apt-get install -y dropbear
     systemctl enable dropbear
     systemctl start dropbear
@@ -84,15 +75,14 @@ install_dropbear() {
 }
 
 uninstall_dropbear() {
-    echo ">>> Désinstallation de Dropbear complète..."
-    systemctl stop dropbear 2>/dev/null || true
-    systemctl disable dropbear 2>/dev/null || true
+    echo ">>> Désinstallation de Dropbear..."
     apt-get remove -y dropbear
-    echo "[OK] Dropbear désinstallé."
+    systemctl disable dropbear
+    echo "[OK] Dropbear supprimé."
 }
 
 # =====================================================
-# Fonctions pour UDP Custom
+# Fonctions UDP Custom avec désinstallation améliorée
 # =====================================================
 install_udp_custom() {
     echo ">>> Nettoyage avant installation UDP Custom..."
@@ -115,21 +105,42 @@ install_udp_custom() {
 
 uninstall_udp_custom() {
     echo ">>> Désinstallation complète UDP Custom..."
-    pkill -f udp_custom || true
-    killall udp_custom 2>/dev/null || true
+
+    pids=$(pgrep -f udp_custom)
+    if [ ! -z "$pids" ]; then
+        echo "Terminer processus UDP Custom : $pids"
+        kill -15 $pids
+        sleep 2
+        pids=$(pgrep -f udp_custom)
+        if [ ! -z "$pids" ]; then
+            echo "Processus résistants kill -9 : $pids"
+            kill -9 $pids
+        fi
+    else
+        echo "Aucun processus UDP Custom actif."
+    fi
+
+    if systemctl list-units --full -all | grep -Fq 'udp_custom.service'; then
+        systemctl stop udp_custom.service
+        systemctl disable udp_custom.service
+        rm -f /etc/systemd/system/udp_custom.service
+        systemctl daemon-reload
+        echo "Service UDP Custom arrêté et supprimé."
+    else
+        echo "Aucun service systemd UDP Custom trouvé."
+    fi
+
     rm -f $HOME/Kighmu/udp_custom.sh
-    systemctl stop udp_custom.service 2>/dev/null || true
-    systemctl disable udp_custom.service 2>/dev/null || true
-    rm -f /etc/systemd/system/udp_custom.service
-    systemctl daemon-reload
+
     ufw delete allow 54000/udp 2>/dev/null || true
     iptables -D INPUT -p udp --dport 54000 -j ACCEPT 2>/dev/null || true
+    iptables -D OUTPUT -p udp --sport 54000 -j ACCEPT 2>/dev/null || true
 
-    echo "[OK] UDP Custom désinstallé et nettoyé."
+    echo "[OK] UDP Custom désinstallé."
 }
 
 # =====================================================
-# Fonctions pour SOCKS Python
+# Fonctions SOCKS Python avec désinstallation améliorée
 # =====================================================
 install_socks_python() {
     echo ">>> Nettoyage avant installation SOCKS Python..."
@@ -156,55 +167,61 @@ install_socks_python() {
 
 uninstall_socks_python() {
     echo ">>> Désinstallation complète SOCKS Python..."
-    pkill -f socks_python || true
-    killall socks_python 2>/dev/null || true
+
+    pids=$(pgrep -f socks_python)
+    if [ ! -z "$pids" ]; then
+        echo "Terminer processus SOCKS Python : $pids"
+        kill -15 $pids
+        sleep 2
+        pids=$(pgrep -f socks_python)
+        if [ ! -z "$pids" ]; then
+            echo "Processus résistants kill -9 : $pids"
+            kill -9 $pids
+        fi
+    else
+        echo "Aucun processus SOCKS Python actif."
+    fi
+
+    if systemctl list-units --full -all | grep -Fq 'socks_python.service'; then
+        systemctl stop socks_python.service
+        systemctl disable socks_python.service
+        rm -f /etc/systemd/system/socks_python.service
+        systemctl daemon-reload
+        echo "Service SOCKS Python arrêté et supprimé."
+    else
+        echo "Aucun service systemd SOCKS Python trouvé."
+    fi
+
     rm -f $HOME/Kighmu/socks_python.sh
-    systemctl stop socks_python.service 2>/dev/null || true
-    systemctl disable socks_python.service 2>/dev/null || true
-    rm -f /etc/systemd/system/socks_python.service
-    systemctl daemon-reload
+
     ufw delete allow 8080/tcp 2>/dev/null || true
     ufw delete allow 9090/tcp 2>/dev/null || true
     iptables -D INPUT -p tcp --dport 8080 -j ACCEPT 2>/dev/null || true
+    iptables -D OUTPUT -p tcp --sport 8080 -j ACCEPT 2>/dev/null || true
     iptables -D INPUT -p tcp --dport 9090 -j ACCEPT 2>/dev/null || true
+    iptables -D OUTPUT -p tcp --sport 9090 -j ACCEPT 2>/dev/null || true
 
-    echo "[OK] SOCKS Python désinstallé et nettoyé."
+    echo "[OK] SOCKS Python désinstallé."
 }
 
 # =====================================================
-# Fonctions SSL/TLS (à compléter)
+# Fonctions SSL/TLS et BadVPN à compléter plus tard
 # =====================================================
 install_ssl_tls() {
-    echo ">>> Nettoyage avant installation SSL/TLS..."
-    # Ajoutez nettoyage et installation ici
     echo ">>> Installation SSL/TLS (à compléter)"
 }
-
 uninstall_ssl_tls() {
-    echo ">>> Désinstallation SSL/TLS complète..."
-    # Ajoutez nettoyage et désinstallation ici
     echo ">>> Désinstallation SSL/TLS (à compléter)"
 }
-
-# =====================================================
-# Fonctions BadVPN (à compléter)
-# =====================================================
 install_badvpn() {
-    echo ">>> Nettoyage avant installation BadVPN..."
-    pkill -f badvpn || true
-    # Ajoutez nettoyage et installation ici
     echo ">>> Installation BadVPN (à compléter)"
 }
-
 uninstall_badvpn() {
-    echo ">>> Désinstallation complète BadVPN..."
-    pkill -f badvpn || true
-    # Ajoutez nettoyage et désinstallation ici
     echo ">>> Désinstallation BadVPN (à compléter)"
 }
 
 # =====================================================
-# Fonction générique de gestion des modes
+# Fonction générique gestion des modes
 # =====================================================
 manage_mode() {
     MODE_NAME=$1
