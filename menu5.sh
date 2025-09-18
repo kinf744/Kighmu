@@ -1,11 +1,19 @@
 #!/bin/bash
-# menu5.sh
-# Panneau de contrôle installation/désinstallation
+# menu5.sh - Panneau de contrôle installation/désinstallation avec améliorations
 
 clear
 echo "+--------------------------------------------+"
 echo "|      PANNEAU DE CONTROLE DES MODES         |"
 echo "+--------------------------------------------+"
+
+# Authentification
+echo -n "Mot de passe admin : "
+read -s MP
+echo
+if [ "$MP" != "votre_mot_de_passe_securise" ]; then
+    echo "Accès refusé."
+    exit 1
+fi
 
 # Détection IP et uptime
 HOST_IP=$(curl -s https://api.ipify.org)
@@ -14,8 +22,50 @@ echo "IP: $HOST_IP | Uptime: $UPTIME"
 echo ""
 
 # =====================================================
-# Fonctions pour OpenSSH
+# Fonctions pour SlowDNS améliorées
 # =====================================================
+install_slowdns() {
+    echo ">>> Nettoyage avant installation SlowDNS..."
+    # Arrêter slowdns et nettoyer tout
+    pkill -f slowdns || true
+    rm -rf $HOME/.slowdns
+    rm -f /usr/local/bin/slowdns
+    systemctl stop slowdns.service 2>/dev/null || true
+    systemctl disable slowdns.service 2>/dev/null || true
+    rm -f /etc/systemd/system/slowdns.service
+    systemctl daemon-reload
+    ufw delete allow 5300/udp 2>/dev/null || true
+
+    echo ">>> Installation/configuration de SlowDNS..."
+    bash "$HOME/Kighmu/slowdns.sh" || echo "SlowDNS : script introuvable."
+
+    # Activer le firewall pour le port SlowDNS
+    ufw allow 5300/udp
+}
+
+uninstall_slowdns() {
+    echo ">>> Désinstallation de SlowDNS complète..."
+
+    # Stopper tout processus slowdns
+    pkill -f slowdns || true
+
+    # Nettoyer fichiers/keys slowdns
+    rm -rf $HOME/.slowdns
+    rm -f /usr/local/bin/slowdns
+
+    # Supprimer service systemd slowdns
+    systemctl stop slowdns.service 2>/dev/null || true
+    systemctl disable slowdns.service 2>/dev/null || true
+    rm -f /etc/systemd/system/slowdns.service
+    systemctl daemon-reload
+
+    # Supprimer règle firewall
+    ufw delete allow 5300/udp 2>/dev/null || true
+
+    echo "[OK] SlowDNS désinstallé et nettoyé."
+}
+
+# Les autres modes... (comme avant)
 install_openssh() {
     echo ">>> Installation d'OpenSSH..."
     apt-get install -y openssh-server
@@ -23,17 +73,12 @@ install_openssh() {
     systemctl start ssh
     echo "[OK] OpenSSH installé."
 }
-
 uninstall_openssh() {
     echo ">>> Désinstallation d'OpenSSH..."
     apt-get remove -y openssh-server
     systemctl disable ssh
     echo "[OK] OpenSSH supprimé."
 }
-
-# =====================================================
-# Fonctions pour Dropbear
-# =====================================================
 install_dropbear() {
     echo ">>> Installation de Dropbear..."
     apt-get install -y dropbear
@@ -41,43 +86,23 @@ install_dropbear() {
     systemctl start dropbear
     echo "[OK] Dropbear installé."
 }
-
 uninstall_dropbear() {
     echo ">>> Désinstallation de Dropbear..."
     apt-get remove -y dropbear
     systemctl disable dropbear
     echo "[OK] Dropbear supprimé."
 }
-
-# =====================================================
-# Fonctions pour SlowDNS
-# =====================================================
-install_slowdns() {
-    echo ">>> Installation/configuration de SlowDNS..."
-    bash "$HOME/Kighmu/slowdns.sh" || echo "SlowDNS : script introuvable."
-}
-
-uninstall_slowdns() {
-    echo ">>> Désinstallation de SlowDNS..."
-    pkill -f slowdns || true
-    echo "[OK] SlowDNS désinstallé (processus tués)."
-}
-
-# Les autres modes (udp, socks, ssl/tls, badvpn) :
 install_udp_custom() { bash "$HOME/Kighmu/udp_custom.sh" || echo "Script introuvable."; }
 uninstall_udp_custom() { pkill -f udp_custom || echo "UDP Custom déjà arrêté."; }
-
 install_socks_python() { bash "$HOME/Kighmu/socks_python.sh" || echo "Script introuvable."; }
 uninstall_socks_python() { pkill -f socks_python || echo "SOCKS déjà arrêté."; }
-
 install_ssl_tls() { echo ">>> Installation SSL/TLS (à compléter)"; }
 uninstall_ssl_tls() { echo ">>> Désinstallation SSL/TLS (à compléter)"; }
-
 install_badvpn() { echo ">>> Installation BadVPN (à compléter)"; }
 uninstall_badvpn() { echo ">>> Désinstallation BadVPN (à compléter)"; }
 
 # =====================================================
-# Fonction générique qui affiche le sous-menu
+# Fonction générique de gestion des modes
 # =====================================================
 manage_mode() {
     MODE_NAME=$1
