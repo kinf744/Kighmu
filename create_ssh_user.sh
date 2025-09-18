@@ -29,7 +29,7 @@ mkdir -p /home/"$USERNAME"/.ssh
 chmod 700 /home/"$USERNAME"/.ssh
 chown -R "$USERNAME":"$USERNAME" /home/"$USERNAME"/.ssh
 
-# Optional: ajouter une clé publique SSH (si fournie)
+# Optionnel : ajouter une clé publique SSH (si fournie)
 read -p "Si vous avez une clé publique SSH à ajouter, collez-la maintenant (ou appuyez sur Entrée pour passer) : " PUBKEY
 
 if [ -n "$PUBKEY" ]; then
@@ -41,6 +41,18 @@ else
     echo "Aucune clé publique SSH ajoutée."
 fi
 
+# Ajout automatique de l'affichage du banner personnalisé au login shell
+BANNER_PATH="$HOME/.kighmu/banner.txt"  # Adaptez ce chemin si nécessaire
+
+echo "
+# Affichage du banner Kighmu VPS Manager
+if [ -f $BANNER_PATH ]; then
+    cat $BANNER_PATH
+fi
+" >> /home/"$USERNAME"/.bashrc
+
+chown "$USERNAME":"$USERNAME" /home/"$USERNAME"/.bashrc
+
 echo
 echo "+--------------------------------------------+"
 echo "|        UTILISATEUR SSH CRÉÉ AVEC SUCCÈS   |"
@@ -51,5 +63,3 @@ echo -e "Clé publique SlowDNS :\n$PUBLIC_KEY"
 echo "+--------------------------------------------+"
 
 echo "Utilisateur $USERNAME créé et configuré avec succès."
-
-echo "Note : Le banner personnalisé est partagé pour tous les utilisateurs via /etc/kighmu/banner.txt."
