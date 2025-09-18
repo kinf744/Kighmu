@@ -163,7 +163,7 @@ manage_mode() {
     while true; do
         echo ""
         echo -e "${CYAN}+==================================================+${RESET}"
-        echo -e "|           🚀 Gestion du mode : $MODE_NAME 🚀         |"
+        echo -e "|           🚀 Gestion du mode : $MODE_NAME 🚀        |"
         echo -e "${CYAN}+==================================================+${RESET}"
         echo -e "${YELLOW}[1] Installer${RESET}"
         echo -e "${YELLOW}[2] Désinstaller${RESET}"
