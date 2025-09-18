@@ -36,20 +36,19 @@ if [ -z "$user_line" ]; then
     exit 1
 fi
 
-# Affichage du menu des actions possibles
+# Affichage du menu des actions possibles avec style numéros entre crochets
 echo
-echo -e "${BOLD}Que souhaitez-vous modifier ?${RESET}"
-echo -e " 1) Durée d'expiration du compte"
-echo -e " 2) Mot de passe"
-echo -e " 0) Retour au menu"
+echo -e "${GREEN}${BOLD}[01]${RESET} ${YELLOW}Durée d'expiration du compte${RESET}"
+echo -e "${GREEN}${BOLD}[02]${RESET} ${YELLOW}Mot de passe${RESET}"
+echo -e "${GREEN}${BOLD}[00]${RESET} ${YELLOW}Retour au menu${RESET}"
 
-read -p "Entrez votre choix [0-2] : " choice
+read -p "Entrez votre choix [00-02] : " choice
 
 # Récupération des champs actuels pour mise à jour
 IFS="|" read -r user pass limite expire_date hostip domain slowdns_ns <<< "$user_line"
 
 case $choice in
-    1)
+    1|01)
         echo
         read -p "Nouvelle durée d'expiration (en jours, 0 pour pas d'expiration) : " new_limit
         if ! [[ "$new_limit" =~ ^[0-9]+$ ]]; then
@@ -70,7 +69,7 @@ case $choice in
 
         echo -e "${GREEN}Durée modifiée avec succès.${RESET}"
         ;;
-    2)
+    2|02)
         echo
         # Lecture du mot de passe sans l'afficher
         read -s -p "Nouveau mot de passe : " pass1
@@ -84,7 +83,6 @@ case $choice in
         fi
 
         # Mise à jour du mot de passe dans le user_file (à adapter selon format de hash)
-        # Ici on stocke le mot de passe en clair, à adapter selon sécurité souhaitée
         new_line="${user}|${pass1}|${limite}|${expire_date}|${hostip}|${domain}|${slowdns_ns}"
         sed -i "s/^$user|.*/$new_line/" "$USER_FILE"
 
@@ -97,7 +95,7 @@ case $choice in
             echo -e "${RED}Erreur lors de la modification du mot de passe système.${RESET}"
         fi
         ;;
-    0)
+    0|00)
         echo "Retour au menu..."
         exit 0
         ;;
