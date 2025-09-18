@@ -2,11 +2,21 @@
 # menu1.sh
 # Créer un utilisateur normal et sauvegarder ses infos
 
+# Définition des couleurs (comme dans le panneau principal)
+RED="\e[31m"
+GREEN="\e[32m"
+YELLOW="\e[33m"
+BLUE="\e[34m"
+MAGENTA="\e[35m"
+CYAN="\e[36m"
+BOLD="\e[1m"
+RESET="\e[0m"
+
 # Charger la configuration globale si elle existe
 if [ -f ~/.kighmu_info ]; then
     source ~/.kighmu_info
 else
-    echo "Erreur : fichier ~/.kighmu_info introuvable, informations globales manquantes."
+    echo -e "${RED}Erreur : fichier ~/.kighmu_info introuvable, informations globales manquantes.${RESET}"
     exit 1
 fi
 
@@ -14,26 +24,27 @@ fi
 if [ -f /etc/slowdns/server.pub ]; then
     SLOWDNS_KEY=$(cat /etc/slowdns/server.pub)
 else
-    SLOWDNS_KEY="Clé publique SlowDNS non trouvée!"
+    SLOWDNS_KEY="${RED}Clé publique SlowDNS non trouvée!${RESET}"
 fi
 
 # Charger le NameServer SlowDNS exact depuis le fichier de config
 if [ -f /etc/slowdns/ns.conf ]; then
     SLOWDNS_NS=$(cat /etc/slowdns/ns.conf)
 else
-    echo "Erreur : fichier /etc/slowdns/ns.conf introuvable."
+    echo -e "${RED}Erreur : fichier /etc/slowdns/ns.conf introuvable.${RESET}"
     exit 1
 fi
 
-echo "+--------------------------------------------+"
-echo "|         CRÉATION D'UTILISATEUR            |"
-echo "+--------------------------------------------+"
+clear
+echo -e "${CYAN}+==================================================+${RESET}"
+echo -e "|                CRÉATION D'UTILISATEUR             |"
+echo -e "${CYAN}+==================================================+${RESET}"
 
 # Demander les informations
 read -p "Nom d'utilisateur : " username
 
 if id "$username" &>/dev/null; then
-    echo "L'utilisateur existe déjà."
+    echo -e "${RED}L'utilisateur existe déjà.${RESET}"
     exit 1
 fi
 
@@ -45,7 +56,7 @@ read -p "Durée de validité (en jours) : " days
 
 # Validation simple
 if ! [[ "$limite" =~ ^[0-9]+$ ]] || ! [[ "$days" =~ ^[0-9]+$ ]]; then
-    echo "Nombre d'appareils ou durée non valides."
+    echo -e "${RED}Nombre d'appareils ou durée non valides.${RESET}"
     exit 1
 fi
 
@@ -53,7 +64,7 @@ fi
 expire_date=$(date -d "+$days days" '+%Y-%m-%d')
 
 # Création utilisateur sans home et shell bloqué
-useradd -M -s /bin/false "$username" || { echo "Erreur lors de la création"; exit 1; }
+useradd -M -s /bin/false "$username" || { echo -e "${RED}Erreur lors de la création${RESET}"; exit 1; }
 echo "$username:$password" | chpasswd
 
 # Appliquer la date d'expiration du compte
@@ -73,43 +84,50 @@ echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> 
 # Ajout automatique de l'affichage du banner personnalisé au login shell
 BANNER_PATH="/etc/ssh/sshd_banner"  # Chemin vers le fichier banner, à adapter si besoin
 
-echo "
+# Comme pas de home créé (avec -M), .bashrc n'existe pas => créer dossier home minimal et fichier .bashrc pour banner
+USER_HOME="/home/$username"
+if [ ! -d "$USER_HOME" ]; then
+    mkdir -p "$USER_HOME"
+    chown "$username":"$username" "$USER_HOME"
+fi
+
+echo -e "
 # Affichage du banner Kighmu VPS Manager
 if [ -f $BANNER_PATH ]; then
     cat \$BANNER_PATH
 fi
-" >> /home/"$username"/.bashrc
+" > "$USER_HOME/.bashrc"
 
-chown "$username":"$username" /home/"$username"/.bashrc
-chmod 644 /home/"$username"/.bashrc
+chown "$username":"$username" "$USER_HOME/.bashrc"
+chmod 644 "$USER_HOME/.bashrc"
 
-# Afficher résumé
-echo ""
-echo "*NOUVEAU UTILISATEUR CRÉÉ*"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "∘ SSH: 22                  ∘ System-DNS: 53"
-echo "∘ SOCKS/PYTHON: 8080       ∘ WEB-NGINX: 81"
-echo "∘ DROPBEAR: 90             ∘ SSL: 443"
-echo "∘ BadVPN: 7200             ∘ BadVPN: 7300"
-echo "∘ SlowDNS: 5300            ∘ UDP-Custom: 1-65535"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "DOMAIN         : $DOMAIN"
-echo "Host/IP-Address: $HOST_IP"
-echo "UTILISATEUR    : $username"
-echo "MOT DE PASSE   : $password"
-echo "LIMITE         : $limite"
-echo "DATE EXPIRÉE   : $expire_date"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+# Afficher résumé dans cadre coloré
+echo -e "${CYAN}+==================================================+${RESET}"
+echo -e "*NOUVEAU UTILISATEUR CRÉÉ*"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "∘ SSH: 22                  ∘ System-DNS: 53"
+echo -e "∘ SOCKS/PYTHON: 8080       ∘ WEB-NGINX: 81"
+echo -e "∘ DROPBEAR: 90             ∘ SSL: 443"
+echo -e "∘ BadVPN: 7200             ∘ BadVPN: 7300"
+echo -e "∘ SlowDNS: 5300            ∘ UDP-Custom: 1-65535"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${YELLOW}DOMAIN         :${RESET} $DOMAIN"
+echo -e "${YELLOW}Host/IP-Address:${RESET} $HOST_IP"
+echo -e "${YELLOW}UTILISATEUR    :${RESET} $username"
+echo -e "${YELLOW}MOT DE PASSE   :${RESET} $password"
+echo -e "${YELLOW}LIMITE         :${RESET} $limite"
+echo -e "${YELLOW}DATE EXPIRÉE   :${RESET} $expire_date"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo "En APPS comme HTTP Injector, CUSTOM, KPN Rev, etc."
 echo ""
-echo "🙍 HTTP-Direct  : $HOST_IP:90@$username:$password"
-echo "🙍 SSL/TLS(SNI) : $HOST_IP:443@$username:$password"
-echo "🙍 Proxy(WS)    : $DOMAIN:8080@$username:$password"
-echo "🙍 SSH UDP     : $HOST_IP:1-65535@$username:$password"
+echo -e "🙍 HTTP-Direct  : ${GREEN}$HOST_IP:90@$username:$password${RESET}"
+echo -e "🙍 SSL/TLS(SNI) : ${GREEN}$HOST_IP:443@$username:$password${RESET}"
+echo -e "🙍 Proxy(WS)    : ${GREEN}$DOMAIN:8080@$username:$password${RESET}"
+echo -e "🙍 SSH UDP     : ${GREEN}$HOST_IP:1-65535@$username:$password${RESET}"
 echo ""
-echo "━━━━━━━━━━━  CONFIGS SLOWDNS PORT 22 ━━━━━━━━━━━"
-echo "Pub KEY :"
+echo -e "${CYAN}━━━━━━━━━━━  CONFIGS SLOWDNS PORT 22 ━━━━━━━━━━━${RESET}"
+echo -e "${YELLOW}Pub KEY :${RESET}"
 echo "$SLOWDNS_KEY"
-echo "NameServer (NS) : $SLOWDNS_NS"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Compte créé avec succès"
+echo -e "${YELLOW}NameServer (NS) :${RESET} $SLOWDNS_NS"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${GREEN}Compte créé avec succès${RESET}"
