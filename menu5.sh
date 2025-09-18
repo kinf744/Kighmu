@@ -1,15 +1,25 @@
 #!/bin/bash
 # menu5.sh - Panneau de contrôle installation/désinstallation amélioré
 
+# Définition des couleurs (copiées du script principal)
+RED="\e[31m"
+GREEN="\e[32m"
+YELLOW="\e[33m"
+BLUE="\e[34m"
+MAGENTA="\e[35m"
+CYAN="\e[36m"
+BOLD="\e[1m"
+RESET="\e[0m"
+
 clear
-echo "+--------------------------------------------+"
-echo "|      PANNEAU DE CONTROLE DES MODES         |"
-echo "+--------------------------------------------+"
+echo -e "${CYAN}+==================================================+${RESET}"
+echo -e "|           🚀 PANNEAU DE CONTROLE DES MODES 🚀    |"
+echo -e "${CYAN}+==================================================+${RESET}"
 
 # Détection IP et uptime
 HOST_IP=$(curl -s https://api.ipify.org)
 UPTIME=$(uptime -p)
-echo "IP: $HOST_IP | Uptime: $UPTIME"
+echo -e "${CYAN} IP: ${GREEN}$HOST_IP${RESET} | ${CYAN}Uptime: ${GREEN}$UPTIME${RESET}"
 echo ""
 
 # Fonctions SlowDNS
@@ -40,7 +50,7 @@ uninstall_slowdns() {
     rm -f /etc/systemd/system/slowdns.service
     systemctl daemon-reload
     ufw delete allow 5300/udp 2>/dev/null || true
-    echo "[OK] SlowDNS désinstallé."
+    echo -e "${GREEN}[OK] SlowDNS désinstallé.${RESET}"
 }
 
 # Fonctions OpenSSH
@@ -49,14 +59,14 @@ install_openssh() {
     apt-get install -y openssh-server
     systemctl enable ssh
     systemctl start ssh
-    echo "[OK] OpenSSH installé."
+    echo -e "${GREEN}[OK] OpenSSH installé.${RESET}"
 }
 
 uninstall_openssh() {
     echo ">>> Désinstallation d'OpenSSH..."
     apt-get remove -y openssh-server
     systemctl disable ssh
-    echo "[OK] OpenSSH supprimé."
+    echo -e "${GREEN}[OK] OpenSSH supprimé.${RESET}"
 }
 
 # Fonctions Dropbear
@@ -65,14 +75,14 @@ install_dropbear() {
     apt-get install -y dropbear
     systemctl enable dropbear
     systemctl start dropbear
-    echo "[OK] Dropbear installé."
+    echo -e "${GREEN}[OK] Dropbear installé.${RESET}"
 }
 
 uninstall_dropbear() {
     echo ">>> Désinstallation de Dropbear..."
     apt-get remove -y dropbear
     systemctl disable dropbear
-    echo "[OK] Dropbear supprimé."
+    echo -e "${GREEN}[OK] Dropbear supprimé.${RESET}"
 }
 
 # UDP Custom
@@ -102,7 +112,7 @@ uninstall_udp_custom() {
     ufw delete allow 54000/udp 2>/dev/null || true
     iptables -D INPUT -p udp --dport 54000 -j ACCEPT 2>/dev/null || true
     iptables -D OUTPUT -p udp --sport 54000 -j ACCEPT 2>/dev/null || true
-    echo "[OK] UDP Custom désinstallé."
+    echo -e "${GREEN}[OK] UDP Custom désinstallé.${RESET}"
 }
 
 # SOCKS Python
@@ -135,7 +145,7 @@ uninstall_socks_python() {
     iptables -D OUTPUT -p tcp --sport 8080 -j ACCEPT 2>/dev/null || true
     iptables -D INPUT -p tcp --dport 9090 -j ACCEPT 2>/dev/null || true
     iptables -D OUTPUT -p tcp --sport 9090 -j ACCEPT 2>/dev/null || true
-    echo "[OK] SOCKS Python désinstallé."
+    echo -e "${GREEN}[OK] SOCKS Python désinstallé.${RESET}"
 }
 
 # SSL/TLS et BadVPN - à compléter
@@ -152,20 +162,20 @@ manage_mode() {
 
     while true; do
         echo ""
-        echo "+--------------------------------------------+"
-        echo "   Gestion du mode : $MODE_NAME"
-        echo "+--------------------------------------------+"
-        echo " [1] Installer"
-        echo " [2] Désinstaller"
-        echo " [0] Retour"
-        echo "----------------------------------------------"
-        echo -n "👉 Choisissez une action : "
+        echo -e "${CYAN}+==================================================+${RESET}"
+        echo -e "|           🚀 Gestion du mode : $MODE_NAME 🚀         |"
+        echo -e "${CYAN}+==================================================+${RESET}"
+        echo -e "${YELLOW}[1] Installer${RESET}"
+        echo -e "${YELLOW}[2] Désinstaller${RESET}"
+        echo -e "${YELLOW}[0] Retour${RESET}"
+        echo -e "${CYAN}+--------------------------------------------------+${RESET}"
+        echo -ne "${BOLD}${YELLOW}👉 Choisissez une action : ${RESET}"
         read action
         case $action in
             1) $INSTALL_FUNC ;;
             2) $UNINSTALL_FUNC ;;
             0) break ;;
-            *) echo "❌ Mauvais choix, réessayez." ;;
+            *) echo -e "${RED}❌ Mauvais choix, réessayez.${RESET}" ;;
         esac
     done
 }
@@ -173,17 +183,19 @@ manage_mode() {
 # Menu principal
 while true; do
     echo ""
-    echo "+================ MENU PRINCIPAL =================+"
-    echo " [1] OpenSSH"
-    echo " [2] Dropbear"
-    echo " [3] SlowDNS"
-    echo " [4] UDP Custom"
-    echo " [5] SOCKS/Python"
-    echo " [6] SSL/TLS"
-    echo " [7] BadVPN"
-    echo " [0] Quitter"
-    echo "+================================================+"
-    echo -n "👉 Choisissez un mode : "
+    echo -e "${CYAN}+==================================================+${RESET}"
+    echo -e "|             🚀 MENU PRINCIPAL DES MODES 🚀        |"
+    echo -e "${CYAN}+==================================================+${RESET}"
+    echo -e "${YELLOW}[1] OpenSSH${RESET}"
+    echo -e "${YELLOW}[2] Dropbear${RESET}"
+    echo -e "${YELLOW}[3] SlowDNS${RESET}"
+    echo -e "${YELLOW}[4] UDP Custom${RESET}"
+    echo -e "${YELLOW}[5] SOCKS/Python${RESET}"
+    echo -e "${YELLOW}[6] SSL/TLS${RESET}"
+    echo -e "${YELLOW}[7] BadVPN${RESET}"
+    echo -e "${YELLOW}[0] Quitter${RESET}"
+    echo -e "${CYAN}+==================================================+${RESET}"
+    echo -ne "${BOLD}${YELLOW}👉 Choisissez un mode : ${RESET}"
     read choix
     case $choix in
         1) manage_mode "OpenSSH" install_openssh uninstall_openssh ;;
@@ -193,7 +205,7 @@ while true; do
         5) manage_mode "SOCKS/Python" install_socks_python uninstall_socks_python ;;
         6) manage_mode "SSL/TLS" install_ssl_tls uninstall_ssl_tls ;;
         7) manage_mode "BadVPN" install_badvpn uninstall_badvpn ;;
-        0) echo "🚪 Sortie du panneau de contrôle." ; exit 0 ;;
-        *) echo "❌ Option invalide, réessayez." ;;
+        0) echo -e "${RED}🚪 Sortie du panneau de contrôle.${RESET}" ; exit 0 ;;
+        *) echo -e "${RED}❌ Option invalide, réessayez.${RESET}" ;;
     esac
 done
