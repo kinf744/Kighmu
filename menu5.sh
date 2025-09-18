@@ -184,7 +184,7 @@ manage_mode() {
 while true; do
     echo ""
     echo -e "${CYAN}+==================================================+${RESET}"
-    echo -e "|             🚀 MENU PRINCIPAL DES MODES 🚀        |"
+    echo -e "|             🚀 MENU PRINCIPAL DES MODES 🚀       |"
     echo -e "${CYAN}+==================================================+${RESET}"
     echo -e "${YELLOW}[1] OpenSSH${RESET}"
     echo -e "${YELLOW}[2] Dropbear${RESET}"
