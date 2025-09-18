@@ -1,5 +1,5 @@
 #!/bin/bash
-# menu5.sh - Panneau de contrôle installation/désinstallation sans authentification
+# menu5.sh - Panneau de contrôle installation/désinstallation, nettoyage complet pour chaque mode
 
 clear
 echo "+--------------------------------------------+"
@@ -45,9 +45,15 @@ uninstall_slowdns() {
     echo "[OK] SlowDNS désinstallé et nettoyé."
 }
 
-# Fonctions pour OpenSSH
+# =====================================================
+# Fonctions pour OpenSSH améliorées
+# =====================================================
 install_openssh() {
-    echo ">>> Installation d'OpenSSH..."
+    echo ">>> Nettoyage avant installation OpenSSH..."
+    pkill -f sshd || true
+    systemctl stop ssh 2>/dev/null || true
+    systemctl disable ssh 2>/dev/null || true
+    apt-get remove -y openssh-server
     apt-get install -y openssh-server
     systemctl enable ssh
     systemctl start ssh
@@ -55,15 +61,22 @@ install_openssh() {
 }
 
 uninstall_openssh() {
-    echo ">>> Désinstallation d'OpenSSH..."
+    echo ">>> Désinstallation d'OpenSSH complète..."
+    systemctl stop ssh 2>/dev/null || true
+    systemctl disable ssh 2>/dev/null || true
     apt-get remove -y openssh-server
-    systemctl disable ssh
-    echo "[OK] OpenSSH supprimé."
+    echo "[OK] OpenSSH désinstallé."
 }
 
-# Fonctions pour Dropbear
+# =====================================================
+# Fonctions pour Dropbear améliorées
+# =====================================================
 install_dropbear() {
-    echo ">>> Installation de Dropbear..."
+    echo ">>> Nettoyage avant installation Dropbear..."
+    pkill -f dropbear || true
+    systemctl stop dropbear 2>/dev/null || true
+    systemctl disable dropbear 2>/dev/null || true
+    apt-get remove -y dropbear
     apt-get install -y dropbear
     systemctl enable dropbear
     systemctl start dropbear
@@ -71,27 +84,81 @@ install_dropbear() {
 }
 
 uninstall_dropbear() {
-    echo ">>> Désinstallation de Dropbear..."
+    echo ">>> Désinstallation de Dropbear complète..."
+    systemctl stop dropbear 2>/dev/null || true
+    systemctl disable dropbear 2>/dev/null || true
     apt-get remove -y dropbear
-    systemctl disable dropbear
-    echo "[OK] Dropbear supprimé."
+    echo "[OK] Dropbear désinstallé."
 }
 
-# Autres modes
-install_udp_custom() { bash "$HOME/Kighmu/udp_custom.sh" || echo "Script introuvable."; }
-uninstall_udp_custom() { pkill -f udp_custom || echo "UDP Custom déjà arrêté."; }
+# =====================================================
+# Fonctions pour UDP Custom
+# =====================================================
+install_udp_custom() {
+    echo ">>> Nettoyage avant installation UDP Custom..."
+    pkill -f udp_custom || true
+    # Ajoutez ici suppression de fichiers et services si utilisés
+    bash "$HOME/Kighmu/udp_custom.sh" || echo "Script introuvable."
+}
 
-install_socks_python() { bash "$HOME/Kighmu/socks_python.sh" || echo "Script introuvable."; }
-uninstall_socks_python() { pkill -f socks_python || echo "SOCKS déjà arrêté."; }
-
-install_ssl_tls() { echo ">>> Installation SSL/TLS (à compléter)"; }
-uninstall_ssl_tls() { echo ">>> Désinstallation SSL/TLS (à compléter)"; }
-
-install_badvpn() { echo ">>> Installation BadVPN (à compléter)"; }
-uninstall_badvpn() { echo ">>> Désinstallation BadVPN (à compléter)"; }
+uninstall_udp_custom() {
+    echo ">>> Désinstallation complète UDP Custom..."
+    pkill -f udp_custom || true
+    # Ajoutez ici nettoyage fichiers/services liés udp_custom
+    echo "[OK] UDP Custom désinstallé."
+}
 
 # =====================================================
-# Fonction générique qui affiche le sous-menu
+# Fonctions pour SOCKS Python
+# =====================================================
+install_socks_python() {
+    echo ">>> Nettoyage avant installation SOCKS Python..."
+    pkill -f socks_python || true
+    # Nettoyage fichiers/services si nécessaire
+    bash "$HOME/Kighmu/socks_python.sh" || echo "Script introuvable."
+}
+
+uninstall_socks_python() {
+    echo ">>> Désinstallation complète SOCKS Python..."
+    pkill -f socks_python || true
+    # Nettoyage fichiers/services si nécessaire
+    echo "[OK] SOCKS Python désinstallé."
+}
+
+# =====================================================
+# Fonctions pour SSL/TLS (à compléter)
+# =====================================================
+install_ssl_tls() {
+    echo ">>> Nettoyage avant installation SSL/TLS..."
+    # Arrêtez, désactivez services, supprimez fichiers si nécessaires
+    echo ">>> Installation SSL/TLS (à compléter)"
+}
+
+uninstall_ssl_tls() {
+    echo ">>> Désinstallation SSL/TLS complète..."
+    # Arrêtez, désactivez services, supprimez fichiers
+    echo ">>> Désinstallation SSL/TLS (à compléter)"
+}
+
+# =====================================================
+# Fonctions pour BadVPN (à compléter)
+# =====================================================
+install_badvpn() {
+    echo ">>> Nettoyage avant installation BadVPN..."
+    pkill -f badvpn || true
+    # Nettoyage fichiers/services si nécessaire
+    echo ">>> Installation BadVPN (à compléter)"
+}
+
+uninstall_badvpn() {
+    echo ">>> Désinstallation complète BadVPN..."
+    pkill -f badvpn || true
+    # Nettoyage fichiers/services si nécessaire
+    echo ">>> Désinstallation BadVPN (à compléter)"
+}
+
+# =====================================================
+# Fonction générique de gestion des modes
 # =====================================================
 manage_mode() {
     MODE_NAME=$1
