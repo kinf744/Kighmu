@@ -12,8 +12,7 @@ UPTIME=$(uptime -p)
 echo "IP: $HOST_IP | Uptime: $UPTIME"
 echo ""
 
-# =====================================================
-# Fonctions SlowDNS (exemple abrégé)
+# Fonctions SlowDNS
 install_slowdns() {
     echo ">>> Nettoyage avant installation SlowDNS..."
     pkill -f slowdns || true
@@ -33,25 +32,55 @@ install_slowdns() {
 
 uninstall_slowdns() {
     echo ">>> Désinstallation complète SlowDNS..."
-    ...
+    pkill -f slowdns || true
+    rm -rf $HOME/.slowdns
+    rm -f /usr/local/bin/slowdns
+    systemctl stop slowdns.service 2>/dev/null || true
+    systemctl disable slowdns.service 2>/dev/null || true
+    rm -f /etc/systemd/system/slowdns.service
+    systemctl daemon-reload
+    ufw delete allow 5300/udp 2>/dev/null || true
+    echo "[OK] SlowDNS désinstallé."
 }
 
-# =====================================================
-# Fonctions OpenSSH (abrégées)
-install_openssh() { ... }
-uninstall_openssh() { ... }
+# Fonctions OpenSSH
+install_openssh() {
+    echo ">>> Installation d'OpenSSH..."
+    apt-get install -y openssh-server
+    systemctl enable ssh
+    systemctl start ssh
+    echo "[OK] OpenSSH installé."
+}
 
-# =====================================================
-# Fonctions Dropbear (abrégées)
-install_dropbear() { ... }
-uninstall_dropbear() { ... }
+uninstall_openssh() {
+    echo ">>> Désinstallation d'OpenSSH..."
+    apt-get remove -y openssh-server
+    systemctl disable ssh
+    echo "[OK] OpenSSH supprimé."
+}
 
-# =====================================================
+# Fonctions Dropbear
+install_dropbear() {
+    echo ">>> Installation de Dropbear..."
+    apt-get install -y dropbear
+    systemctl enable dropbear
+    systemctl start dropbear
+    echo "[OK] Dropbear installé."
+}
+
+uninstall_dropbear() {
+    echo ">>> Désinstallation de Dropbear..."
+    apt-get remove -y dropbear
+    systemctl disable dropbear
+    echo "[OK] Dropbear supprimé."
+}
+
 # UDP Custom
 install_udp_custom() {
     echo ">>> Installation UDP Custom via script..."
     bash "$HOME/Kighmu/udp_custom.sh" || echo "Script introuvable."
 }
+
 uninstall_udp_custom() {
     echo ">>> Désinstallation UDP Custom..."
     pids=$(pgrep -f udp-custom-linux-amd64)
@@ -76,12 +105,12 @@ uninstall_udp_custom() {
     echo "[OK] UDP Custom désinstallé."
 }
 
-# =====================================================
 # SOCKS Python
 install_socks_python() {
     echo ">>> Installation SOCKS Python via script..."
     bash "$HOME/Kighmu/socks_python.sh" || echo "Script introuvable."
 }
+
 uninstall_socks_python() {
     echo ">>> Désinstallation SOCKS Python..."
     pids=$(pgrep -f KIGHMUPROXY.py)
@@ -109,19 +138,18 @@ uninstall_socks_python() {
     echo "[OK] SOCKS Python désinstallé."
 }
 
-# =====================================================
-# SSL/TLS et BadVPN à compléter
+# SSL/TLS et BadVPN - à compléter
 install_ssl_tls() { echo ">>> Installation SSL/TLS (à compléter)"; }
 uninstall_ssl_tls() { echo ">>> Désinstallation SSL/TLS (à compléter)"; }
 install_badvpn() { echo ">>> Installation BadVPN (à compléter)"; }
 uninstall_badvpn() { echo ">>> Désinstallation BadVPN (à compléter)"; }
 
-# =====================================================
-# Sous-menu pour chaque mode
+# Gestion du sous-menu des modes
 manage_mode() {
     MODE_NAME=$1
     INSTALL_FUNC=$2
     UNINSTALL_FUNC=$3
+
     while true; do
         echo ""
         echo "+--------------------------------------------+"
@@ -142,7 +170,6 @@ manage_mode() {
     done
 }
 
-# =====================================================
 # Menu principal
 while true; do
     echo ""
