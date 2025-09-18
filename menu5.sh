@@ -13,7 +13,7 @@ echo "IP: $HOST_IP | Uptime: $UPTIME"
 echo ""
 
 # =====================================================
-# SlowDNS (inchangé)
+# Fonctions SlowDNS (exemple abrégé)
 install_slowdns() {
     echo ">>> Nettoyage avant installation SlowDNS..."
     pkill -f slowdns || true
@@ -25,100 +25,80 @@ install_slowdns() {
     systemctl daemon-reload
     ufw delete allow 5300/udp 2>/dev/null || true
 
-    echo ">>> Installation/configuration de SlowDNS..."
+    echo ">>> Installation/configuration SlowDNS..."
     bash "$HOME/Kighmu/slowdns.sh" || echo "SlowDNS : script introuvable."
 
     ufw allow 5300/udp
 }
 
-uninstall_slowdns() { ... }
+uninstall_slowdns() {
+    echo ">>> Désinstallation complète SlowDNS..."
+    ...
+}
 
 # =====================================================
-# OpenSSH (inchangé)
+# Fonctions OpenSSH (abrégées)
 install_openssh() { ... }
 uninstall_openssh() { ... }
 
 # =====================================================
-# Dropbear (inchangé)
+# Fonctions Dropbear (abrégées)
 install_dropbear() { ... }
 uninstall_dropbear() { ... }
 
 # =====================================================
-# UDP Custom avec appel script fourni et désinstallation propre
+# UDP Custom
 install_udp_custom() {
     echo ">>> Installation UDP Custom via script..."
     bash "$HOME/Kighmu/udp_custom.sh" || echo "Script introuvable."
 }
-
 uninstall_udp_custom() {
-    echo ">>> Désinstallation complète UDP Custom..."
-
+    echo ">>> Désinstallation UDP Custom..."
     pids=$(pgrep -f udp-custom-linux-amd64)
     if [ ! -z "$pids" ]; then
-        echo "Arrêt des processus UDP Custom : $pids"
         kill -15 $pids
         sleep 2
         pids=$(pgrep -f udp-custom-linux-amd64)
         if [ ! -z "$pids" ]; then
-            echo "Kill forcé des processus UDP Custom : $pids"
             kill -9 $pids
         fi
-    else
-        echo "Aucun processus UDP Custom actif."
     fi
-
     if systemctl list-units --full -all | grep -Fq 'udp_custom.service'; then
         systemctl stop udp_custom.service
         systemctl disable udp_custom.service
         rm -f /etc/systemd/system/udp_custom.service
         systemctl daemon-reload
-        echo "Service UDP Custom arrêté et supprimé."
-    else
-        echo "Aucun service systemd UDP Custom trouvé."
     fi
-
     rm -rf /root/udp-custom
     ufw delete allow 54000/udp 2>/dev/null || true
     iptables -D INPUT -p udp --dport 54000 -j ACCEPT 2>/dev/null || true
     iptables -D OUTPUT -p udp --sport 54000 -j ACCEPT 2>/dev/null || true
-
     echo "[OK] UDP Custom désinstallé."
 }
 
 # =====================================================
-# SOCKS Python avec appel script fourni et désinstallation propre
+# SOCKS Python
 install_socks_python() {
     echo ">>> Installation SOCKS Python via script..."
     bash "$HOME/Kighmu/socks_python.sh" || echo "Script introuvable."
 }
-
 uninstall_socks_python() {
-    echo ">>> Désinstallation complète SOCKS Python..."
-
+    echo ">>> Désinstallation SOCKS Python..."
     pids=$(pgrep -f KIGHMUPROXY.py)
     if [ ! -z "$pids" ]; then
-        echo "Arrêt des processus SOCKS Python : $pids"
         kill -15 $pids
         sleep 2
         pids=$(pgrep -f KIGHMUPROXY.py)
         if [ ! -z "$pids" ]; then
-            echo "Kill forcé des processus SOCKS Python : $pids"
             kill -9 $pids
         fi
-    else
-        echo "Aucun processus SOCKS Python actif."
     fi
-
     if systemctl list-units --full -all | grep -Fq 'socks_python.service'; then
         systemctl stop socks_python.service
         systemctl disable socks_python.service
         rm -f /etc/systemd/system/socks_python.service
         systemctl daemon-reload
-        echo "Service SOCKS Python arrêté et supprimé."
-    else
-        echo "Aucun service systemd SOCKS Python trouvé."
     fi
-
     rm -f /usr/local/bin/KIGHMUPROXY.py
     ufw delete allow 8080/tcp 2>/dev/null || true
     ufw delete allow 9090/tcp 2>/dev/null || true
@@ -126,24 +106,22 @@ uninstall_socks_python() {
     iptables -D OUTPUT -p tcp --sport 8080 -j ACCEPT 2>/dev/null || true
     iptables -D INPUT -p tcp --dport 9090 -j ACCEPT 2>/dev/null || true
     iptables -D OUTPUT -p tcp --sport 9090 -j ACCEPT 2>/dev/null || true
-
     echo "[OK] SOCKS Python désinstallé."
 }
 
 # =====================================================
-# SSL/TLS et BadVPN 
+# SSL/TLS et BadVPN à compléter
 install_ssl_tls() { echo ">>> Installation SSL/TLS (à compléter)"; }
 uninstall_ssl_tls() { echo ">>> Désinstallation SSL/TLS (à compléter)"; }
 install_badvpn() { echo ">>> Installation BadVPN (à compléter)"; }
 uninstall_badvpn() { echo ">>> Désinstallation BadVPN (à compléter)"; }
 
 # =====================================================
-# Fonction générique gestion modes
+# Sous-menu pour chaque mode
 manage_mode() {
     MODE_NAME=$1
     INSTALL_FUNC=$2
     UNINSTALL_FUNC=$3
-
     while true; do
         echo ""
         echo "+--------------------------------------------+"
