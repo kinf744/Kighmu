@@ -48,8 +48,8 @@ while IFS="|" read -r username password limite expire_date hostip domain slowdns
     ssh_connected=${ssh_counts["$username"]}
     ssh_connected=${ssh_connected:-0}
 
-    # Compter le nombre total d'appareils connectés par IP de l'utilisateur
-    total_conn=ssh_connected
+    # Affectation correcte de la valeur numérique à total_conn
+    total_conn=$ssh_connected
 
     # SlowDNS connexions : on compte 1 si l'IP utilisateur est dans slowdns_ips
     for ip in "${slowdns_ips[@]}"; do
