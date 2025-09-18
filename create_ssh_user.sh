@@ -17,8 +17,6 @@ if id "$USERNAME" &>/dev/null; then
     exit 1
 fi
 
-USER_HOME=$(eval echo "~$USERNAME")
-
 # Création de l'utilisateur avec home et shell bash
 useradd -m -s /bin/bash "$USERNAME"
 
@@ -26,39 +24,22 @@ useradd -m -s /bin/bash "$USERNAME"
 echo "Définir le mot de passe pour $USERNAME :"
 passwd "$USERNAME"
 
-# Création des dossiers nécessaires avec droits
-mkdir -p "$USER_HOME/.ssh" "$USER_HOME/.kighmu"
-chmod 700 "$USER_HOME/.ssh"
-chown -R "$USERNAME":"$USERNAME" "$USER_HOME/.ssh" "$USER_HOME/.kighmu"
+# Création du dossier .ssh avec droits stricts
+mkdir -p /home/"$USERNAME"/.ssh
+chmod 700 /home/"$USERNAME"/.ssh
+chown -R "$USERNAME":"$USERNAME" /home/"$USERNAME"/.ssh
 
-# Optionnel : ajouter une clé publique SSH (si fournie)
+# Optional: ajouter une clé publique SSH (si fournie)
 read -p "Si vous avez une clé publique SSH à ajouter, collez-la maintenant (ou appuyez sur Entrée pour passer) : " PUBKEY
 
 if [ -n "$PUBKEY" ]; then
-    echo "$PUBKEY" > "$USER_HOME/.ssh/authorized_keys"
-    chmod 600 "$USER_HOME/.ssh/authorized_keys"
-    chown "$USERNAME":"$USERNAME" "$USER_HOME/.ssh/authorized_keys"
+    echo "$PUBKEY" > /home/"$USERNAME"/.ssh/authorized_keys
+    chmod 600 /home/"$USERNAME"/.ssh/authorized_keys
+    chown "$USERNAME":"$USERNAME" /home/"$USERNAME"/.ssh/authorized_keys
     echo "Clé publique SSH ajoutée pour $USERNAME."
 else
     echo "Aucune clé publique SSH ajoutée."
 fi
-
-# Copier banner global dans dossier utilisateur pour affichage
-if [ -f "$HOME/.kighmu/banner.txt" ]; then
-    cp "$HOME/.kighmu/banner.txt" "$USER_HOME/.kighmu/banner.txt"
-    chown "$USERNAME":"$USERNAME" "$USER_HOME/.kighmu/banner.txt"
-else
-    echo "Aucun banner global trouvé à copier dans l'espace utilisateur."
-fi
-
-# Ajouter affichage banner dans .bashrc utilisateur
-echo "
-# Affichage du banner Kighmu VPS Manager
-if [ -f ~/.kighmu/banner.txt ]; then
-    cat ~/.kighmu/banner.txt
-fi
-" >> "$USER_HOME/.bashrc"
-chown "$USERNAME":"$USERNAME" "$USER_HOME/.bashrc"
 
 echo
 echo "+--------------------------------------------+"
@@ -70,3 +51,5 @@ echo -e "Clé publique SlowDNS :\n$PUBLIC_KEY"
 echo "+--------------------------------------------+"
 
 echo "Utilisateur $USERNAME créé et configuré avec succès."
+
+echo "Note : Le banner personnalisé est partagé pour tous les utilisateurs via /etc/kighmu/banner.txt."
