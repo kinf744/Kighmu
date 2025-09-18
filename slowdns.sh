@@ -37,15 +37,12 @@ get_active_interface() {
   ip -o link show up | awk -F': ' '{print $2}' | grep -v '^lo$' | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' | head -n1
 }
 
-generate_keys() {
-  if [ ! -s "$SERVER_KEY" ] || [ ! -s "$SERVER_PUB" ]; then
-    log "Génération des clés SlowDNS..."
-    "$SLOWDNS_BIN" -gen-key -privkey-file "$SERVER_KEY" -pubkey-file "$SERVER_PUB"
-    chmod 600 "$SERVER_KEY"
-    chmod 644 "$SERVER_PUB"
-  else
-    log "Clés SlowDNS déjà présentes."
-  fi
+install_fixed_keys() {
+  mkdir -p "$SLOWDNS_DIR"
+  echo "4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa" > "$SERVER_KEY"
+  echo "2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c" > "$SERVER_PUB"
+  chmod 600 "$SERVER_KEY"
+  chmod 644 "$SERVER_PUB"
 }
 
 stop_old_instance() {
@@ -101,7 +98,7 @@ Wants=network.target
 [Service]
 Type=simple
 User=root
-ExecStart=$SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY \$(cat $CONFIG_FILE) 0.0.0.0:$ssh_port
+ExecStart=$SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY \$(cat $CONFIG_FILE) 0.0.0.0:\$(ss -tlnp | grep sshd | head -1 | awk '{print \$4}' | cut -d: -f2)
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -144,10 +141,11 @@ main() {
     fi
   fi
 
-  generate_keys
+  install_fixed_keys
   PUB_KEY=$(cat "$SERVER_PUB")
 
-  local interface=$(get_active_interface)
+  local interface
+  interface=$(get_active_interface)
   if [ -z "$interface" ]; then
     echo "Échec détection interface réseau. Veuillez spécifier manuellement." >&2
     exit 1
