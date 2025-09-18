@@ -1,7 +1,7 @@
 #!/bin/bash
 # menu5.sh - Panneau de contrôle installation/désinstallation amélioré
 
-# Définition des couleurs (copiées du script principal)
+# Définition des couleurs
 RED="\e[31m"
 GREEN="\e[32m"
 YELLOW="\e[33m"
@@ -154,7 +154,7 @@ uninstall_ssl_tls() { echo ">>> Désinstallation SSL/TLS (à compléter)"; }
 install_badvpn() { echo ">>> Installation BadVPN (à compléter)"; }
 uninstall_badvpn() { echo ">>> Désinstallation BadVPN (à compléter)"; }
 
-# Gestion du sous-menu des modes
+# Gestion du sous-menu des modes avec coloration appliquée
 manage_mode() {
     MODE_NAME=$1
     INSTALL_FUNC=$2
@@ -165,9 +165,9 @@ manage_mode() {
         echo -e "${CYAN}+==================================================+${RESET}"
         echo -e "|           🚀 Gestion du mode : $MODE_NAME 🚀        |"
         echo -e "${CYAN}+==================================================+${RESET}"
-        echo -e "${YELLOW}[1] Installer${RESET}"
-        echo -e "${YELLOW}[2] Désinstaller${RESET}"
-        echo -e "${YELLOW}[0] Retour${RESET}"
+        echo -e "${GREEN}${BOLD}[1]${RESET} ${YELLOW}Installer${RESET}"
+        echo -e "${GREEN}${BOLD}[2]${RESET} ${YELLOW}Désinstaller${RESET}"
+        echo -e "${GREEN}${BOLD}[0]${RESET} ${YELLOW}Retour${RESET}"
         echo -e "${CYAN}+--------------------------------------------------+${RESET}"
         echo -ne "${BOLD}${YELLOW}👉 Choisissez une action : ${RESET}"
         read action
@@ -180,20 +180,20 @@ manage_mode() {
     done
 }
 
-# Menu principal
+# Menu principal avec coloration appliquée
 while true; do
     echo ""
     echo -e "${CYAN}+==================================================+${RESET}"
     echo -e "|             🚀 MENU PRINCIPAL DES MODES 🚀       |"
     echo -e "${CYAN}+==================================================+${RESET}"
-    echo -e "${YELLOW}[1] OpenSSH${RESET}"
-    echo -e "${YELLOW}[2] Dropbear${RESET}"
-    echo -e "${YELLOW}[3] SlowDNS${RESET}"
-    echo -e "${YELLOW}[4] UDP Custom${RESET}"
-    echo -e "${YELLOW}[5] SOCKS/Python${RESET}"
-    echo -e "${YELLOW}[6] SSL/TLS${RESET}"
-    echo -e "${YELLOW}[7] BadVPN${RESET}"
-    echo -e "${YELLOW}[0] Quitter${RESET}"
+    echo -e "${GREEN}${BOLD}[01]${RESET} ${YELLOW}OpenSSH${RESET}"
+    echo -e "${GREEN}${BOLD}[02]${RESET} ${YELLOW}Dropbear${RESET}"
+    echo -e "${GREEN}${BOLD}[03]${RESET} ${YELLOW}SlowDNS${RESET}"
+    echo -e "${GREEN}${BOLD}[04]${RESET} ${YELLOW}UDP Custom${RESET}"
+    echo -e "${GREEN}${BOLD}[05]${RESET} ${YELLOW}SOCKS/Python${RESET}"
+    echo -e "${GREEN}${BOLD}[06]${RESET} ${YELLOW}SSL/TLS${RESET}"
+    echo -e "${GREEN}${BOLD}[07]${RESET} ${YELLOW}BadVPN${RESET}"
+    echo -e "${GREEN}${BOLD}[00]${RESET} ${YELLOW}Quitter${RESET}"
     echo -e "${CYAN}+==================================================+${RESET}"
     echo -ne "${BOLD}${YELLOW}👉 Choisissez un mode : ${RESET}"
     read choix
