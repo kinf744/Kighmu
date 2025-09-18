@@ -1,113 +1,109 @@
 #!/bin/bash
-# ==============================================
-# menu_4.sh - Gestion des utilisateurs SSH
-# ==============================================
+# menu_modification.sh - Modifier la durée ou le mot de passe d'un utilisateur
 
-WIDTH=60
+# Couleurs pour l'interface
+RED="\e[31m"
+GREEN="\e[32m"
+YELLOW="\e[33m"
+CYAN="\e[36m"
+BOLD="\e[1m"
+RESET="\e[0m"
 
-# Fonctions d'affichage
-line_full() { echo "+$(printf '%0.s=' $(seq 1 $WIDTH))+"; }
-line_simple() { echo "+$(printf '%0.s-' $(seq 1 $WIDTH))+"; }
-content_line() { printf "| %-56s |\n" "$1"; }
-center_line() {
-    local text="$1"
-    local visible_text=$(echo -e "$text" | sed 's/\x1B\[[0-9;]*[mK]//g')
-    local padding=$(( (WIDTH - ${#visible_text}) / 2 ))
-    printf "|%*s%s%*s|\n" "$padding" "" "$text" "$padding" ""
-}
+USER_FILE="/etc/kighmu/users.list"
 
-# Vérification root
-if [ "$(id -u)" -ne 0 ]; then
-    echo "[ERREUR] Veuillez exécuter ce script en root."
+clear
+echo -e "${CYAN}+--------------------------------------------+${RESET}"
+echo             "|          MODIFIER DUREE / MOT DE PASSE    |"
+echo -e "${CYAN}+--------------------------------------------+${RESET}"
+
+if [ ! -f "$USER_FILE" ]; then
+    echo -e "${RED}Aucun utilisateur trouvé.${RESET}"
+    read -p "Appuyez sur Entrée pour revenir au menu..."
+    exit 0
+fi
+
+echo -e "${BOLD}Utilisateurs existants :${RESET}"
+cut -d'|' -f1 "$USER_FILE"
+
+echo
+read -p "Nom de l'utilisateur à modifier : " username
+
+# Vérification que l'utilisateur est dans la liste
+user_line=$(grep "^$username|" "$USER_FILE")
+if [ -z "$user_line" ]; then
+    echo -e "${RED}Utilisateur ${username} introuvable dans la liste.${RESET}"
+    read -p "Appuyez sur Entrée pour revenir au menu..."
     exit 1
 fi
 
-# Fonction pour gérer un utilisateur sélectionné
-manage_user() {
-    local selected_user="$1"
-    while true; do
-        clear
-        line_full
-        center_line "UTILISATEUR : $selected_user"
-        line_full
-        content_line "1) Modifier le mot de passe"
-        content_line "2) Modifier la durée / expiration"
-        content_line "0) Retour"
-        line_simple
-        read -p "Votre choix : " action_choice
+# Affichage du menu des actions possibles
+echo
+echo -e "${BOLD}Que souhaitez-vous modifier ?${RESET}"
+echo -e " 1) Durée d'expiration du compte"
+echo -e " 2) Mot de passe"
+echo -e " 0) Retour au menu"
 
-        case $action_choice in
-            1)
-                read -s -p "Nouveau mot de passe : " new_pass
-                echo
-                read -s -p "Confirmez le mot de passe : " new_pass2
-                echo
-                if [ "$new_pass" == "$new_pass2" ]; then
-                    echo "$selected_user:$new_pass" | chpasswd
-                    content_line "Mot de passe modifié avec succès !"
-                else
-                    content_line "Les mots de passe ne correspondent pas."
-                fi
-                read -p "Appuyez sur Entrée pour continuer..." dummy
-                ;;
-            2)
-                read -p "Nouvelle durée (en jours) : " days
-                if [[ "$days" =~ ^[0-9]+$ ]]; then
-                    chage -E $(date -d "+$days days" +"%Y-%m-%d") "$selected_user"
-                    content_line "Expiration modifiée avec succès !"
-                else
-                    content_line "Durée invalide."
-                fi
-                read -p "Appuyez sur Entrée pour continuer..." dummy
-                ;;
-            0) break ;;
-            *) content_line "Choix invalide !"
-               read -p "Appuyez sur Entrée pour continuer..." dummy ;;
-        esac
-    done
-}
+read -p "Entrez votre choix [0-2] : " choice
 
-# Boucle principale
-while true; do
-    clear
-    line_full
-    center_line "GESTION DES UTILISATEURS SSH"
-    line_full
+# Récupération des champs actuels pour mise à jour
+IFS="|" read -r user pass limite expire_date hostip domain slowdns_ns <<< "$user_line"
 
-    # Liste des utilisateurs SSH
-    users=($(awk -F: '/\/home/ {print $1}' /etc/passwd))
-    if [ ${#users[@]} -eq 0 ]; then
-        content_line "Aucun utilisateur SSH trouvé."
-        line_full
-        read -p "Appuyez sur Entrée pour revenir au menu..." dummy
+case $choice in
+    1)
+        echo
+        read -p "Nouvelle durée d'expiration (en jours, 0 pour pas d'expiration) : " new_limit
+        if ! [[ "$new_limit" =~ ^[0-9]+$ ]]; then
+            echo -e "${RED}Valeur invalide.${RESET}"
+            read -p "Appuyez sur Entrée pour revenir au menu..."
+            exit 1
+        fi
+        # Calcul de la nouvelle date d'expiration si > 0
+        if [ "$new_limit" -eq 0 ]; then
+            new_expire="none"
+        else
+            new_expire=$(date -d "+$new_limit days" +%Y-%m-%d)
+        fi
+
+        # Mise à jour de la ligne dans le fichier users.list
+        new_line="${user}|${pass}|${new_limit}|${new_expire}|${hostip}|${domain}|${slowdns_ns}"
+        sed -i "s/^$user|.*/$new_line/" "$USER_FILE"
+
+        echo -e "${GREEN}Durée modifiée avec succès.${RESET}"
+        ;;
+    2)
+        echo
+        # Lecture du mot de passe sans l'afficher
+        read -s -p "Nouveau mot de passe : " pass1
+        echo
+        read -s -p "Confirmez le mot de passe : " pass2
+        echo
+        if [ "$pass1" != "$pass2" ]; then
+            echo -e "${RED}Les mots de passe ne correspondent pas.${RESET}"
+            read -p "Appuyez sur Entrée pour revenir au menu..."
+            exit 1
+        fi
+
+        # Mise à jour du mot de passe dans le user_file (à adapter selon format de hash)
+        # Ici on stocke le mot de passe en clair, à adapter selon sécurité souhaitée
+        new_line="${user}|${pass1}|${limite}|${expire_date}|${hostip}|${domain}|${slowdns_ns}"
+        sed -i "s/^$user|.*/$new_line/" "$USER_FILE"
+
+        # Mise à jour du mot de passe système (avec sudo)
+        echo -e "$pass1\n$pass1" | sudo passwd "$user" >/dev/null 2>&1
+
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}Mot de passe modifié avec succès.${RESET}"
+        else
+            echo -e "${RED}Erreur lors de la modification du mot de passe système.${RESET}"
+        fi
+        ;;
+    0)
+        echo "Retour au menu..."
         exit 0
-    fi
+        ;;
+    *)
+        echo -e "${RED}Choix invalide.${RESET}"
+        ;;
+esac
 
-    # Affichage des utilisateurs avec expiration
-    content_line "No. Utilisateur        Expiration"
-    line_simple
-    i=1
-    for u in "${users[@]}"; do
-        expire_date=$(chage -l "$u" 2>/dev/null | grep "Account expires" | cut -d: -f2 | xargs)
-        [ -z "$expire_date" ] && expire_date="Jamais"
-        content_line "$(printf "%-3s %-20s %-15s" "$i" "$u" "$expire_date")"
-        i=$((i+1))
-    done
-    line_full
-    content_line "0) Retour au menu principal"
-    line_simple
-    read -p "Sélectionnez un utilisateur (numéro) : " user_choice
-
-    if [ "$user_choice" == "0" ]; then
-        exit 0
-    fi
-
-    selected_user="${users[$((user_choice-1))]}"
-    if [ -z "$selected_user" ]; then
-        content_line "Choix invalide !"
-        read -p "Appuyez sur Entrée pour continuer..." dummy
-        continue
-    fi
-
-    manage_user "$selected_user"
-done
+read -p "Appuyez sur Entrée pour revenir au menu..."
