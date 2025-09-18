@@ -137,6 +137,7 @@ FILES=(
   "menu1.sh"
   "menu2.sh"
   "menu3.sh"
+  "menu_4.sh"
   "menu4.sh"
   "menu5.sh"
   "menu6.sh"
