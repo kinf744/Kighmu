@@ -32,18 +32,12 @@ while true; do
     OS_INFO=$(if [ -f /etc/os-release ]; then . /etc/os-release; echo "$NAME $VERSION_ID"; else uname -s; fi)
     IP=$(hostname -I | awk '{print $1}')
     
-    # Taille RAM exacte en Mo
     TOTAL_RAM=$(free -m | awk 'NR==2{print $2 " Mo"}')
-    # Fréquence CPU en MHz (première ligne MHz trouvée)
     CPU_FREQ=$(lscpu | grep "MHz" | head -1 | awk '{print $3 " MHz"}')
     
-    # Utilisation RAM en pourcentage
     RAM_USAGE=$(free -m | awk 'NR==2{printf "%.2f%%", $3*100/$2}')
-    # Utilisation CPU en pourcentage (moyenne simple)
     CPU_USAGE=$(grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf "%.2f%%", usage}')
     
-    # Sécurisation des appels aux fonctions pour éviter erreurs
-
     if declare -f get_user_ips_by_service > /dev/null; then
         mapfile -t ssh_ips < <(get_user_ips_by_service 22 2>/dev/null || echo "")
     else
@@ -71,7 +65,6 @@ while true; do
     all_ips=("${ssh_ips[@]}" "${dropbear_ips[@]}" "${openvpn_ips[@]}" "${wireguard_ips[@]}")
     total_connected=$(printf "%s\n" "${all_ips[@]}" | awk '{print $2}' | sort -u | wc -l)
 
-    # Calcul uniquement du nombre d’utilisateurs SSH créés avec home dans /home
     SSH_USERS_COUNT=$(awk -F: '/\/home\// {print $1}' /etc/passwd | wc -l)
 
     echo -e "${CYAN}+==================================================+${RESET}"
@@ -92,16 +85,16 @@ while true; do
 
     echo -e "${BOLD}${YELLOW}|                  MENU PRINCIPAL:                 |${RESET}"
     echo -e "${CYAN}+==================================================+${RESET}"
-    echo -e "${GREEN}[01]${RESET} ${YELLOW}Créer un utilisateur SSH${RESET}"
-    echo -e "${GREEN}[02]${RESET} ${YELLOW}Créer un test utilisateur${RESET}"
-    echo -e "${GREEN}[03]${RESET} ${YELLOW}Voir les utilisateurs en ligne${RESET}"
-    echo -e "${GREEN}[04]${RESET} ${YELLOW}Modifier durée / mot de passe utilisateur${RESET}"
-    echo -e "${GREEN}[05]${RESET} ${YELLOW}Supprimer un utilisateur${RESET}"
-    echo -e "${GREEN}[06]${RESET} ${YELLOW}Message du serveur${RESET}"
-    echo -e "${GREEN}[07]${RESET} ${YELLOW}Installation de mode${RESET}"
-    echo -e "${GREEN}[08]${RESET} ${YELLOW}V2ray slowdns mode${RESET}"
-    echo -e "${GREEN}[09]${RESET} ${YELLOW}Désinstaller le script${RESET}"
-    echo -e "${GREEN}[10]${RESET} ${YELLOW}Blocage de torrents${RESET}"
+    echo -e "${GREEN}${BOLD}[01]${RESET} ${YELLOW}Créer un utilisateur SSH${RESET}"
+    echo -e "${GREEN}${BOLD}[02]${RESET} ${YELLOW}Créer un test utilisateur${RESET}"
+    echo -e "${GREEN}${BOLD}[03]${RESET} ${YELLOW}Voir les utilisateurs en ligne${RESET}"
+    echo -e "${GREEN}${BOLD}[04]${RESET} ${YELLOW}Modifier durée / mot de passe utilisateur${RESET}"
+    echo -e "${GREEN}${BOLD}[05]${RESET} ${YELLOW}Supprimer un utilisateur${RESET}"
+    echo -e "${GREEN}${BOLD}[06]${RESET} ${YELLOW}Message du serveur${RESET}"
+    echo -e "${GREEN}${BOLD}[07]${RESET} ${YELLOW}Installation de mode${RESET}"
+    echo -e "${GREEN}${BOLD}[08]${RESET} ${YELLOW}V2ray slowdns mode${RESET}"
+    echo -e "${GREEN}${BOLD}[09]${RESET} ${YELLOW}Désinstaller le script${RESET}"
+    echo -e "${GREEN}${BOLD}[10]${RESET} ${YELLOW}Blocage de torrents${RESET}"
     echo -e "${RED}[00] Quitter${RESET}"
     echo -e "${CYAN}+==================================================+${RESET}"
     echo -ne "${BOLD}${YELLOW} Entrez votre choix [1-10]: ${RESET}"
