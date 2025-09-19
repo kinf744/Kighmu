@@ -60,54 +60,52 @@ echo "=============================================="
 echo " 🚀 Installation des paquets essentiels..."
 echo "=============================================="
 
-apt update -y && apt upgrade -y
-
-apt install -y sudo
-apt install -y bsdmainutils
-apt install -y zip
-apt install -y unzip
-apt install -y ufw
-apt install -y curl
-apt install -y python3
-apt install -y python3-pip
-apt install -y openssl
-apt install -y screen
-apt install -y cron
-apt install -y iptables
-apt install -y lsof
-apt install -y pv
-apt install -y nano
-apt install -y at
-apt install -y gawk
-apt install -y grep
-apt install -y bc
-apt install -y jq
-apt install -y npm
-apt install -y nodejs
-apt install -y socat
-apt install -y netcat-openbsd
-apt install -y net-tools
-apt install -y cowsay
-apt install -y figlet
-apt install -y dnsutils
-apt install -y wget
-apt install -y psmisc
-apt install -y python3-setuptools
-apt install -y qrencode
-apt install -y gcc
-apt install -y make
-apt install -y perl
-apt install -y systemd
-apt install -y tcpdump
-apt install -y iptables
-apt install -y iproute2
-apt install -y net-tools
-apt install -y tmux
-apt install -y git
-apt install -y iptables-persistent
-apt install -y build-essential
-apt install -y libssl-dev
-apt install -y software-properties-common
+install_package_if_missing "sudo"
+install_package_if_missing "bsdmainutils"
+install_package_if_missing "zip"
+install_package_if_missing "unzip"
+install_package_if_missing "ufw"
+install_package_if_missing "curl"
+install_package_if_missing "python3"
+install_package_if_missing "python3-pip"
+install_package_if_missing "openssl"
+install_package_if_missing "screen"
+install_package_if_missing "cron"
+install_package_if_missing "iptables"
+install_package_if_missing "lsof"
+install_package_if_missing "pv"
+install_package_if_missing "nano"
+install_package_if_missing "at"
+install_package_if_missing "gawk"
+install_package_if_missing "grep"
+install_package_if_missing "bc"
+install_package_if_missing "jq"
+install_package_if_missing "npm"
+install_package_if_missing "nodejs"
+install_package_if_missing "socat"
+install_package_if_missing "netcat-openbsd"
+install_package_if_missing "net-tools"
+install_package_if_missing "cowsay"
+install_package_if_missing "figlet"
+install_package_if_missing "dnsutils"
+install_package_if_missing "wget"
+install_package_if_missing "psmisc"
+install_package_if_missing "python3-setuptools"
+install_package_if_missing "qrencode"
+install_package_if_missing "gcc"
+install_package_if_missing "make"
+install_package_if_missing "perl"
+install_package_if_missing "systemd"
+install_package_if_missing "tcpdump"
+install_package_if_missing "iptables"
+install_package_if_missing "iproute2"
+install_package_if_missing "net-tools"
+install_package_if_missing "tmux"
+install_package_if_missing "git"
+install_package_if_missing "iptables-persistent"
+install_package_if_missing "build-essential"
+install_package_if_missing "libssl-dev"
+install_package_if_missing "software-properties-common"
 
 apt autoremove -y
 apt clean
