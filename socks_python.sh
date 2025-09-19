@@ -1,10 +1,53 @@
 #!/bin/bash
 # socks_python.sh
-# Activation du SOCKS Python avec nettoyage des anciennes instances, configuration UFW et service systemd
+# Activation du SOCKS Python avec nettoyage des anciennes instances, installation du module pysocks, configuration UFW et service systemd
 
 echo "+--------------------------------------------+"
 echo "|             CONFIG SOCKS/PYTHON            |"
 echo "+--------------------------------------------+"
+
+install_pysocks() {
+  echo "Installation du module Python pysocks..."
+
+  # Tentative d'installation via apt
+  if sudo apt-get install -y python3-socks; then
+    echo "Module pysocks installé via apt avec succès."
+    return 0
+  fi
+
+  echo "Le paquet python3-socks n'est pas disponible via apt ou l'installation a échoué."
+
+  # Installer python3-venv si pas présent
+  if ! dpkg -s python3-venv &> /dev/null; then
+    echo "Installation de python3-venv..."
+    if ! sudo apt-get install -y python3-venv; then
+      echo "Échec de l'installation de python3-venv, abandon."
+      return 1
+    fi
+  fi
+
+  # Créer un environnement virtuel dédié dans $HOME/socksenv
+  VENV_DIR="$HOME/socksenv"
+  if [[ ! -d "$VENV_DIR" ]]; then
+    echo "Création de l'environnement virtuel Python dans $VENV_DIR..."
+    python3 -m venv "$VENV_DIR"
+  fi
+
+  echo "Activation de l'environnement virtuel..."
+  source "$VENV_DIR/bin/activate"
+
+  echo "Installation de pysocks via pip dans l'environnement virtuel..."
+  if ! pip install --upgrade pip setuptools && pip install pysocks; then
+    echo "Échec de l'installation de pysocks via pip dans l'environnement virtuel."
+    deactivate
+    return 1
+  fi
+
+  deactivate
+  echo "Module pysocks installé avec succès dans l'environnement virtuel $VENV_DIR."
+  echo "Pour l'utiliser, activez cet environnement avec : source $VENV_DIR/bin/activate"
+  return 0
+}
 
 create_systemd_service() {
   SERVICE_PATH="/etc/systemd/system/socks_python.service"
@@ -47,9 +90,7 @@ case "$confirm" in
         echo "Vérification du module pysocks..."
         if ! python3 -c "import socks" &> /dev/null; then
             echo "Module pysocks non trouvé, installation en cours..."
-            sudo pip3 install --upgrade pip
-            sudo pip3 install pysocks python-socks requests[socks]
-            if [ $? -ne 0 ]; then
+            if ! install_pysocks; then
                 echo "Erreur lors de l'installation des modules Python. Abandon."
                 exit 1
             fi
