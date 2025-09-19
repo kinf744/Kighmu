@@ -85,8 +85,7 @@ apt install -y jq
 apt install -y npm
 apt install -y nodejs
 apt install -y socat
-apt install -y netcat
-apt install -y netcat-traditional
+apt install -y netcat-openbsd
 apt install -y net-tools
 apt install -y cowsay
 apt install -y figlet
