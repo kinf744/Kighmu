@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==============================================
-# Kighmu VPS Manager - Version Dynamique Corrigée
+# Kighmu VPS Manager - Version Dynamique Corrigée Unix
 # ==============================================
 
 # Vérifier si root
@@ -71,7 +71,7 @@ while true; do
 
     printf " Utilisateurs SSH: ${BLUE}%-4d${RESET}\n" "$SSH_USERS_COUNT"
 
-    # Nouvelle section consommation réseau avec couleurs vives
+    # Affichage consommation données vives
     printf " Consommation aujourd'hui : ${MAGENTA_VIF}%-6s Go${RESET} | Ce mois-ci : ${CYAN_VIF}%-6s Go${RESET}\n" "$DATA_DAY_GB" "$DATA_MONTH_GB"
 
     echo -e "${CYAN}+======================================================+${RESET}"
