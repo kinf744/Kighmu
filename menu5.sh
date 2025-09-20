@@ -13,36 +13,48 @@ RESET="\e[0m"
 
 clear
 
-# Fonction affichage des modes actifs et ports utilisés
+# Fonction affichage des modes actifs et ports utilisés (affiche seulement si un mode est actif)
 afficher_modes_ports() {
+    local any_active=0
+
+    # Vérifier si au moins un service est actif
+    if systemctl is-active --quiet ssh || \
+       systemctl is-active --quiet dropbear || \
+       systemctl is-active --quiet slowdns.service || \
+       systemctl is-active --quiet udp_custom.service || \
+       systemctl is-active --quiet socks_python.service; then
+        any_active=1
+    fi
+
+    # Si aucun service actif, ne rien afficher
+    if [[ $any_active -eq 0 ]]; then
+        return
+    fi
+
+    # Sinon affichage des modes actifs avec ports
     echo -e "${CYAN}Modes actifs et ports utilisés:${RESET}"
-    
-    # OpenSSH (port 22 par défaut)
+
     if systemctl is-active --quiet ssh; then
         echo -e "  - OpenSSH: ${GREEN}port 22${RESET}"
     fi
-    
-    # Dropbear (port généralement 22, vérifier config)
+
     if systemctl is-active --quiet dropbear; then
         DROPBEAR_PORT=$(grep -oP '(?<=-p )\d+' /etc/default/dropbear 2>/dev/null || echo "22")
         echo -e "  - Dropbear: ${GREEN}port $DROPBEAR_PORT${RESET}"
     fi
-    
-    # SlowDNS (UDP 5300 par défaut)
+
     if systemctl is-active --quiet slowdns.service; then
         echo -e "  - SlowDNS: ${GREEN}port UDP 5300${RESET}"
     fi
-    
-    # UDP Custom (UDP 54000 par défaut)
+
     if systemctl is-active --quiet udp_custom.service; then
         echo -e "  - UDP Custom: ${GREEN}port UDP 54000${RESET}"
     fi
-    
-    # SOCKS Python (ports TCP 8080 et 9090)
+
     if systemctl is-active --quiet socks_python.service; then
         echo -e "  - SOCKS Python: ${GREEN}ports TCP 8080, 9090${RESET}"
     fi
-    
+
     echo ""
 }
 
