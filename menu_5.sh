@@ -7,20 +7,19 @@ YELLOW="\033[33m"
 CYAN="\033[36m"
 RESET="\033[0m"
 
-V2RAY_CONFIG="/etc/v2ray/config.json"
-UUID_FILE="/etc/v2ray/uuid.txt"
+V2RAY_CONFIG="/usr/local/etc/v2ray/config.json"
+UUID_FILE="/usr/local/etc/v2ray/uuid.txt"
 DOMAIN_FILE="/etc/slowdns/ns.conf"
 SLOWDNS_KEY_PRIV="/etc/slowdns/server.key"
 SLOWDNS_KEY_PUB="/etc/slowdns/server.pub"
 SLOWDNS_BIN_CLIENT="/usr/local/bin/sldns-client"
 
 V2RAY_PORT=10000
-WS_PATH="/kighmu"  # Chemin websocket forcé
+WS_PATH="/kighmu"
 
 install_complete() {
     echo -e "${CYAN}Installation complète de V2Ray SlowDNS (sans TUN)...${RESET}"
 
-    # Demander le nom de domaine à chaque installation
     read -rp "Entrez le nom de domaine SlowDNS (ex: kiaje.kighmuop.dpdns.org) : " DOMAIN
     while [[ -z "$DOMAIN" ]]; do
         echo -e "${RED}Le nom de domaine ne peut pas être vide. Veuillez réessayer.${RESET}"
@@ -29,11 +28,11 @@ install_complete() {
     echo "$DOMAIN" > "$DOMAIN_FILE"
 
     if [[ ! -f $SLOWDNS_KEY_PUB ]]; then
-        echo -e "${RED}Erreur : Clé publique SlowDNS introuvable à $SLOWDNS_KEY_PUB.${RESET}"
+        echo -e "${RED}Clé publique SlowDNS introuvable à $SLOWDNS_KEY_PUB.${RESET}"
         exit 1
     fi
 
-    echo -e "${YELLOW}Mise à jour système et installation des dépendances nécessaires...${RESET}"
+    echo -e "${YELLOW}Mise à jour système et installation des dépendances...${RESET}"
     apt update && apt upgrade -y
     apt install -y curl unzip jq iproute2
 
@@ -43,7 +42,7 @@ install_complete() {
         bash install-release.sh
     fi
 
-    mkdir -p /etc/v2ray
+    mkdir -p "$(dirname $V2RAY_CONFIG)"
 
     if [[ ! -f $UUID_FILE ]]; then
         UUID=$(uuidgen)
@@ -149,6 +148,9 @@ EOF
     echo
     echo -e "${YELLOW}VMess Link:${RESET}"
     echo "$VMESS_LINK"
+    echo
+    echo -e "${YELLOW}Nom de domaine NS slowdns :${RESET}"
+    echo -e "${GREEN}$DOMAIN${RESET}"
     echo
     echo -e "${YELLOW}Clé publique SlowDNS:${RESET}"
     echo "$PUBKEY"
