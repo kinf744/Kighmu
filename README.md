@@ -14,7 +14,9 @@
 
 <p align="center" style="background-color:#e0f7fa; padding: 15px; border-radius: 10px; display: inline-block;">
   <img src="https://img.shields.io/badge/Ubuntu-18.04%20LTS-e95420?style=for-the-badge&logo=ubuntu">  
-  <img src="https://img.shields.io/badge/Ubuntu-20.04%20LTS-f57c00?style=for-the-badge&logo=ubuntu">  
+  <img src="https://img.shields.io/badge/Ubuntu-20.04%20LTS-f57c00?style=for-the-badge&logo=ubuntu">
+  <img src="https://img.shields.io/badge/Ubuntu-22.04%20LTS-e95420?style=for-the-badge&logo=ubuntu">
+  <img src="https://img.shields.io/badge/Ubuntu-24.04%20LTS-f57c00?style=for-the-badge&logo=ubuntu">
   <img src="https://img.shields.io/badge/Debian-11-007ec6?style=for-the-badge&logo=debian">  
   <img src="https://img.shields.io/badge/Debian-12-0055a5?style=for-the-badge&logo=debian">  
 </p>
