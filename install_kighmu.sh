@@ -129,8 +129,6 @@ else
   ufw allow 5300
   ufw allow 54000
   ufw allow 8080
-  ufw allow 10000
-  ufw allow 5400
 
   ufw --force enable
 
@@ -152,7 +150,6 @@ FILES=(
   "menu2.sh"
   "menu3.sh"
   "menu_4.sh"
-  "menu_5.sh"
   "menu4.sh"
   "menu5.sh"
   "menu6.sh"
@@ -185,7 +182,7 @@ for file in "${FILES[@]}"; do
   fi
 done
 
-# Récupération dynamique du NS depuis la configuration DNS locale du système
+# Récupération dynamique du NS depuis la configuration DNS locale
 NS=$(awk '/^nameserver/ {print $2; exit}' /etc/resolv.conf)
 if [[ -z "$NS" ]]; then
   echo "⚠️ Erreur : aucun serveur DNS trouvé dans /etc/resolv.conf, continuez prudemment."
@@ -239,30 +236,30 @@ if ! grep -q "/usr/local/bin" ~/.bashrc; then
   echo "Ajout de /usr/local/bin au PATH dans ~/.bashrc"
 fi
 
-# Création du script kighmu-panel.sh dans /usr/local/bin
+# Création du script kighmu-panel.sh dans /usr/local/bin (nouvelle version avec KIGHMU VPS en rouge vif)
 cat > /usr/local/bin/kighmu-panel.sh << 'EOF'
 #!/bin/bash
 
 clear
 
-BLUE='\033[0;34m'
+RED='\033[0;31m'
 YELLOW='\033[0;33m'
 GREEN='\033[0;32m'
 NC='\033[0m'
 
-echo -e "${BLUE}
-K   K  III  GGG  H   H M   M U   U
-K  K    I  G     H   H MM MM U   U
-KKK     I  G  GG HHHHH M M M U   U
-K  K    I  G   G H   H M   M U   U
-K   K  III  GGG  H   H M   M  UUU
+echo -e "${RED}
+K   K  III  GGG  H   H M   M U   U     V   V PPPP   SSS
+K  K    I  G     H   H MM MM U   U     V   V P   P S
+KKK     I  G  GG HHHHH M M M U   U     V   V PPPP   SSS
+K  K    I  G   G H   H M   M U   U      V V  P         S
+K   K  III  GGG  H   H M   M  UUU        V   P      SSS
 ${NC}"
 
 echo
 echo -e "Saisir et valider: ${YELLOW}source ~/.bashrc${NC}"
 
 echo -e "${GREEN}Version du script : 2.5${NC}"
-echo -e "${BLUE}Inbox Telegramme : @KIGHMU${NC}"
+echo -e "${RED}Inbox Telegramme : @KIGHMU${NC}"
 echo
 echo -e "Pour ouvrir le panneau de contrôle principal, tapez : ${YELLOW}kighmu${NC}"
 echo
