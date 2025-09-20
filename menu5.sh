@@ -55,7 +55,6 @@ afficher_modes_ports() {
         echo -e "  - SOCKS Python: ${GREEN}ports TCP 8080, 9090${RESET}"
     fi
 
-    echo ""
 }
 
 HOST_IP=$(curl -s https://api.ipify.org)
