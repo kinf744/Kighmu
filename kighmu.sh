@@ -30,7 +30,7 @@ WIREGUARD_CMD="wg"
 # Interface réseau à surveiller (adapter selon VPS)
 NET_INTERFACE="eth0"
 
-# Fonction pour convertir octets en gigaoctets (Go)
+# Fonction pour convertir octets en gigaoctets avec 2 décimales
 bytes_to_gb() {
   echo "scale=2; $1/1024/1024/1024" | bc
 }
@@ -48,15 +48,12 @@ while true; do
     
     SSH_USERS_COUNT=$(awk -F: '/\/home\// && $7 ~ /(bash|sh)$/ {print $1}' /etc/passwd | wc -l)
 
-    # Extraction brute de vnstat
     DATA_DAY_RAW=$(vnstat -i "$NET_INTERFACE" --oneline | cut -d\; -f9)
     DATA_MONTH_RAW=$(vnstat -i "$NET_INTERFACE" --oneline | cut -d\; -f15)
 
-    # Nettoyer pour garder que les chiffres (évite erreurs bc)
     DATA_DAY_BYTES=$(echo "$DATA_DAY_RAW" | tr -cd '0-9')
     DATA_MONTH_BYTES=$(echo "$DATA_MONTH_RAW" | tr -cd '0-9')
 
-    # Gestion cas vide
     DATA_DAY_BYTES=${DATA_DAY_BYTES:-0}
     DATA_MONTH_BYTES=${DATA_MONTH_BYTES:-0}
 
@@ -68,16 +65,14 @@ while true; do
     echo -e "${CYAN}+======================================================+${RESET}"
 
     printf " OS: %-20s | IP: %-15s\n" "$OS_INFO" "$IP"
-    
     echo -e "${CYAN} Taille RAM: ${GREEN}$TOTAL_RAM${RESET}"
     echo -e "${CYAN} CPU fréquence: ${YELLOW}$CPU_FREQ${RESET}"
     printf " RAM utilisée: ${GREEN}%-6s${RESET} | CPU utilisé: ${YELLOW}%-6s${RESET}\n" "$RAM_USAGE" "$CPU_USAGE"
 
     echo -e "${CYAN}+======================================================+${RESET}"
-
     printf " Utilisateurs SSH: ${BLUE}%-4d${RESET}\n" "$SSH_USERS_COUNT"
 
-    printf " Consommation aujourd'hui : ${MAGENTA_VIF}%-6s Go${RESET} | Ce mois-ci : ${CYAN_VIF}%-6s Go${RESET}\n" "$DATA_DAY_GB" "$DATA_MONTH_GB"
+    printf " Consommation aujourd'hui : ${MAGENTA_VIF}%.2f Go${RESET} | Ce mois-ci : ${CYAN_VIF}%.2f Go${RESET}\n" "$DATA_DAY_GB" "$DATA_MONTH_GB"
 
     echo -e "${CYAN}+======================================================+${RESET}"
 
