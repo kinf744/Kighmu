@@ -12,9 +12,9 @@ BOLD="\e[1m"
 RESET="\e[0m"
 
 clear
-echo -e "${CYAN}+====================================================+${RESET}"
-echo -e "|           🚀 PANNEAU DE CONTROLE DES MODES 🚀      |"
-echo -e "${CYAN}+====================================================+${RESET}"
+echo -e "${CYAN}+=====================================================+${RESET}"
+echo -e "|           🚀 PANNEAU DE CONTROLE DES MODES 🚀       |"
+echo -e "${CYAN}+=====================================================+${RESET}"
 
 # Détection IP et uptime
 HOST_IP=$(curl -s https://api.ipify.org)
