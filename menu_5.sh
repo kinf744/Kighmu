@@ -20,17 +20,14 @@ WS_PATH="/kighmu"
 install_complete() {
     echo -e "${CYAN}Installation complète de V2Ray SlowDNS (sans TUN)...${RESET}"
 
-    # Vérification de la présence des fichiers SlowDNS existants (clé priv/pub et domaine NS)
     if [[ ! -f $SLOWDNS_KEY_PUB || ! -f $SLOWDNS_KEY_PRIV || ! -f $DOMAIN_FILE ]]; then
-        echo -e "${RED}Les fichiers de configuration SlowDNS (clé publique, privée ou NS) sont manquants.${RESET}"
+        echo -e "${RED}Les fichiers SlowDNS (clé publique, privée ou NS) sont manquants.${RESET}"
         echo "Veuillez d'abord installer/configurer SlowDNS SSH Tunnel qui fonctionne."
         exit 1
     fi
 
     DOMAIN=$(cat "$DOMAIN_FILE")
     PUBKEY=$(cat "$SLOWDNS_KEY_PUB")
-    # PRIVATE KEY normalement gardée secrète et non affichée
-    PRIVKEY=$(cat "$SLOWDNS_KEY_PRIV")
 
     echo "Utilisation des informations SlowDNS existantes:"
     echo "Domaine NS    : $DOMAIN"
@@ -39,7 +36,7 @@ install_complete() {
 
     echo -e "${YELLOW}Mise à jour système et installation des dépendances...${RESET}"
     apt update && apt upgrade -y
-    apt install -y curl unzip jq iproute2
+    apt install -y curl unzip jq iproute2 ufw
 
     if ! command -v v2ray &>/dev/null; then
         echo -e "${YELLOW}Installation de V2Ray...${RESET}"
@@ -56,7 +53,7 @@ install_complete() {
         UUID=$(cat $UUID_FILE)
     fi
 
-    echo -e "${YELLOW}Création de la configuration V2Ray avec websocket et logs debug...${RESET}"
+    echo -e "${YELLOW}Création de la configuration V2Ray avec écoute publique et logs debug...${RESET}"
 
     cat > $V2RAY_CONFIG <<EOF
 {
@@ -68,7 +65,7 @@ install_complete() {
   "inbounds": [
     {
       "port": $V2RAY_PORT,
-      "listen": "127.0.0.1",
+      "listen": "0.0.0.0",
       "protocol": "vmess",
       "settings": {
         "clients": [
@@ -99,7 +96,13 @@ EOF
     systemctl enable v2ray
     systemctl restart v2ray
 
-    echo -e "${GREEN}Installation terminée. V2Ray écoute sur 127.0.0.1:$V2RAY_PORT avec ws path $WS_PATH${RESET}"
+    echo -e "${GREEN}V2Ray écoute maintenant sur toutes les interfaces au port $V2RAY_PORT${RESET}"
+
+    echo -e "${YELLOW}Ouverture du port $V2RAY_PORT dans le firewall UFW...${RESET}"
+    ufw allow $V2RAY_PORT/tcp
+    ufw reload
+
+    echo -e "${GREEN}Installation complète terminée.${RESET}"
 }
 
 create_user() {
