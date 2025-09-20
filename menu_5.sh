@@ -29,7 +29,7 @@ install_complete() {
     DOMAIN=$(cat "$DOMAIN_FILE")
     PUBKEY=$(cat "$SLOWDNS_KEY_PUB")
 
-    echo "Utilisation des informations SlowDNS existantes:"
+    echo "Utilisation des informations SlowDNS existantes :"
     echo "Domaine NS    : $DOMAIN"
     echo "Clé publique  :"
     echo "$PUBKEY"
@@ -92,6 +92,7 @@ install_complete() {
 }
 EOF
 
+    # Recharger et démarrer V2Ray
     systemctl daemon-reload
     systemctl enable v2ray
     systemctl restart v2ray
@@ -190,6 +191,11 @@ delete_user() {
     fi
 }
 
+show_logs() {
+    echo -e "${YELLOW}Affichage des logs V2Ray en temps réel (Ctrl+C pour quitter)...${RESET}"
+    tail -f /var/log/v2ray/access.log /var/log/v2ray/error.log
+}
+
 while true; do
     clear
     echo -e "${CYAN}+=============================================+${RESET}"
@@ -198,15 +204,17 @@ while true; do
     echo -e "${GREEN}1)${RESET} Installation complète V2Ray SlowDNS"
     echo -e "${GREEN}2)${RESET} Créer un utilisateur V2Ray SlowDNS"
     echo -e "${GREEN}3)${RESET} Supprimer un utilisateur V2Ray SlowDNS"
-    echo -e "${GREEN}4)${RESET} Quitter"
+    echo -e "${GREEN}4)${RESET} Afficher logs V2Ray en temps réel"
+    echo -e "${GREEN}5)${RESET} Quitter"
     echo
-    read -rp "Choisissez une option [1-4] : " option
+    read -rp "Choisissez une option [1-5] : " option
 
     case $option in
         1) install_complete ;;
         2) create_user ;;
         3) delete_user ;;
-        4) exit 0 ;;
+        4) show_logs ;;
+        5) exit 0 ;;
         *) echo -e "${RED}Option invalide.${RESET}" ;;
     esac
 
