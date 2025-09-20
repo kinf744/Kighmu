@@ -62,7 +62,7 @@ UPTIME=$(uptime -p)
 echo -e "${CYAN}+=====================================================+${RESET}"
 echo -e "|           🚀 PANNEAU DE CONTROLE DES MODES 🚀       |"
 echo -e "${CYAN}+=====================================================+${RESET}"
-echo -e "${CYAN} IP: ${GREEN}$HOST_IP${RESET} | ${CYAN}Uptime: ${GREEN}$UPTIME${RESET}"
+echo -e "${CYAN} IP: ${GREEN}$HOST_IP${RESET} | ${CYAN}Up: ${GREEN}$UPTIME${RESET}"
 afficher_modes_ports
 
 install_slowdns() {
