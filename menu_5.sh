@@ -20,17 +20,22 @@ WS_PATH="/kighmu"
 install_complete() {
     echo -e "${CYAN}Installation complète de V2Ray SlowDNS (sans TUN)...${RESET}"
 
-    read -rp "Entrez le nom de domaine SlowDNS (ex: kiaje.kighmuop.dpdns.org) : " DOMAIN
-    while [[ -z "$DOMAIN" ]]; do
-        echo -e "${RED}Le nom de domaine ne peut pas être vide. Veuillez réessayer.${RESET}"
-        read -rp "Entrez le nom de domaine SlowDNS (ex: kiaje.kighmuop.dpdns.org) : " DOMAIN
-    done
-    echo "$DOMAIN" > "$DOMAIN_FILE"
-
-    if [[ ! -f $SLOWDNS_KEY_PUB ]]; then
-        echo -e "${RED}Clé publique SlowDNS introuvable à $SLOWDNS_KEY_PUB.${RESET}"
+    # Vérification de la présence des fichiers SlowDNS existants (clé priv/pub et domaine NS)
+    if [[ ! -f $SLOWDNS_KEY_PUB || ! -f $SLOWDNS_KEY_PRIV || ! -f $DOMAIN_FILE ]]; then
+        echo -e "${RED}Les fichiers de configuration SlowDNS (clé publique, privée ou NS) sont manquants.${RESET}"
+        echo "Veuillez d'abord installer/configurer SlowDNS SSH Tunnel qui fonctionne."
         exit 1
     fi
+
+    DOMAIN=$(cat "$DOMAIN_FILE")
+    PUBKEY=$(cat "$SLOWDNS_KEY_PUB")
+    # PRIVATE KEY normalement gardée secrète et non affichée
+    PRIVKEY=$(cat "$SLOWDNS_KEY_PRIV")
+
+    echo "Utilisation des informations SlowDNS existantes:"
+    echo "Domaine NS    : $DOMAIN"
+    echo "Clé publique  :"
+    echo "$PUBKEY"
 
     echo -e "${YELLOW}Mise à jour système et installation des dépendances...${RESET}"
     apt update && apt upgrade -y
