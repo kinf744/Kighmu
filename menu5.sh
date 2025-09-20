@@ -12,15 +12,50 @@ BOLD="\e[1m"
 RESET="\e[0m"
 
 clear
+
+# Fonction affichage des modes actifs et ports utilisés
+afficher_modes_ports() {
+    echo -e "${CYAN}Modes actifs et ports utilisés:${RESET}"
+    
+    # OpenSSH (port 22 par défaut)
+    if systemctl is-active --quiet ssh; then
+        echo -e "  - OpenSSH: ${GREEN}port 22${RESET}"
+    fi
+    
+    # Dropbear (port généralement 22, vérifier config)
+    if systemctl is-active --quiet dropbear; then
+        DROPBEAR_PORT=$(grep -oP '(?<=-p )\d+' /etc/default/dropbear 2>/dev/null || echo "22")
+        echo -e "  - Dropbear: ${GREEN}port $DROPBEAR_PORT${RESET}"
+    fi
+    
+    # SlowDNS (UDP 5300 par défaut)
+    if systemctl is-active --quiet slowdns.service; then
+        echo -e "  - SlowDNS: ${GREEN}port UDP 5300${RESET}"
+    fi
+    
+    # UDP Custom (UDP 54000 par défaut)
+    if systemctl is-active --quiet udp_custom.service; then
+        echo -e "  - UDP Custom: ${GREEN}port UDP 54000${RESET}"
+    fi
+    
+    # SOCKS Python (ports TCP 8080 et 9090)
+    if systemctl is-active --quiet socks_python.service; then
+        echo -e "  - SOCKS Python: ${GREEN}ports TCP 8080, 9090${RESET}"
+    fi
+    
+    echo ""
+}
+
+# Informations IP et uptime
+HOST_IP=$(curl -s https://api.ipify.org)
+UPTIME=$(uptime -p)
+
 echo -e "${CYAN}+=====================================================+${RESET}"
 echo -e "|           🚀 PANNEAU DE CONTROLE DES MODES 🚀       |"
 echo -e "${CYAN}+=====================================================+${RESET}"
 
-# Détection IP et uptime
-HOST_IP=$(curl -s https://api.ipify.org)
-UPTIME=$(uptime -p)
 echo -e "${CYAN} IP: ${GREEN}$HOST_IP${RESET} | ${CYAN}Uptime: ${GREEN}$UPTIME${RESET}"
-echo ""
+afficher_modes_ports
 
 # Fonctions SlowDNS
 install_slowdns() {
@@ -34,10 +69,17 @@ install_slowdns() {
     systemctl daemon-reload
     ufw delete allow 5300/udp 2>/dev/null || true
 
-    echo ">>> Installation/configuration SlowDNS..."
-    bash "$HOME/Kighmu/slowdns.sh" || echo "SlowDNS : script introuvable."
+    echo -ne "Entrez votre domaine ou serveur DNS pour SlowDNS (exemple: example.com) : "
+    read SLOWDNS_DOMAIN
+    if [[ -z "$SLOWDNS_DOMAIN" ]]; then
+        echo "Domaine vide, installation annulée."
+        return
+    fi
 
+    echo ">>> Installation/configuration SlowDNS avec domaine $SLOWDNS_DOMAIN..."
+    bash "$HOME/Kighmu/slowdns.sh" "$SLOWDNS_DOMAIN" || echo "SlowDNS : script introuvable."
     ufw allow 5300/udp
+    echo -e "${GREEN}[OK] SlowDNS installé avec domaine ${SLOWDNS_DOMAIN}.${RESET}"
 }
 
 uninstall_slowdns() {
