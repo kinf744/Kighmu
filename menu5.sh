@@ -12,9 +12,9 @@ BOLD="\e[1m"
 RESET="\e[0m"
 
 clear
-echo -e "${CYAN}+==================================================+${RESET}"
-echo -e "|           🚀 PANNEAU DE CONTROLE DES MODES 🚀    |"
-echo -e "${CYAN}+==================================================+${RESET}"
+echo -e "${CYAN}+====================================================+${RESET}"
+echo -e "|           🚀 PANNEAU DE CONTROLE DES MODES 🚀      |"
+echo -e "${CYAN}+====================================================+${RESET}"
 
 # Détection IP et uptime
 HOST_IP=$(curl -s https://api.ipify.org)
@@ -163,7 +163,7 @@ manage_mode() {
     while true; do
         echo ""
         echo -e "${CYAN}+======================================================+${RESET}"
-        echo -e "|             🚀 Gestion du mode : $MODE_NAME 🚀        |"
+        echo -e "|             🚀 Gestion du mode : $MODE_NAME 🚀          |"
         echo -e "${CYAN}+======================================================+${RESET}"
         echo -e "${GREEN}${BOLD}[1]${RESET} ${YELLOW}Installer${RESET}"
         echo -e "${GREEN}${BOLD}[2]${RESET} ${YELLOW}Désinstaller${RESET}"
@@ -184,7 +184,7 @@ manage_mode() {
 while true; do
     echo ""
     echo -e "${CYAN}+======================================================+${RESET}"
-    echo -e "|               🚀 MENU PRINCIPAL DES MODES 🚀       |"
+    echo -e "|               🚀 MENU PRINCIPAL DES MODES 🚀         |"
     echo -e "${CYAN}+======================================================+${RESET}"
     echo -e "${GREEN}${BOLD}[01]${RESET} ${YELLOW}OpenSSH${RESET}"
     echo -e "${GREEN}${BOLD}[02]${RESET} ${YELLOW}Dropbear${RESET}"
