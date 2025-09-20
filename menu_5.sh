@@ -51,10 +51,15 @@ install_complete() {
         UUID=$(cat $UUID_FILE)
     fi
 
-    echo -e "${YELLOW}Création de la configuration V2Ray avec websocket...${RESET}"
+    echo -e "${YELLOW}Création de la configuration V2Ray avec websocket et logs debug...${RESET}"
 
     cat > $V2RAY_CONFIG <<EOF
 {
+  "log": {
+    "access": "/var/log/v2ray/access.log",
+    "error": "/var/log/v2ray/error.log",
+    "loglevel": "debug"
+  },
   "inbounds": [
     {
       "port": $V2RAY_PORT,
