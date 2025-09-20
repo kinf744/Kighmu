@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==============================================
-# Kighmu VPS Manager - Version Dynamique Corrigée Unix
+# Kighmu VPS Manager - Version Dynamique Corrigée
 # ==============================================
 
 # Vérifier si root
@@ -35,8 +35,6 @@ bytes_to_gb() {
   echo "scale=2; $1/1024/1024/1024" | bc
 }
 
-# ... (les fonctions restent inchangées) ...
-
 while true; do
     clear
     OS_INFO=$(if [ -f /etc/os-release ]; then . /etc/os-release; echo "$NAME $VERSION_ID"; else uname -s; fi)
@@ -50,9 +48,17 @@ while true; do
     
     SSH_USERS_COUNT=$(awk -F: '/\/home\// && $7 ~ /(bash|sh)$/ {print $1}' /etc/passwd | wc -l)
 
-    # Récupérer la consommation réseau avec vnStat pour journée et mois
-    DATA_DAY_BYTES=$(vnstat -i "$NET_INTERFACE" --oneline | cut -d\; -f9)
-    DATA_MONTH_BYTES=$(vnstat -i "$NET_INTERFACE" --oneline | cut -d\; -f15)
+    # Extraction brute de vnstat
+    DATA_DAY_RAW=$(vnstat -i "$NET_INTERFACE" --oneline | cut -d\; -f9)
+    DATA_MONTH_RAW=$(vnstat -i "$NET_INTERFACE" --oneline | cut -d\; -f15)
+
+    # Nettoyer pour garder que les chiffres (évite erreurs bc)
+    DATA_DAY_BYTES=$(echo "$DATA_DAY_RAW" | tr -cd '0-9')
+    DATA_MONTH_BYTES=$(echo "$DATA_MONTH_RAW" | tr -cd '0-9')
+
+    # Gestion cas vide
+    DATA_DAY_BYTES=${DATA_DAY_BYTES:-0}
+    DATA_MONTH_BYTES=${DATA_MONTH_BYTES:-0}
 
     DATA_DAY_GB=$(bytes_to_gb "$DATA_DAY_BYTES")
     DATA_MONTH_GB=$(bytes_to_gb "$DATA_MONTH_BYTES")
@@ -71,7 +77,6 @@ while true; do
 
     printf " Utilisateurs SSH: ${BLUE}%-4d${RESET}\n" "$SSH_USERS_COUNT"
 
-    # Affichage consommation données vives
     printf " Consommation aujourd'hui : ${MAGENTA_VIF}%-6s Go${RESET} | Ce mois-ci : ${CYAN_VIF}%-6s Go${RESET}\n" "$DATA_DAY_GB" "$DATA_MONTH_GB"
 
     echo -e "${CYAN}+======================================================+${RESET}"
