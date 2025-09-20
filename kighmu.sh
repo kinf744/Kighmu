@@ -15,7 +15,9 @@ GREEN="\e[32m"
 YELLOW="\e[33m"
 BLUE="\e[34m"
 MAGENTA="\e[35m"
+MAGENTA_VIF="\e[1;35m"
 CYAN="\e[36m"
+CYAN_VIF="\e[1;36m"
 BOLD="\e[1m"
 RESET="\e[0m"
 
@@ -25,6 +27,14 @@ AUTH_LOG="/var/log/auth.log"
 OPENVPN_STATUS="/etc/openvpn/openvpn-status.log"
 WIREGUARD_CMD="wg"
 
+# Interface réseau à surveiller (adapter selon VPS)
+NET_INTERFACE="eth0"
+
+# Fonction pour convertir octets en gigaoctets (Go)
+bytes_to_gb() {
+  echo "scale=2; $1/1024/1024/1024" | bc
+}
+
 # ... (les fonctions restent inchangées) ...
 
 while true; do
@@ -33,39 +43,19 @@ while true; do
     IP=$(hostname -I | awk '{print $1}')
     
     TOTAL_RAM=$(free -m | awk 'NR==2{print $2 " Mo"}')
-    CPU_FREQ=$(lscpu | grep "MHz" | head -1 | awk '{print $3 " MHz"}')
+    CPU_FREQ=$(lscpu | awk -F: '/CPU max MHz/ {gsub(/^[ \t]+/, "", $2); print $2 " MHz"}')
     
     RAM_USAGE=$(free -m | awk 'NR==2{printf "%.2f%%", $3*100/$2}')
     CPU_USAGE=$(grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf "%.2f%%", usage}')
     
-    if declare -f get_user_ips_by_service > /dev/null; then
-        mapfile -t ssh_ips < <(get_user_ips_by_service 22 2>/dev/null || echo "")
-    else
-        ssh_ips=()
-    fi
+    SSH_USERS_COUNT=$(awk -F: '/\/home\// && $7 ~ /(bash|sh)$/ {print $1}' /etc/passwd | wc -l)
 
-    if declare -f get_dropbear_user_ips > /dev/null; then
-        mapfile -t dropbear_ips < <(get_dropbear_user_ips 2>/dev/null || echo "")
-    else
-        dropbear_ips=()
-    fi
+    # Récupérer la consommation réseau avec vnStat pour journée et mois
+    DATA_DAY_BYTES=$(vnstat -i "$NET_INTERFACE" --oneline | cut -d\; -f9)
+    DATA_MONTH_BYTES=$(vnstat -i "$NET_INTERFACE" --oneline | cut -d\; -f15)
 
-    if declare -f get_openvpn_user_ips > /dev/null; then
-        mapfile -t openvpn_ips < <(get_openvpn_user_ips 2>/dev/null || echo "")
-    else
-        openvpn_ips=()
-    fi
-
-    if declare -f get_wireguard_user_ips > /dev/null; then
-        mapfile -t wireguard_ips < <(get_wireguard_user_ips 2>/dev/null || echo "")
-    else
-        wireguard_ips=()
-    fi
-
-    all_ips=("${ssh_ips[@]}" "${dropbear_ips[@]}" "${openvpn_ips[@]}" "${wireguard_ips[@]}")
-    total_connected=$(printf "%s\n" "${all_ips[@]}" | awk '{print $2}' | sort -u | wc -l)
-
-    SSH_USERS_COUNT=$(awk -F: '/\/home\// {print $1}' /etc/passwd | wc -l)
+    DATA_DAY_GB=$(bytes_to_gb "$DATA_DAY_BYTES")
+    DATA_MONTH_GB=$(bytes_to_gb "$DATA_MONTH_BYTES")
 
     echo -e "${CYAN}+======================================================+${RESET}"
     echo -e "${BOLD}${MAGENTA}|                  🚀 KIGHMU MANAGER 🇨🇲 🚀             |${RESET}"
@@ -79,7 +69,10 @@ while true; do
 
     echo -e "${CYAN}+======================================================+${RESET}"
 
-    printf " Utilisateurs SSH: ${BLUE}%-4d${RESET} | Appareils connectés: ${MAGENTA}%-4d${RESET}\n" "$SSH_USERS_COUNT" "$total_connected"
+    printf " Utilisateurs SSH: ${BLUE}%-4d${RESET}\n" "$SSH_USERS_COUNT"
+
+    # Nouvelle section consommation réseau avec couleurs vives
+    printf " Consommation aujourd'hui : ${MAGENTA_VIF}%-6s Go${RESET} | Ce mois-ci : ${CYAN_VIF}%-6s Go${RESET}\n" "$DATA_DAY_GB" "$DATA_MONTH_GB"
 
     echo -e "${CYAN}+======================================================+${RESET}"
 
@@ -107,7 +100,7 @@ while true; do
         3) bash "$SCRIPT_DIR/menu3.sh" ;;
         4) bash "$SCRIPT_DIR/menu_4.sh" ;;
         5) bash "$SCRIPT_DIR/menu4.sh" ;;
-        6) bash "$SCRIPT_DIR/menu4_2.sh" ;;  # Assurez-vous que c'est le bon script banner
+        6) bash "$SCRIPT_DIR/menu4_2.sh" ;;
         7) bash "$SCRIPT_DIR/menu5.sh" ;;
         8) bash "$SCRIPT_DIR/menu_5.sh" ;;
         9)
