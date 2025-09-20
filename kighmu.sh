@@ -68,7 +68,7 @@ while true; do
     SSH_USERS_COUNT=$(awk -F: '/\/home\// {print $1}' /etc/passwd | wc -l)
 
     echo -e "${CYAN}+======================================================+${RESET}"
-    echo -e "${BOLD}${MAGENTA}|                  🚀 KIGHMU MANAGER 🇨🇲 🚀           |${RESET}"
+    echo -e "${BOLD}${MAGENTA}|                  🚀 KIGHMU MANAGER 🇨🇲 🚀             |${RESET}"
     echo -e "${CYAN}+======================================================+${RESET}"
 
     printf " OS: %-20s | IP: %-15s\n" "$OS_INFO" "$IP"
@@ -83,7 +83,7 @@ while true; do
 
     echo -e "${CYAN}+======================================================+${RESET}"
 
-    echo -e "${BOLD}${YELLOW}|                    MENU PRINCIPAL:                 |${RESET}"
+    echo -e "${BOLD}${YELLOW}|                    MENU PRINCIPAL:                   |${RESET}"
     echo -e "${CYAN}+======================================================+${RESET}"
     echo -e "${GREEN}${BOLD}[01]${RESET} ${YELLOW}Créer un utilisateur SSH${RESET}"
     echo -e "${GREEN}${BOLD}[02]${RESET} ${YELLOW}Créer un test utilisateur${RESET}"
