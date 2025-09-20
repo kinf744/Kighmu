@@ -26,7 +26,6 @@ install_package_if_missing() {
 
 apt-get update -y
 apt-get install dnsutils -y
-apt-get install ufw -y
 
 install_package_if_missing "curl"
 
