@@ -13,63 +13,59 @@ RESET="\e[0m"
 
 clear
 
-# Fonction affichage des modes actifs et ports utilisés (affiche seulement si un mode est actif)
 afficher_modes_ports() {
     local any_active=0
 
-    # Vérifier si au moins un service est actif
-    if systemctl is-active --quiet ssh || \
-       systemctl is-active --quiet dropbear || \
-       systemctl is-active --quiet slowdns.service || \
-       systemctl is-active --quiet udp_custom.service || \
-       systemctl is-active --quiet socks_python.service; then
+    if systemctl is-active --quiet ssh || pgrep -x sshd >/dev/null 2>&1; then
+        any_active=1
+    elif systemctl is-active --quiet dropbear || pgrep -x dropbear >/dev/null 2>&1; then
+        any_active=1
+    elif systemctl is-active --quiet slowdns.service || pgrep -f "sldns-server" >/dev/null 2>&1 || screen -list | grep -q slowdns_session; then
+        any_active=1
+    elif systemctl is-active --quiet udp_custom.service || pgrep -f udp-custom-linux-amd64 >/dev/null 2>&1 || screen -list | grep -q udp_custom; then
+        any_active=1
+    elif systemctl is-active --quiet socks_python.service || pgrep -f KIGHMUPROXY.py >/dev/null 2>&1 || screen -list | grep -q socks_python; then
         any_active=1
     fi
 
-    # Si aucun service actif, ne rien afficher
     if [[ $any_active -eq 0 ]]; then
         return
     fi
 
-    # Sinon affichage des modes actifs avec ports
     echo -e "${CYAN}Modes actifs et ports utilisés:${RESET}"
 
-    if systemctl is-active --quiet ssh; then
+    if systemctl is-active --quiet ssh || pgrep -x sshd >/dev/null 2>&1; then
         echo -e "  - OpenSSH: ${GREEN}port 22${RESET}"
     fi
 
-    if systemctl is-active --quiet dropbear; then
+    if systemctl is-active --quiet dropbear || pgrep -x dropbear >/dev/null 2>&1; then
         DROPBEAR_PORT=$(grep -oP '(?<=-p )\d+' /etc/default/dropbear 2>/dev/null || echo "22")
         echo -e "  - Dropbear: ${GREEN}port $DROPBEAR_PORT${RESET}"
     fi
 
-    if systemctl is-active --quiet slowdns.service; then
-        echo -e "  - SlowDNS: ${GREEN}port UDP 5300${RESET}"
+    if systemctl is-active --quiet slowdns.service || pgrep -f "sldns-server" >/dev/null 2>&1 || screen -list | grep -q slowdns_session; then
+        echo -e "  - SlowDNS: ${GREEN}ports UDP 5300, 5400${RESET}"
     fi
 
-    if systemctl is-active --quiet udp_custom.service; then
+    if systemctl is-active --quiet udp_custom.service || pgrep -f udp-custom-linux-amd64 >/dev/null 2>&1 || screen -list | grep -q udp_custom; then
         echo -e "  - UDP Custom: ${GREEN}port UDP 54000${RESET}"
     fi
 
-    if systemctl is-active --quiet socks_python.service; then
+    if systemctl is-active --quiet socks_python.service || pgrep -f KIGHMUPROXY.py >/dev/null 2>&1 || screen -list | grep -q socks_python; then
         echo -e "  - SOCKS Python: ${GREEN}ports TCP 8080, 9090${RESET}"
     fi
 
     echo ""
 }
 
-# Informations IP et uptime
 HOST_IP=$(curl -s https://api.ipify.org)
 UPTIME=$(uptime -p)
-
 echo -e "${CYAN}+=====================================================+${RESET}"
 echo -e "|           🚀 PANNEAU DE CONTROLE DES MODES 🚀       |"
 echo -e "${CYAN}+=====================================================+${RESET}"
-
 echo -e "${CYAN} IP: ${GREEN}$HOST_IP${RESET} | ${CYAN}Uptime: ${GREEN}$UPTIME${RESET}"
 afficher_modes_ports
 
-# Fonctions SlowDNS
 install_slowdns() {
     echo ">>> Nettoyage avant installation SlowDNS..."
     pkill -f slowdns || true
@@ -80,18 +76,9 @@ install_slowdns() {
     rm -f /etc/systemd/system/slowdns.service
     systemctl daemon-reload
     ufw delete allow 5300/udp 2>/dev/null || true
-
-    echo -ne "Entrez votre domaine ou serveur DNS pour SlowDNS (exemple: example.com) : "
-    read SLOWDNS_DOMAIN
-    if [[ -z "$SLOWDNS_DOMAIN" ]]; then
-        echo "Domaine vide, installation annulée."
-        return
-    fi
-
-    echo ">>> Installation/configuration SlowDNS avec domaine $SLOWDNS_DOMAIN..."
-    bash "$HOME/Kighmu/slowdns.sh" "$SLOWDNS_DOMAIN" || echo "SlowDNS : script introuvable."
+    echo ">>> Installation/configuration SlowDNS..."
+    bash "$HOME/Kighmu/slowdns.sh" || echo "SlowDNS : script introuvable."
     ufw allow 5300/udp
-    echo -e "${GREEN}[OK] SlowDNS installé avec domaine ${SLOWDNS_DOMAIN}.${RESET}"
 }
 
 uninstall_slowdns() {
@@ -107,7 +94,6 @@ uninstall_slowdns() {
     echo -e "${GREEN}[OK] SlowDNS désinstallé.${RESET}"
 }
 
-# Fonctions OpenSSH
 install_openssh() {
     echo ">>> Installation d'OpenSSH..."
     apt-get install -y openssh-server
@@ -123,7 +109,6 @@ uninstall_openssh() {
     echo -e "${GREEN}[OK] OpenSSH supprimé.${RESET}"
 }
 
-# Fonctions Dropbear
 install_dropbear() {
     echo ">>> Installation de Dropbear..."
     apt-get install -y dropbear
@@ -139,7 +124,6 @@ uninstall_dropbear() {
     echo -e "${GREEN}[OK] Dropbear supprimé.${RESET}"
 }
 
-# UDP Custom
 install_udp_custom() {
     echo ">>> Installation UDP Custom via script..."
     bash "$HOME/Kighmu/udp_custom.sh" || echo "Script introuvable."
@@ -169,7 +153,6 @@ uninstall_udp_custom() {
     echo -e "${GREEN}[OK] UDP Custom désinstallé.${RESET}"
 }
 
-# SOCKS Python
 install_socks_python() {
     echo ">>> Installation SOCKS Python via script..."
     bash "$HOME/Kighmu/socks_python.sh" || echo "Script introuvable."
@@ -202,13 +185,11 @@ uninstall_socks_python() {
     echo -e "${GREEN}[OK] SOCKS Python désinstallé.${RESET}"
 }
 
-# SSL/TLS et BadVPN - à compléter
 install_ssl_tls() { echo ">>> Installation SSL/TLS (à compléter)"; }
 uninstall_ssl_tls() { echo ">>> Désinstallation SSL/TLS (à compléter)"; }
 install_badvpn() { echo ">>> Installation BadVPN (à compléter)"; }
 uninstall_badvpn() { echo ">>> Désinstallation BadVPN (à compléter)"; }
 
-# Gestion du sous-menu des modes avec coloration appliquée
 manage_mode() {
     MODE_NAME=$1
     INSTALL_FUNC=$2
@@ -234,7 +215,6 @@ manage_mode() {
     done
 }
 
-# Menu principal avec coloration appliquée
 while true; do
     echo ""
     echo -e "${CYAN}+======================================================+${RESET}"
