@@ -162,13 +162,13 @@ manage_mode() {
 
     while true; do
         echo ""
-        echo -e "${CYAN}+==================================================+${RESET}"
-        echo -e "|           🚀 Gestion du mode : $MODE_NAME 🚀        |"
-        echo -e "${CYAN}+==================================================+${RESET}"
+        echo -e "${CYAN}+======================================================+${RESET}"
+        echo -e "|             🚀 Gestion du mode : $MODE_NAME 🚀        |"
+        echo -e "${CYAN}+======================================================+${RESET}"
         echo -e "${GREEN}${BOLD}[1]${RESET} ${YELLOW}Installer${RESET}"
         echo -e "${GREEN}${BOLD}[2]${RESET} ${YELLOW}Désinstaller${RESET}"
         echo -e "${GREEN}${BOLD}[0]${RESET} ${YELLOW}Retour${RESET}"
-        echo -e "${CYAN}+--------------------------------------------------+${RESET}"
+        echo -e "${CYAN}+------------------------------------------------------+${RESET}"
         echo -ne "${BOLD}${YELLOW}👉 Choisissez une action : ${RESET}"
         read action
         case $action in
@@ -183,9 +183,9 @@ manage_mode() {
 # Menu principal avec coloration appliquée
 while true; do
     echo ""
-    echo -e "${CYAN}+==================================================+${RESET}"
-    echo -e "|             🚀 MENU PRINCIPAL DES MODES 🚀       |"
-    echo -e "${CYAN}+==================================================+${RESET}"
+    echo -e "${CYAN}+======================================================+${RESET}"
+    echo -e "|               🚀 MENU PRINCIPAL DES MODES 🚀       |"
+    echo -e "${CYAN}+======================================================+${RESET}"
     echo -e "${GREEN}${BOLD}[01]${RESET} ${YELLOW}OpenSSH${RESET}"
     echo -e "${GREEN}${BOLD}[02]${RESET} ${YELLOW}Dropbear${RESET}"
     echo -e "${GREEN}${BOLD}[03]${RESET} ${YELLOW}SlowDNS${RESET}"
@@ -194,7 +194,7 @@ while true; do
     echo -e "${GREEN}${BOLD}[06]${RESET} ${YELLOW}SSL/TLS${RESET}"
     echo -e "${GREEN}${BOLD}[07]${RESET} ${YELLOW}BadVPN${RESET}"
     echo -e "${GREEN}${BOLD}[00]${RESET} ${YELLOW}Quitter${RESET}"
-    echo -e "${CYAN}+==================================================+${RESET}"
+    echo -e "${CYAN}+======================================================+${RESET}"
     echo -ne "${BOLD}${YELLOW}👉 Choisissez un mode : ${RESET}"
     read choix
     case $choix in
