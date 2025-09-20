@@ -67,9 +67,9 @@ while true; do
 
     SSH_USERS_COUNT=$(awk -F: '/\/home\// {print $1}' /etc/passwd | wc -l)
 
-    echo -e "${CYAN}+==================================================+${RESET}"
-    echo -e "${BOLD}${MAGENTA}|                🚀 KIGHMU MANAGER 🇨🇲 🚀           |${RESET}"
-    echo -e "${CYAN}+==================================================+${RESET}"
+    echo -e "${CYAN}+======================================================+${RESET}"
+    echo -e "${BOLD}${MAGENTA}|                  🚀 KIGHMU MANAGER 🇨🇲 🚀           |${RESET}"
+    echo -e "${CYAN}+======================================================+${RESET}"
 
     printf " OS: %-20s | IP: %-15s\n" "$OS_INFO" "$IP"
     
@@ -77,14 +77,14 @@ while true; do
     echo -e "${CYAN} CPU fréquence: ${YELLOW}$CPU_FREQ${RESET}"
     printf " RAM utilisée: ${GREEN}%-6s${RESET} | CPU utilisé: ${YELLOW}%-6s${RESET}\n" "$RAM_USAGE" "$CPU_USAGE"
 
-    echo -e "${CYAN}+==================================================+${RESET}"
+    echo -e "${CYAN}+======================================================+${RESET}"
 
     printf " Utilisateurs SSH: ${BLUE}%-4d${RESET} | Appareils connectés: ${MAGENTA}%-4d${RESET}\n" "$SSH_USERS_COUNT" "$total_connected"
 
-    echo -e "${CYAN}+==================================================+${RESET}"
+    echo -e "${CYAN}+======================================================+${RESET}"
 
-    echo -e "${BOLD}${YELLOW}|                  MENU PRINCIPAL:                 |${RESET}"
-    echo -e "${CYAN}+==================================================+${RESET}"
+    echo -e "${BOLD}${YELLOW}|                    MENU PRINCIPAL:                 |${RESET}"
+    echo -e "${CYAN}+======================================================+${RESET}"
     echo -e "${GREEN}${BOLD}[01]${RESET} ${YELLOW}Créer un utilisateur SSH${RESET}"
     echo -e "${GREEN}${BOLD}[02]${RESET} ${YELLOW}Créer un test utilisateur${RESET}"
     echo -e "${GREEN}${BOLD}[03]${RESET} ${YELLOW}Voir les utilisateurs en ligne${RESET}"
@@ -96,10 +96,10 @@ while true; do
     echo -e "${GREEN}${BOLD}[09]${RESET} ${YELLOW}Désinstaller le script${RESET}"
     echo -e "${GREEN}${BOLD}[10]${RESET} ${YELLOW}Blocage de torrents${RESET}"
     echo -e "${RED}[00] Quitter${RESET}"
-    echo -e "${CYAN}+==================================================+${RESET}"
+    echo -e "${CYAN}+======================================================+${RESET}"
     echo -ne "${BOLD}${YELLOW} Entrez votre choix [1-10]: ${RESET}"
     read -r choix
-    echo -e "${CYAN}+--------------------------------------------------+${RESET}"
+    echo -e "${CYAN}+------------------------------------------------------+${RESET}"
 
     case $choix in
         1) bash "$SCRIPT_DIR/menu1.sh" ;;
