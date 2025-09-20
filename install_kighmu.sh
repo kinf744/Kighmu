@@ -129,6 +129,8 @@ else
   ufw allow 5300
   ufw allow 54000
   ufw allow 8080
+  ufw allow 10000
+  ufw allow 5400
 
   ufw --force enable
 
@@ -150,6 +152,7 @@ FILES=(
   "menu2.sh"
   "menu3.sh"
   "menu_4.sh"
+  "menu_5.sh"
   "menu4.sh"
   "menu5.sh"
   "menu6.sh"
