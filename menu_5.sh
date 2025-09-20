@@ -1,5 +1,12 @@
 #!/bin/bash
 
+# Couleurs ANSI
+RED="\033[31m"
+GREEN="\033[32m"
+YELLOW="\033[33m"
+CYAN="\033[36m"
+RESET="\033[0m"
+
 V2RAY_CONFIG="/etc/v2ray/config.json"
 UUID_FILE="/etc/v2ray/uuid.txt"
 DOMAIN_FILE="/etc/slowdns/ns.conf"
@@ -11,29 +18,32 @@ V2RAY_PORT=10000
 WS_PATH="/kighmu"  # Chemin websocket forcé
 
 install_complete() {
-    echo "Installation complète de V2Ray SlowDNS (sans TUN)..."
+    echo -e "${CYAN}Installation complète de V2Ray SlowDNS (sans TUN)...${RESET}"
 
-    if [[ ! -f "$DOMAIN_FILE" ]]; then
-        echo "Le fichier nameserver $DOMAIN_FILE est introuvable. Veuillez exécuter l'installation SlowDNS avant."
-        exit 1
-    fi
-    DOMAIN=$(cat "$DOMAIN_FILE")
-    echo "Nom de domaine SlowDNS : $DOMAIN"
+    # Demander le nom de domaine à chaque installation
+    read -rp "Entrez le nom de domaine SlowDNS (ex: kiaje.kighmuop.dpdns.org) : " DOMAIN
+    while [[ -z "$DOMAIN" ]]; do
+        echo -e "${RED}Le nom de domaine ne peut pas être vide. Veuillez réessayer.${RESET}"
+        read -rp "Entrez le nom de domaine SlowDNS (ex: kiaje.kighmuop.dpdns.org) : " DOMAIN
+    done
+    echo "$DOMAIN" > "$DOMAIN_FILE"
 
     if [[ ! -f $SLOWDNS_KEY_PUB ]]; then
-        echo "Clé publique SlowDNS introuvable à $SLOWDNS_KEY_PUB."
+        echo -e "${RED}Erreur : Clé publique SlowDNS introuvable à $SLOWDNS_KEY_PUB.${RESET}"
         exit 1
     fi
 
-    echo "Mise à jour système et installation des dépendances nécessaires..."
+    echo -e "${YELLOW}Mise à jour système et installation des dépendances nécessaires...${RESET}"
     apt update && apt upgrade -y
     apt install -y curl unzip jq iproute2
 
     if ! command -v v2ray &>/dev/null; then
-        echo "Installation de V2Ray..."
+        echo -e "${YELLOW}Installation de V2Ray...${RESET}"
         curl -O https://raw.githubusercontent.com/v2fly/fhs-install-v2ray/master/install-release.sh
         bash install-release.sh
     fi
+
+    mkdir -p /etc/v2ray
 
     if [[ ! -f $UUID_FILE ]]; then
         UUID=$(uuidgen)
@@ -42,7 +52,7 @@ install_complete() {
         UUID=$(cat $UUID_FILE)
     fi
 
-    echo "Création de la configuration V2Ray avec websocket..."
+    echo -e "${YELLOW}Création de la configuration V2Ray avec websocket...${RESET}"
 
     cat > $V2RAY_CONFIG <<EOF
 {
@@ -80,18 +90,18 @@ EOF
     systemctl enable v2ray
     systemctl restart v2ray
 
-    echo "Installation terminée. V2Ray écoute sur 127.0.0.1:$V2RAY_PORT avec ws path $WS_PATH"
+    echo -e "${GREEN}Installation terminée. V2Ray écoute sur 127.0.0.1:$V2RAY_PORT avec ws path $WS_PATH${RESET}"
 }
 
 create_user() {
     if [[ ! -f $V2RAY_CONFIG ]]; then
-        echo "Configuration V2Ray absente. Veuillez faire l'installation complète d'abord."
+        echo -e "${RED}Configuration V2Ray absente. Veuillez faire l'installation complète d'abord.${RESET}"
         return
     fi
 
     DOMAIN=$(cat $DOMAIN_FILE)
     if [[ ! -f $SLOWDNS_KEY_PUB ]]; then
-        echo "Clé publique SlowDNS non trouvée."
+        echo -e "${RED}Clé publique SlowDNS non trouvée.${RESET}"
         return
     fi
 
@@ -124,51 +134,57 @@ EOF
     VMESS_LINK="vmess://$(echo -n "$VMESS_JSON" | base64 -w 0)"
     PUBKEY=$(cat "$SLOWDNS_KEY_PUB")
 
-    echo -e "\n*NOUVEAU UTILISATEUR V2RAYDNSTT CRÉÉ*"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "DOMAIN        : $DOMAIN"
-    echo "PORT          : $V2RAY_PORT"
-    echo "UUID          : $USER_UUID"
-    echo "MÉTHODE       : WS sans TLS"
-    echo "PATH          : $WS_PATH"
-    echo "UTILISATEUR   : $USERNAME"
-    echo "LIMITE        : $DURATION jours"
-    echo "DATE EXPIRÉE  : $EXPIRY_DATE"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    clear
+    echo -e "${CYAN}+=============================================+${RESET}"
+    echo -e "${CYAN}|           ${YELLOW}NOUVEAU UTILISATEUR V2RAYDNSTT CRÉÉ${CYAN}           |${RESET}"
+    echo -e "${CYAN}+=============================================+${RESET}"
+    echo -e "${GREEN}DOMAIN        :${RESET} $DOMAIN"
+    echo -e "${GREEN}PORT          :${RESET} $V2RAY_PORT"
+    echo -e "${GREEN}UUID          :${RESET} $USER_UUID"
+    echo -e "${GREEN}MÉTHODE       :${RESET} WS sans TLS"
+    echo -e "${GREEN}PATH          :${RESET} $WS_PATH"
+    echo -e "${GREEN}UTILISATEUR   :${RESET} $USERNAME"
+    echo -e "${GREEN}LIMITE        :${RESET} $DURATION jours"
+    echo -e "${GREEN}DATE EXPIRÉE  :${RESET} $EXPIRY_DATE"
+    echo
+    echo -e "${YELLOW}VMess Link:${RESET}"
     echo "$VMESS_LINK"
-    echo -e "\n━━━━━━━━━━━  CONFIG SLOWDNS  ━━━━━━━━━━━"
-    echo "Clé publique :"
+    echo
+    echo -e "${YELLOW}Clé publique SlowDNS:${RESET}"
     echo "$PUBKEY"
-    echo "NameServer (NS) : $DOMAIN"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo -e "${CYAN}+=============================================+${RESET}"
 }
 
 delete_user() {
     if [[ ! -f $V2RAY_CONFIG ]]; then
-        echo "Configuration V2Ray absente. Faites l'installation complète d'abord."
+        echo -e "${RED}Configuration V2Ray absente. Faites l'installation complète d'abord.${RESET}"
         return
     fi
 
-    echo "UUIDs existants :"
+    echo -e "${YELLOW}UUIDs existants :${RESET}"
     jq -r '.inbounds[0].settings.clients[].id' $V2RAY_CONFIG
 
     read -p "UUID utilisateur à supprimer : " DEL_UUID
 
     if jq -e ".inbounds[0].settings.clients[] | select(.id==\"$DEL_UUID\")" $V2RAY_CONFIG >/dev/null; then
         jq "del(.inbounds[0].settings.clients[] | select(.id==\"$DEL_UUID\"))" $V2RAY_CONFIG > "${V2RAY_CONFIG}.tmp" && mv "${V2RAY_CONFIG}.tmp" $V2RAY_CONFIG
-        echo "Utilisateur $DEL_UUID supprimé."
+        echo -e "${GREEN}Utilisateur $DEL_UUID supprimé.${RESET}"
         systemctl restart v2ray
     else
-        echo "UUID non trouvé."
+        echo -e "${RED}UUID non trouvé.${RESET}"
     fi
 }
 
 while true; do
-    echo "===== Gestion V2Ray SlowDNS ====="
-    echo "1) Installation complète V2Ray SlowDNS"
-    echo "2) Créer un utilisateur V2Ray SlowDNS"
-    echo "3) Supprimer un utilisateur V2Ray SlowDNS"
-    echo "4) Quitter"
+    clear
+    echo -e "${CYAN}+=============================================+${RESET}"
+    echo -e "${CYAN}|           ${YELLOW}Gestion V2Ray SlowDNS${CYAN}           |${RESET}"
+    echo -e "${CYAN}+=============================================+${RESET}"
+    echo -e "${GREEN}1)${RESET} Installation complète V2Ray SlowDNS"
+    echo -e "${GREEN}2)${RESET} Créer un utilisateur V2Ray SlowDNS"
+    echo -e "${GREEN}3)${RESET} Supprimer un utilisateur V2Ray SlowDNS"
+    echo -e "${GREEN}4)${RESET} Quitter"
+    echo
     read -rp "Choisissez une option [1-4] : " option
 
     case $option in
@@ -176,6 +192,9 @@ while true; do
         2) create_user ;;
         3) delete_user ;;
         4) exit 0 ;;
-        *) echo "Option invalide." ;;
+        *) echo -e "${RED}Option invalide.${RESET}" ;;
     esac
+
+    echo
+    read -rp "Appuyez sur Entrée pour continuer..." pause
 done
