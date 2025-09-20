@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==============================================
-# Kighmu VPS Manager - Version Dynamique Corrigée
+# Kighmu VPS Manager - Version Dynamique Corrigée avec détection interfaces
 # ==============================================
 
 # Vérifier si root
@@ -27,8 +27,10 @@ AUTH_LOG="/var/log/auth.log"
 OPENVPN_STATUS="/etc/openvpn/openvpn-status.log"
 WIREGUARD_CMD="wg"
 
-# Interface réseau à surveiller (adapter selon VPS)
-NET_INTERFACE="eth0"
+# Fonction pour détecter dynamiquement les interfaces réseau actives valides
+detect_interfaces() {
+  ip -o link show up | awk -F': ' '{print $2}' | grep -v '^lo$' | grep -vE '^(docker|veth|br|virbr|wl|vmnet|vboxnet)'
+}
 
 # Fonction pour convertir octets en gigaoctets avec 2 décimales
 bytes_to_gb() {
@@ -37,25 +39,36 @@ bytes_to_gb() {
 
 while true; do
     clear
+
     OS_INFO=$(if [ -f /etc/os-release ]; then . /etc/os-release; echo "$NAME $VERSION_ID"; else uname -s; fi)
     IP=$(hostname -I | awk '{print $1}')
-    
     TOTAL_RAM=$(free -m | awk 'NR==2{print $2 " Mo"}')
     CPU_FREQ=$(lscpu | awk -F: '/CPU max MHz/ {gsub(/^[ \t]+/, "", $2); print $2 " MHz"}')
-    
     RAM_USAGE=$(free -m | awk 'NR==2{printf "%.2f%%", $3*100/$2}')
     CPU_USAGE=$(grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf "%.2f%%", usage}')
-    
     SSH_USERS_COUNT=$(awk -F: '/\/home\// && $7 ~ /(bash|sh)$/ {print $1}' /etc/passwd | wc -l)
 
-    DATA_DAY_RAW=$(vnstat -i "$NET_INTERFACE" --oneline | cut -d\; -f9)
-    DATA_MONTH_RAW=$(vnstat -i "$NET_INTERFACE" --oneline | cut -d\; -f15)
+    # Détection dynamique des interfaces à surveiller
+    mapfile -t NET_INTERFACES < <(detect_interfaces)
 
-    DATA_DAY_BYTES=$(echo "$DATA_DAY_RAW" | tr -cd '0-9')
-    DATA_MONTH_BYTES=$(echo "$DATA_MONTH_RAW" | tr -cd '0-9')
+    # Initialiser compteurs consommation réseau
+    DATA_DAY_BYTES=0
+    DATA_MONTH_BYTES=0
 
-    DATA_DAY_BYTES=${DATA_DAY_BYTES:-0}
-    DATA_MONTH_BYTES=${DATA_MONTH_BYTES:-0}
+    # Agréger consommation de toutes les interfaces détectées
+    for iface in "${NET_INTERFACES[@]}"; do
+      day_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d\; -f9)
+      month_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d\; -f15)
+
+      day_bytes=$(echo "$day_raw" | tr -cd '0-9')
+      month_bytes=$(echo "$month_raw" | tr -cd '0-9')
+
+      day_bytes=${day_bytes:-0}
+      month_bytes=${month_bytes:-0}
+
+      DATA_DAY_BYTES=$((DATA_DAY_BYTES + day_bytes))
+      DATA_MONTH_BYTES=$((DATA_MONTH_BYTES + month_bytes))
+    done
 
     DATA_DAY_GB=$(bytes_to_gb "$DATA_DAY_BYTES")
     DATA_MONTH_GB=$(bytes_to_gb "$DATA_MONTH_BYTES")
