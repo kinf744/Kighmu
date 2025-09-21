@@ -8,7 +8,6 @@ SLOWDNS_BIN="/usr/local/bin/sldns-server"
 PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 MTU_VALUE=1400
-LOG_FILE="/var/log/slowdns.log"
 
 log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
@@ -24,7 +23,7 @@ check_root() {
 install_dependencies() {
   log "Mise à jour des paquets et installation des dépendances..."
   apt-get update -q
-  for pkg in iptables screen tcpdump ufw logrotate; do
+  for pkg in iptables screen tcpdump ufw; do
     if ! command -v "$pkg" &> /dev/null; then
       log "$pkg non trouvé, installation..."
       apt-get install -y "$pkg"
@@ -85,34 +84,10 @@ enable_ip_forwarding() {
   fi
 }
 
-create_logrotate_config() {
-  LOGROTATE_CONF="/etc/logrotate.d/slowdns"
-
-  log "Création de la configuration logrotate pour $LOG_FILE..."
-
-  cat <<EOF > "$LOGROTATE_CONF"
-/var/log/slowdns.log {
-    daily
-    rotate 7
-    missingok
-    notifempty
-    compress
-    delaycompress
-    copytruncate
-    create 0640 root root
-    sharedscripts
-    postrotate
-        systemctl restart slowdns.service > /dev/null 2>&1 || true
-    endscript
-}
-EOF
-  log "Configuration logrotate écrite dans $LOGROTATE_CONF"
-}
-
 create_systemd_service() {
   SERVICE_PATH="/etc/systemd/system/slowdns.service"
 
-  log "Création du fichier systemd slowdns.service avec logs vers $LOG_FILE..."
+  log "Création du fichier systemd slowdns.service..."
 
   cat <<EOF > "$SERVICE_PATH"
 [Unit]
@@ -123,9 +98,12 @@ Wants=network.target
 [Service]
 Type=simple
 User=root
-ExecStart=$SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY \$(cat $CONFIG_FILE) 0.0.0.0:\$(ss -tlnp | grep sshd | head -1 | awk '{print \$4}' | cut -d: -f2) >> $LOG_FILE 2>&1
+ExecStart=$SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY \$(cat $CONFIG_FILE) 0.0.0.0:\$(ss -tlnp | grep sshd | head -1 | awk '{print \$4}' | cut -d: -f2)
 Restart=always
 RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=slowdns-server
 
 [Install]
 WantedBy=multi-user.target
@@ -205,9 +183,6 @@ main() {
 
   # Création et activation du service systemd à partir du script
   create_systemd_service
-
-  # Configuration logrotate
-  create_logrotate_config
 
   if command -v ufw >/dev/null 2>&1; then
     log "Ouverture du port UDP $PORT avec UFW."
