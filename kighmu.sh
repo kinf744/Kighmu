@@ -44,7 +44,7 @@ count_ssh_users() {
   awk -F: '($3 >= 1000) && ($7 ~ /^\/(bin\/bash|bin\/sh|bin\/false)$/) {print $1}' /etc/passwd | wc -l
 }
 
-# Méthode DarkSSH de comptage appareils connectés
+# Comptage appareils connectés
 count_connected_devices() {
   _ons=$(ps -x | grep sshd | grep -v root | grep priv | wc -l)
   [[ -e /etc/openvpn/openvpn-status.log ]] && _onop=$(grep -c "10.8.0" /etc/openvpn/openvpn-status.log) || _onop="0"
