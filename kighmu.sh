@@ -41,10 +41,8 @@ bytes_to_gb() {
 }
 
 count_ssh_users() {
-  # Compte les utilisateurs avec home dans /home et shell valide dans /etc/shells
-  awk -F: '
-    $6 ~ /^\/home/ && system("grep -Fxq " $7 " /etc/shells") == 0 {print $1}
-  ' /etc/passwd | wc -l
+  # Compte les utilisateurs standards (UID>=1000) avec shell bash, sh ou false
+  awk -F: '($3 >= 1000) && ($7 ~ /^\/(bin\/bash|bin\/sh|bin\/false)$/) {print $1}' /etc/passwd | wc -l
 }
 
 get_user_ips_by_service() {
