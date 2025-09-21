@@ -19,6 +19,7 @@ echo -e "${CYAN}+--------------------------------------------+${RESET}"
 
 if [ ! -f "$USER_FILE" ]; then
     echo -e "${YELLOW}Aucun utilisateur trouvé.${RESET}"
+    read -rp "${BOLD}Appuyez sur Entrée pour revenir au menu...${RESET}"
     exit 0
 fi
 
@@ -30,6 +31,7 @@ read -rp "${BOLD}Nom de l'utilisateur à supprimer : ${RESET}" username
 # Vérification dans users.list
 if ! grep -q "^$username|" "$USER_FILE"; then
     echo -e "${RED}Utilisateur '$username' introuvable dans la liste.${RESET}"
+    read -rp "${BOLD}Appuyez sur Entrée pour revenir au menu...${RESET}"
     exit 1
 fi
 
@@ -37,6 +39,7 @@ fi
 read -rp "${YELLOW}Confirmez suppression de l'utilisateur '${username}' ? (o/N) : ${RESET}" confirm
 if [[ ! "$confirm" =~ ^[oO]$ ]]; then
     echo -e "${GREEN}Suppression annulée.${RESET}"
+    read -rp "${BOLD}Appuyez sur Entrée pour revenir au menu...${RESET}"
     exit 0
 fi
 
@@ -52,10 +55,12 @@ if id "$username" &>/dev/null; then
             echo -e "${GREEN}Utilisateur '${username}' supprimé de la liste utilisateurs.${RESET}"
         else
             echo -e "${RED}Erreur : impossible de mettre à jour la liste des utilisateurs.${RESET}"
+            read -rp "${BOLD}Appuyez sur Entrée pour revenir au menu...${RESET}"
             exit 1
         fi
     else
         echo -e "${RED}Erreur lors de la suppression de l'utilisateur système '${username}'.${RESET}"
+        read -rp "${BOLD}Appuyez sur Entrée pour revenir au menu...${RESET}"
         exit 1
     fi
 else
@@ -67,6 +72,7 @@ else
             echo -e "${GREEN}Utilisateur '${username}' retiré de la liste utilisateurs.${RESET}"
         else
             echo -e "${RED}Erreur : impossible de mettre à jour la liste des utilisateurs.${RESET}"
+            read -rp "${BOLD}Appuyez sur Entrée pour revenir au menu...${RESET}"
             exit 1
         fi
     fi
