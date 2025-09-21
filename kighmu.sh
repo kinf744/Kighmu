@@ -1,18 +1,16 @@
 #!/bin/bash
 # ==============================================
-# Kighmu VPS Manager - Version Dynamique Corrigée + Mode Debug
+# Kighmu VPS Manager - Version Dynamique & SSH Fix + Mode Debug
 # ==============================================
 
-_DEBUG="off"  # régler à "on" pour activer le mode debug
+_DEBUG="off"  # mettre "on" pour activer le mode debug réseau
 
-# Fonction debug conditionnelle
 DEBUG() {
   if [ "$_DEBUG" = "on" ]; then
     echo -e "${YELLOW}[DEBUG] $*${RESET}"
   fi
 }
 
-# Vérifier si root
 if [ "$(id -u)" -ne 0 ]; then
     echo -e "\e[31m[ERREUR]\e[0m Veuillez exécuter ce script en root."
     exit 1
@@ -36,13 +34,34 @@ AUTH_LOG="/var/log/auth.log"
 OPENVPN_STATUS="/etc/openvpn/openvpn-status.log"
 WIREGUARD_CMD="wg"
 
-# Détection des interfaces valides
 detect_interfaces() {
   ip -o link show up | awk -F': ' '{print $2}' | grep -v '^lo$' | grep -vE '^(docker|veth|br|virbr|wl|vmnet|vboxnet)'
 }
 
 bytes_to_gb() {
   echo "scale=2; $1/1024/1024/1024" | bc
+}
+
+# Fonctions pour connecter utilisateurs (reprendre celles déclarées dans l'ancien script si besoin)
+get_user_ips_by_service() {
+    # Usage: get_user_ips_by_service <port> (example: 22 for SSH)
+    ss -tpn | grep ":$1" | grep -v '127.0.0.1' | grep ESTAB | awk -F'[ ,]+' '{print $6}' | sed -r 's/.*addr=//;s/port=.*//'
+}
+
+get_dropbear_user_ips() {
+    ps aux | grep dropbear | grep 'root@' | grep -v grep | awk '{print $17}' | sed 's/]:.*//;s/\[//'
+}
+
+get_openvpn_user_ips() {
+    if [ -f "$OPENVPN_STATUS" ]; then
+        grep -E ",([0-9]{1,3}\.){3}[0-9]{1,3}," "$OPENVPN_STATUS" | awk -F, '{print $1}'
+    fi
+}
+
+get_wireguard_user_ips() {
+    if command -v $WIREGUARD_CMD &>/dev/null; then
+        $WIREGUARD_CMD show | grep 'endpoint' | awk '{print $2}' | cut -d: -f1
+    fi
 }
 
 while true; do
@@ -54,9 +73,18 @@ while true; do
     CPU_FREQ=$(lscpu | awk -F: '/CPU max MHz/ {gsub(/^[ \t]+/, "", $2); print $2 " MHz"}')
     RAM_USAGE=$(free -m | awk 'NR==2{printf "%.2f%%", $3*100/$2}')
     CPU_USAGE=$(grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf "%.2f%%", usage}')
+
+    # ----- Utilisateurs connectés -----
+    mapfile -t ssh_ips < <(get_user_ips_by_service 22 2>/dev/null || echo "")
+    mapfile -t dropbear_ips < <(get_dropbear_user_ips 2>/dev/null || echo "")
+    mapfile -t openvpn_ips < <(get_openvpn_user_ips 2>/dev/null || echo "")
+    mapfile -t wireguard_ips < <(get_wireguard_user_ips 2>/dev/null || echo "")
+    all_ips=("${ssh_ips[@]}" "${dropbear_ips[@]}" "${openvpn_ips[@]}" "${wireguard_ips[@]}")
+    total_connected=$(printf "%s\n" "${all_ips[@]}" | awk '{print $1}' | sort -u | grep -v '^$' | wc -l)
+
     SSH_USERS_COUNT=$(awk -F: '/\/home\// && $7 ~ /(bash|sh)$/ {print $1}' /etc/passwd | wc -l)
 
-    # Interfaces détectées
+    # ----- Consommation réseau dynamique -----
     mapfile -t NET_INTERFACES < <(detect_interfaces)
     DEBUG "Interfaces détectées : ${NET_INTERFACES[*]}"
 
@@ -66,15 +94,11 @@ while true; do
     for iface in "${NET_INTERFACES[@]}"; do
       day_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d\; -f9)
       month_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d\; -f15)
-
       day_bytes=$(echo "$day_raw" | tr -cd '0-9')
       month_bytes=$(echo "$month_raw" | tr -cd '0-9')
-
       day_bytes=${day_bytes:-0}
       month_bytes=${month_bytes:-0}
-
       DEBUG "Interface $iface - Jour: $day_bytes octets, Mois: $month_bytes octets"
-
       DATA_DAY_BYTES=$((DATA_DAY_BYTES + day_bytes))
       DATA_MONTH_BYTES=$((DATA_MONTH_BYTES + month_bytes))
     done
@@ -92,8 +116,7 @@ while true; do
     printf " RAM utilisée: ${GREEN}%-6s${RESET} | CPU utilisé: ${YELLOW}%-6s${RESET}\n" "$RAM_USAGE" "$CPU_USAGE"
 
     echo -e "${CYAN}+======================================================+${RESET}"
-    printf " Utilisateurs SSH: ${BLUE}%-4d${RESET}\n" "$SSH_USERS_COUNT"
-
+    printf " Utilisateurs SSH: ${BLUE}%-4d${RESET} | Appareils connectés: ${MAGENTA}%-4d${RESET}\n" "$SSH_USERS_COUNT" "$total_connected"
     printf " Consommation aujourd'hui : ${MAGENTA_VIF}%.2f Go${RESET} | Ce mois-ci : ${CYAN_VIF}%.2f Go${RESET}\n" "$DATA_DAY_GB" "$DATA_MONTH_GB"
 
     echo -e "${CYAN}+======================================================+${RESET}"
