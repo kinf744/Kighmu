@@ -9,17 +9,13 @@ PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 MTU_VALUE=1400
 
-# Paramètres deuxième instance SlowDNS (V2Ray)
-UDP_PORT_V2RAY=5400
-V2RAY_LOCAL_PORT=10000
-
 log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
 }
 
 check_root() {
   if [ "$EUID" -ne 0 ]; then
-    echo "Ce script doit être exécuté en root ou via sudo." >&2
+    echo "Ce script doit être executé en root ou via sudo." >&2
     exit 1
   fi
 }
@@ -69,13 +65,8 @@ setup_iptables() {
   log "Ajout règle iptables pour autoriser UDP port $PORT"
   iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
 
-  # Redirection du port DNS standard 53 vers le port SlowDNS principal
   log "Redirection DNS UDP port 53 vers $PORT sur interface $1"
   iptables -t nat -I PREROUTING -i "$1" -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
-
-  # Règle iptables supplémentaire pour le port V2Ray SlowDNS UDP
-  log "Ajout règle iptables pour autoriser UDP port $UDP_PORT_V2RAY"
-  iptables -I INPUT -p udp --dport "$UDP_PORT_V2RAY" -j ACCEPT
 
   log "Sauvegarde des règles mises à jour dans /etc/iptables/rules.v4"
   iptables-save > /etc/iptables/rules.v4
@@ -180,35 +171,25 @@ main() {
   log "Démarrage SlowDNS sur UDP port $PORT avec NS $NAMESERVER..."
   screen -dmS slowdns_session "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NAMESERVER" 0.0.0.0:"$ssh_port"
 
-
-  # Lancement de la deuxième instance SlowDNS pour V2Ray sur UDP port 5400 vers localhost:10000
-  UDP_PORT_V2RAY=5400
-  V2RAY_LOCAL_PORT=10000
-  log "Démarrage SlowDNS V2Ray sur UDP port $UDP_PORT_V2RAY vers port local $V2RAY_LOCAL_PORT..."
-  screen -dmS slowdns_v2ray_session "$SLOWDNS_BIN" -udp ":$UDP_PORT_V2RAY" -privkey-file "$SERVER_KEY" "$NAMESERVER" 127.0.0.1:"$V2RAY_LOCAL_PORT"
-
   sleep 3
 
   if pgrep -f "sldns-server" >/dev/null; then
     log "SlowDNS démarré avec succès sur UDP port $PORT."
-    log "SlowDNS V2Ray démarré avec succès sur UDP port $UDP_PORT_V2RAY."
-    log "Pour les logs : screen -r slowdns_session ou screen -r slowdns_v2ray_session"
+    log "Pour les logs : screen -r slowdns_session"
   else
     echo "ERREUR : SlowDNS n'a pas pu démarrer." >&2
     exit 1
   fi
 
-  # Création et activation du service systemd slowdns.service uniquement (ne pas créer de service supplémentaire pour la deuxième instance)
+  # Création et activation du service systemd à partir du script
   create_systemd_service
 
   if command -v ufw >/dev/null 2>&1; then
     log "Ouverture du port UDP $PORT avec UFW."
     ufw allow "$PORT"/udp
-    log "Ouverture du port UDP $UDP_PORT_V2RAY avec UFW."
-    ufw allow "$UDP_PORT_V2RAY"/udp
     ufw reload
   else
-    log "UFW non installé. Veuillez vérifier manuellement l'ouverture des ports UDP."
+    log "UFW non installé. Veuillez vérifier manuellement l'ouverture du port UDP $PORT."
   fi
 
   echo ""
@@ -219,13 +200,7 @@ main() {
   echo "Clé publique :"
   echo "$PUB_KEY"
   echo ""
-  echo "NameServer: $NAMESERVER"
-  echo ""
-  echo "Tunnel SSH SlowDNS sur UDP port $PORT"
-  echo "Tunnel V2Ray SlowDNS sur UDP port $UDP_PORT_V2RAY"
-  echo ""
-  echo "Commande client (termux) SSH slowdns:"
-  echo "curl -sO https://github.com/khaledagn/DNS-AGN/raw/main/files/slowdns && chmod +x slowdns && ./slowdns $NAMESERVER $PUB_KEY"
+  echo "NameServer  : $NAMESERVER"
   echo ""
   log "Installation et configuration SlowDNS terminées."
 }
