@@ -99,11 +99,11 @@ while true; do
 
     printf " OS: %-20s | IP: %-15s\n" "$OS_INFO" "$IP"
     printf " Taille RAM totale: ${GREEN}%-6s${RESET} | Nombre de cœurs CPU: ${YELLOW}%-6s${RESET}\n" "$TOTAL_RAM_GB" "$CPU_CORES"
-    printf " RAM utilisée:          ${GREEN}%-6s${RESET} | CPU utilisé:          ${YELLOW}%-6s${RESET}\n" "$RAM_USAGE" "$CPU_USAGE"
+    printf " RAM utilisée: ${GREEN}%-6s${RESET} | CPU utilisé: ${YELLOW}%-6s${RESET}\n" "$RAM_USAGE" "$CPU_USAGE"
 
     echo -e "${CYAN}+======================================================+${RESET}"
     printf " Utilisateurs SSH: ${BLUE}%-4d${RESET} | Appareils connectés: ${MAGENTA}%-4d${RESET}\n" "$SSH_USERS_COUNT" "$total_connected"
-    printf " Consommation aujourd'hui : ${MAGENTA_VIF}%.2f Go${RESET} | Ce mois-ci : ${CYAN_VIF}%.2f Go${RESET}\n" "$DATA_DAY_GB" "$DATA_MONTH_GB"
+    printf " Consommation aujourd'hui: ${MAGENTA_VIF}%.2f Go${RESET} | Ce mois-ci: ${CYAN_VIF}%.2f Go${RESET}\n" "$DATA_DAY_GB" "$DATA_MONTH_GB"
 
     echo -e "${CYAN}+======================================================+${RESET}"
 
