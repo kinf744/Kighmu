@@ -57,14 +57,6 @@ afficher_modes_ports() {
 
 }
 
-HOST_IP=$(curl -s https://api.ipify.org)
-UPTIME=$(uptime -p)
-echo -e "${CYAN}+=====================================================+${RESET}"
-echo -e "|           🚀 PANNEAU DE CONTROLE DES MODES 🚀       |"
-echo -e "${CYAN}+=====================================================+${RESET}"
-echo -e "${CYAN} IP: ${GREEN}$HOST_IP${RESET} | ${CYAN}Up: ${GREEN}$UPTIME${RESET}"
-afficher_modes_ports
-
 install_slowdns() {
     echo ">>> Nettoyage avant installation SlowDNS..."
     pkill -f slowdns || true
@@ -195,6 +187,7 @@ manage_mode() {
     UNINSTALL_FUNC=$3
 
     while true; do
+        clear
         echo ""
         echo -e "${CYAN}+======================================================+${RESET}"
         echo -e "|             🚀 Gestion du mode : $MODE_NAME 🚀          |"
@@ -208,13 +201,14 @@ manage_mode() {
         case $action in
             1) $INSTALL_FUNC ;;
             2) $UNINSTALL_FUNC ;;
-            0) break ;;  # Permet de retourner au menu principal
+            0) return ;;  # Retourne au menu principal proprement
             *) echo -e "${RED}❌ Mauvais choix, réessayez.${RESET}" ;;
         esac
     done
 }
 
 while true; do
+    clear
     echo ""
     echo -e "${CYAN}+======================================================+${RESET}"
     echo -e "|               🚀 MENU PRINCIPAL DES MODES 🚀         |"
