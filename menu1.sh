@@ -12,11 +12,14 @@ CYAN="\e[36m"
 BOLD="\e[1m"
 RESET="\e[0m"
 
+clear
+
 # Charger la configuration globale si elle existe
 if [ -f ~/.kighmu_info ]; then
     source ~/.kighmu_info
 else
     echo -e "${RED}Erreur : fichier ~/.kighmu_info introuvable, informations globales manquantes.${RESET}"
+    read -p "Appuyez sur Entrée pour revenir au menu..." 
     exit 1
 fi
 
@@ -32,10 +35,10 @@ if [ -f /etc/slowdns/ns.conf ]; then
     SLOWDNS_NS=$(cat /etc/slowdns/ns.conf)
 else
     echo -e "${RED}Erreur : fichier /etc/slowdns/ns.conf introuvable.${RESET}"
+    read -p "Appuyez sur Entrée pour revenir au menu..." 
     exit 1
 fi
 
-clear
 echo -e "${CYAN}+==================================================+${RESET}"
 echo -e "|                CRÉATION D'UTILISATEUR             |"
 echo -e "${CYAN}+==================================================+${RESET}"
@@ -45,6 +48,7 @@ read -p "Nom d'utilisateur : " username
 
 if id "$username" &>/dev/null; then
     echo -e "${RED}L'utilisateur existe déjà.${RESET}"
+    read -p "Appuyez sur Entrée pour revenir au menu..."
     exit 1
 fi
 
@@ -57,6 +61,7 @@ read -p "Durée de validité (en jours) : " days
 # Validation simple
 if ! [[ "$limite" =~ ^[0-9]+$ ]] || ! [[ "$days" =~ ^[0-9]+$ ]]; then
     echo -e "${RED}Nombre d'appareils ou durée non valides.${RESET}"
+    read -p "Appuyez sur Entrée pour revenir au menu..."
     exit 1
 fi
 
@@ -64,7 +69,7 @@ fi
 expire_date=$(date -d "+$days days" '+%Y-%m-%d')
 
 # Création utilisateur sans home et shell bloqué
-useradd -M -s /bin/false "$username" || { echo -e "${RED}Erreur lors de la création${RESET}"; exit 1; }
+useradd -M -s /bin/false "$username" || { echo -e "${RED}Erreur lors de la création${RESET}"; read -p "Appuyez sur Entrée pour revenir au menu..."; exit 1; }
 echo "$username:$password" | chpasswd
 
 # Appliquer la date d'expiration du compte
@@ -131,3 +136,5 @@ echo "$SLOWDNS_KEY"
 echo -e "${YELLOW}NameServer (NS) :${RESET} $SLOWDNS_NS"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo -e "${GREEN}Compte créé avec succès${RESET}"
+
+read -p "Appuyez sur Entrée pour revenir au menu..."
