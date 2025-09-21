@@ -31,8 +31,6 @@ RESET="\e[0m"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 USER_FILE="/etc/kighmu/users.list"
 AUTH_LOG="/var/log/auth.log"
-OPENVPN_STATUS="/etc/openvpn/openvpn-status.log"
-WIREGUARD_CMD="wg"
 
 detect_interfaces() {
   ip -o link show up | awk -F': ' '{print $2}' | grep -v '^lo$' | grep -vE '^(docker|veth|br|virbr|wl|vmnet|vboxnet)'
@@ -49,28 +47,34 @@ count_ssh_users() {
   ' /etc/passwd | wc -l
 }
 
-# Fonctions pour connecter utilisateurs (reprendre celles déclarées dans l'ancien script si besoin)
 get_user_ips_by_service() {
     # Usage: get_user_ips_by_service <port> (example: 22 for SSH)
     ss -tpn | grep ":$1" | grep -v '127.0.0.1' | grep ESTAB | awk -F'[ ,]+' '{print $6}' | sed -r 's/.*addr=//;s/port=.*//'
 }
 
-get_dropbear_user_ips() {
-    ps aux | grep dropbear | grep 'root@' | grep -v grep | awk '{print $17}' | sed 's/]:.*//;s/\[//'
+get_slowdns_user_ips() {
+  if [ -f /var/log/slowdns.log ]; then
+    grep 'New connection from' /var/log/slowdns.log | awk '{print $NF}' | sort -u
+  else
+    echo ""
+  fi
 }
 
-get_openvpn_user_ips() {
-    if [ -f "$OPENVPN_STATUS" ]; then
-        grep -E ",([0-9]{1,3}\.){3}[0-9]{1,3}," "$OPENVPN_STATUS" | awk -F, '{print $1}'
-    fi
+get_udp_custom_user_ips() {
+  if [ -f /var/log/udp_custom.log ]; then
+    awk '{print $1}' /var/log/udp_custom.log | sort -u
+  else
+    echo ""
+  fi
 }
 
-get_wireguard_user_ips() {
-    if command -v $WIREGUARD_CMD &>/dev/null; then
-        $WIREGUARD_CMD show | grep 'endpoint' | awk '{print $2}' | cut -d: -f1
-    fi
+get_socks_python_user_ips() {
+  if [ -f /var/log/socks_python.log ]; then
+    grep 'Connection from' /var/log/socks_python.log | awk '{print $NF}' | sort -u
+  else
+    echo ""
+  fi
 }
-
 
 while true; do
     clear
@@ -84,10 +88,12 @@ while true; do
 
     # ----- Utilisateurs connectés -----
     mapfile -t ssh_ips < <(get_user_ips_by_service 22 2>/dev/null || echo "")
-    mapfile -t dropbear_ips < <(get_dropbear_user_ips 2>/dev/null || echo "")
-    mapfile -t openvpn_ips < <(get_openvpn_user_ips 2>/dev/null || echo "")
-    mapfile -t wireguard_ips < <(get_wireguard_user_ips 2>/dev/null || echo "")
-    all_ips=("${ssh_ips[@]}" "${dropbear_ips[@]}" "${openvpn_ips[@]}" "${wireguard_ips[@]}")
+    mapfile -t slowdns_ips < <(get_slowdns_user_ips 2>/dev/null || echo "")
+    mapfile -t udp_custom_ips < <(get_udp_custom_user_ips 2>/dev/null || echo "")
+    mapfile -t socks_python_ips < <(get_socks_python_user_ips 2>/dev/null || echo "")
+
+    all_ips=("${ssh_ips[@]}" "${slowdns_ips[@]}" "${udp_custom_ips[@]}" "${socks_python_ips[@]}")
+
     total_connected=$(printf "%s\n" "${all_ips[@]}" | awk '{print $1}' | sort -u | grep -v '^$' | wc -l)
 
     # Compte précis des utilisateurs SSH
@@ -184,4 +190,3 @@ while true; do
     echo ""
     read -p "Appuyez sur Entrée pour revenir au menu..."
 done
-
