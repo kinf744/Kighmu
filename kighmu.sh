@@ -1,7 +1,16 @@
 #!/bin/bash
 # ==============================================
-# Kighmu VPS Manager - Version Dynamique Corrigée avec détection interfaces
+# Kighmu VPS Manager - Version Dynamique Corrigée + Mode Debug
 # ==============================================
+
+_DEBUG="off"  # régler à "on" pour activer le mode debug
+
+# Fonction debug conditionnelle
+DEBUG() {
+  if [ "$_DEBUG" = "on" ]; then
+    echo -e "${YELLOW}[DEBUG] $*${RESET}"
+  fi
+}
 
 # Vérifier si root
 if [ "$(id -u)" -ne 0 ]; then
@@ -27,12 +36,11 @@ AUTH_LOG="/var/log/auth.log"
 OPENVPN_STATUS="/etc/openvpn/openvpn-status.log"
 WIREGUARD_CMD="wg"
 
-# Fonction pour détecter dynamiquement les interfaces réseau actives valides
+# Détection des interfaces valides
 detect_interfaces() {
   ip -o link show up | awk -F': ' '{print $2}' | grep -v '^lo$' | grep -vE '^(docker|veth|br|virbr|wl|vmnet|vboxnet)'
 }
 
-# Fonction pour convertir octets en gigaoctets avec 2 décimales
 bytes_to_gb() {
   echo "scale=2; $1/1024/1024/1024" | bc
 }
@@ -48,14 +56,13 @@ while true; do
     CPU_USAGE=$(grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf "%.2f%%", usage}')
     SSH_USERS_COUNT=$(awk -F: '/\/home\// && $7 ~ /(bash|sh)$/ {print $1}' /etc/passwd | wc -l)
 
-    # Détection dynamique des interfaces à surveiller
+    # Interfaces détectées
     mapfile -t NET_INTERFACES < <(detect_interfaces)
+    DEBUG "Interfaces détectées : ${NET_INTERFACES[*]}"
 
-    # Initialiser compteurs consommation réseau
     DATA_DAY_BYTES=0
     DATA_MONTH_BYTES=0
 
-    # Agréger consommation de toutes les interfaces détectées
     for iface in "${NET_INTERFACES[@]}"; do
       day_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d\; -f9)
       month_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d\; -f15)
@@ -65,6 +72,8 @@ while true; do
 
       day_bytes=${day_bytes:-0}
       month_bytes=${month_bytes:-0}
+
+      DEBUG "Interface $iface - Jour: $day_bytes octets, Mois: $month_bytes octets"
 
       DATA_DAY_BYTES=$((DATA_DAY_BYTES + day_bytes))
       DATA_MONTH_BYTES=$((DATA_MONTH_BYTES + month_bytes))
