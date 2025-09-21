@@ -23,7 +23,7 @@ check_root() {
 install_dependencies() {
   log "Mise à jour des paquets et installation des dépendances..."
   apt-get update -q
-  for pkg in iptables screen tcpdump; do
+  for pkg in iptables screen tcpdump ufw; do
     if ! command -v "$pkg" &> /dev/null; then
       log "$pkg non trouvé, installation..."
       apt-get install -y "$pkg"
