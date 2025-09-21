@@ -62,8 +62,8 @@ while true; do
 
     OS_INFO=$(if [ -f /etc/os-release ]; then . /etc/os-release; echo "$NAME $VERSION_ID"; else uname -s; fi)
     IP=$(hostname -I | awk '{print $1}')
-    TOTAL_RAM=$(free -m | awk 'NR==2{print $2 " Mo"}')
-    CPU_FREQ=$(lscpu | awk -F: '/CPU max MHz/ {gsub(/^[ \t]+/, "", $2); print $2 " MHz"}')
+    TOTAL_RAM_GB=$(free -g | awk 'NR==2{print $2 " Go"}')
+    CPU_CORES=$(nproc)
     RAM_USAGE=$(free -m | awk 'NR==2{printf "%.2f%%", $3*100/$2}')
     CPU_USAGE=$(grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf "%.2f%%", usage}')
 
@@ -98,9 +98,8 @@ while true; do
     echo -e "${CYAN}+======================================================+${RESET}"
 
     printf " OS: %-20s | IP: %-15s\n" "$OS_INFO" "$IP"
-    echo -e "${CYAN} Taille RAM: ${GREEN}$TOTAL_RAM${RESET}"
-    echo -e "${CYAN} CPU fréquence: ${YELLOW}$CPU_FREQ${RESET}"
-    printf " RAM utilisée: ${GREEN}%-6s${RESET} | CPU utilisé: ${YELLOW}%-6s${RESET}\n" "$RAM_USAGE" "$CPU_USAGE"
+    printf " Taille RAM totale: ${GREEN}%-6s${RESET} | Nombre de cœurs CPU: ${YELLOW}%-6s${RESET}\n" "$TOTAL_RAM_GB" "$CPU_CORES"
+    printf " RAM utilisée:          ${GREEN}%-6s${RESET} | CPU utilisé:          ${YELLOW}%-6s${RESET}\n" "$RAM_USAGE" "$CPU_USAGE"
 
     echo -e "${CYAN}+======================================================+${RESET}"
     printf " Utilisateurs SSH: ${BLUE}%-4d${RESET} | Appareils connectés: ${MAGENTA}%-4d${RESET}\n" "$SSH_USERS_COUNT" "$total_connected"
