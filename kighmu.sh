@@ -103,7 +103,7 @@ while true; do
     echo -e "${CYAN}+======================================================+${RESET}"
 
     printf " OS: %-20s | IP: %-15s\n" "$OS_INFO" "$IP"
-    printf " Taille RAM totale: ${GREEN}%-6s${RESET} | Nombre de cœurs CPU: ${YELLOW}%-6s${RESET}\n" "$RAM_GB_ARR" "$CPU_CORES"
+    printf " Taille RAM totale: ${GREEN}%-6s Go${RESET} | Nombre de cœurs CPU: ${YELLOW}%-6s${RESET}\n" "$RAM_GB_ARR" "$CPU_CORES"
     printf " RAM utilisée: ${GREEN}%-6s${RESET} | CPU utilisé: ${YELLOW}%-6s${RESET}\n" "$RAM_USAGE" "$CPU_USAGE"
 
     echo -e "${CYAN}+======================================================+${RESET}"
