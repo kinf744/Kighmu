@@ -41,37 +41,20 @@ bytes_to_gb() {
 }
 
 count_ssh_users() {
-  # Compte les utilisateurs standards (UID>=1000) avec shell bash, sh ou false
   awk -F: '($3 >= 1000) && ($7 ~ /^\/(bin\/bash|bin\/sh|bin\/false)$/) {print $1}' /etc/passwd | wc -l
 }
 
-get_user_ips_by_service() {
-    # Usage: get_user_ips_by_service <port> (example: 22 for SSH)
-    ss -tpn | grep ":$1" | grep -v '127.0.0.1' | grep ESTAB | awk -F'[ ,]+' '{print $6}' | sed -r 's/.*addr=//;s/port=.*//'
-}
-
-get_slowdns_user_ips() {
-  if [ -f /var/log/slowdns.log ]; then
-    grep 'New connection from' /var/log/slowdns.log | awk '{print $NF}' | sort -u
+# Méthode DarkSSH de comptage appareils connectés
+count_connected_devices() {
+  _ons=$(ps -x | grep sshd | grep -v root | grep priv | wc -l)
+  [[ -e /etc/openvpn/openvpn-status.log ]] && _onop=$(grep -c "10.8.0" /etc/openvpn/openvpn-status.log) || _onop="0"
+  if [[ -e /etc/default/dropbear ]]; then
+    _drp=$(ps aux | grep dropbear | grep -v grep | wc -l)
+    _ondrp=$(($_drp - 1))
   else
-    echo ""
+    _ondrp="0"
   fi
-}
-
-get_udp_custom_user_ips() {
-  if [ -f /var/log/udp_custom.log ]; then
-    awk '{print $1}' /var/log/udp_custom.log | sort -u
-  else
-    echo ""
-  fi
-}
-
-get_socks_python_user_ips() {
-  if [ -f /var/log/socks_python.log ]; then
-    grep 'Connection from' /var/log/socks_python.log | awk '{print $NF}' | sort -u
-  else
-    echo ""
-  fi
+  echo $((_ons + _onop + _ondrp))
 }
 
 while true; do
@@ -85,19 +68,10 @@ while true; do
     CPU_USAGE=$(grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf "%.2f%%", usage}')
 
     # ----- Utilisateurs connectés -----
-    mapfile -t ssh_ips < <(get_user_ips_by_service 22 2>/dev/null || echo "")
-    mapfile -t slowdns_ips < <(get_slowdns_user_ips 2>/dev/null || echo "")
-    mapfile -t udp_custom_ips < <(get_udp_custom_user_ips 2>/dev/null || echo "")
-    mapfile -t socks_python_ips < <(get_socks_python_user_ips 2>/dev/null || echo "")
-
-    all_ips=("${ssh_ips[@]}" "${slowdns_ips[@]}" "${udp_custom_ips[@]}" "${socks_python_ips[@]}")
-
-    total_connected=$(printf "%s\n" "${all_ips[@]}" | awk '{print $1}' | sort -u | grep -v '^$' | wc -l)
-
-    # Compte précis des utilisateurs SSH
+    total_connected=$(count_connected_devices)
     SSH_USERS_COUNT=$(count_ssh_users)
 
-    # ----- Consommation réseau dynamique -----
+    # Consommation réseau
     mapfile -t NET_INTERFACES < <(detect_interfaces)
     DEBUG "Interfaces détectées : ${NET_INTERFACES[*]}"
 
