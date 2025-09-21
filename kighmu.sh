@@ -42,6 +42,13 @@ bytes_to_gb() {
   echo "scale=2; $1/1024/1024/1024" | bc
 }
 
+count_ssh_users() {
+  # Compte les utilisateurs avec home dans /home et shell valide dans /etc/shells
+  awk -F: '
+    $6 ~ /^\/home/ && system("grep -Fxq " $7 " /etc/shells") == 0 {print $1}
+  ' /etc/passwd | wc -l
+}
+
 # Fonctions pour connecter utilisateurs (reprendre celles déclarées dans l'ancien script si besoin)
 get_user_ips_by_service() {
     # Usage: get_user_ips_by_service <port> (example: 22 for SSH)
@@ -64,6 +71,7 @@ get_wireguard_user_ips() {
     fi
 }
 
+
 while true; do
     clear
 
@@ -82,7 +90,8 @@ while true; do
     all_ips=("${ssh_ips[@]}" "${dropbear_ips[@]}" "${openvpn_ips[@]}" "${wireguard_ips[@]}")
     total_connected=$(printf "%s\n" "${all_ips[@]}" | awk '{print $1}' | sort -u | grep -v '^$' | wc -l)
 
-    SSH_USERS_COUNT=$(awk -F: '/\/home\// && $7 ~ /(bash|sh)$/ {print $1}' /etc/passwd | wc -l)
+    # Compte précis des utilisateurs SSH
+    SSH_USERS_COUNT=$(count_ssh_users)
 
     # ----- Consommation réseau dynamique -----
     mapfile -t NET_INTERFACES < <(detect_interfaces)
@@ -175,3 +184,4 @@ while true; do
     echo ""
     read -p "Appuyez sur Entrée pour revenir au menu..."
 done
+
