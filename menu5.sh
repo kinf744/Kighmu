@@ -208,7 +208,7 @@ manage_mode() {
         case $action in
             1) $INSTALL_FUNC ;;
             2) $UNINSTALL_FUNC ;;
-            0) break ;;
+            0) break ;;  # Permet de retourner au menu principal
             *) echo -e "${RED}❌ Mauvais choix, réessayez.${RESET}" ;;
         esac
     done
