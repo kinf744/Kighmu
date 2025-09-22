@@ -16,6 +16,7 @@ apt-get update && apt-get upgrade -y
 
 echo "Installation de Stunnel4..."
 apt-get install -y stunnel4
+apt-get install -y ufw
 
 echo "Activation de stunnel au démarrage..."
 sed -i 's/ENABLED=0/ENABLED=1/g' /etc/default/stunnel4
