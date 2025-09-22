@@ -26,6 +26,8 @@ afficher_modes_ports() {
         any_active=1
     elif systemctl is-active --quiet socks_python.service || pgrep -f KIGHMUPROXY.py >/dev/null 2>&1 || screen -list | grep -q socks_python; then
         any_active=1
+    elif systemctl is-active --quiet stunnel4.service || pgrep -f stunnel >/dev/null 2>&1; then
+        any_active=1
     fi
 
     if [[ $any_active -eq 0 ]]; then
@@ -55,6 +57,9 @@ afficher_modes_ports() {
         echo -e "  - SOCKS Python: ${GREEN}ports TCP 8080, 9090${RESET}"
     fi
 
+    if systemctl is-active --quiet stunnel4.service || pgrep -f stunnel >/dev/null 2>&1; then
+        echo -e "  - Stunnel SSL/TLS: ${GREEN}port TCP 444${RESET}"
+    fi
 }
 
 HOST_IP=$(curl -s https://api.ipify.org)
@@ -184,10 +189,41 @@ uninstall_socks_python() {
     echo -e "${GREEN}[OK] SOCKS Python désinstallé.${RESET}"
 }
 
-install_ssl_tls() { echo ">>> Installation SSL/TLS (à compléter)"; }
-uninstall_ssl_tls() { echo ">>> Désinstallation SSL/TLS (à compléter)"; }
-install_badvpn() { echo ">>> Installation BadVPN (à compléter)"; }
-uninstall_badvpn() { echo ">>> Désinstallation BadVPN (à compléter)"; }
+install_ssl_tls() {
+    echo ">>> Lancement du script d'installation SSL/TLS externe..."
+    bash "$HOME/Kighmu/ssl.sh" || echo "Script SSL/TLS introuvable ou erreur."
+}
+
+uninstall_ssl_tls() {
+    echo ">>> Désinstallation complète de Stunnel SSL/TLS..."
+
+    systemctl stop stunnel4 2>/dev/null || true
+    systemctl disable stunnel4 2>/dev/null || true
+
+    rm -f /etc/stunnel/stunnel.key /etc/stunnel/stunnel.crt /etc/stunnel/stunnel.pem
+    rm -f /etc/stunnel/stunnel.conf
+    rm -rf /etc/systemd/system/stunnel4.service.d
+
+    systemctl daemon-reload
+
+    echo "Suppression de la règle firewall UFW (port 444)..."
+    if command -v ufw &> /dev/null; then
+        ufw delete allow 444/tcp 2>/dev/null || true
+        ufw reload
+    else
+        echo "UFW non détecté, vérifier firewall manuellement."
+    fi
+
+    echo -e "${GREEN}[OK] Stunnel SSL/TLS désinstallé proprement.${RESET}"
+}
+
+install_badvpn() {
+    echo ">>> Installation BadVPN (à compléter)"
+}
+
+uninstall_badvpn() {
+    echo ">>> Désinstallation BadVPN (à compléter)"
+}
 
 manage_mode() {
     MODE_NAME=$1
