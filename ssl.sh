@@ -1,57 +1,53 @@
 #!/bin/bash
-# ssl.sh
-# Script pour installer et configurer SSL avec Certbot et configurer Nginx sur le port 445
+# Installation & configuration complète de Stunnel avec service systemd et port SSL fixe 444
 
 set -e
 
-# Remplace cette variable par ton nom de domaine réel
-DOMAIN="example.com"
-EMAIL="admin@example.com"
-NGINX_CONF="/etc/nginx/sites-available/$DOMAIN"
+STUNNEL_CONF="/etc/stunnel/stunnel.conf"
+STUNNEL_PEM="/etc/stunnel/stunnel.pem"
+LISTEN_PORT=444    # Port fixe SSL Stunnel choisi
+TARGET_PORT=22     # Port local à sécuriser (ex : SSH 22)
 
-echo "Mise à jour des paquets..."
-apt-get update -y
+echo "Mise à jour système..."
+apt-get update && apt-get upgrade -y
 
-echo "Installation de Certbot et du plugin Nginx..."
-apt-get install -y certbot python3-certbot-nginx
+echo "Installation de Stunnel4..."
+apt-get install -y stunnel4
 
-echo "Obtention du certificat SSL pour $DOMAIN..."
-certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --email "$EMAIL"
+echo "Activation de stunnel au démarrage..."
+sed -i 's/ENABLED=0/ENABLED=1/g' /etc/default/stunnel4
 
-echo "Configuration du renouvellement automatique..."
-systemctl enable certbot.timer
-systemctl start certbot.timer
+echo "Génération du certificat auto-signé..."
+openssl genrsa -out /etc/stunnel/stunnel.key 2048
+openssl req -new -x509 -key /etc/stunnel/stunnel.key -days 1000 -out /etc/stunnel/stunnel.crt -subj "/CN=$(hostname)"
+cat /etc/stunnel/stunnel.crt /etc/stunnel/stunnel.key > $STUNNEL_PEM
+chmod 600 $STUNNEL_PEM
 
-# Création d'un fichier de configuration Nginx pour le port 445
-echo "Création de la configuration Nginx pour le port 445..."
+echo "Configuration de Stunnel..."
+cat > $STUNNEL_CONF <<EOF
+client = no
 
-cat > "$NGINX_CONF" <<EOF
-server {
-    listen 445 ssl;
-    server_name $DOMAIN;
+[ssh]
+accept = $LISTEN_PORT
+connect = 127.0.0.1:$TARGET_PORT
 
-    ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
-
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers HIGH:!aNULL:!MD5;
-
-    location / {
-        proxy_pass http://localhost:22;  # Change si nécessaire vers ton service
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-    }
-}
+cert = $STUNNEL_PEM
 EOF
 
-echo "Test de la configuration Nginx..."
-nginx -t
+echo "Création d'un override systemd pour stunnel avec redémarrage automatique..."
+mkdir -p /etc/systemd/system/stunnel4.service.d
+cat > /etc/systemd/system/stunnel4.service.d/override.conf <<EOF
+[Service]
+Restart=always
+RestartSec=5s
+EOF
 
-echo "Recharge de Nginx pour appliquer les changements..."
-systemctl reload nginx
+echo "Rechargement de la configuration systemd..."
+systemctl daemon-reload
 
-echo "Configuration SSL terminée et Nginx écoute sur le port 445."
+echo "Activation et démarrage du service Stunnel..."
+systemctl enable stunnel4
+systemctl restart stunnel4
 
-echo "Vérification du statut du certificat..."
-certbot certificates | grep "$DOMAIN"
+echo "Installation terminée. Stunnel écoute en SSL sur le port $LISTEN_PORT et protège le port $TARGET_PORT en local."
+echo "Le service est configuré pour redémarrer automatiquement en cas de plantage ou au démarrage du VPS."
