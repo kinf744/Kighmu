@@ -1,22 +1,25 @@
 #!/bin/bash
 # sockspy.sh
-# Activation du SOCKS/PYTHON WS Python avec nettoyage des anciennes instances, installation du module pysocks, configuration UFW et service systemd
+# Installation / activation du proxy SOCKS Python WebSocket via systemd
 
 echo "+--------------------------------------------+"
 echo "|        CONFIG SOCKS/PYTHON WS              |"
 echo "+--------------------------------------------+"
 
-# Gérer un paramètre 'auto' pour bypasser la confirmation interactive
+# Port par défaut
+DEFAULT_PORT=80
+PORT=${2:-$DEFAULT_PORT}
+
+# Gestion paramètre auto bypass prompt
 if [ "$1" == "auto" ]; then
     confirm="oui"
 else
-    read -p "Voulez-vous démarrer le proxy SOCKS/PYTHON WS ? [oui/non] : " confirm
+    read -p "Voulez-vous démarrer le proxy SOCKS/PYTHON WS sur le port $PORT ? [oui/non] : " confirm
 fi
 
 install_pysocks() {
   echo "Installation du module Python pysocks..."
 
-  # Tentative d'installation via apt
   if sudo apt-get install -y python3-socks; then
     echo "Module pysocks installé via apt avec succès."
     return 0
@@ -24,7 +27,6 @@ install_pysocks() {
 
   echo "Le paquet python3-socks n'est pas disponible via apt ou l'installation a échoué."
 
-  # Installer python3-venv si pas présent
   if ! dpkg -s python3-venv &> /dev/null; then
     echo "Installation de python3-venv..."
     if ! sudo apt-get install -y python3-venv; then
@@ -33,46 +35,57 @@ install_pysocks() {
     fi
   fi
 
-  # Créer un environnement virtuel dédié dans $HOME/socksenv
   VENV_DIR="$HOME/socksenv"
   if [[ ! -d "$VENV_DIR" ]]; then
     echo "Création de l'environnement virtuel Python dans $VENV_DIR..."
     python3 -m venv "$VENV_DIR"
   fi
 
-  echo "Activation de l'environnement virtuel..."
   source "$VENV_DIR/bin/activate"
 
-  echo "Installation de pysocks via pip dans l'environnement virtuel..."
   if ! pip install --upgrade pip setuptools && pip install pysocks; then
-    echo "Échec de l'installation de pysocks via pip dans l'environnement virtuel."
+    echo "Échec de l'installation de pysocks via pip."
     deactivate
     return 1
   fi
 
   deactivate
-  echo "Module pysocks installé avec succès dans l'environnement virtuel $VENV_DIR."
-  echo "Pour l'utiliser, activez cet environnement avec : source $VENV_DIR/bin/activate"
+  echo "Module pysocks installé dans l'environnement virtuel $VENV_DIR."
+  echo "Activez-le avec : source $VENV_DIR/bin/activate"
   return 0
+}
+
+check_ufw() {
+  if ! command -v ufw &> /dev/null; then
+    echo "UFW non détecté. Voulez-vous installer UFW ? [oui/non]"
+    read -r ans
+    if [[ "$ans" =~ ^(o|oui|y|yes)$ ]]; then
+      sudo apt-get update
+      sudo apt-get install -y ufw
+      sudo ufw enable
+      sudo ufw allow ssh
+    else
+      echo "Attention : UFW non installé. Le port $PORT ne sera pas autorisé automatiquement."
+    fi
+  fi
 }
 
 create_systemd_service() {
   SERVICE_PATH="/etc/systemd/system/socks_python_ws.service"
-  PROXY_PORT=80
   SCRIPT_PATH="/usr/local/bin/ws2_proxy.py"
 
-  echo "Création du fichier systemd socks_python_ws.service..."
+  echo "Création du service systemd socks_python_ws.service..."
 
   sudo tee "$SERVICE_PATH" > /dev/null <<EOF
 [Unit]
-Description=Proxy SOCKS/PYTHON WS
+Description=Proxy SOCKS/PYTHON WS - port $PORT
 After=network.target
 Wants=network.target
 
 [Service]
 Type=simple
 User=root
-ExecStart=/usr/bin/python3 $SCRIPT_PATH $PROXY_PORT
+ExecStart=/usr/bin/python3 $SCRIPT_PATH $PORT
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -83,94 +96,64 @@ SyslogIdentifier=socks-python-ws-proxy
 WantedBy=multi-user.target
 EOF
 
-  echo "Reload systemd, enable and start the service socks_python_ws..."
   sudo systemctl daemon-reload
   sudo systemctl enable socks_python_ws.service
   sudo systemctl restart socks_python_ws.service
-  echo "Service socks_python_ws activé et démarré."
+  echo "Service socks_python_ws activé et démarré sur le port $PORT."
+}
+
+kill_old_instances() {
+  PIDS=$(pgrep -f "ws2_proxy.py")
+  if [ -n "$PIDS" ]; then
+    echo "Arrêt des anciennes instances du proxy WS (PID: $PIDS)..."
+    sudo kill -9 $PIDS
+    sleep 3
+  fi
 }
 
 case "$confirm" in
-    [oO][uU][iI]|[yY][eE][sS])
-        echo "Vérification du module pysocks..."
-        if ! python3 -c "import socks" &> /dev/null; then
-            echo "Module pysocks non trouvé, installation en cours..."
-            if ! install_pysocks; then
-                echo "Erreur lors de l'installation des modules Python. Abandon."
-                exit 1
-            fi
-        else
-            echo "Module pysocks déjà installé."
-        fi
+  [oO][uU][iI]|[yY][eE][sS])
+    echo "Vérification du module pysocks..."
+    if ! python3 -c "import socks" &> /dev/null; then
+      echo "Module pysocks absent, installation requise."
+      if ! install_pysocks; then
+        echo "Erreur installation pysocks, abandon."
+        exit 1
+      fi
+    else
+      echo "Module pysocks déjà installé."
+    fi
 
-        PROXY_PORT=80
-        SCRIPT_PATH="/usr/local/bin/ws2_proxy.py"
-        SCRIPT_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main/ws2_proxy.py"
-        LOG_FILE="/var/log/socks_python_ws.log"
+    check_ufw
 
-        echo "Configuration du firewall UFW pour autoriser le port $PROXY_PORT..."
-        sudo ufw allow $PROXY_PORT/tcp
-        echo "Port $PROXY_PORT autorisé dans UFW."
+    echo "Autorisation du port $PORT dans le firewall UFW..."
+    sudo ufw allow "$PORT"/tcp
 
-        DOWNLOAD_SCRIPT=false
-        if [ ! -f "$SCRIPT_PATH" ]; then
-            echo "Script proxy absent, téléchargement en cours..."
-            DOWNLOAD_SCRIPT=true
-        else
-            FILE_AGE=$(( $(date +%s) - $(stat -c %Y "$SCRIPT_PATH") ))
-            if [ $FILE_AGE -ge 86400 ]; then
-                echo "Script proxy date dépassée (plus d'un jour), re-téléchargement..."
-                DOWNLOAD_SCRIPT=true
-            fi
-        fi
+    SCRIPT_PATH="/usr/local/bin/ws2_proxy.py"
+    SCRIPT_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main/ws2_proxy.py"
 
-        if $DOWNLOAD_SCRIPT; then
-            sudo wget -q -O "$SCRIPT_PATH" "$SCRIPT_URL"
-            if [ $? -ne 0 ]; then
-                echo "Erreur : téléchargement du script proxy échoué."
-                exit 1
-            fi
-            sudo chmod +x "$SCRIPT_PATH"
-            echo "Script proxy téléchargé et rendu exécutable."
-        else
-            echo "Script proxy trouvé et valide : $SCRIPT_PATH"
-        fi
+    if [ ! -f "$SCRIPT_PATH" ] || [ $(( $(date +%s) - $(stat -c %Y "$SCRIPT_PATH") )) -ge 86400 ]; then
+      echo "Téléchargement / mise à jour du script proxy..."
+      sudo wget -q -O "$SCRIPT_PATH" "$SCRIPT_URL" || { echo "Erreur téléchargement."; exit 1; }
+      sudo chmod +x "$SCRIPT_PATH"
+      echo "Script proxy prêt à l'emploi."
+    else
+      echo "Script proxy à jour : $SCRIPT_PATH"
+    fi
 
-        echo "Recherche d'instances précédentes du proxy SOCKS/PYTHON WS à arrêter..."
-        PIDS=$(pgrep -f "python3 $SCRIPT_PATH")
-        if [ -n "$PIDS" ]; then
-            echo "Arrêt des instances proxy (PID: $PIDS)..."
-            sudo kill -9 $PIDS
-            sleep 5
-            if pgrep -f "python3 $SCRIPT_PATH" > /dev/null; then
-                echo "Certaines instances n'ont pas été arrêtées, veuillez vérifier."
-                exit 1
-            fi
-            echo "Instances arrêtées."
-        else
-            echo "Aucune instance précédente détectée."
-        fi
+    kill_old_instances
 
-        echo "Vérification du port $PROXY_PORT..."
-        if sudo lsof -i :$PROXY_PORT >/dev/null; then
-            echo "Le port $PROXY_PORT est occupé. Veuillez libérer ce port ou modifier la configuration."
-            exit 1
-        fi
+    if sudo lsof -i :"$PORT" >/dev/null; then
+      echo "Le port $PORT est déjà utilisé, veuillez le libérer."
+      exit 1
+    fi
 
-        create_systemd_service
+    create_systemd_service
 
-        if systemctl is-active --quiet socks_python_ws.service; then
-            echo "Proxy SOCKS/PYTHON WS démarré via systemd sur le port $PROXY_PORT."
-            echo "Vérifiez les logs avec : sudo journalctl -u socks_python_ws.service"
-        else
-            echo "Échec du démarrage du proxy SOCKS/PYTHON WS."
-            echo "Consultez les logs pour diagnostic."
-        fi
-        ;;
-    [nN][oO]|[nN])
-        echo "Démarrage annulé."
-        ;;
-    *)
-        echo "Réponse invalide. Abandon."
-        ;;
+    echo "Vérifier les logs : sudo journalctl -u socks_python_ws.service"
+    ;;
+  *)
+    echo "Installation annulée."
+    exit 1
+    ;;
 esac
