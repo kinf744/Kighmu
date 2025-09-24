@@ -5,16 +5,12 @@ clear
 
 KIGHMU_DIR="${HOME}/Kighmu"
 SCPdir="${KIGHMU_DIR}"
-SCPfrm="${SCPdir}/tools"
-SCPinst="${SCPdir}/protocols"
 
-# Vérification que les dossiers existent
-for d in "$SCPdir" "$SCPfrm" "$SCPinst"; do
-  if [[ ! -d "$d" ]]; then
-    echo "Erreur : Le dossier $d n'existe pas. Vérifiez votre installation."
-    exit 1
-  fi
-done
+# Vérification que le dossier principal existe
+if [[ ! -d "$SCPdir" ]]; then
+  echo "Erreur : Le dossier $SCPdir n'existe pas. Vérifiez votre installation."
+  exit 1
+fi
 
 declare -A cor=( [0]="\033[1;37m" [1]="\033[1;34m" [2]="\033[1;31m" [3]="\033[1;33m" [4]="\033[1;32m" )
 [[ $(dpkg --get-selections | grep -w "python" | head -1) ]] || apt-get install python -y &>/dev/null
@@ -60,12 +56,12 @@ tcpbypass_fun () {
 }
 
 gettunel_fun () {
-  echo "master=NetVPS" > "${SCPinst}/pwd.pwd"
+  echo "master=NetVPS" > "${SCPdir}/pwd.pwd"
   while read service; do
     [[ -z $service ]] && break
-    echo "127.0.0.1:$(echo $service | cut -d' ' -f2)=$(echo $service | cut -d' ' -f1)" >> "${SCPinst}/pwd.pwd"
+    echo "127.0.0.1:$(echo $service | cut -d' ' -f2)=$(echo $service | cut -d' ' -f1)" >> "${SCPdir}/pwd.pwd"
   done <<< "$(mportas)"
-  screen -dmS getpy python "${SCPinst}/PGet.py" -b "0.0.0.0:$1" -p "${SCPinst}/pwd.pwd"
+  screen -dmS getpy python "${SCPdir}/PGet.py" -b "0.0.0.0:$1" -p "${SCPdir}/pwd.pwd"
   if pgrep -f "PGet.py" > /dev/null; then
     echo -e "Gettunel Started with Success"
   else
@@ -75,14 +71,13 @@ gettunel_fun () {
 
 PythonDic_fun () {
   echo -e "\033[1;33m  Select Local Port and Header\033[1;37m"
-  # Remplacer msg -bar et fun_trans par echo si non existants
   echo "----------------------------------"
   echo -ne "Enter an active SSH/DROPBEAR port: " && read puetoantla
   echo "----------------------------------"
   echo -ne "Header response (200,101,404,500,etc): " && read rescabeza
   echo "----------------------------------"
   (
-  cat << PYTHON > "${SCPinst}/PDirect.py"
+  cat << PYTHON > "${SCPdir}/PDirect.py"
 import socket, threading, select, sys, time, getopt
 
 # Listen
@@ -339,11 +334,11 @@ if __name__ == '__main__':
     main()
 
 PYTHON
-  ) > "${SCPinst}/PDirect.py"
+  ) > "${SCPdir}/PDirect.py"
 
-  chmod +x "${SCPinst}/PDirect.py"
+  chmod +x "${SCPdir}/PDirect.py"
 
-  screen -dmS pydic-"$puetoantla" python "${SCPinst}/PDirect.py" "$puetoantla" "$rescabeza" && echo "$puetoantla $rescabeza" >> "${SCPdir}/PortPD.log"
+  screen -dmS pydic-"$puetoantla" python "${SCPdir}/PDirect.py" "$puetoantla" "$rescabeza" && echo "$puetoantla $rescabeza" >> "${SCPdir}/PortPD.log"
 }
 
 pid_kill () {
@@ -405,7 +400,7 @@ iniciarsocks () {
 
   case $portproxy in
     3) PythonDic_fun;;
-    4) screen -dmS screen python "${SCPinst}/POpen.py" "$puetoantla" "$rescabeza";;
+    4) screen -dmS screen python "${SCPdir}/POpen.py" "$puetoantla" "$rescabeza";;
     7) remove_fun;;
     0) return;;
   esac
