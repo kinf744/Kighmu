@@ -1,93 +1,100 @@
 #!/bin/bash
-#25/01/2021 by @KhaledAGN
+#25/01/2021 by @KhaledAGN (modifié pour Kighmu)
 clear
 clear
-SCPdir="/etc/VPS-AGN"
-SCPfrm="${SCPdir}/tools" && [[ ! -d ${SCPfrm} ]] && exit
-SCPinst="${SCPdir}/protocols"&& [[ ! -d ${SCPinst} ]] && exit
+
+KIGHMU_DIR="${HOME}/Kighmu"
+SCPdir="${KIGHMU_DIR}"
+SCPfrm="${SCPdir}/tools"
+SCPinst="${SCPdir}/protocols"
+
+# Vérification que les dossiers existent
+for d in "$SCPdir" "$SCPfrm" "$SCPinst"; do
+  if [[ ! -d "$d" ]]; then
+    echo "Erreur : Le dossier $d n'existe pas. Vérifiez votre installation."
+    exit 1
+  fi
+done
+
 declare -A cor=( [0]="\033[1;37m" [1]="\033[1;34m" [2]="\033[1;31m" [3]="\033[1;33m" [4]="\033[1;32m" )
-[[ $(dpkg --get-selections|grep -w "python"|head -1) ]] || apt-get install python -y &>/dev/null
+[[ $(dpkg --get-selections | grep -w "python" | head -1) ]] || apt-get install python -y &>/dev/null
 
 mportas () {
-unset portas
-portas_var=$(lsof -V -i tcp -P -n | grep -v "ESTABLISHED" |grep -v "COMMAND" | grep "LISTEN")
-while read port; do
-var1=$(echo $port | awk '{print $1}') && var2=$(echo $port | awk '{print $9}' | awk -F ":" '{print $2}')
-[[ "$(echo -e $portas|grep "$var1 $var2")" ]] || portas+="$var1 $var2\n"
-done <<< "$portas_var"
-i=1
-echo -e "$portas"
+  unset portas
+  portas_var=$(lsof -V -i tcp -P -n | grep -v "ESTABLISHED" | grep -v "COMMAND" | grep "LISTEN")
+  while read port; do
+    var1=$(echo $port | awk '{print $1}')
+    var2=$(echo $port | awk '{print $9}' | awk -F ":" '{print $2}')
+    [[ "$(echo -e $portas | grep "$var1 $var2")" ]] || portas+="$var1 $var2\n"
+  done <<< "$portas_var"
+  echo -e "$portas"
 }
+
 meu_ip () {
-MEU_IP=$(ip addr | grep 'inet' | grep -v inet6 | grep -vE '127\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | grep -o -E '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | head -1)
-MEU_IP2=$(wget -qO- ipv4.icanhazip.com)
-[[ "$MEU_IP" != "$MEU_IP2" ]] && echo "$MEU_IP2" || echo "$MEU_IP"
+  MEU_IP=$(ip addr | grep 'inet' | grep -v inet6 | grep -vE '127\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | grep -o -E '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | head -1)
+  MEU_IP2=$(wget -qO- ipv4.icanhazip.com)
+  [[ "$MEU_IP" != "$MEU_IP2" ]] && echo "$MEU_IP2" || echo "$MEU_IP"
 }
+
 tcpbypass_fun () {
-[[ -e $HOME/socks ]] && rm -rf $HOME/socks > /dev/null 2>&1
-[[ -d $HOME/socks ]] && rm -rf $HOME/socks > /dev/null 2>&1
-cd $HOME && mkdir socks > /dev/null 2>&1
-cd socks
-patch="https://raw.githubusercontent.com/khaledagn/VPS-AGN_English_Official/master/LINKS-LIBRARIES/backsocz.zip"
-arq="backsocz.zip"
-wget $patch > /dev/null 2>&1
-unzip $arq > /dev/null 2>&1
-mv -f /root/socks/backsocz/./ssh /etc/ssh/sshd_config && service ssh restart 1> /dev/null 2>/dev/null
-mv -f /root/socks/backsocz/sckt$(python3 --version|awk '{print $2}'|cut -d'.' -f1,2) /usr/sbin/sckt
-mv -f /root/socks/backsocz/scktcheck /bin/scktcheck
-chmod +x /bin/scktcheck
-chmod +x  /usr/sbin/sckt
-rm -rf $HOME/root/socks
-cd $HOME
-msg="$2"
-[[ $msg = "" ]] && msg="@KhaledAGN"
-portxz="$1"
-[[ $portxz = "" ]] && portxz="8080"
-screen -dmS sokz scktcheck "$portxz" "$msg" > /dev/null 2>&1
+  [[ -e $HOME/socks ]] && rm -rf $HOME/socks > /dev/null 2>&1
+  [[ -d $HOME/socks ]] && rm -rf $HOME/socks > /dev/null 2>&1
+  cd $HOME && mkdir socks > /dev/null 2>&1
+  cd socks
+  patch="https://raw.githubusercontent.com/khaledagn/VPS-AGN_English_Official/master/LINKS-LIBRARIES/backsocz.zip"
+  arq="backsocz.zip"
+  wget $patch > /dev/null 2>&1
+  unzip $arq > /dev/null 2>&1
+  mv -f "$HOME/socks/backsocz/./ssh" /etc/ssh/sshd_config && service ssh restart 1> /dev/null 2>/dev/null
+  mv -f "$HOME/socks/backsocz/sckt$(python3 --version | awk '{print $2}' | cut -d'.' -f1,2)" /usr/sbin/sckt
+  mv -f "$HOME/socks/backsocz/scktcheck" /bin/scktcheck
+  chmod +x /bin/scktcheck
+  chmod +x /usr/sbin/sckt
+  rm -rf "$HOME/socks"
+  cd $HOME
+  msg="$2"
+  [[ $msg = "" ]] && msg="@KhaledAGN"
+  portxz="$1"
+  [[ $portxz = "" ]] && portxz="8080"
+  screen -dmS sokz scktcheck "$portxz" "$msg" > /dev/null 2>&1
 }
+
 gettunel_fun () {
-echo "master=NetVPS" > ${SCPinst}/pwd.pwd
-while read service; do
-[[ -z $service ]] && break
-echo "127.0.0.1:$(echo $service|cut -d' ' -f2)=$(echo $service|cut -d' ' -f1)" >> ${SCPinst}/pwd.pwd
-done <<< "$(mportas)"
-screen -dmS getpy python ${SCPinst}/PGet.py -b "0.0.0.0:$1" -p "${SCPinst}/pwd.pwd"
- [[ "$(ps x | grep "PGet.py" | grep -v "grep" | awk -F "pts" '{print $1}')" ]] && {
- echo -e "$(fun_trans  "Gettunel Started with Success")"
- msg -bar
- echo -ne "$(fun_trans  "Your Gettunnel Password and"):"
- echo -e "\033[1;32m KhaledAGN"
- msg -bar
- } || echo -e "$(fun_trans  "Gettunnel not started")"
- msg -bar
+  echo "master=NetVPS" > "${SCPinst}/pwd.pwd"
+  while read service; do
+    [[ -z $service ]] && break
+    echo "127.0.0.1:$(echo $service | cut -d' ' -f2)=$(echo $service | cut -d' ' -f1)" >> "${SCPinst}/pwd.pwd"
+  done <<< "$(mportas)"
+  screen -dmS getpy python "${SCPinst}/PGet.py" -b "0.0.0.0:$1" -p "${SCPinst}/pwd.pwd"
+  if pgrep -f "PGet.py" > /dev/null; then
+    echo -e "Gettunel Started with Success"
+  else
+    echo -e "Gettunnel not started"
+  fi
 }
 
 PythonDic_fun () {
-echo -e "\033[1;33m  Select Local Port and Header\033[1;37m" 
-msg -bar
-echo -ne "\033[1;97mEnter an active SSH/DROPBEAR port: \033[1;92m" && read puetoantla 
-msg -bar
-echo -ne "\033[1;97mHeader response (200,101,404,500,etc): \033[1;92m" && read rescabeza
-msg -bar
-(
-less << PYTHON  > /etc/VPS-AGN/protocols/PDirect.py
-import socket, threading, thread, select, signal, sys, time, getopt
+  echo -e "\033[1;33m  Select Local Port and Header\033[1;37m"
+  # Remplacer msg -bar et fun_trans par echo si non existants
+  echo "----------------------------------"
+  echo -ne "Enter an active SSH/DROPBEAR port: " && read puetoantla
+  echo "----------------------------------"
+  echo -ne "Header response (200,101,404,500,etc): " && read rescabeza
+  echo "----------------------------------"
+  (
+  cat << PYTHON > "${SCPinst}/PDirect.py"
+import socket, threading, select, sys, time, getopt
 
 # Listen
 LISTENING_ADDR = '0.0.0.0'
-if sys.argv[1:]:
-  LISTENING_PORT = sys.argv[1]
-else:
-  LISTENING_PORT = 80  
-#Pass
+LISTENING_PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 80
+
 PASS = ''
 
-# CONST
 BUFLEN = 4096 * 4
 TIMEOUT = 60
 DEFAULT_HOST = '127.0.0.1:$puetoantla'
-RESPONSE = 'HTTP/1.1 $rescabeza <strong>$texto_soket</strong>\r\nContent-length: 0\r\n\r\nHTTP/1.1 $rescabeza Connection established\r\n\r\n'
-#RESPONSE = 'HTTP/1.1 200 Hello_World!\r\nContent-length: 0\r\n\r\nHTTP/1.1 200 Connection established\r\n\r\n'  # lint:ok
+RESPONSE = 'HTTP/1.1 $rescabeza Connection established\r\n\r\n'
 
 class Server(threading.Thread):
     def __init__(self, host, port):
@@ -103,8 +110,7 @@ class Server(threading.Thread):
         self.soc = socket.socket(socket.AF_INET)
         self.soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.soc.settimeout(2)
-        intport = int(self.port)
-        self.soc.bind((self.host, intport))
+        self.soc.bind((self.host, self.port))
         self.soc.listen(0)
         self.running = True
 
@@ -125,7 +131,7 @@ class Server(threading.Thread):
 
     def printLog(self, log):
         self.logLock.acquire()
-        print log
+        print(log)
         self.logLock.release()
 
     def addConn(self, conn):
@@ -154,14 +160,13 @@ class Server(threading.Thread):
         finally:
             self.threadsLock.release()
 
-
 class ConnectionHandler(threading.Thread):
     def __init__(self, socClient, server, addr):
         threading.Thread.__init__(self)
         self.clientClosed = False
         self.targetClosed = True
         self.client = socClient
-        self.client_buffer = ''
+        self.client_buffer = b""
         self.server = server
         self.log = 'Connection: ' + str(addr)
 
@@ -200,41 +205,41 @@ class ConnectionHandler(threading.Thread):
 
             if hostPort != '':
                 passwd = self.findHeader(self.client_buffer, 'X-Pass')
-				
+
                 if len(PASS) != 0 and passwd == PASS:
                     self.method_CONNECT(hostPort)
                 elif len(PASS) != 0 and passwd != PASS:
-                    self.client.send('HTTP/1.1 400 WrongPass!\r\n\r\n')
+                    self.client.send(b'HTTP/1.1 400 WrongPass!\r\n\r\n')
                 elif hostPort.startswith('127.0.0.1') or hostPort.startswith('localhost'):
                     self.method_CONNECT(hostPort)
                 else:
-                    self.client.send('HTTP/1.1 403 Forbidden!\r\n\r\n')
+                    self.client.send(b'HTTP/1.1 403 Forbidden!\r\n\r\n')
             else:
-                print '- No X-Real-Host!'
-                self.client.send('HTTP/1.1 400 NoXRealHost!\r\n\r\n')
+                print('- No X-Real-Host!')
+                self.client.send(b'HTTP/1.1 400 NoXRealHost!\r\n\r\n')
 
         except Exception as e:
-            self.log += ' - error: ' + e.strerror
+            self.log += ' - error: ' + str(e)
             self.server.printLog(self.log)
-	    pass
+            pass
         finally:
             self.close()
             self.server.removeConn(self)
 
     def findHeader(self, head, header):
-        aux = head.find(header + ': ')
+        aux = head.find((header + ': ').encode())
 
         if aux == -1:
             return ''
 
-        aux = head.find(':', aux)
+        aux = head.find(b':', aux)
         head = head[aux+2:]
-        aux = head.find('\r\n')
+        aux = head.find(b'\r\n')
 
         if aux == -1:
             return ''
 
-        return head[:aux];
+        return head[:aux].decode()
 
     def connect_target(self, host):
         i = host.find(':')
@@ -242,10 +247,7 @@ class ConnectionHandler(threading.Thread):
             port = int(host[i+1:])
             host = host[:i]
         else:
-            if self.method=='CONNECT':
-                port = $puetoantla
-            else:
-                port = sys.argv[1]
+            port = sys.argv[1]
 
         (soc_family, soc_type, proto, _, address) = socket.getaddrinfo(host, port)[0]
 
@@ -257,8 +259,8 @@ class ConnectionHandler(threading.Thread):
         self.log += ' - CONNECT ' + path
 
         self.connect_target(path)
-        self.client.sendall(RESPONSE)
-        self.client_buffer = ''
+        self.client.sendall(RESPONSE.encode())
+        self.client_buffer = b''
 
         self.server.printLog(self.log)
         self.doCONNECT()
@@ -274,20 +276,20 @@ class ConnectionHandler(threading.Thread):
                 error = True
             if recv:
                 for in_ in recv:
-		    try:
+                    try:
                         data = in_.recv(BUFLEN)
                         if data:
-			    if in_ is self.target:
-				self.client.send(data)
+                            if in_ is self.target:
+                                self.client.send(data)
                             else:
                                 while data:
                                     byte = self.target.send(data)
                                     data = data[byte:]
 
                             count = 0
-			else:
-			    break
-		    except:
+                        else:
+                            break
+                    except:
                         error = True
                         break
             if count == TIMEOUT:
@@ -295,16 +297,15 @@ class ConnectionHandler(threading.Thread):
             if error:
                 break
 
-
 def print_usage():
-    print 'Usage: proxy.py -p <port>'
-    print '       proxy.py -b <bindAddr> -p <port>'
-    print '       proxy.py -b 0.0.0.0 -p 80'
+    print('Usage: proxy.py -p <port>')
+    print('       proxy.py -b <bindAddr> -p <port>')
+    print('       proxy.py -b 0.0.0.0 -p 80')
 
 def parse_args(argv):
     global LISTENING_ADDR
     global LISTENING_PORT
-    
+
     try:
         opts, args = getopt.getopt(argv,"hb:p:",["bind=","port="])
     except getopt.GetoptError:
@@ -319,98 +320,97 @@ def parse_args(argv):
         elif opt in ("-p", "--port"):
             LISTENING_PORT = int(arg)
 
-
 def main(host=LISTENING_ADDR, port=LISTENING_PORT):
-    print "\n:-------PythonProxy-------:\n"
-    print "Listening addr: " + LISTENING_ADDR
-    print "Listening port: " + str(LISTENING_PORT) + "\n"
-    print ":-------------------------:\n"
+    print("\n:-------PythonProxy-------:\n")
+    print("Listening addr: " + LISTENING_ADDR)
+    print("Listening port: " + str(LISTENING_PORT) + "\n")
+    print(":-------------------------:\n")
     server = Server(LISTENING_ADDR, LISTENING_PORT)
     server.start()
     while True:
         try:
             time.sleep(2)
         except KeyboardInterrupt:
-            print 'Stopping...'
+            print('Stopping...')
             server.close()
             break
 
-#######    parse_args(sys.argv[1:])
 if __name__ == '__main__':
     main()
 
-
 PYTHON
-) > $HOME/proxy.log
+  ) > "${SCPinst}/PDirect.py"
 
-chmod +x /etc/VPS-AGN/protocols/PDirect.py
+  chmod +x "${SCPinst}/PDirect.py"
 
-screen -dmS pydic-"$porta_socket" python ${SCPinst}/PDirect.py "$porta_socket" "$texto_soket" && echo ""$porta_socket" "$texto_soket"" >> /etc/VPS-AGN/PortPD.log
+  screen -dmS pydic-"$puetoantla" python "${SCPinst}/PDirect.py" "$puetoantla" "$rescabeza" && echo "$puetoantla $rescabeza" >> "${SCPdir}/PortPD.log"
 }
 
 pid_kill () {
-[[ -z $1 ]] && refurn 1
-pids="$@"
-for pid in $(echo $pids); do
-kill -9 $pid &>/dev/null
-done
+  [[ -z $1 ]] && return 1
+  pids="$@"
+  for pid in $pids; do
+    kill -9 $pid &>/dev/null
+  done
 }
 
 remove_fun () {
-echo -e "$(fun_trans  "Stopping Socks Python")"
-msg -bar
-pidproxy=$(ps x | grep "PPub.py" | grep -v "grep" | awk -F "pts" '{print $1}') && [[ ! -z $pidproxy ]] && pid_kill $pidproxy
-pidproxy2=$(ps x | grep "PPriv.py" | grep -v "grep" | awk -F "pts" '{print $1}') && [[ ! -z $pidproxy2 ]] && pid_kill $pidproxy2
-pidproxy3=$(ps x | grep "PDirect.py" | grep -v "grep" | awk -F "pts" '{print $1}') && [[ ! -z $pidproxy3 ]] && pid_kill $pidproxy3
-pidproxy4=$(ps x | grep "POpen.py" | grep -v "grep" | awk -F "pts" '{print $1}') && [[ ! -z $pidproxy4 ]] && pid_kill $pidproxy4
-pidproxy5=$(ps x | grep "PGet.py" | grep -v "grep" | awk -F "pts" '{print $1}') && [[ ! -z $pidproxy5 ]] && pid_kill $pidproxy5
-pidproxy6=$(ps x | grep "scktcheck" | grep -v "grep" | awk -F "pts" '{print $1}') && [[ ! -z $pidproxy6 ]] && pid_kill $pidproxy6
-pidproxy7=$(ps x | grep "python.py" | grep -v "grep" | awk -F "pts" '{print $1}') && [[ ! -z $pidproxy7 ]] && pid_kill $pidproxy7
-echo -e "\033[1;91m  $(fun_trans  "Socks ARRESTED")"
-msg -bar
-rm -rf /etc/VPS-AGN/PortPD.log
-echo "" > /etc/VPS-AGN/PortPD.log
-exit 0
+  echo -e "Stopping Socks Python"
+  #msg -bar
+  pidproxy=$(pgrep -f "PPub.py")
+  [[ ! -z $pidproxy ]] && pid_kill $pidproxy
+  pidproxy2=$(pgrep -f "PPriv.py")
+  [[ ! -z $pidproxy2 ]] && pid_kill $pidproxy2
+  pidproxy3=$(pgrep -f "PDirect.py")
+  [[ ! -z $pidproxy3 ]] && pid_kill $pidproxy3
+  pidproxy4=$(pgrep -f "POpen.py")
+  [[ ! -z $pidproxy4 ]] && pid_kill $pidproxy4
+  pidproxy5=$(pgrep -f "PGet.py")
+  [[ ! -z $pidproxy5 ]] && pid_kill $pidproxy5
+  pidproxy6=$(pgrep -f "scktcheck")
+  [[ ! -z $pidproxy6 ]] && pid_kill $pidproxy6
+  pidproxy7=$(pgrep -f "python.py")
+  [[ ! -z $pidproxy7 ]] && pid_kill $pidproxy7
+  echo -e "\033[1;91m Socks ARRESTED"
+  #msg -bar
+  rm -rf "${SCPdir}/PortPD.log"
+  echo "" > "${SCPdir}/PortPD.log"
+  exit 0
 }
 
 iniciarsocks () {
-pidproxy=$(ps x | grep -w "PPub.py" | grep -v "grep" | awk -F "pts" '{print $1}') && [[ ! -z $pidproxy ]] && P1="\033[1;32m[ON]" || P1="\033[1;31m[OFF]"
-pidproxy2=$(ps x | grep -w  "PPriv.py" | grep -v "grep" | awk -F "pts" '{print $1}') && [[ ! -z $pidproxy2 ]] && P2="\033[1;32m[ON]" || P2="\033[1;31m[OFF]"
-pidproxy3=$(ps x | grep -w  "PDirect.py" | grep -v "grep" | awk -F "pts" '{print $1}') && [[ ! -z $pidproxy3 ]] && P3="\033[1;32m[ON]" || P3="\033[1;31m[OFF]"
-pidproxy4=$(ps x | grep -w  "POpen.py" | grep -v "grep" | awk -F "pts" '{print $1}') && [[ ! -z $pidproxy4 ]] && P4="\033[1;32m[ON]" || P4="\033[1;31m[OFF]"
-pidproxy5=$(ps x | grep "PGet.py" | grep -v "grep" | awk -F "pts" '{print $1}') && [[ ! -z $pidproxy5 ]] && P5="\033[1;32m[ON]" || P5="\033[1;31m[OFF]"
-pidproxy6=$(ps x | grep "scktcheck" | grep -v "grep" | awk -F "pts" '{print $1}') && [[ ! -z $pidproxy6 ]] && P6="\033[1;32m[ON]" || P6="\033[1;31m[OFF]"
-msg -bar 
-msg -tit
-msg -ama "   INSTALLER OF PROXY'S VPS-AGN By MOD @KhaledAGN"
-msg -bar
-# Suppression dans le menu
-# echo -e "${cor[4]} [1] $(msg -verm2 "==>>") \033[1;97m$(fun_trans  "Proxy Python SIMPLE")\033[1;97m ------------- $P1"
-# echo -e "${cor[4]} [2] $(msg -verm2 "==>>") \033[1;97m$(fun_trans  "Proxy Python SECURED")\033[1;97m ------------- $P2"
-echo -e "${cor[4]} [3] $(msg -verm2 "==>>") \033[1;97m$(fun_trans  "Proxy Python DIRECT")\033[1;97m ------------- $P3"
-echo -e "${cor[4]} [4] $(msg -verm2 "==>>") \033[1;97m$(fun_trans  "Proxy Python OPENVPN")\033[1;97m ------------ $P4"
-# echo -e "${cor[4]} [5] $(msg -verm2 "==>>") \033[1;97m$(fun_trans  "Proxy Python GETTUNEL")\033[1;97m ----------- $P5"
-# echo -e "${cor[4]} [6] $(msg -verm2 "==>>") \033[1;97m$(fun_trans  "Proxy Python TCP BYPASS")\033[1;97m --------- $P6"
-echo -e "${cor[4]} [7] $(msg -verm2 "==>>") \033[1;97m$(fun_trans  " ¡¡ STOP ALL PROXY'S !!")"
-echo -e "$(msg -bar)\n${cor[4]} [0] $(msg -verm2 "==>>")  \e[97m\033[1;41m RETURN \033[1;37m"
-msg -bar
-IP=(meu_ip)
-while [[ -z $portproxy || $portproxy != @(0|[3-4]|7) ]]; do
-echo -ne "$(fun_trans  "Type an option"): \033[1;37m" && read portproxy
-tput cuu1 && tput dl1
-done
-case $portproxy in
-# Suppression des lancements
-# 1) screen -dmS screen python ${SCPinst}/PPub.py "$porta_socket" "$texto_soket";;
-# 2) screen -dmS screen python3 ${SCPinst}/PPriv.py "$porta_socket" "$texto_soket" "$IP";;
-3) PythonDic_fun;;
-4) screen -dmS screen python ${SCPinst}/POpen.py "$porta_socket" "$texto_soket";;
-# 5) gettunel_fun "$porta_socket";;
-# 6) tcpbypass_fun "$porta_socket" "$texto_soket";;
-7) remove_fun;;
-0) return;;
-esac
-echo -e "\033[1;92m$(fun_trans "COMPLETED procedure")"
-msg -bar
+  pidproxy=$(pgrep -f "PPub.py")
+  [[ ! -z $pidproxy ]] && P1="\033[1;32m[ON]" || P1="\033[1;31m[OFF]"
+  pidproxy2=$(pgrep -f "PPriv.py")
+  [[ ! -z $pidproxy2 ]] && P2="\033[1;32m[ON]" || P2="\033[1;31m[OFF]"
+  pidproxy3=$(pgrep -f "PDirect.py")
+  [[ ! -z $pidproxy3 ]] && P3="\033[1;32m[ON]" || P3="\033[1;31m[OFF]"
+  pidproxy4=$(pgrep -f "POpen.py")
+  [[ ! -z $pidproxy4 ]] && P4="\033[1;32m[ON]" || P4="\033[1;31m[OFF]"
+  pidproxy5=$(pgrep -f "PGet.py")
+  [[ ! -z $pidproxy5 ]] && P5="\033[1;32m[ON]" || P5="\033[1;31m[OFF]"
+  pidproxy6=$(pgrep -f "scktcheck")
+  [[ ! -z $pidproxy6 ]] && P6="\033[1;32m[ON]" || P6="\033[1;31m[OFF]"
+  echo "==== INSTALLER OF PROXY'S VPS-AGN By MOD @KhaledAGN ===="
+  echo "[3] Proxy Python DIRECT $P3"
+  echo "[4] Proxy Python OPENVPN $P4"
+  echo "[7] STOP ALL PROXY'S"
+  echo "[0] RETURN"
+
+  IP=$(meu_ip)
+  while [[ -z $portproxy || $portproxy != @(0|3|4|7) ]]; do
+    echo -ne "Type an option: " && read portproxy
+    tput cuu1 && tput dl1
+  done
+
+  case $portproxy in
+    3) PythonDic_fun;;
+    4) screen -dmS screen python "${SCPinst}/POpen.py" "$puetoantla" "$rescabeza";;
+    7) remove_fun;;
+    0) return;;
+  esac
+
+  echo -e "\033[1;92mCOMPLETED procedure"
 }
+
 iniciarsocks
