@@ -225,6 +225,16 @@ uninstall_badvpn() {
     echo ">>> Désinstallation BadVPN (à compléter)"
 }
 
+install_ws_total() {
+    echo ">>> Lancement du panneau Ws total (sockspy.sh)..."
+    bash "$HOME/Kighmu/sockspy.sh" || echo "Erreur : sockspy.sh introuvable."
+}
+
+uninstall_ws_total() {
+    echo ">>> Désinstallation du panneau Ws total (optionnel)"
+    echo "[OK] Ws total désinstallé (pas d'action nécessaire)"
+}
+
 manage_mode() {
     MODE_NAME=$1
     INSTALL_FUNC=$2
@@ -262,6 +272,7 @@ while true; do
     echo -e "${GREEN}${BOLD}[05]${RESET} ${YELLOW}SOCKS/Python${RESET}"
     echo -e "${GREEN}${BOLD}[06]${RESET} ${YELLOW}SSL/TLS${RESET}"
     echo -e "${GREEN}${BOLD}[07]${RESET} ${YELLOW}BadVPN${RESET}"
+    echo -e "${GREEN}${BOLD}[08]${RESET} ${YELLOW}Ws total${RESET}"
     echo -e "${GREEN}${BOLD}[00]${RESET} ${YELLOW}Quitter${RESET}"
     echo -e "${CYAN}+======================================================+${RESET}"
     echo -ne "${BOLD}${YELLOW}👉 Choisissez un mode : ${RESET}"
@@ -274,6 +285,7 @@ while true; do
         5) manage_mode "SOCKS/Python" install_socks_python uninstall_socks_python ;;
         6) manage_mode "SSL/TLS" install_ssl_tls uninstall_ssl_tls ;;
         7) manage_mode "BadVPN" install_badvpn uninstall_badvpn ;;
+        8) install_ws_total ;;
         0) echo -e "${RED}🚪 Sortie du panneau de contrôle.${RESET}" ; exit 0 ;;
         *) echo -e "${RED}❌ Option invalide, réessayez.${RESET}" ;;
     esac
