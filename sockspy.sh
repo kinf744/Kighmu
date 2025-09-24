@@ -1,5 +1,5 @@
 #!/bin/bash
-#25/01/2021 by @Kighmu (modifié pour Kighmu)
+#by @Kighmu (modifié pour Kighmu)
 clear
 clear
 
