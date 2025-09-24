@@ -173,7 +173,7 @@ FILES=(
   "setup_ssh_config.sh"
   "create_ssh_user.sh"
   "menu4_2.sh"
-  "PDirect.py"
+  "ws2_proxy.py"
   "POpen.py"
   "sockspy.sh"
 )
