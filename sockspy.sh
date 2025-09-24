@@ -76,6 +76,25 @@ PythonDic_fun () {
   echo "----------------------------------"
   echo -ne "Header response (200,101,404,500,etc): " && read rescabeza
   echo "----------------------------------"
+
+  # Installer ufw s'il manque
+  if ! command -v ufw &> /dev/null; then
+    echo "UFW non installé. Installation en cours..."
+    sudo apt-get update -y
+    sudo apt-get install -y ufw
+  fi
+
+  # Vérifier l’état de ufw et l’activer si inactif
+  ufw_status=$(sudo ufw status | head -n 1)
+  if [[ "$ufw_status" == "Status: inactive" ]]; then
+    echo "Activation de UFW..."
+    sudo ufw --force enable
+  fi
+
+  # Autoriser le port local choisi dans le firewall
+  echo "Autorisation du port $puetoantla/tcp dans le pare-feu UFW..."
+  sudo ufw allow "$puetoantla/tcp"
+
   (
   cat << PYTHON > "${SCPdir}/PDirect.py"
 import socket, threading, select, sys, time, getopt
