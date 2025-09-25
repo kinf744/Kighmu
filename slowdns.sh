@@ -7,7 +7,7 @@ SERVER_PUB="$SLOWDNS_DIR/server.pub"
 SLOWDNS_BIN="/usr/local/bin/sldns-server"
 PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
-MTU_VALUE=1400
+MTU_VALUE=1350
 
 log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
