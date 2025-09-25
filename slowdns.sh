@@ -122,13 +122,24 @@ main() {
   mkdir -p "$SLOWDNS_DIR"
   stop_old_instance
 
-  read -rp "Entrez le NameServer (NS) (ex: ns.example.com) : " NAMESERVER
-  if [[ -z "$NAMESERVER" ]]; then
-    echo "NameServer invalide." >&2
+  # Lecture de 1 ou 2 domaines NS, séparés par espace
+  read -rp "Entrez un ou deux NameServers (NS) séparés par un espace (ex: ns1.example.com ns2.example.com) : " NAMESERVERS
+  if [[ -z "$NAMESERVERS" ]]; then
+    echo "Aucun NameServer fourni. Abandon." >&2
     exit 1
   fi
-  echo "$NAMESERVER" > "$CONFIG_FILE"
-  log "NameServer enregistré dans $CONFIG_FILE"
+
+  # Validation simple des noms de domaines (exemple basique)
+  for ns in $NAMESERVERS; do
+    if ! [[ "$ns" =~ ^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+      echo "Nom de domaine invalide : $ns" >&2
+      exit 1
+    fi
+  done
+
+  # Sauvegarde dans le fichier de config
+  echo "$NAMESERVERS" > "$CONFIG_FILE"
+  log "NameServers enregistrés dans $CONFIG_FILE : $NAMESERVERS"
 
   if [ ! -x "$SLOWDNS_BIN" ]; then
     mkdir -p /usr/local/bin
@@ -168,8 +179,9 @@ main() {
     ssh_port=22
   fi
 
-  log "Démarrage SlowDNS sur UDP port $PORT avec NS $NAMESERVER..."
-  screen -dmS slowdns_session "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NAMESERVER" 0.0.0.0:"$ssh_port"
+  # Lancement SlowDNS avec tous les domaines NS
+  log "Démarrage SlowDNS sur UDP port $PORT avec NS $NAMESERVERS..."
+  screen -dmS slowdns_session "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" $NAMESERVERS 0.0.0.0:"$ssh_port"
 
   sleep 3
 
@@ -181,7 +193,6 @@ main() {
     exit 1
   fi
 
-  # Création et activation du service systemd à partir du script
   create_systemd_service
 
   if command -v ufw >/dev/null 2>&1; then
@@ -200,7 +211,7 @@ main() {
   echo "Clé publique :"
   echo "$PUB_KEY"
   echo ""
-  echo "NameServer  : $NAMESERVER"
+  echo "NameServer(s)  : $NAMESERVERS"
   echo ""
   log "Installation et configuration SlowDNS terminées."
 }
