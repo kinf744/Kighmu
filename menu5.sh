@@ -26,8 +26,6 @@ afficher_modes_ports() {
         any_active=1
     elif systemctl is-active --quiet socks_python.service || pgrep -f KIGHMUPROXY.py >/dev/null 2>&1 || screen -list | grep -q socks_python; then
         any_active=1
-    elif systemctl is-active --quiet socks_python_ws.service || pgrep -f ws2_proxy.py >/dev/null 2>&1; then
-        any_active=1
     elif systemctl is-active --quiet stunnel4.service || pgrep -f stunnel >/dev/null 2>&1; then
         any_active=1
     fi
@@ -57,17 +55,6 @@ afficher_modes_ports() {
 
     if systemctl is-active --quiet socks_python.service || pgrep -f KIGHMUPROXY.py >/dev/null 2>&1 || screen -list | grep -q socks_python; then
         echo -e "  - SOCKS Python: ${GREEN}ports TCP 8080, 9090${RESET}"
-    fi
-
-    if systemctl is-active --quiet socks_python_ws.service || pgrep -f ws2_proxy.py >/dev/null 2>&1; then
-        # Essaye de détecter le port dynamiquement
-        if [ -f /etc/systemd/system/socks_python_ws.service ]; then
-            PROXY_WS_PORT=$(grep "ExecStart=" /etc/systemd/system/socks_python_ws.service | awk '{print $NF}')
-        else
-            PROXY_WS_PORT=$(sudo lsof -Pan -p $(pgrep -f ws2_proxy.py | head -n1) -iTCP -sTCP:LISTEN 2>/dev/null | awk 'NR==2 {print $9}' | cut -d: -f2)
-        fi
-        PROXY_WS_PORT=${PROXY_WS_PORT:-80}
-        echo -e "  - proxy ws: ${GREEN}port TCP $PROXY_WS_PORT${RESET}"
     fi
 
     if systemctl is-active --quiet stunnel4.service || pgrep -f stunnel >/dev/null 2>&1; then
@@ -202,40 +189,6 @@ uninstall_socks_python() {
     echo -e "${GREEN}[OK] SOCKS Python désinstallé.${RESET}"
 }
 
-install_proxy_ws() {
-    echo ">>> Installation proxy ws via script sockspy.sh..."
-    bash "$HOME/Kighmu/sockspy.sh" || echo "Script sockspy introuvable."
-}
-
-uninstall_proxy_ws() {
-    echo ">>> Désinstallation proxy ws..."
-
-    pids=$(pgrep -f ws2_proxy.py)
-    if [ ! -z "$pids" ]; then
-        kill -15 $pids
-        sleep 2
-        pids=$(pgrep -f ws2_proxy.py)
-        if [ ! -z "$pids" ]; then
-            kill -9 $pids
-        fi
-    fi
-
-    if systemctl list-units --full -all | grep -Fq 'socks_python_ws.service'; then
-        systemctl stop socks_python_ws.service
-        systemctl disable socks_python_ws.service
-        rm -f /etc/systemd/system/socks_python_ws.service
-        systemctl daemon-reload
-    fi
-
-    rm -f /usr/local/bin/ws2_proxy.py
-
-    ufw delete allow 80/tcp 2>/dev/null || true
-    iptables -D INPUT -p tcp --dport 80 -j ACCEPT 2>/dev/null || true
-    iptables -D OUTPUT -p tcp --sport 80 -j ACCEPT 2>/dev/null || true
-
-    echo -e "${GREEN}[OK] proxy ws désinstallé.${RESET}"
-}
-
 install_ssl_tls() {
     echo ">>> Lancement du script d'installation SSL/TLS externe..."
     bash "$HOME/Kighmu/ssl.sh" || echo "Script SSL/TLS introuvable ou erreur."
@@ -291,7 +244,7 @@ manage_mode() {
         case $action in
             1) $INSTALL_FUNC ;;
             2) $UNINSTALL_FUNC ;;
-            0) break ;;
+            0) break ;;  # Permet de retourner au menu principal
             *) echo -e "${RED}❌ Mauvais choix, réessayez.${RESET}" ;;
         esac
     done
@@ -309,7 +262,6 @@ while true; do
     echo -e "${GREEN}${BOLD}[05]${RESET} ${YELLOW}SOCKS/Python${RESET}"
     echo -e "${GREEN}${BOLD}[06]${RESET} ${YELLOW}SSL/TLS${RESET}"
     echo -e "${GREEN}${BOLD}[07]${RESET} ${YELLOW}BadVPN${RESET}"
-    echo -e "${GREEN}${BOLD}[08]${RESET} ${YELLOW}proxy ws${RESET}"
     echo -e "${GREEN}${BOLD}[00]${RESET} ${YELLOW}Quitter${RESET}"
     echo -e "${CYAN}+======================================================+${RESET}"
     echo -ne "${BOLD}${YELLOW}👉 Choisissez un mode : ${RESET}"
@@ -322,7 +274,6 @@ while true; do
         5) manage_mode "SOCKS/Python" install_socks_python uninstall_socks_python ;;
         6) manage_mode "SSL/TLS" install_ssl_tls uninstall_ssl_tls ;;
         7) manage_mode "BadVPN" install_badvpn uninstall_badvpn ;;
-        8) manage_mode "proxy ws" install_proxy_ws uninstall_proxy_ws ;;
         0) echo -e "${RED}🚪 Sortie du panneau de contrôle.${RESET}" ; exit 0 ;;
         *) echo -e "${RED}❌ Option invalide, réessayez.${RESET}" ;;
     esac
