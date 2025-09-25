@@ -3,9 +3,8 @@
 import socket
 import threading
 import select
-import signal
-import sys
 import time
+import sys
 import getopt
 
 PASS = ''
@@ -94,7 +93,7 @@ class ConnectionHandler(threading.Thread):
         self.clientClosed = False
         self.targetClosed = True
         self.client = socClient
-        self.client_buffer = ''
+        self.client_buffer = b''  # changer initialisation en bytes
         self.server = server
         self.log = 'Connection: ' + str(addr)
 
@@ -117,22 +116,39 @@ class ConnectionHandler(threading.Thread):
         finally:
             self.targetClosed = True
 
+    def findHeader(self, head, header):
+        header_bytes = header.encode('utf-8') + b': '
+        aux = head.find(header_bytes)
+        if aux == -1:
+            return b''
+
+        aux = head.find(b':', aux)
+        head = head[aux + 2:]
+        aux = head.find(b'\r\n')
+        if aux == -1:
+            return b''
+
+        return head[:aux]
+
     def run(self):
         try:
             self.client_buffer = self.client.recv(BUFLEN)
 
-            hostPort = self.findHeader(self.client_buffer, 'X-Real-Host')
+            hostPort_bytes = self.findHeader(self.client_buffer, 'X-Real-Host')
+            hostPort = hostPort_bytes.decode('utf-8') if hostPort_bytes else ''
 
             if hostPort == '':
                 hostPort = DEFAULT_HOST
 
-            split = self.findHeader(self.client_buffer, 'X-Split')
+            split_bytes = self.findHeader(self.client_buffer, 'X-Split')
+            split = split_bytes.decode('utf-8') if split_bytes else ''
 
             if split != '':
                 self.client.recv(BUFLEN)
 
             if hostPort != '':
-                passwd = self.findHeader(self.client_buffer, 'X-Pass')
+                passwd_bytes = self.findHeader(self.client_buffer, 'X-Pass')
+                passwd = passwd_bytes.decode('utf-8') if passwd_bytes else ''
 
                 if len(PASS) != 0 and passwd == PASS:
                     self.method_CONNECT(hostPort)
@@ -153,21 +169,6 @@ class ConnectionHandler(threading.Thread):
         finally:
             self.close()
             self.server.removeConn(self)
-
-    def findHeader(self, head, header):
-        aux = head.find(header + ': ')
-
-        if aux == -1:
-            return ''
-
-        aux = head.find(':', aux)
-        head = head[aux + 2:]
-        aux = head.find('\r\n')
-
-        if aux == -1:
-            return ''
-
-        return head[:aux]
 
     def connect_target(self, host):
         i = host.find(':')
@@ -191,7 +192,7 @@ class ConnectionHandler(threading.Thread):
 
         self.connect_target(path)
         self.client.sendall(RESPONSE.encode())
-        self.client_buffer = ''
+        self.client_buffer = b''
 
         self.server.printLog(self.log)
         self.doCONNECT()
@@ -277,4 +278,3 @@ def main(host=LISTENING_ADDR, port=LISTENING_PORT):
 if __name__ == '__main__':
     parse_args(sys.argv[1:])
     main()
-		
