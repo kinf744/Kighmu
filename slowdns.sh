@@ -7,7 +7,7 @@ SERVER_PUB="$SLOWDNS_DIR/server.pub"
 SLOWDNS_BIN="/usr/local/bin/sldns-server"
 PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
-MTU_VALUE=1300
+MTU_VALUE=1400
 
 log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
@@ -23,7 +23,7 @@ check_root() {
 install_dependencies() {
   log "Mise à jour des paquets et installation des dépendances..."
   apt-get update -q
-  for pkg in iptables screen tcpdump ufw; do
+  for pkg in iptables screen tcpdump; do
     if ! command -v "$pkg" &> /dev/null; then
       log "$pkg non trouvé, installation..."
       apt-get install -y "$pkg"
@@ -122,24 +122,13 @@ main() {
   mkdir -p "$SLOWDNS_DIR"
   stop_old_instance
 
-  # Lecture de 1 ou 2 domaines NS, séparés par espace
-  read -rp "Entrez un ou deux NameServers (NS) séparés par un espace (ex: ns1.example.com ns2.example.com) : " NAMESERVERS
-  if [[ -z "$NAMESERVERS" ]]; then
-    echo "Aucun NameServer fourni. Abandon." >&2
+  read -rp "Entrez le NameServer (NS) (ex: ns.example.com) : " NAMESERVER
+  if [[ -z "$NAMESERVER" ]]; then
+    echo "NameServer invalide." >&2
     exit 1
   fi
-
-  # Validation simple des noms de domaines (exemple basique)
-  for ns in $NAMESERVERS; do
-    if ! [[ "$ns" =~ ^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
-      echo "Nom de domaine invalide : $ns" >&2
-      exit 1
-    fi
-  done
-
-  # Sauvegarde dans le fichier de config
-  echo "$NAMESERVERS" > "$CONFIG_FILE"
-  log "NameServers enregistrés dans $CONFIG_FILE : $NAMESERVERS"
+  echo "$NAMESERVER" > "$CONFIG_FILE"
+  log "NameServer enregistré dans $CONFIG_FILE"
 
   if [ ! -x "$SLOWDNS_BIN" ]; then
     mkdir -p /usr/local/bin
@@ -179,9 +168,8 @@ main() {
     ssh_port=22
   fi
 
-  # Lancement SlowDNS avec tous les domaines NS
-  log "Démarrage SlowDNS sur UDP port $PORT avec NS $NAMESERVERS..."
-  screen -dmS slowdns_session "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" $NAMESERVERS 0.0.0.0:"$ssh_port"
+  log "Démarrage SlowDNS sur UDP port $PORT avec NS $NAMESERVER..."
+  screen -dmS slowdns_session "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NAMESERVER" 0.0.0.0:"$ssh_port"
 
   sleep 3
 
@@ -193,6 +181,7 @@ main() {
     exit 1
   fi
 
+  # Création et activation du service systemd à partir du script
   create_systemd_service
 
   if command -v ufw >/dev/null 2>&1; then
@@ -211,7 +200,10 @@ main() {
   echo "Clé publique :"
   echo "$PUB_KEY"
   echo ""
-  echo "NameServer(s)  : $NAMESERVERS"
+  echo "NameServer  : $NAMESERVER"
+  echo ""
+  echo "Commande client (termux) :"
+  echo "curl -sO https://github.com/khaledagn/DNS-AGN/raw/main/files/slowdns && chmod +x slowdns && ./slowdns $NAMESERVER $PUB_KEY"
   echo ""
   log "Installation et configuration SlowDNS terminées."
 }
