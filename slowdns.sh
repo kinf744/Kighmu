@@ -51,7 +51,6 @@ stop_old_instance() {
     pkill sldns-server || true
     sleep 2
   fi
-  # Nettoyer règles iptables existantes pour ports 5300 et 5301
   for port in 5300 5301; do
     iptables -D INPUT -p udp --dport "$port" -j ACCEPT 2>/dev/null || true
     iptables -t nat -D PREROUTING -p udp --dport 53 -j REDIRECT --to-ports "$port" 2>/dev/null || true
@@ -69,8 +68,6 @@ setup_iptables() {
     iptables -I INPUT -p udp --dport "$port" -j ACCEPT
   done
 
-  # Redirection du port 53 vers le premier port SlowDNS (pour la première instance)
-  # Vous pouvez adapter la redirection si nécessaire
   local interface
   interface=$(get_active_interface)
   log "Redirection DNS UDP port 53 vers $PORT_BASE sur interface $interface"
@@ -105,10 +102,7 @@ Wants=network.target
 [Service]
 Type=simple
 User=root
-ExecStart=/bin/bash -c '
-  $SLOWDNS_BIN -udp :$PORT_BASE -privkey-file $SERVER_KEY $1 0.0.0.0:$2 &
-  $SLOWDNS_BIN -udp :$((PORT_BASE+1)) -privkey-file $SERVER_KEY $3 0.0.0.0:$2
-'
+ExecStart=/usr/local/bin/slowdns_multi.sh $1 $2
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -139,7 +133,6 @@ main() {
     exit 1
   fi
 
-  # Validation basique
   for ns in "$NS1" "$NS2"; do
     if ! [[ "$ns" =~ ^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
       echo "Nom de domaine invalide : $ns" >&2
@@ -147,7 +140,6 @@ main() {
     fi
   done
 
-  # Sauvegarde pour information
   echo -e "$NS1\n$NS2" > "$CONFIG_FILE"
   log "NameServers enregistrés dans $CONFIG_FILE : $NS1, $NS2"
 
@@ -203,7 +195,7 @@ main() {
     exit 1
   fi
 
-  create_systemd_service_multi "$NS1" "$ssh_port" "$NS2"
+  create_systemd_service_multi "$NS1" "$NS2"
 
   if command -v ufw >/dev/null 2>&1; then
     log "Ouverture des ports UDP $PORT_BASE et $((PORT_BASE+1)) avec UFW."
