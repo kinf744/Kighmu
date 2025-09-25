@@ -99,7 +99,13 @@ EOF
   sudo systemctl daemon-reload
   sudo systemctl enable socks_python_ws.service
   sudo systemctl restart socks_python_ws.service
-  echo "Service socks_python_ws activé et démarré sur le port $PORT."
+
+  # Vérification du démarrage du service
+  if sudo systemctl is-active --quiet socks_python_ws.service; then
+    echo "Service socks_python_ws démarré avec succès sur le port $PORT."
+  else
+    echo "Échec du démarrage du service socks_python_ws. Vérifiez les logs avec : sudo journalctl -u socks_python_ws.service"
+  fi
 }
 
 kill_old_instances() {
@@ -108,6 +114,47 @@ kill_old_instances() {
     echo "Arrêt des anciennes instances du proxy WS (PID: $PIDS)..."
     sudo kill -9 $PIDS
     sleep 3
+  fi
+}
+
+kill_and_clean_port80() {
+  local port="$PORT"
+  local PIDS
+  PIDS=$(sudo lsof -ti tcp:"$port")
+
+  if [ -n "$PIDS" ]; then
+    echo "Les processus suivants utilisent le port $port :"
+    sudo lsof -nP -i TCP:"$port"
+
+    # Identifier et stopper les services systemd associés
+    SERVICES_STOPPED=()
+    for pid in $PIDS; do
+      unit_name=$(systemctl show -p Id -p Names $(ps -p $pid -o unit=) 2>/dev/null | grep '^Names=' | cut -d= -f2)
+      if [ -n "$unit_name" ] && [[ ! " ${SERVICES_STOPPED[@]} " =~ " ${unit_name} " ]]; then
+        echo "Arrêt et désactivation temporaire du service $unit_name..."
+        sudo systemctl stop "$unit_name"
+        sudo systemctl disable "$unit_name"
+        SERVICES_STOPPED+=("$unit_name")
+      fi
+    done
+
+    echo "Arrêt des processus sur le port $port..."
+    sudo kill -9 $PIDS
+    sleep 3
+
+    echo "Nettoyage terminé. Vérification :"
+    sudo lsof -nP -i TCP:"$port" || echo "Aucun processus n'utilise encore le port $port."
+
+    if [ ${#SERVICES_STOPPED[@]} -gt 0 ]; then
+      echo "Les services suivants ont été arrêtés et désactivés temporairement :"
+      for svc in "${SERVICES_STOPPED[@]}"; do
+        echo " - $svc"
+      done
+      echo "N'oubliez pas de les redémarrer après l'installation, par exemple :"
+      echo "sudo systemctl enable ${SERVICES_STOPPED[0]} && sudo systemctl start ${SERVICES_STOPPED[0]}"
+    fi
+  else
+    echo "Aucun processus n'occupe le port $port."
   fi
 }
 
@@ -143,8 +190,10 @@ case "$confirm" in
 
     kill_old_instances
 
+    kill_and_clean_port80
+
     if sudo lsof -i :"$PORT" >/dev/null; then
-      echo "Le port $PORT est déjà utilisé, veuillez le libérer."
+      echo "Le port $PORT est encore utilisé, veuillez vérifier manuellement."
       exit 1
     fi
 
