@@ -205,9 +205,6 @@ main() {
   echo ""
   echo "NameServer  : $NAMESERVER"
   echo ""
-  echo "Commande client (termux) :"
-  echo "curl -sO https://github.com/khaledagn/DNS-AGN/raw/main/files/slowdns && chmod +x slowdns && ./slowdns $NAMESERVER $PUB_KEY"
-  echo ""
   log "Installation et configuration SlowDNS terminées avec optimisations et support screen."
 }
 
