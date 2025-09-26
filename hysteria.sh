@@ -130,6 +130,13 @@ main() {
   deploy_systemd_unit
   open_firewall_udp
   log "Hysteria (Kighmu) prêt, port $HYST_PORT, utilisateurs issus de $USER_FILE."
+  
+  # Affichage cadre de fin
+  echo "+--------------------------------------------+"
+  echo "|             CONFIG HYSTERIA               |"
+  echo "+--------------------------------------------+"
+  
+  echo "Installation terminée avec succès."
   echo "Pour vérifier les logs: sudo journalctl -u hysteria -f"
 }
 
