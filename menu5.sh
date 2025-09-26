@@ -30,6 +30,8 @@ afficher_modes_ports() {
         any_active=1
     elif systemctl is-active --quiet stunnel4.service || pgrep -f stunnel >/dev/null 2>&1; then
         any_active=1
+    elif systemctl is-active --quiet hysteria.service || pgrep -f hysteria >/dev/null 2>&1; then
+        any_active=1
     fi
 
     if [[ $any_active -eq 0 ]]; then
@@ -60,7 +62,6 @@ afficher_modes_ports() {
     fi
 
     if systemctl is-active --quiet socks_python_ws.service || pgrep -f ws2_proxy.py >/dev/null 2>&1; then
-        # Essaye de détecter le port dynamiquement
         if [ -f /etc/systemd/system/socks_python_ws.service ]; then
             PROXY_WS_PORT=$(grep "ExecStart=" /etc/systemd/system/socks_python_ws.service | awk '{print $NF}')
         else
@@ -73,6 +74,10 @@ afficher_modes_ports() {
     if systemctl is-active --quiet stunnel4.service || pgrep -f stunnel >/dev/null 2>&1; then
         echo -e "  - Stunnel SSL/TLS: ${GREEN}port TCP 444${RESET}"
     fi
+
+    if systemctl is-active --quiet hysteria.service || pgrep -f hysteria >/dev/null 2>&1; then
+        echo -e "  - Hysteria UDP : ${GREEN}port UDP 22000${RESET}"
+    fi
 }
 
 HOST_IP=$(curl -s https://api.ipify.org)
@@ -81,7 +86,10 @@ echo -e "${CYAN}+=====================================================+${RESET}"
 echo -e "|           🚀 PANNEAU DE CONTROLE DES MODES 🚀       |"
 echo -e "${CYAN}+=====================================================+${RESET}"
 echo -e "${CYAN} IP: ${GREEN}$HOST_IP${RESET} | ${CYAN}Up: ${GREEN}$UPTIME${RESET}"
+
 afficher_modes_ports
+
+# Fonctions d'installation/désinstallation des tunnels et services
 
 install_slowdns() {
     echo ">>> Nettoyage avant installation SlowDNS..."
@@ -272,6 +280,30 @@ uninstall_badvpn() {
     echo ">>> Désinstallation BadVPN (à compléter)"
 }
 
+# Variables pour Hysteria
+HYST_PORT=22000
+
+install_hysteria() {
+    echo ">>> Installation Hysteria..."
+    bash "$HOME/Kighmu/hysteria.sh" || echo "Script hysteria introuvable ou erreur."
+    ufw allow ${HYST_PORT}/udp 2>/dev/null || true
+    echo -e "${GREEN}[OK] Hysteria installé.${RESET}"
+}
+
+uninstall_hysteria() {
+    echo ">>> Désinstallation Hysteria..."
+    if systemctl list-units --full -all | grep -Fq 'hysteria.service'; then
+        systemctl stop hysteria.service
+        systemctl disable hysteria.service
+        rm -f /etc/systemd/system/hysteria.service
+        systemctl daemon-reload
+    fi
+    pkill -f hysteria || true
+    rm -f /usr/local/bin/hysteria
+    ufw delete allow ${HYST_PORT}/udp 2>/dev/null || true
+    echo -e "${GREEN}[OK] Hysteria désinstallé.${RESET}"
+}
+
 manage_mode() {
     MODE_NAME=$1
     INSTALL_FUNC=$2
@@ -310,8 +342,8 @@ while true; do
     echo -e "${GREEN}${BOLD}[06]${RESET} ${YELLOW}SSL/TLS${RESET}"
     echo -e "${GREEN}${BOLD}[07]${RESET} ${YELLOW}BadVPN${RESET}"
     echo -e "${GREEN}${BOLD}[08]${RESET} ${YELLOW}proxy ws${RESET}"
+    echo -e "${GREEN}${BOLD}[09]${RESET} ${YELLOW}Hysteria${RESET}"
     echo -e "${GREEN}${BOLD}[00]${RESET} ${YELLOW}Quitter${RESET}"
-    echo -e "${CYAN}+======================================================+${RESET}"
     echo -ne "${BOLD}${YELLOW}👉 Choisissez un mode : ${RESET}"
     read choix
     case $choix in
@@ -323,6 +355,7 @@ while true; do
         6) manage_mode "SSL/TLS" install_ssl_tls uninstall_ssl_tls ;;
         7) manage_mode "BadVPN" install_badvpn uninstall_badvpn ;;
         8) manage_mode "proxy ws" install_proxy_ws uninstall_proxy_ws ;;
+        9) manage_mode "Hysteria" install_hysteria uninstall_hysteria ;;
         0) echo -e "${RED}🚪 Sortie du panneau de contrôle.${RESET}" ; exit 0 ;;
         *) echo -e "${RED}❌ Option invalide, réessayez.${RESET}" ;;
     esac
