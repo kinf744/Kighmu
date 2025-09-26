@@ -44,6 +44,7 @@ stop_old_instance() {
   if pgrep -f "sldns-server" >/dev/null; then
     log "Arrêt de l'ancienne instance SlowDNS..."
     fuser -k "${PORT}/udp" || true
+    pkill -f "sldns-server" || true
     sleep 2
   fi
   iptables -D INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || true
@@ -170,8 +171,23 @@ main() {
   setup_iptables "$interface"
   enable_ip_forwarding
 
-  log "Démarrage SlowDNS sur UDP port $PORT avec NS $NAMESERVER..."
-  systemctl restart slowdns.service
+  ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
+  [ -z "$ssh_port" ] && ssh_port=22
+
+  log "Démarrage SlowDNS via screen..."
+  screen -dmS slowdns_session "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NAMESERVER" 0.0.0.0:"$ssh_port"
+
+  sleep 3
+  if pgrep -f "sldns-server" >/dev/null; then
+    log "SlowDNS démarré avec succès (screen)."
+    log "Pour voir les logs : screen -r slowdns_session"
+  else
+    echo "ERREUR : SlowDNS n'a pas pu démarrer." >&2
+    exit 1
+  fi
+
+  # On garde aussi le service systemd comme backup
+  create_systemd_service
 
   if command -v ufw >/dev/null 2>&1; then
     log "Ouverture du port UDP $PORT avec UFW."
@@ -192,7 +208,7 @@ main() {
   echo "Commande client (termux) :"
   echo "curl -sO https://github.com/khaledagn/DNS-AGN/raw/main/files/slowdns && chmod +x slowdns && ./slowdns $NAMESERVER $PUB_KEY"
   echo ""
-  log "Installation et configuration SlowDNS terminées avec optimisations."
+  log "Installation et configuration SlowDNS terminées avec optimisations et support screen."
 }
 
 main "$@"
