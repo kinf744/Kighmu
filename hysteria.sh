@@ -57,20 +57,16 @@ write_server_config() {
   cfg="$HYST_CONFIG_DIR/config.yaml"
   log "Écriture de la config Hysteria dans $cfg"
 
+  # Récupérer le mot de passe du premier utilisateur comme mot de passe unique
+  local first_password
+  first_password=$(awk -F'|' 'NR==1 {print $2}' "$USER_FILE")
+
   cat > "$cfg" <<EOF
 listen: :${HYST_PORT}
 
 auth:
   type: password
-  accounts:
-EOF
-
-  # Ajouter chaque utilisateur avec son password
-  while IFS='|' read -r username password limite expire ip domain ns; do
-    echo "    ${username}: \"${password}\"" >> "$cfg"
-  done < "$USER_FILE"
-
-  cat >> "$cfg" <<'EOF'
+  password: "${first_password}"
 
 masquerade:
   type: proxy
