@@ -61,6 +61,9 @@ write_server_config() {
   local first_password
   first_password=$(awk -F'|' 'NR==1 {print $2}' "$USER_FILE")
 
+  # Utilisation de la variable DOMAIN exportée lors de l'installation
+  local proxy_url="https://${DOMAIN:-example.com}"
+
   cat > "$HYST_CONFIG_DIR/config.yaml" <<EOF
 listen: :${HYST_PORT}
 
@@ -75,7 +78,9 @@ auth:
 masquerade:
   type: proxy
   proxy:
-    url: ""
+    url: "$proxy_url"
+    rewriteHost: true
+    insecure: false
 
 socks5:
   listen: 127.0.0.1:1080
