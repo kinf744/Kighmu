@@ -83,11 +83,11 @@ chmod 600 "$USER_FILE"
 
 HOST_IP=$(hostname -I | awk '{print $1}')
 
-# Sauvegarder les infos utilisateur
+# Sauvegarder les infos utilisateur dans le format attendu par hysteria.sh
 echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
 
 # Ajout automatique de l'affichage du banner personnalisé au login shell
-BANNER_PATH="/etc/ssh/sshd_banner"  # Chemin vers le fichier banner, à adapter si besoin
+BANNER_PATH="/etc/ssh/sshd_banner"  # Chemin vers le fichier banner, à adapter
 
 # Comme pas de home créé (avec -M), .bashrc n'existe pas => créer dossier home minimal et fichier .bashrc pour banner
 USER_HOME="/home/$username"
@@ -106,7 +106,7 @@ fi
 chown "$username":"$username" "$USER_HOME/.bashrc"
 chmod 644 "$USER_HOME/.bashrc"
 
-# Afficher résumé dans cadre coloré
+# Résumé affichage coloré des informations utilisateur avec hysteria inclus
 echo -e "${CYAN}+=================================================================+${RESET}"
 echo -e "*NOUVEAU UTILISATEUR CRÉÉ*"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
@@ -115,6 +115,7 @@ echo -e "∘ SOCKS/PYTHON: 8080       ∘ WEB-NGINX: 81"
 echo -e "∘ DROPBEAR: 90             ∘ SSL: 443"
 echo -e "∘ BadVPN: 7200             ∘ BadVPN: 7300"
 echo -e "∘ SlowDNS: 5300            ∘ UDP-Custom: 1-65535"
+echo -e "∘ Hysteria: 22000          ∘ Proxy WS: 80"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo -e "${YELLOW}DOMAIN         :${RESET} $DOMAIN"
 echo -e "${YELLOW}Host/IP-Address:${RESET} $HOST_IP"
@@ -125,10 +126,11 @@ echo -e "${YELLOW}DATE EXPIRÉE   :${RESET} $expire_date"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo "En APPS comme HTTP Injector, CUSTOM, SOCKSIP TUNNEL, SSC, etc."
 echo ""
-echo -e "🙍 HTTP-Direct  : ${GREEN}$HOST_IP:90@$username:$password${RESET}"
-echo -e "🙍 SSL/TLS(SNI) : ${GREEN}$HOST_IP:443@$username:$password${RESET}"
-echo -e "🙍 Proxy(WS)    : ${GREEN}$DOMAIN:8080@$username:$password${RESET}"
-echo -e "🙍 SSH UDP     : ${GREEN}$HOST_IP:1-65535@$username:$password${RESET}"
+echo -e "🙍 HTTP-Direct     : ${GREEN}$HOST_IP:8080@$username:$password${RESET}"
+echo -e "🙍 SSL/TLS(SNI)    : ${GREEN}$HOST_IP:444@$username:$password${RESET}"
+echo -e "🙍 Proxy(WS)       : ${GREEN}$DOMAIN:80@$username:$password${RESET}"
+echo -e "🙍 SSH UDP         : ${GREEN}$HOST_IP:1-65535@$username:$password${RESET}"
+echo -e "🙍 Hysteria (UDP)  : ${GREEN}$DOMAIN:22000@$username:$password${RESET}"
 echo ""
 echo -e "${CYAN}━━━━━━━━━━━  CONFIGS SLOWDNS PORT 5300 ━━━━━━━━━━━${RESET}"
 echo -e "${YELLOW}Pub KEY :${RESET}"
