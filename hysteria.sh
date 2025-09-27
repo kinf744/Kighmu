@@ -101,8 +101,10 @@ After=network.target
 [Service]
 Type=simple
 ExecStart=${HYST_BIN} -c ${HYST_CONFIG_DIR}/config.yaml
-Restart=on-failure
-RestartSec=5
+Restart=always
+RestartSec=5s
+StartLimitBurst=0
+StartLimitIntervalSec=0
 LimitNOFILE=1048576
 
 [Install]
