@@ -56,42 +56,6 @@ count_connected_devices() {
   echo $((_ons + _onop + _ondrp))
 }
 
-# Conversion des octets en format lisible humain
-bytes_to_human() {
-  local bytes=$1
-  if ((bytes < 1024)); then
-    echo "${bytes}B"
-  elif ((bytes < 1048576)); then
-    awk "BEGIN {printf \"%.2f KB\", $bytes/1024}"
-  elif ((bytes < 1073741824)); then
-    awk "BEGIN {printf \"%.2f MB\", $bytes/1048576}"
-  else
-    awk "BEGIN {printf \"%.2f GB\", $bytes/1073741824}"
-  fi
-}
-
-# Affichage consommation V2Ray par utilisateur et consommation SSH totale
-show_consumptions() {
-  echo -e "${CYAN}=== Consommation V2Ray par utilisateur : ===${RESET}"
-  local users=($(ls /etc/limit/vmess 2>/dev/null || echo ""))
-  if [ ${#users[@]} -eq 0 ]; then
-    echo "  Aucun utilisateur V2Ray détecté."
-  else
-    for user in "${users[@]}"; do
-      local usage_bytes=$(cat /etc/limit/vmess/"$user")
-      local usage_human=$(bytes_to_human "$usage_bytes")
-      echo "  $user : $usage_human"
-    done
-  fi
-
-  echo -e "\n${CYAN}=== Consommation totale SSH (port 22) : ===${RESET}"
-  local ssh_bytes=$(iptables -L INPUT -v -n -x | grep "dpt:22" | awk '{sum += $2} END {print sum}')
-  ssh_bytes=${ssh_bytes:-0}
-  local ssh_human=$(bytes_to_human "$ssh_bytes")
-  echo "  $ssh_human"
-  echo
-}
-
 while true; do
     clear
 
@@ -140,10 +104,10 @@ while true; do
 
     echo -e "${CYAN}+======================================================+${RESET}"
 
-    show_consumptions
+    # Seule la consommation globale jour/mois affichée (suppression du détail V2Ray & SSH)
+    printf " Consommation aujourd'hui: ${MAGENTA_VIF}%.2f Go${RESET} | Ce mois-ci: ${CYAN_VIF}%.2f Go${RESET}\n" "$DATA_DAY_GB" "$DATA_MONTH_GB"
 
     printf " Utilisateurs SSH: ${BLUE}%-4d${RESET} | Appareils connectés: ${MAGENTA}%-4d${RESET}\n" "$SSH_USERS_COUNT" "$total_connected"
-    printf " Consommation aujourd'hui: ${MAGENTA_VIF}%.2f Go${RESET} | Ce mois-ci: ${CYAN_VIF}%.2f Go${RESET}\n" "$DATA_DAY_GB" "$DATA_MONTH_GB"
 
     echo -e "${CYAN}+======================================================+${RESET}"
 
