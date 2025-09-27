@@ -64,9 +64,7 @@ write_server_config() {
   cat > "$cfg" <<EOF
 listen: :${HYST_PORT}
 
-auth:
-  type: password
-  password: "${first_password}"
+auth: "${first_password}"
 
 masquerade:
   type: proxy
@@ -129,7 +127,6 @@ main() {
   open_firewall_udp
   log "Hysteria (Kighmu) prêt, port $HYST_PORT, utilisateurs issus de $USER_FILE."
   
-  # Affichage cadre de fin
   echo "+--------------------------------------------+"
   echo "|             CONFIG HYSTERIA               |"
   echo "+--------------------------------------------+"
