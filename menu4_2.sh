@@ -97,6 +97,7 @@ delete_banner() {
 while true; do
     clear
     echo -e "${CYAN}+===================== Gestion Banner =====================+${RESET}"
+    echo -e ""
     echo -e "${GREEN}${BOLD}[01]${RESET} ${YELLOW}Afficher le banner${RESET}"
     echo -e "${GREEN}${BOLD}[02]${RESET} ${YELLOW}Créer / Modifier le banner${RESET}"
     echo -e "${GREEN}${BOLD}[03]${RESET} ${YELLOW}Supprimer le banner${RESET}"
