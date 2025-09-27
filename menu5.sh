@@ -11,42 +11,17 @@ CYAN="\e[36m"
 BOLD="\e[1m"
 RESET="\e[0m"
 
-clear
-
 afficher_modes_ports() {
     local any_active=0
 
-    if systemctl is-active --quiet ssh || pgrep -x sshd >/dev/null 2>&1; then
-        any_active=1
-    fi
-
-    if systemctl is-active --quiet dropbear || pgrep -x dropbear >/dev/null 2>&1; then
-        any_active=1
-    fi
-
-    if systemctl is-active --quiet slowdns.service || pgrep -f "sldns-server" >/dev/null 2>&1 || screen -list | grep -q slowdns_session; then
-        any_active=1
-    fi
-
-    if systemctl is-active --quiet udp_custom.service || pgrep -f udp-custom-linux-amd64 >/dev/null 2>&1 || screen -list | grep -q udp_custom; then
-        any_active=1
-    fi
-
-    if systemctl is-active --quiet socks_python.service || pgrep -f KIGHMUPROXY.py >/dev/null 2>&1 || screen -list | grep -q socks_python; then
-        any_active=1
-    fi
-
-    if systemctl is-active --quiet socks_python_ws.service || pgrep -f ws2_proxy.py >/dev/null 2>&1; then
-        any_active=1
-    fi
-
-    if systemctl is-active --quiet stunnel4.service || pgrep -f stunnel >/dev/null 2>&1; then
-        any_active=1
-    fi
-
-    if systemctl is-active --quiet hysteria.service || pgrep -f hysteria >/dev/null 2>&1; then
-        any_active=1
-    fi
+    if systemctl is-active --quiet ssh || pgrep -x sshd >/dev/null 2>&1; then any_active=1; fi
+    if systemctl is-active --quiet dropbear || pgrep -x dropbear >/dev/null 2>&1; then any_active=1; fi
+    if systemctl is-active --quiet slowdns.service || pgrep -f "sldns-server" >/dev/null 2>&1 || screen -list | grep -q slowdns_session; then any_active=1; fi
+    if systemctl is-active --quiet udp_custom.service || pgrep -f udp-custom-linux-amd64 >/dev/null 2>&1 || screen -list | grep -q udp_custom; then any_active=1; fi
+    if systemctl is-active --quiet socks_python.service || pgrep -f KIGHMUPROXY.py >/dev/null 2>&1 || screen -list | grep -q socks_python; then any_active=1; fi
+    if systemctl is-active --quiet socks_python_ws.service || pgrep -f ws2_proxy.py >/dev/null 2>&1; then any_active=1; fi
+    if systemctl is-active --quiet stunnel4.service || pgrep -f stunnel >/dev/null 2>&1; then any_active=1; fi
+    if systemctl is-active --quiet hysteria.service || pgrep -f hysteria >/dev/null 2>&1; then any_active=1; fi
 
     if [[ $any_active -eq 0 ]]; then
         return
@@ -57,24 +32,19 @@ afficher_modes_ports() {
     if systemctl is-active --quiet ssh || pgrep -x sshd >/dev/null 2>&1; then
         echo -e "  - OpenSSH: ${GREEN}port 22${RESET}"
     fi
-
     if systemctl is-active --quiet dropbear || pgrep -x dropbear >/dev/null 2>&1; then
         DROPBEAR_PORT=$(grep -oP '(?<=-p )\d+' /etc/default/dropbear 2>/dev/null || echo "22")
         echo -e "  - Dropbear: ${GREEN}port $DROPBEAR_PORT${RESET}"
     fi
-
     if systemctl is-active --quiet slowdns.service || pgrep -f "sldns-server" >/dev/null 2>&1 || screen -list | grep -q slowdns_session; then
         echo -e "  - SlowDNS: ${GREEN}ports UDP 5300, 5400${RESET}"
     fi
-
     if systemctl is-active --quiet udp_custom.service || pgrep -f udp-custom-linux-amd64 >/dev/null 2>&1 || screen -list | grep -q udp_custom; then
         echo -e "  - UDP Custom: ${GREEN}port UDP 54000${RESET}"
     fi
-
     if systemctl is-active --quiet socks_python.service || pgrep -f KIGHMUPROXY.py >/dev/null 2>&1 || screen -list | grep -q socks_python; then
         echo -e "  - SOCKS Python: ${GREEN}ports TCP 8080, 9090${RESET}"
     fi
-
     if systemctl is-active --quiet socks_python_ws.service || pgrep -f ws2_proxy.py >/dev/null 2>&1; then
         if [ -f /etc/systemd/system/socks_python_ws.service ]; then
             PROXY_WS_PORT=$(grep "ExecStart=" /etc/systemd/system/socks_python_ws.service | awk '{print $NF}')
@@ -84,27 +54,15 @@ afficher_modes_ports() {
         PROXY_WS_PORT=${PROXY_WS_PORT:-80}
         echo -e "  - proxy ws: ${GREEN}port TCP $PROXY_WS_PORT${RESET}"
     fi
-
     if systemctl is-active --quiet stunnel4.service || pgrep -f stunnel >/dev/null 2>&1; then
         echo -e "  - Stunnel SSL/TLS: ${GREEN}port TCP 444${RESET}"
     fi
-
     if systemctl is-active --quiet hysteria.service || pgrep -f hysteria >/dev/null 2>&1; then
         echo -e "  - Hysteria UDP : ${GREEN}port UDP 22000${RESET}"
     fi
 }
 
-HOST_IP=$(curl -s https://api.ipify.org)
-UPTIME=$(uptime -p)
-echo -e "${CYAN}+=====================================================+${RESET}"
-echo -e "|           🚀 PANNEAU DE CONTROLE DES MODES 🚀       |"
-echo -e "${CYAN}+=====================================================+${RESET}"
-echo -e "${CYAN} IP: ${GREEN}$HOST_IP${RESET} | ${CYAN}Up: ${GREEN}$UPTIME${RESET}"
-
-afficher_modes_ports
-
-# Fonctions d'installation/désinstallation des tunnels et services
-
+# --- Fonctions d'installation et désinstallation ---
 install_slowdns() {
     echo ">>> Nettoyage avant installation SlowDNS..."
     pkill -f slowdns || true
@@ -318,6 +276,7 @@ uninstall_hysteria() {
     echo -e "${GREEN}[OK] Hysteria désinstallé.${RESET}"
 }
 
+
 manage_mode() {
     MODE_NAME=$1
     INSTALL_FUNC=$2
@@ -325,7 +284,6 @@ manage_mode() {
 
     while true; do
         clear
-        echo ""
         echo -e "${CYAN}+======================================================+${RESET}"
         echo -e "|             🚀 Gestion du mode : $MODE_NAME 🚀          |"
         echo -e "${CYAN}+======================================================+${RESET}"
@@ -351,7 +309,15 @@ manage_mode() {
 
 while true; do
     clear
-    echo ""
+    HOST_IP=$(curl -s https://api.ipify.org)
+    UPTIME=$(uptime -p)
+    echo -e "${CYAN}+=====================================================+${RESET}"
+    echo -e "|           🚀 PANNEAU DE CONTROLE DES MODES 🚀       |"
+    echo -e "${CYAN}+=====================================================+${RESET}"
+    echo -e "${CYAN} IP: ${GREEN}$HOST_IP${RESET} | ${CYAN}Up: ${GREEN}$UPTIME${RESET}"
+
+    afficher_modes_ports
+
     echo -e "${CYAN}+======================================================+${RESET}"
     echo -e "|               🚀 MENU PRINCIPAL DES MODES 🚀         |"
     echo -e "${CYAN}+======================================================+${RESET}"
