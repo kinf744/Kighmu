@@ -57,14 +57,15 @@ write_server_config() {
   cfg="$HYST_CONFIG_DIR/config.yaml"
   log "Écriture de la config Hysteria dans $cfg"
 
-  # Récupérer le mot de passe du premier utilisateur comme mot de passe unique
   local first_password
   first_password=$(awk -F'|' 'NR==1 {print $2}' "$USER_FILE")
 
   cat > "$cfg" <<EOF
 listen: :${HYST_PORT}
 
-auth: "${first_password}"
+auth:
+  type: password
+  password: "${first_password}"
 
 masquerade:
   type: proxy
