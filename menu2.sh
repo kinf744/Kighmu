@@ -13,6 +13,12 @@ CYAN="\e[36m"
 BOLD="\e[1m"
 RESET="\e[0m"
 
+# Vérifier que le script est lancé en root
+if [[ $EUID -ne 0 ]]; then
+  echo -e "${RED}Erreur : ce script doit être lancé avec les droits root.${RESET}"
+  exit 1
+fi
+
 # Charger les infos globales Kighmu
 if [ -f ~/.kighmu_info ]; then
     source ~/.kighmu_info
@@ -38,6 +44,7 @@ fi
 
 # Fichiers et dossiers nécessaires
 USER_FILE="/etc/kighmu/users.list"
+LOCK_FILE="/etc/kighmu/users.list.lock"
 mkdir -p /etc/kighmu
 touch "$USER_FILE"
 chmod 600 "$USER_FILE"
@@ -62,7 +69,9 @@ if id "$username" &>/dev/null; then
     exit 1
 fi
 
-read -p "Mot de passe : " password
+# Lecture sécurisée du mot de passe (sans affichage)
+read -sp "Mot de passe : " password
+echo
 if [[ -z "$password" ]]; then
     echo -e "${RED}Mot de passe vide, annulation.${RESET}"
     exit 1
@@ -80,32 +89,56 @@ if ! [[ "$minutes" =~ ^[0-9]+$ ]]; then
     exit 1
 fi
 
-useradd -M -s /bin/false "$username" || { echo -e "${RED}Erreur lors de la création du compte${RESET}"; exit 1; }
-echo "$username:$password" | chpasswd
+# Création utilisateur
+if ! useradd -M -s /bin/false "$username"; then
+  echo -e "${RED}Erreur lors de la création du compte.${RESET}"
+  exit 1
+fi
+
+if ! echo "$username:$password" | chpasswd; then
+  echo -e "${RED}Erreur lors de la définition du mot de passe.${RESET}"
+  userdel --force "$username"
+  exit 1
+fi
 
 expire_date=$(date -d "+$minutes minutes" '+%Y-%m-%d %H:%M:%S')
-
 HOST_IP=$(curl -s https://api.ipify.org)
 
-echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
+# Écriture avec verrouillage pour éviter corruption en cas de multi-exécution
+(
+  flock -x 200 || { echo -e "${RED}Impossible d'obtenir le verrou sur $USER_FILE.${RESET}"; exit 1; }
+  echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
+) 200>"$LOCK_FILE"
 
+# Création du script de suppression automatique
 CLEAN_SCRIPT="$TEST_DIR/$username-clean.sh"
 cat > "$CLEAN_SCRIPT" <<EOF
 #!/bin/bash
-pkill -f "$username"
+# Arrêter tous les processus liés à l'utilisateur
+pkill -u "$username"
+# Suppression forcée de l'utilisateur
 userdel --force "$username"
-grep -v "^$username|" $USER_FILE > /tmp/users.tmp && mv /tmp/users.tmp $USER_FILE
+# Nettoyage du fichier utilisateur avec verrouillage
+(
+  flock -x 200 || exit 1
+  grep -v "^$username|" $USER_FILE > /tmp/users.tmp
+  mv /tmp/users.tmp $USER_FILE
+) 200>"$LOCK_FILE"
+# Suppression du script clean lui-même
 rm -f "$CLEAN_SCRIPT"
 exit 0
 EOF
 chmod +x "$CLEAN_SCRIPT"
 
-if ! command -v at >/dev/null 2>&1; then
-    echo -e "${YELLOW}La commande 'at' n'est pas installée. Veuillez l'installer pour la suppression automatique.${RESET}"
+# Planification suppression automatique via at
+if command -v at >/dev/null 2>&1; then
+    echo "bash $CLEAN_SCRIPT" | at now + "$minutes" min 2>/dev/null || \
+      echo -e "${YELLOW}Échec de la planification avec at.${RESET}"
 else
-    echo "bash $CLEAN_SCRIPT" | at now + "$minutes" minutes 2>/dev/null
+    echo -e "${YELLOW}La commande 'at' n'est pas installée. Veuillez l'installer pour la suppression automatique.${RESET}"
 fi
 
+# Création du home customisé minimal (bannière etc)
 BANNER_PATH="/etc/ssh/sshd_banner"
 USER_HOME="/home/$username"
 if [ ! -d "$USER_HOME" ]; then
@@ -113,16 +146,17 @@ if [ ! -d "$USER_HOME" ]; then
     chown "$username":"$username" "$USER_HOME"
 fi
 
-echo -e "
+cat > "$USER_HOME/.bashrc" <<EOF
 # Affichage du banner Kighmu VPS Manager
 if [ -f $BANNER_PATH ]; then
-    cat \$BANNER_PATH
+    cat $BANNER_PATH
 fi
-" > "$USER_HOME/.bashrc"
+EOF
 
 chown "$username":"$username" "$USER_HOME/.bashrc"
 chmod 644 "$USER_HOME/.bashrc"
 
+# Affichage récapitulatif
 echo -e "${CYAN}+==================================================+${RESET}"
 echo -e "*NOUVEAU UTILISATEUR CRÉÉ*"
 echo -e "${CYAN}──────────────────────────────────────────────────────${RESET}"
