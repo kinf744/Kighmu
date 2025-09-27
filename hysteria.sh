@@ -8,6 +8,8 @@ HYST_CONFIG_DIR="/etc/hysteria"
 SYSTEMD_UNIT_PATH="/etc/systemd/system/hysteria.service"
 USER_FILE="/etc/kighmu/users.list"
 HYST_PORT=22000
+CERT_FILE="$HYST_CONFIG_DIR/server.crt"
+KEY_FILE="$HYST_CONFIG_DIR/server.key"
 
 log() { echo "==> $*"; }
 err() { echo "ERREUR: $*" >&2; exit 1; }
@@ -20,7 +22,7 @@ require_root() {
 
 install_prereqs() {
   log "Vérification et installation des paquets prérequis..."
-  PKGS=(curl unzip ca-certificates socat jq ufw)
+  PKGS=(curl unzip ca-certificates socat jq ufw openssl)
   for pkg in "${PKGS[@]}"; do
     if ! dpkg -s "$pkg" >/dev/null 2>&1; then
       log "Installation du paquet manquant: $pkg"
@@ -41,27 +43,30 @@ install_hysteria_binary() {
   log "Installation du binaire Hysteria réussie."
 }
 
-read_users_list() {
-  declare -A USERS
-  if [ ! -f "$USER_FILE" ]; then
-    err "Fichier utilisateurs $USER_FILE introuvable."
+generate_self_signed_cert() {
+  mkdir -p "$HYST_CONFIG_DIR"
+  if [ ! -f "$CERT_FILE" ] || [ ! -f "$KEY_FILE" ]; then
+    log "Génération d'un certificat TLS auto-signé..."
+    openssl req -newkey rsa:2048 -nodes -keyout "$KEY_FILE" -x509 -days 3650 -out "$CERT_FILE" -subj "/C=FR/ST=State/L=City/O=Org/OU=IT/CN=$(hostname -f)"
+    chmod 600 "$CERT_FILE" "$KEY_FILE"
+    log "Certificat et clé générés dans $HYST_CONFIG_DIR."
+  else
+    log "Certificat TLS et clé déjà présents."
   fi
-  while IFS='|' read -r username password limite expire ip domain ns; do
-    USERS["$username"]="$password"
-  done < "$USER_FILE"
-  echo "${USERS[@]}"
 }
 
 write_server_config() {
-  mkdir -p "$HYST_CONFIG_DIR"
-  cfg="$HYST_CONFIG_DIR/config.yaml"
-  log "Écriture de la config Hysteria dans $cfg"
+  log "Écriture de la config Hysteria dans $HYST_CONFIG_DIR/config.yaml"
 
   local first_password
   first_password=$(awk -F'|' 'NR==1 {print $2}' "$USER_FILE")
 
-  cat > "$cfg" <<EOF
+  cat > "$HYST_CONFIG_DIR/config.yaml" <<EOF
 listen: :${HYST_PORT}
+
+tls:
+  cert: $CERT_FILE
+  key: $KEY_FILE
 
 auth:
   type: password
@@ -80,8 +85,8 @@ udpIdleTimeout: 60s
 disableUDP: false
 EOF
 
-  chmod 600 "$cfg"
-  chown root:root "$cfg"
+  chmod 600 "$HYST_CONFIG_DIR/config.yaml"
+  chown root:root "$HYST_CONFIG_DIR/config.yaml"
   log "Configuration Hysteria écrite avec succès."
 }
 
@@ -123,15 +128,16 @@ main() {
   require_root
   install_prereqs
   install_hysteria_binary
+  generate_self_signed_cert
   write_server_config
   deploy_systemd_unit
   open_firewall_udp
   log "Hysteria (Kighmu) prêt, port $HYST_PORT, utilisateurs issus de $USER_FILE."
-  
+
   echo "+--------------------------------------------+"
   echo "|             CONFIG HYSTERIA               |"
   echo "+--------------------------------------------+"
-  
+
   echo "Installation terminée avec succès."
   echo "Pour vérifier les logs: sudo journalctl -u hysteria -f"
 }
