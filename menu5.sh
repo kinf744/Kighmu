@@ -37,13 +37,13 @@ afficher_modes_ports() {
         echo -e "  - Dropbear: ${GREEN}port $DROPBEAR_PORT${RESET}"
     fi
     if systemctl is-active --quiet slowdns.service || pgrep -f "sldns-server" >/dev/null 2>&1 || screen -list | grep -q slowdns_session; then
-        echo -e "  - SlowDNS: ${GREEN}ports UDP 5300, 5400${RESET}"
+        echo -e "  - SlowDNS: ${GREEN}ports UDP 5300${RESET}"
     fi
     if systemctl is-active --quiet udp_custom.service || pgrep -f udp-custom-linux-amd64 >/dev/null 2>&1 || screen -list | grep -q udp_custom; then
         echo -e "  - UDP Custom: ${GREEN}port UDP 54000${RESET}"
     fi
     if systemctl is-active --quiet socks_python.service || pgrep -f KIGHMUPROXY.py >/dev/null 2>&1 || screen -list | grep -q socks_python; then
-        echo -e "  - SOCKS Python: ${GREEN}ports TCP 8080, 9090${RESET}"
+        echo -e "  - SOCKS Python: ${GREEN}ports TCP 8080${RESET}"
     fi
     if systemctl is-active --quiet socks_python_ws.service || pgrep -f ws2_proxy.py >/dev/null 2>&1; then
         if [ -f /etc/systemd/system/socks_python_ws.service ]; then
