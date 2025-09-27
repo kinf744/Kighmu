@@ -94,7 +94,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=${HYST_BIN} -c ${HYST_CONFIG_DIR}/config.yaml
+ExecStart=${HYST_BIN} server -c ${HYST_CONFIG_DIR}/config.yaml
 Restart=always
 RestartSec=5s
 StartLimitBurst=0
