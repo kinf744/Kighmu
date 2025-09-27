@@ -44,7 +44,6 @@ count_ssh_users() {
   awk -F: '($3 >= 1000) && ($7 ~ /^\/(bin\/bash|bin\/sh|bin\/false)$/) {print $1}' /etc/passwd | wc -l
 }
 
-# Comptage appareils connectés
 count_connected_devices() {
   _ons=$(ps -x | grep sshd | grep -v root | grep priv | wc -l)
   [[ -e /etc/openvpn/openvpn-status.log ]] && _onop=$(grep -c "10.8.0" /etc/openvpn/openvpn-status.log) || _onop="0"
@@ -57,13 +56,48 @@ count_connected_devices() {
   echo $((_ons + _onop + _ondrp))
 }
 
+# Conversion des octets en format lisible humain
+bytes_to_human() {
+  local bytes=$1
+  if ((bytes < 1024)); then
+    echo "${bytes}B"
+  elif ((bytes < 1048576)); then
+    awk "BEGIN {printf \"%.2f KB\", $bytes/1024}"
+  elif ((bytes < 1073741824)); then
+    awk "BEGIN {printf \"%.2f MB\", $bytes/1048576}"
+  else
+    awk "BEGIN {printf \"%.2f GB\", $bytes/1073741824}"
+  fi
+}
+
+# Affichage consommation V2Ray par utilisateur et consommation SSH totale
+show_consumptions() {
+  echo -e "${CYAN}=== Consommation V2Ray par utilisateur : ===${RESET}"
+  local users=($(ls /etc/limit/vmess 2>/dev/null || echo ""))
+  if [ ${#users[@]} -eq 0 ]; then
+    echo "  Aucun utilisateur V2Ray détecté."
+  else
+    for user in "${users[@]}"; do
+      local usage_bytes=$(cat /etc/limit/vmess/"$user")
+      local usage_human=$(bytes_to_human "$usage_bytes")
+      echo "  $user : $usage_human"
+    done
+  fi
+
+  echo -e "\n${CYAN}=== Consommation totale SSH (port 22) : ===${RESET}"
+  local ssh_bytes=$(iptables -L INPUT -v -n -x | grep "dpt:22" | awk '{sum += $2} END {print sum}')
+  ssh_bytes=${ssh_bytes:-0}
+  local ssh_human=$(bytes_to_human "$ssh_bytes")
+  echo "  $ssh_human"
+  echo
+}
+
 while true; do
     clear
 
     OS_INFO=$(if [ -f /etc/os-release ]; then . /etc/os-release; echo "$NAME $VERSION_ID"; else uname -s; fi)
     IP=$(hostname -I | awk '{print $1}')
     
-    # Calcul RAM totale arrondie à l'entier supérieur
     TOTAL_RAM_RAW=$(free -m | awk 'NR==2{print $2}')
     RAM_GB=$(echo "scale=2; $TOTAL_RAM_RAW/1024" | bc)
     RAM_GB_ARR=$(echo "$RAM_GB" | awk '{printf "%d\n", ($1 == int($1)) ? $1 : int($1)+1}')
@@ -72,11 +106,9 @@ while true; do
     RAM_USAGE=$(free -m | awk 'NR==2{printf "%.2f%%", $3*100/$2}')
     CPU_USAGE=$(grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf "%.2f%%", usage}')
 
-    # ----- Utilisateurs connectés -----
     total_connected=$(count_connected_devices)
     SSH_USERS_COUNT=$(count_ssh_users)
 
-    # Consommation réseau
     mapfile -t NET_INTERFACES < <(detect_interfaces)
     DEBUG "Interfaces détectées : ${NET_INTERFACES[*]}"
 
@@ -107,6 +139,9 @@ while true; do
     printf " RAM utilisée: ${GREEN}%-6s${RESET} | CPU utilisé: ${YELLOW}%-6s${RESET}\n" "$RAM_USAGE" "$CPU_USAGE"
 
     echo -e "${CYAN}+======================================================+${RESET}"
+
+    show_consumptions
+
     printf " Utilisateurs SSH: ${BLUE}%-4d${RESET} | Appareils connectés: ${MAGENTA}%-4d${RESET}\n" "$SSH_USERS_COUNT" "$total_connected"
     printf " Consommation aujourd'hui: ${MAGENTA_VIF}%.2f Go${RESET} | Ce mois-ci: ${CYAN_VIF}%.2f Go${RESET}\n" "$DATA_DAY_GB" "$DATA_MONTH_GB"
 
