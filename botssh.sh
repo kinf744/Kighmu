@@ -1,5 +1,5 @@
 #!/bin/bash
-# KIGHMU Telegram VPS Bot - Interface complète avec boutons demandés
+# KIGHMU Telegram VPS Bot Manager complet
 
 install_shellbot() {
   if [[ ! -f /etc/DARKssh/ShellBot.sh ]]; then
@@ -35,58 +35,141 @@ send_message() {
   ShellBot.sendMessage --chat_id "$1" --text "$2" --parse_mode html
 }
 
-show_main_menu() {
-  local chat_id=$1
-  local keyboard=$(ShellBot.InlineKeyboard \
-    --button '👤 Création Utilisateur' create_user_callback \
-    --button '🧪 Création Utilisateur Test' create_user_test_callback \
-    --button '📶 Appareils Connectés' connected_devices_callback \
-    --button '✏️ Modifier Utilisateur' modify_user_callback \
-    --button '🗑 Supprimer Utilisateur' delete_user_callback \
-    --button 'ℹ️ Infos Serveur VPS' info_vps_callback \
-  )
-  send_message "$chat_id" "<b>KIGHMU BOT - Menu Principal</b>\nChoisissez une option :"
-  ShellBot.sendMessage --chat_id "$chat_id" --text "Options :" --reply_markup "$keyboard" --parse_mode html
+send_user_creation_summary() {
+  local chat_id=$1 domain=$2 host_ip=$3 username=$4 password=$5 limite=$6 expire_date=$7 slowdns_key=$8 slowdns_ns=$9
+  local msg="
+<b>+=================================================================+</b>
+<b>*NOUVEAU UTILISATEUR CRÉÉ*</b>
+<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>
+∘ SSH: 22                  ∘ System-DNS: 53
+∘ SOCKS/PYTHON: 8080       ∘ WEB-NGINX: 81
+∘ DROPBEAR: 90             ∘ SSL: 443
+∘ BadVPN: 7200             ∘ BadVPN: 7300
+∘ SlowDNS: 5300            ∘ UDP-Custom: 1-65535
+∘ Hysteria: 22000          ∘ Proxy WS: 80
+<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>
+<b>DOMAIN         :</b> $domain
+<b>Host/IP-Address:</b> $host_ip
+<b>UTILISATEUR    :</b> $username
+<b>MOT DE PASSE   :</b> $password
+<b>LIMITE         :</b> $limite
+<b>DATE EXPIRÉE   :</b> $expire_date
+<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>
+En APPS comme HTTP Injector, CUSTOM, SOCKSIP TUNNEL, SSC, etc.
+
+🙍 HTTP-Direct     : <code>$host_ip:8080@$username:$password</code>
+🙍 SSL/TLS(SNI)    : <code>$host_ip:444@$username:$password</code>
+🙍 Proxy(WS)       : <code>$domain:80@$username:$password</code>
+🙍 SSH UDP         : <code>$host_ip:1-65535@$username:$password</code>
+🙍 Hysteria (UDP)  : <code>$domain:22000@$username:$password</code>
+
+<b>━━━━━━━━━━━  CONFIGS SLOWDNS PORT 5300 ━━━━━━━━━━━</b>
+<b>Pub KEY :</b>
+<pre>$slowdns_key</pre>
+<b>NameServer (NS) :</b> $slowdns_ns
+<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>
+<b>Compte créé avec succès</b>
+"
+  send_message "$chat_id" "$msg"
 }
 
-handle_callback() {
-  local id=$1
-  local data=${callback_query_data[$id]}
-  local chat_id=${callback_query_message_chat_id[$id]}
+send_user_test_creation_summary() {
+  local chat_id=$1 domain=$2 host_ip=$3 username=$4 password=$5 limite=$6 expire_date=$7 slowdns_key=$8 slowdns_ns=$9
+  local msg="
+<b>+==================================================+</b>
+<b>*NOUVEAU UTILISATEUR TEST CRÉÉ*</b>
+<b>──────────────────────────────────────────────────</b>
+<b>DOMAIN        :</b> $domain
+<b>Adresse IP    :</b> $host_ip
+<b>Utilisateur   :</b> $username
+<b>Mot de passe  :</b> $password
+<b>Limite        :</b> $limite
+<b>Date d'expire :</b> $expire_date
+<b>──────────────────────────────────────────────────</b>
+En APPS comme HTTP Injector, Netmod, SSC, etc.
 
-  case "$data" in
-    create_user_callback)
-      ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Création utilisateur sélectionnée"
-      ShellBot.sendMessage --chat_id "$chat_id" --text "Envoyez: username password limite days" --reply_markup "$(ShellBot.ForceReply)"
-      ;;
-    create_user_test_callback)
-      ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Création utilisateur test sélectionnée"
-      ShellBot.sendMessage --chat_id "$chat_id" --text "Envoyez: username password limite minutes" --reply_markup "$(ShellBot.ForceReply)"
-      ;;
-    connected_devices_callback)
-      ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Appareils connectés"
-      # Ici appeler la fonction listing appareils connectés
-      # Exemple simple:
-      send_message "$chat_id" "Fonction 'Appareils connectés' en cours de développement."
-      ;;
-    modify_user_callback)
-      ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Modification utilisateur"
-      ShellBot.sendMessage --chat_id "$chat_id" --text "Envoyez: username new_password" --reply_markup "$(ShellBot.ForceReply)"
-      ;;
-    delete_user_callback)
-      ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Suppression utilisateur"
-      ShellBot.sendMessage --chat_id "$chat_id" --text "Envoyez le nom de l'utilisateur à supprimer" --reply_markup "$(ShellBot.ForceReply)"
-      ;;
-    info_vps_callback)
-      ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Infos VPS"
-      # Exemple rapide de stats
-      local info="Uptime: $(uptime -p)\nRAM libre: $(free -h | awk '/^Mem:/ { print $4 }')\nCPU load: $(top -bn1 | grep "Cpu(s)" | awk '{print $2 + $4}')%"
-      send_message "$chat_id" "<b>Infos VPS :</b>\n$info"
-      ;;
-    *)
-      ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Option inconnue"
-      ;;
-  esac
+🙍 HTTP-Direct  : <code>$host_ip:90@$username:$password</code>
+🙍 SSL/TLS(SNI) : <code>$host_ip:443@$username:$password</code>
+🙍 Proxy(WS)    : <code>$domain:8080@$username:$password</code>
+🙍 SSH UDP      : <code>$host_ip:1-65535@$username:$password</code>
+🙍 Hysteria (UDP): <code>$domain:22000@$username:$password</code>
+
+<b>───────────── CONFIG SLOWDNS 5300 ───────────────</b>
+<b>Pub Key :</b>
+<pre>$slowdns_key</pre>
+<b>NameServer (NS) :</b> $slowdns_ns
+<b>──────────────────────────────────────────────────</b>
+<b>Le compte sera supprimé automatiquement après $limite minutes.</b>
+<b>Compte créé avec succès</b>
+"
+  send_message "$chat_id" "$msg"
+}
+
+create_user() {
+  local chat_id=$1 username=$2 password=$3 limite=$4 days=$5
+  bash "$HOME/Kighmu/menu1.sh" "$username" "$password" "$limite" "$days"
+  if [[ $? -eq 0 ]]; then
+    local domain=$(awk -F= '/^DOMAIN=/ {print $2}' ~/.kighmu_info 2>/dev/null)
+    local host_ip=$(curl -s https://api.ipify.org)
+    local expire_date=$(date -d "+$days days" '+%Y-%m-%d')
+    local slowdns_key=$(sed ':a;N;$!ba;s/\n/\\n/g' /etc/slowdns/server.pub 2>/dev/null || echo "N/A")
+    local slowdns_ns=$(cat /etc/slowdns/ns.conf 2>/dev/null || echo "N/A")
+    send_user_creation_summary "$chat_id" "$domain" "$host_ip" "$username" "$password" "$limite" "$expire_date" "$slowdns_key" "$slowdns_ns"
+  else
+    send_message "$chat_id" "<b>Erreur lors de la création utilisateur $username.</b>"
+  fi
+}
+
+create_user_test() {
+  local chat_id=$1 username=$2 password=$3 limite=$4 minutes=$5
+  bash "$HOME/Kighmu/menu_test.sh" "$username" "$password" "$limite" "$minutes"
+  if [[ $? -eq 0 ]]; then
+    local domain=$(awk -F= '/^DOMAIN=/ {print $2}' ~/.kighmu_info 2>/dev/null)
+    local host_ip=$(curl -s https://api.ipify.org)
+    local expire_date=$(date -d "+$minutes minutes" '+%Y-%m-%d %H:%M:%S')
+    local slowdns_key=$(sed ':a;N;$!ba;s/\n/\\n/g' /etc/slowdns/server.pub 2>/dev/null || echo "N/A")
+    local slowdns_ns=$(cat /etc/slowdns/ns.conf 2>/dev/null || echo "N/A")
+    send_user_test_creation_summary "$chat_id" "$domain" "$host_ip" "$username" "$password" "$limite" "$expire_date" "$slowdns_key" "$slowdns_ns"
+  else
+    send_message "$chat_id" "<b>Erreur lors de création utilisateur test.</b>"
+  fi
+}
+
+handle_command() {
+  local chat_id=$1 user=$2 msg=$3
+  if [[ "$msg" == "/start" || "$msg" == "/menu" ]]; then
+    local keyboard=$(ShellBot.InlineKeyboard \
+      --button '👤 Création Utilisateur' create_user_callback \
+      --button '🧪 Création Utilisateur Test' create_user_test_callback \
+      --button '🏢 Infos VPS' info_vps_callback)
+    send_message "$chat_id" "<b>KIGHMU BOT</b> - Menu Principal"
+    ShellBot.sendMessage --chat_id "$chat_id" --text "Choisissez une option:" --reply_markup "$keyboard" --parse_mode html
+  else
+    send_message "$chat_id" "<b>Commande inconnue. Utilisez /menu.</b>"
+  fi
+}
+
+process_callbacks() {
+  for id in "${!callback_query_data[@]}"; do
+    case "${callback_query_data[$id]}" in
+      create_user_callback)
+        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Création utilisateur sélectionnée"
+        ShellBot.sendMessage --chat_id "${callback_query_message_chat_id[$id]}" --text "Envoyez: username password limite days" --reply_markup "$(ShellBot.ForceReply)"
+        ;;
+      create_user_test_callback)
+        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Création utilisateur test sélectionnée"
+        ShellBot.sendMessage --chat_id "${callback_query_message_chat_id[$id]}" --text "Envoyez: username password limite minutes" --reply_markup "$(ShellBot.ForceReply)"
+        ;;
+      info_vps_callback)
+        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Infos VPS"
+        local info="Uptime: $(uptime -p)\nRAM libre: $(free -h | awk '/^Mem:/ {print $4}')\nCPU load: $(top -bn1 | grep 'Cpu(s)' | awk '{print $2 + $4}' )%"
+        send_message "${callback_query_message_chat_id[$id]}" "<b>Infos VPS :</b>\n$info"
+        ;;
+      *)
+        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Option inconnue"
+        ;;
+    esac
+  done
 }
 
 process_forcereply() {
@@ -97,65 +180,12 @@ process_forcereply() {
 
     if [[ "$replied_text" =~ "Envoyez: username password limite days" ]]; then
       IFS=' ' read -r username password limite days <<< "$text"
-      # Appeler votre script créé utilisateur ici avec ces valeurs
       create_user "$chat_id" "$username" "$password" "$limite" "$days"
     elif [[ "$replied_text" =~ "Envoyez: username password limite minutes" ]]; then
       IFS=' ' read -r username password limite minutes <<< "$text"
-      # Appeler votre script création test utilisateur
       create_user_test "$chat_id" "$username" "$password" "$limite" "$minutes"
-    elif [[ "$replied_text" =~ "Envoyez: username new_password" ]]; then
-      IFS=' ' read -r username newpass <<< "$text"
-      # Ajoutez fonction changement mot de passe utilisateur ici
-      send_message "$chat_id" "<b>Fonction modifier utilisateur pas encore implémentée</b>"
-    elif [[ "$replied_text" =~ "Envoyez le nom de l'utilisateur à supprimer" ]]; then
-      # Appeler fonction suppression utilisateur
-      delete_user "$chat_id" "$text"
     fi
   done
-}
-
-create_user() {
-  local chat_id=$1
-  local username=$2
-  local password=$3
-  local limite=$4
-  local days=$5
-  # Appel script menu1.sh pour création
-  bash "$HOME/Kighmu/menu1.sh" "$username" "$password" "$limite" "$days"
-  local status=$?
-  if [[ $status -eq 0 ]]; then
-    send_message "$chat_id" "<b>Utilisateur $username créé avec succès</b>"
-  else
-    send_message "$chat_id" "<b>Erreur création utilisateur</b>"
-  fi
-}
-
-create_user_test() {
-  local chat_id=$1
-  local username=$2
-  local password=$3
-  local limite=$4
-  local minutes=$5
-  # Appel script menu_test.sh ou équivalent pour test utilisateur
-  bash "$HOME/Kighmu/menu_test.sh" "$username" "$password" "$limite" "$minutes"
-  local status=$?
-  if [[ $status -eq 0 ]]; then
-    send_message "$chat_id" "<b>Utilisateur test $username créé avec succès</b>"
-  else
-    send_message "$chat_id" "<b>Erreur création utilisateur test</b>"
-  fi
-}
-
-delete_user() {
-  local chat_id=$1
-  local username=$2
-  bash "$HOME/Kighmu/menu4.sh" "$username"
-  local status=$?
-  if [[ $status -eq 0 ]]; then
-    send_message "$chat_id" "<b>Utilisateur $username supprimé avec succès</b>"
-  else
-    send_message "$chat_id" "<b>Erreur suppression utilisateur</b>"
-  fi
 }
 
 while true; do
@@ -165,9 +195,6 @@ while true; do
     handle_command "${message_chat_id[$id]}" "${message_from_username[$id]}" "${message_text[$id]}"
   done
 
-  for id in "${!callback_query_data[@]}"; do
-    handle_callback "$id"
-  done
-
+  process_callbacks
   process_forcereply
 done
