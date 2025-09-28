@@ -1,5 +1,10 @@
 #!/bin/bash
-# KIGHMU Telegram VPS Bot Manager complet avec suppression utilisateur et menu interactif via dialog
+# KIGHMU Telegram VPS Bot Manager complet avec suppression utilisateur et menu interactif ASCII
+
+# Codes couleurs ANSI
+BLUE_BG="\e[44m"
+RESET="\e[0m"
+WHITE="\e[97m"
 
 install_shellbot() {
   if [[ ! -f /etc/kighmu/ShellBot.sh ]]; then
@@ -20,9 +25,48 @@ API_TOKEN=""
 ADMIN_ID=""
 KIGHMU_DIR="$HOME/Kighmu"
 
+print_header() {
+  echo -e "${BLUE_BG}${WHITE}====================================================${RESET}"
+  echo -e "${BLUE_BG}${WHITE}   KIGHMU Telegram VPS Bot Manager - Menu Principal  ${RESET}"
+  echo -e "${BLUE_BG}${WHITE}====================================================${RESET}"
+}
+
+main_menu() {
+  print_header
+  echo -e "${BLUE_BG}${WHITE} 1) Démarrer le bot                              ${RESET}"
+  echo -e "${BLUE_BG}${WHITE} 2) Entrer / modifier API_TOKEN et ADMIN_ID    ${RESET}"
+  echo -e "${BLUE_BG}${WHITE} 3) Quitter                                    ${RESET}"
+  echo -e "${BLUE_BG}${WHITE}====================================================${RESET}"
+  echo -n "Choisissez une option [1-3] : "
+  read choice
+  case "$choice" in
+    1)
+      if [[ -z "$API_TOKEN" || -z "$ADMIN_ID" ]]; then
+        echo "⚠️ Veuillez d'abord entrer le API_TOKEN et l'ADMIN_ID."
+        ask_credentials
+      fi
+      start_bot
+      ;;
+    2)
+      ask_credentials
+      main_menu
+      ;;
+    3)
+      echo "Au revoir!"
+      exit 0
+      ;;
+    *)
+      echo "Choix invalide."
+      main_menu
+      ;;
+  esac
+}
+
 ask_credentials() {
-  API_TOKEN=$(dialog --backtitle "KIGHMU Telegram VPS Bot Manager" --title "API_TOKEN" --clear --inputbox "Entrez le token API du bot Telegram :" 8 50 2>&1 >/dev/tty)
-  ADMIN_ID=$(dialog --backtitle "KIGHMU Telegram VPS Bot Manager" --title "ADMIN_TELEGRAM_ID" --clear --inputbox "Entrez l'ID Telegram administrateur :" 8 50 2>&1 >/dev/tty)
+  echo -n "Entrez le API_TOKEN de votre bot Telegram : "
+  read API_TOKEN
+  echo -n "Entrez l'ADMIN_TELEGRAM_ID (ID administrateur Telegram) : "
+  read ADMIN_ID
 }
 
 send_message() {
@@ -316,72 +360,5 @@ process_forcereply() {
   done
 }
 
-main_menu() {
-  local options=(
-    1 "Démarrer le bot"
-    2 "Entrer / modifier API_TOKEN et ADMIN_ID"
-    3 "Quitter"
-  )
-
-  local choice=$(dialog --backtitle "KIGHMU Telegram VPS Bot Manager" \
-                       --title "Menu Principal" \
-                       --clear \
-                       --menu "Choisissez une option :" \
-                       15 50 6 \
-                       "${options[@]}" \
-                       2>&1 >/dev/tty)
-
-  clear
-
-  case "$choice" in
-    1)
-      if [[ -z "$API_TOKEN" || -z "$ADMIN_ID" ]]; then
-        dialog --msgbox "⚠️ Vous devez d'abord entrer le API_TOKEN et l'ADMIN_TELEGRAM_ID." 7 50
-        ask_credentials
-      fi
-      start_bot
-      ;;
-    2)
-      ask_credentials
-      main_menu
-      ;;
-    3)
-      dialog --msgbox "Au revoir!" 5 30
-      clear
-      exit 0
-      ;;
-    *)
-      dialog --msgbox "Choix invalide." 5 30
-      main_menu
-      ;;
-  esac
-}
-
-start_bot() {
-  install_shellbot
-  check_sudo
-  source /etc/kighmu/ShellBot.sh
-
-  if [[ -f ~/.kighmu_info ]]; then
-    source ~/.kighmu_info
-  else
-    dialog --msgbox "⚠️ ~/.kighmu_info introuvable, variables globales manquantes." 7 50
-  fi
-
-  ShellBot.init --token "$API_TOKEN" --monitor --return map --flush
-  ShellBot.username
-
-  while true; do
-    ShellBot.getUpdates --limit 100 --offset $(ShellBot.Offset) --timeout 0
-
-    for id in "${!message_text[@]}"; do
-      handle_command "${message_chat_id[$id]}" "${message_from_username[$id]}" "${message_text[$id]}"
-    done
-
-    process_callbacks
-    process_forcereply
-  done
-}
-
-# Démarrer le menu principal au lancement de script
+# Démarrer le menu principal
 main_menu
