@@ -1,5 +1,5 @@
 #!/bin/bash
-# KIGHMU Telegram VPS Bot Manager complet avec gestion utilisateur et menu interactif ASCII
+# KIGHMU Telegram VPS Bot Manager complet avec menu interactif ASCII
 
 BLUE_BG="\e[44m"
 RESET="\e[0m"
@@ -317,14 +317,23 @@ start_bot() {
   fi
   ShellBot.init --token "$API_TOKEN" --monitor --return map --flush
   ShellBot.username
+  local offset=0
   while true; do
-    offset=$(ShellBot.Offset)
     ShellBot.getUpdates --limit 100 --offset "$offset" --timeout 0
     for id in "${!message_text[@]}"; do
       handle_command "${message_chat_id[$id]}" "${message_from_username[$id]}" "${message_text[$id]}"
     done
     process_callbacks
     process_forcereply
+    if [ "${#update_update_id[@]}" -gt 0 ]; then
+      local max=0
+      for id in "${!update_update_id[@]}"; do
+        if (( update_update_id[id] > max )); then
+          max=${update_update_id[id]}
+        fi
+      done
+      offset=$((max + 1))
+    fi
   done
 }
 
