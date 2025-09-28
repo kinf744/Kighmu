@@ -1,5 +1,5 @@
 #!/bin/bash
-# menu_modification.sh - Modifier la durée ou le mot de passe d'un utilisateur
+# menu_4.sh - Modifier la durée ou le mot de passe d'un utilisateur
 
 # Couleurs pour l'interface
 RED="\e[31m"
