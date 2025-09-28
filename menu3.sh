@@ -12,7 +12,7 @@ AUTH_LOG="/var/log/auth.log"
 
 clear
 echo -e "${CYAN}+==============================================+${RESET}"
-echo -e "|            GESTION DES UTILISATEURS EN LIGNE        |"
+echo -e "|      GESTION DES UTILISATEURS EN LIGNE        |"
 echo -e "${CYAN}+==============================================+${RESET}"
 
 if [ ! -f "$USER_FILE" ]; then
@@ -20,7 +20,7 @@ if [ ! -f "$USER_FILE" ]; then
     exit 1
 fi
 
-printf "${BOLD}%-20s %-10s %-15s\n${RESET}" "UTILISATEUR" "LIMITÉ" "APPAREILS CONNECTÉS"
+printf "${BOLD}%-20s %-10s %-15s\n${RESET}" "UTILISATEUR" "LIMITÉ" " CONNECTÉS"
 echo -e "${CYAN}--------------------------------------------------${RESET}"
 
 # Fonction pour compter appareils connectés par utilisateur
