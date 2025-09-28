@@ -1,5 +1,5 @@
 #!/bin/bash
-# KIGHMU Telegram VPS Bot Manager complet avec suppression utilisateur
+# KIGHMU Telegram VPS Bot Manager complet avec suppression utilisateur et menu interactif
 
 install_shellbot() {
   if [[ ! -f /etc/kighmu/ShellBot.sh ]]; then
@@ -17,29 +17,15 @@ check_sudo() {
   fi
 }
 
-install_shellbot
-check_sudo
-source /etc/kighmu/ShellBot.sh
-
-API_TOKEN=$1
-ADMIN_ID=$2
-
-if [[ -z "$API_TOKEN" || -z "$ADMIN_ID" ]]; then
-  echo "Usage: $0 <API_TOKEN> <ADMIN_TELEGRAM_ID>"
-  exit 1
-fi
-
-# Charger variables globales install Kighmu
-if [[ -f ~/.kighmu_info ]]; then
-  source ~/.kighmu_info
-else
-  echo "⚠️ ~/.kighmu_info introuvable, variables globales manquantes."
-fi
-
+# Variables globales
+API_TOKEN=""
+ADMIN_ID=""
 KIGHMU_DIR="$HOME/Kighmu"
 
-ShellBot.init --token "$API_TOKEN" --monitor --return map --flush
-ShellBot.username
+ask_credentials() {
+  read -rp "Entrez le API_TOKEN de votre bot Telegram : " API_TOKEN
+  read -rp "Entrez l'ADMIN_TELEGRAM_ID (ID Telegram administrateur) : " ADMIN_ID
+}
 
 send_message() {
   ShellBot.sendMessage --chat_id "$1" --text "$2" --parse_mode html
@@ -106,6 +92,10 @@ En APPS comme HTTP Injector, Netmod, SSC, etc.
 <b>Compte créé avec succès</b>"
   send_message "$chat_id" "$msg"
 }
+
+# Inclure ici toutes les fonctions déjà présentes dans ton script:
+# send_connected_devices, create_user, create_user_test, edit_user, delete_user,
+# handle_command, process_callbacks, process_forcereply (sans modification)
 
 send_connected_devices() {
   local chat_id=$1
@@ -225,19 +215,16 @@ edit_user() {
   send_message "$chat_id" "<b>Utilisateur $username modifié avec succès ✅</b>"
 }
 
-# Nouvelle fonction pour supprimer utilisateur directement
 delete_user() {
   local chat_id=$1
   local username=$2
   local USER_FILE="/etc/kighmu/users.list"
 
-  # Vérifier que l'utilisateur existe dans la liste
   if ! grep -q "^$username|" "$USER_FILE"; then
     send_message "$chat_id" "<b>❌ Utilisateur '$username' introuvable dans la liste.</b>"
     return 1
   fi
 
-  # Supprimer utilisateur système
   if id "$username" &>/dev/null; then
     if sudo userdel -r "$username" &>/dev/null; then
       send_message "$chat_id" "<b>✅ Utilisateur système '$username' supprimé avec succès.</b>"
@@ -249,7 +236,6 @@ delete_user() {
     send_message "$chat_id" "<b>⚠️ Utilisateur système '$username' introuvable ou déjà supprimé.</b>"
   fi
 
-  # Supprimer la ligne de la liste
   if grep -v "^$username|" "$USER_FILE" > "${USER_FILE}.tmp" && sudo mv "${USER_FILE}.tmp" "$USER_FILE"; then
     send_message "$chat_id" "<b>✅ Utilisateur '$username' supprimé de la liste utilisateurs.</b>"
   else
@@ -337,13 +323,61 @@ process_forcereply() {
   done
 }
 
-while true; do
-  ShellBot.getUpdates --limit 100 --offset $(ShellBot.Offset) --timeout 0
+main_menu() {
+  echo "=== KIGHMU Telegram VPS Bot Manager ==="
+  echo "1) Démarrer le bot"
+  echo "2) Entrer / modifier API_TOKEN et ADMIN_ID"
+  echo "3) Quitter"
+  read -rp "Choisissez une option [1-3]: " choice
+  case "$choice" in
+    1)
+      if [[ -z "$API_TOKEN" || -z "$ADMIN_ID" ]]; then
+        echo "⚠️ Vous devez d'abord entrer le API_TOKEN et l'ADMIN_TELEGRAM_ID."
+        ask_credentials
+      fi
+      start_bot
+      ;;
+    2)
+      ask_credentials
+      main_menu
+      ;;
+    3)
+      echo "Au revoir!"
+      exit 0
+      ;;
+    *)
+      echo "Choix invalide."
+      main_menu
+      ;;
+  esac
+}
 
-  for id in "${!message_text[@]}"; do
-    handle_command "${message_chat_id[$id]}" "${message_from_username[$id]}" "${message_text[$id]}"
+start_bot() {
+  install_shellbot
+  check_sudo
+  source /etc/kighmu/ShellBot.sh
+
+  # Charger variables globales install Kighmu
+  if [[ -f ~/.kighmu_info ]]; then
+    source ~/.kighmu_info
+  else
+    echo "⚠️ ~/.kighmu_info introuvable, variables globales manquantes."
+  fi
+
+  ShellBot.init --token "$API_TOKEN" --monitor --return map --flush
+  ShellBot.username
+
+  while true; do
+    ShellBot.getUpdates --limit 100 --offset $(ShellBot.Offset) --timeout 0
+
+    for id in "${!message_text[@]}"; do
+      handle_command "${message_chat_id[$id]}" "${message_from_username[$id]}" "${message_text[$id]}"
+    done
+
+    process_callbacks
+    process_forcereply
   done
+}
 
-  process_callbacks
-  process_forcereply
-done
+# Lance le menu principal au démarrage
+main_menu
