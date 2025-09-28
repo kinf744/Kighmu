@@ -19,7 +19,7 @@ check_sudo() {
 
 install_shellbot
 check_sudo
-source /etc/DARKssh/ShellBot.sh
+source /etc/kighmu/ShellBot.sh
 
 API_TOKEN=$1
 ADMIN_ID=$2
