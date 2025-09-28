@@ -177,6 +177,7 @@ FILES=(
   "POpen.py"
   "sockspy.sh"
   "hysteria.sh"
+  "botssh.sh"
 )
 
 BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
