@@ -306,6 +306,37 @@ process_forcereply() {
   done
 }
 
+start_bot() {
+  install_shellbot
+  check_sudo
+  source /etc/kighmu/ShellBot.sh
+  if [ -f ~/.kighmu_info ]; then
+    source ~/.kighmu_info
+  else
+    echo "⚠️ ~/.kighmu_info introuvable, variables globales manquantes."
+  fi
+  ShellBot.init --token "$API_TOKEN" --monitor --return map --flush
+  ShellBot.username
+  local offset=0
+  while true; do
+    ShellBot.getUpdates --limit 100 --offset "$offset" --timeout 0
+    for id in "${!message_text[@]}"; do
+      handle_command "${message_chat_id[$id]}" "${message_from_username[$id]}" "${message_text[$id]}"
+    done
+    process_callbacks
+    process_forcereply
+    if [ "${#update_update_id[@]}" -gt 0 ]; then
+      local max=0
+      for id in "${!update_update_id[@]}"; do
+        if (( update_update_id[id] > max )); then
+          max=${update_update_id[id]}
+        fi
+      done
+      offset=$((max + 1))
+    fi
+  done
+}
+
 main_menu() {
   print_header
   echo -e "${BLUE_BG}${WHITE} 1) Démarrer le bot                            ${RESET}"
