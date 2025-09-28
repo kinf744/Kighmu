@@ -1,21 +1,17 @@
 #!/bin/bash
-# DarkSSH Enhanced Telegram Bot Manager with KIGHMU BOT Control Panel
-# Usage: ./bot.sh <API_TOKEN> <ADMIN_TELEGRAM_ID>
+# KIGHMU Telegram VPS Bot - Interface complète avec boutons demandés
 
 install_shellbot() {
   if [[ ! -f /etc/DARKssh/ShellBot.sh ]]; then
-    echo "ShellBot.sh not found, installing..."
     sudo mkdir -p /etc/DARKssh
     sudo wget -qO /etc/DARKssh/ShellBot.sh https://raw.githubusercontent.com/shellscriptx/shellbot/master/ShellBot.sh
     sudo chmod +x /etc/DARKssh/ShellBot.sh
-    echo "ShellBot.sh installed successfully."
   fi
 }
 
 check_sudo() {
-  if ! sudo -v >/dev/null 2>&1; then
-    echo "This script requires sudo privileges."
-    echo "Please run 'sudo -v' and then rerun this script."
+  if ! sudo -v &>/dev/null; then
+    echo "Run 'sudo -v' before running this script."
     exit 1
   fi
 }
@@ -27,11 +23,6 @@ source /etc/DARKssh/ShellBot.sh
 API_TOKEN=$1
 ADMIN_ID=$2
 
-ACTIVE_USERS="/etc/bot/lista_ativos"
-SUSPENDED_USERS="/etc/bot/lista_suspensos"
-USER_DB="/root/usuarios.db"
-OPENVPN_EASYRSA="/etc/openvpn/easy-rsa"
-
 if [[ -z "$API_TOKEN" || -z "$ADMIN_ID" ]]; then
   echo "Usage: $0 <API_TOKEN> <ADMIN_TELEGRAM_ID>"
   exit 1
@@ -41,113 +32,133 @@ ShellBot.init --token "$API_TOKEN" --monitor --return map --flush
 ShellBot.username
 
 send_message() {
-  local chat_id=$1
-  local message=$2
-  ShellBot.sendMessage --chat_id $chat_id --text "$message" --parse_mode html
+  ShellBot.sendMessage --chat_id "$1" --text "$2" --parse_mode html
 }
 
-check_access() {
-  local user=$1
-  if grep -qw "$user" "$SUSPENDED_USERS"; then return 1
-  elif grep -qw "$user" "$ACTIVE_USERS"; then return 0
-  else return 2
-  fi
-}
-
-show_start_panel() {
+show_main_menu() {
   local chat_id=$1
-  local title="❇️ <b>KIGHMU BOT</b> ❇️"
-  local text="Bienvenue dans le panneau de contrôle. Cliquez sur ⏯️ Débuter pour lancer le bot."
-
-  local keyboard=$(ShellBot.InlineKeyboard --button '⏯️ Débuter' start_deploy_callback)
-
-  ShellBot.sendMessage --chat_id $chat_id --text "$title\n\n$text" --parse_mode html --reply_markup "$keyboard"
-}
-
-show_main_panel() {
-  local chat_id=$1
-  local title="❇️ <b>KIGHMU BOT</b> - Menu Principal ❇️"
-  local text="Choisissez une option :"
-
   local keyboard=$(ShellBot.InlineKeyboard \
-    --button '📂 Créer Utilisateur' create_user_callback \
+    --button '👤 Création Utilisateur' create_user_callback \
+    --button '🧪 Création Utilisateur Test' create_user_test_callback \
+    --button '📶 Appareils Connectés' connected_devices_callback \
+    --button '✏️ Modifier Utilisateur' modify_user_callback \
     --button '🗑 Supprimer Utilisateur' delete_user_callback \
-    --button '👥 Utilisateurs en ligne' online_users_callback \
-    --button '🆘 Aide' help_callback \
+    --button 'ℹ️ Infos Serveur VPS' info_vps_callback \
   )
+  send_message "$chat_id" "<b>KIGHMU BOT - Menu Principal</b>\nChoisissez une option :"
+  ShellBot.sendMessage --chat_id "$chat_id" --text "Options :" --reply_markup "$keyboard" --parse_mode html
+}
 
-  ShellBot.sendMessage --chat_id $chat_id --text "$title\n\n$text" --parse_mode html --reply_markup "$keyboard"
+handle_callback() {
+  local id=$1
+  local data=${callback_query_data[$id]}
+  local chat_id=${callback_query_message_chat_id[$id]}
+
+  case "$data" in
+    create_user_callback)
+      ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Création utilisateur sélectionnée"
+      ShellBot.sendMessage --chat_id "$chat_id" --text "Envoyez: username password limite days" --reply_markup "$(ShellBot.ForceReply)"
+      ;;
+    create_user_test_callback)
+      ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Création utilisateur test sélectionnée"
+      ShellBot.sendMessage --chat_id "$chat_id" --text "Envoyez: username password limite minutes" --reply_markup "$(ShellBot.ForceReply)"
+      ;;
+    connected_devices_callback)
+      ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Appareils connectés"
+      # Ici appeler la fonction listing appareils connectés
+      # Exemple simple:
+      send_message "$chat_id" "Fonction 'Appareils connectés' en cours de développement."
+      ;;
+    modify_user_callback)
+      ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Modification utilisateur"
+      ShellBot.sendMessage --chat_id "$chat_id" --text "Envoyez: username new_password" --reply_markup "$(ShellBot.ForceReply)"
+      ;;
+    delete_user_callback)
+      ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Suppression utilisateur"
+      ShellBot.sendMessage --chat_id "$chat_id" --text "Envoyez le nom de l'utilisateur à supprimer" --reply_markup "$(ShellBot.ForceReply)"
+      ;;
+    info_vps_callback)
+      ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Infos VPS"
+      # Exemple rapide de stats
+      local info="Uptime: $(uptime -p)\nRAM libre: $(free -h | awk '/^Mem:/ { print $4 }')\nCPU load: $(top -bn1 | grep "Cpu(s)" | awk '{print $2 + $4}')%"
+      send_message "$chat_id" "<b>Infos VPS :</b>\n$info"
+      ;;
+    *)
+      ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Option inconnue"
+      ;;
+  esac
+}
+
+process_forcereply() {
+  for id in "${!message_reply_to_message_text[@]}"; do
+    local replied_text=${message_reply_to_message_text[$id]}
+    local chat_id=${message_chat_id[$id]}
+    local text=${message_text[$id]}
+
+    if [[ "$replied_text" =~ "Envoyez: username password limite days" ]]; then
+      IFS=' ' read -r username password limite days <<< "$text"
+      # Appeler votre script créé utilisateur ici avec ces valeurs
+      create_user "$chat_id" "$username" "$password" "$limite" "$days"
+    elif [[ "$replied_text" =~ "Envoyez: username password limite minutes" ]]; then
+      IFS=' ' read -r username password limite minutes <<< "$text"
+      # Appeler votre script création test utilisateur
+      create_user_test "$chat_id" "$username" "$password" "$limite" "$minutes"
+    elif [[ "$replied_text" =~ "Envoyez: username new_password" ]]; then
+      IFS=' ' read -r username newpass <<< "$text"
+      # Ajoutez fonction changement mot de passe utilisateur ici
+      send_message "$chat_id" "<b>Fonction modifier utilisateur pas encore implémentée</b>"
+    elif [[ "$replied_text" =~ "Envoyez le nom de l'utilisateur à supprimer" ]]; then
+      # Appeler fonction suppression utilisateur
+      delete_user "$chat_id" "$text"
+    fi
+  done
 }
 
 create_user() {
-  local username=$1
-  local password=$2
-  local expire_date=$3
-  local quota=$4
-
-  if id "$username" &>/dev/null; then
-    send_message $CHAT_ID "<b>❌ L'utilisateur $username existe déjà !</b>"
-    return
+  local chat_id=$1
+  local username=$2
+  local password=$3
+  local limite=$4
+  local days=$5
+  # Appel script menu1.sh pour création
+  bash "$HOME/Kighmu/menu1.sh" "$username" "$password" "$limite" "$days"
+  local status=$?
+  if [[ $status -eq 0 ]]; then
+    send_message "$chat_id" "<b>Utilisateur $username créé avec succès</b>"
+  else
+    send_message "$chat_id" "<b>Erreur création utilisateur</b>"
   fi
+}
 
-  local expire_formatted=$(date -d "$expire_date" +%Y-%m-%d)
-  sudo useradd -M -N -s /bin/false -e "$expire_formatted" "$username"
-  echo -e "$password\n$password" | sudo passwd "$username" >/dev/null 2>&1
-  echo "$username $expire_formatted $quota" >> $USER_DB
-
-  cd $OPENVPN_EASYRSA || return
-  ./easyrsa build-client-full "$username" nopass >/dev/null 2>&1
-
-  send_message $CHAT_ID "<b>✅ Utilisateur $username créé avec quota $quota et expiration $expire_formatted.</b>"
+create_user_test() {
+  local chat_id=$1
+  local username=$2
+  local password=$3
+  local limite=$4
+  local minutes=$5
+  # Appel script menu_test.sh ou équivalent pour test utilisateur
+  bash "$HOME/Kighmu/menu_test.sh" "$username" "$password" "$limite" "$minutes"
+  local status=$?
+  if [[ $status -eq 0 ]]; then
+    send_message "$chat_id" "<b>Utilisateur test $username créé avec succès</b>"
+  else
+    send_message "$chat_id" "<b>Erreur création utilisateur test</b>"
+  fi
 }
 
 delete_user() {
-  local username=$1
-  if id "$username" &>/dev/null; then
-    sudo pkill -u "$username" >/dev/null 2>&1
-    sudo userdel --force "$username"
-    sed -i "/^$username /d" $USER_DB
-    send_message $CHAT_ID "<b>🗑 Utilisateur $username supprimé.</b>"
-  else
-    send_message $CHAT_ID "<b>❌ L'utilisateur $username n'existe pas !</b>"
-  fi
-}
-
-list_online_users() {
-  local online_users=$(who | awk '{print $1}' | sort | uniq)
-  send_message $CHAT_ID "<b>👥 Utilisateurs en ligne :</b>\n$online_users"
-}
-
-show_help() {
-  send_message $CHAT_ID "⚙️ <b>Commandes du bot :</b>\n\
-/menu - Afficher le menu\n\
-Créer Utilisateur - Créer un utilisateur SSH\n\
-Supprimer Utilisateur - Supprimer un utilisateur SSH\n\
-Utilisateurs en ligne - Liste des utilisateurs connectés\n\
-Aide - Affiche ce message"
-}
-
-handle_command() {
   local chat_id=$1
-  local user=$2
-  local msg=$3
-  CHAT_ID=$chat_id
-
-  # Première invocation /start affiche le panneau d'accueil
-  if [[ "$msg" == "/start" ]]; then
-    show_start_panel "$chat_id"
-    return
-  fi
-
-  # Commandes classiques
-  if [[ "$msg" == "menu" || "$msg" == "/menu" ]]; then
-    show_main_panel "$chat_id"
+  local username=$2
+  bash "$HOME/Kighmu/menu4.sh" "$username"
+  local status=$?
+  if [[ $status -eq 0 ]]; then
+    send_message "$chat_id" "<b>Utilisateur $username supprimé avec succès</b>"
   else
-    send_message "$chat_id" "<b>Commande inconnue. Utilisez /menu.</b>"
+    send_message "$chat_id" "<b>Erreur suppression utilisateur</b>"
   fi
 }
 
-while :; do
+while true; do
   ShellBot.getUpdates --limit 100 --offset $(ShellBot.Offset) --timeout 0
 
   for id in "${!message_text[@]}"; do
@@ -155,45 +166,8 @@ while :; do
   done
 
   for id in "${!callback_query_data[@]}"; do
-    case "${callback_query_data[$id]}" in
-      start_deploy_callback)
-        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Démarrage du bot..."
-        show_main_panel "${callback_query_message_chat_id[$id]}"
-        ;;
-      create_user_callback)
-        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Création d'utilisateur sélectionnée"
-        ShellBot.sendMessage --chat_id "${callback_query_message_chat_id[$id]}" --text "Envoyez les détails au format : username password yyyy-mm-dd quota" --reply_markup "$(ShellBot.ForceReply)"
-        ;;
-      delete_user_callback)
-        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Suppression d'utilisateur sélectionnée"
-        ShellBot.sendMessage --chat_id "${callback_query_message_chat_id[$id]}" --text "Envoyez le nom d'utilisateur à supprimer" --reply_markup "$(ShellBot.ForceReply)"
-        ;;
-      online_users_callback)
-        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Utilisateurs en ligne"
-        list_online_users "${callback_query_message_chat_id[$id]}"
-        ;;
-      help_callback)
-        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Aide sélectionnée"
-        show_help "${callback_query_message_chat_id[$id]}"
-        ;;
-      *)
-        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Option inconnue"
-        ;;
-    esac
+    handle_callback "$id"
   done
 
-  for id in "${!message_reply_to_message_text[@]}"; do
-    local reply_text="${message_reply_to_message_text[$id]}"
-
-    if [[ "$reply_text" =~ "Envoyez les détails au format" ]]; then
-      IFS=' ' read -r u p e q <<< "${message_text[$id]}"
-      CHAT_ID=${message_chat_id[$id]}
-      create_user "$u" "$p" "$e" "$q"
-    elif [[ "$reply_text" =~ "Envoyez le nom d'utilisateur" ]]; then
-      CHAT_ID=${message_chat_id[$id]}
-      delete_user "${message_text[$id]}"
-    fi
-  done
-
+  process_forcereply
 done
-
