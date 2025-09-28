@@ -124,7 +124,7 @@ case "$option" in
     2)
         supprimer_expired
         ;;
-    3)
+    0)
         echo "Sortie..."
         exit 0
         ;;
