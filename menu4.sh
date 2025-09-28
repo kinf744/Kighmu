@@ -19,7 +19,7 @@ echo -e "${CYAN}+--------------------------------------------+${RESET}"
 echo "[01] Supprimer un utilisateur"
 echo "[02] Supprimer tous les utilisateurs expirés"
 echo "[00] Quitter"
-read -rp "${BOLD}Sélectionnez une option (1/2/3) : ${RESET}" option
+read -rp "Sélectionnez une option (1/2/0) : " option
 
 # Fonction pour supprimer un utilisateur donné
 supprimer_utilisateur() {
