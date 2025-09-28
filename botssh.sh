@@ -1,5 +1,5 @@
 #!/bin/bash
-# KIGHMU Telegram VPS Bot Manager complet
+# KIGHMU Telegram VPS Bot Manager complet avec suppression utilisateur et menu interactif ASCII
 
 BLUE_BG="\e[44m"
 RESET="\e[0m"
@@ -46,7 +46,32 @@ send_user_creation_summary() {
   local chat_id=$1 domain=$2 host_ip=$3 username=$4 password=$5 limite=$6 expire_date=$7 slowdns_key=$8 slowdns_ns=$9
   local msg="<b>+=================================================================+</b>
 <b>*NOUVEAU UTILISATEUR CRÉÉ*</b>
-...
+<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>
+∘ SSH: 22                  ∘ System-DNS: 53
+∘ SOCKS/PYTHON: 8080       ∘ WEB-NGINX: 81
+∘ DROPBEAR: 90             ∘ SSL: 443
+∘ BadVPN: 7200             ∘ BadVPN: 7300
+∘ SlowDNS: 5300            ∘ UDP-Custom: 1-65535
+∘ Hysteria: 22000          ∘ Proxy WS: 80
+<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>
+<b>DOMAIN         :</b> $domain
+<b>Host/IP-Address:</b> $host_ip
+<b>UTILISATEUR    :</b> $username
+<b>MOT DE PASSE   :</b> $password
+<b>LIMITE         :</b> $limite
+<b>DATE EXPIRÉE   :</b> $expire_date
+<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>
+En APPS comme HTTP Injector, CUSTOM, SOCKSIP TUNNEL, SSC, etc.
+🙍 HTTP-Direct     : <code>$host_ip:8080@$username:$password</code>
+🙍 SSL/TLS(SNI)    : <code>$host_ip:444@$username:$password</code>
+🙍 Proxy(WS)       : <code>$domain:80@$username:$password</code>
+🙍 SSH UDP         : <code>$host_ip:1-65535@$username:$password</code>
+🙍 Hysteria (UDP)  : <code>$domain:22000@$username:$password</code>
+<b>━━━━━━━━━━━  CONFIGS SLOWDNS PORT 5300 ━━━━━━━━━━━</b>
+<b>Pub KEY :</b>
+<pre>$slowdns_key</pre>
+<b>NameServer (NS) :</b> $slowdns_ns
+<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>
 <b>Compte créé avec succès</b>"
   send_message "$chat_id" "$msg"
 }
@@ -55,7 +80,26 @@ send_user_test_creation_summary() {
   local chat_id=$1 domain=$2 host_ip=$3 username=$4 password=$5 limite=$6 expire_date=$7 slowdns_key=$8 slowdns_ns=$9
   local msg="<b>+==================================================+</b>
 <b>*NOUVEAU UTILISATEUR TEST CRÉÉ*</b>
-...
+<b>──────────────────────────────────────────────────</b>
+<b>DOMAIN        :</b> $domain
+<b>Adresse IP    :</b> $host_ip
+<b>Utilisateur   :</b> $username
+<b>Mot de passe  :</b> $password
+<b>Limite        :</b> $limite
+<b>Date d'expire :</b> $expire_date
+<b>──────────────────────────────────────────────────</b>
+En APPS comme HTTP Injector, Netmod, SSC, etc.
+🙍 HTTP-Direct  : <code>$host_ip:90@$username:$password</code>
+🙍 SSL/TLS(SNI) : <code>$host_ip:443@$username:$password</code>
+🙍 Proxy(WS)    : <code>$domain:8080@$username:$password</code>
+🙍 SSH UDP      : <code>$host_ip:1-65535@$username:$password</code>
+🙍 Hysteria (UDP): <code>$domain:22000@$username:$password</code>
+<b>───────────── CONFIG SLOWDNS 5300 ───────────────</b>
+<b>Pub Key :</b>
+<pre>$slowdns_key</pre>
+<b>NameServer (NS) :</b> $slowdns_ns
+<b>──────────────────────────────────────────────────</b>
+<b>Le compte sera supprimé automatiquement après $limite minutes.</b>
 <b>Compte créé avec succès</b>"
   send_message "$chat_id" "$msg"
 }
@@ -288,7 +332,8 @@ start_bot() {
   ShellBot.username
 
   while true; do
-    ShellBot.getUpdates --limit 100 --offset "$(ShellBot.Offset)" --timeout 0
+    offset=$(ShellBot.Offset)
+    ShellBot.getUpdates --limit 100 --offset "$offset" --timeout 0
     for id in "${!message_text[@]}"; do
       handle_command "${message_chat_id[$id]}" "${message_from_username[$id]}" "${message_text[$id]}"
     done
@@ -328,5 +373,4 @@ main_menu() {
   esac
 }
 
-# Lancement du menu principal
 main_menu
