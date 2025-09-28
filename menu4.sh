@@ -16,6 +16,7 @@ clear
 echo -e "${CYAN}+--------------------------------------------+${RESET}"
 echo -e "${BOLD}|          GESTION DES UTILISATEURS          |${RESET}"
 echo -e "${CYAN}+--------------------------------------------+${RESET}"
+echo -e ""
 echo "[01] Supprimer un utilisateur"
 echo "[02] Supprimer tous les utilisateurs expirés"
 echo "[00] Quitter"
