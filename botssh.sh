@@ -28,6 +28,15 @@ if [[ -z "$API_TOKEN" || -z "$ADMIN_ID" ]]; then
   exit 1
 fi
 
+# Charger info globales depuis l'installation Kighmu
+if [[ -f ~/.kighmu_info ]]; then
+  source ~/.kighmu_info
+else
+  echo "⚠️ Fichier ~/.kighmu_info introuvable. Variables globales non chargées."
+fi
+
+KIGHMU_DIR="$HOME/Kighmu"
+
 ShellBot.init --token "$API_TOKEN" --monitor --return map --flush
 ShellBot.username
 
@@ -35,10 +44,10 @@ send_message() {
   ShellBot.sendMessage --chat_id "$1" --text "$2" --parse_mode html
 }
 
+# Messages formatés (normal)
 send_user_creation_summary() {
   local chat_id=$1 domain=$2 host_ip=$3 username=$4 password=$5 limite=$6 expire_date=$7 slowdns_key=$8 slowdns_ns=$9
-  local msg="
-<b>+=================================================================+</b>
+  local msg="<b>+=================================================================+</b>
 <b>*NOUVEAU UTILISATEUR CRÉÉ*</b>
 <b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>
 ∘ SSH: 22                  ∘ System-DNS: 53
@@ -56,13 +65,11 @@ send_user_creation_summary() {
 <b>DATE EXPIRÉE   :</b> $expire_date
 <b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>
 En APPS comme HTTP Injector, CUSTOM, SOCKSIP TUNNEL, SSC, etc.
-
 🙍 HTTP-Direct     : <code>$host_ip:8080@$username:$password</code>
 🙍 SSL/TLS(SNI)    : <code>$host_ip:444@$username:$password</code>
 🙍 Proxy(WS)       : <code>$domain:80@$username:$password</code>
 🙍 SSH UDP         : <code>$host_ip:1-65535@$username:$password</code>
 🙍 Hysteria (UDP)  : <code>$domain:22000@$username:$password</code>
-
 <b>━━━━━━━━━━━  CONFIGS SLOWDNS PORT 5300 ━━━━━━━━━━━</b>
 <b>Pub KEY :</b>
 <pre>$slowdns_key</pre>
@@ -73,10 +80,10 @@ En APPS comme HTTP Injector, CUSTOM, SOCKSIP TUNNEL, SSC, etc.
   send_message "$chat_id" "$msg"
 }
 
+# Messages formatés (test)
 send_user_test_creation_summary() {
   local chat_id=$1 domain=$2 host_ip=$3 username=$4 password=$5 limite=$6 expire_date=$7 slowdns_key=$8 slowdns_ns=$9
-  local msg="
-<b>+==================================================+</b>
+  local msg="<b>+==================================================+</b>
 <b>*NOUVEAU UTILISATEUR TEST CRÉÉ*</b>
 <b>──────────────────────────────────────────────────</b>
 <b>DOMAIN        :</b> $domain
@@ -87,13 +94,11 @@ send_user_test_creation_summary() {
 <b>Date d'expire :</b> $expire_date
 <b>──────────────────────────────────────────────────</b>
 En APPS comme HTTP Injector, Netmod, SSC, etc.
-
 🙍 HTTP-Direct  : <code>$host_ip:90@$username:$password</code>
 🙍 SSL/TLS(SNI) : <code>$host_ip:443@$username:$password</code>
 🙍 Proxy(WS)    : <code>$domain:8080@$username:$password</code>
 🙍 SSH UDP      : <code>$host_ip:1-65535@$username:$password</code>
 🙍 Hysteria (UDP): <code>$domain:22000@$username:$password</code>
-
 <b>───────────── CONFIG SLOWDNS 5300 ───────────────</b>
 <b>Pub Key :</b>
 <pre>$slowdns_key</pre>
@@ -107,14 +112,13 @@ En APPS comme HTTP Injector, Netmod, SSC, etc.
 
 create_user() {
   local chat_id=$1 username=$2 password=$3 limite=$4 days=$5
-  bash "$HOME/Kighmu/menu1.sh" "$username" "$password" "$limite" "$days"
+  bash "$KIGHMU_DIR/menu1.sh" "$username" "$password" "$limite" "$days"
   if [[ $? -eq 0 ]]; then
-    local domain=$(awk -F= '/^DOMAIN=/ {print $2}' ~/.kighmu_info 2>/dev/null)
     local host_ip=$(curl -s https://api.ipify.org)
     local expire_date=$(date -d "+$days days" '+%Y-%m-%d')
     local slowdns_key=$(sed ':a;N;$!ba;s/\n/\\n/g' /etc/slowdns/server.pub 2>/dev/null || echo "N/A")
     local slowdns_ns=$(cat /etc/slowdns/ns.conf 2>/dev/null || echo "N/A")
-    send_user_creation_summary "$chat_id" "$domain" "$host_ip" "$username" "$password" "$limite" "$expire_date" "$slowdns_key" "$slowdns_ns"
+    send_user_creation_summary "$chat_id" "$DOMAIN" "$host_ip" "$username" "$password" "$limite" "$expire_date" "$slowdns_key" "$slowdns_ns"
   else
     send_message "$chat_id" "<b>Erreur lors de la création utilisateur $username.</b>"
   fi
@@ -122,14 +126,13 @@ create_user() {
 
 create_user_test() {
   local chat_id=$1 username=$2 password=$3 limite=$4 minutes=$5
-  bash "$HOME/Kighmu/menu_test.sh" "$username" "$password" "$limite" "$minutes"
+  bash "$KIGHMU_DIR/menu_test.sh" "$username" "$password" "$limite" "$minutes"
   if [[ $? -eq 0 ]]; then
-    local domain=$(awk -F= '/^DOMAIN=/ {print $2}' ~/.kighmu_info 2>/dev/null)
     local host_ip=$(curl -s https://api.ipify.org)
     local expire_date=$(date -d "+$minutes minutes" '+%Y-%m-%d %H:%M:%S')
     local slowdns_key=$(sed ':a;N;$!ba;s/\n/\\n/g' /etc/slowdns/server.pub 2>/dev/null || echo "N/A")
     local slowdns_ns=$(cat /etc/slowdns/ns.conf 2>/dev/null || echo "N/A")
-    send_user_test_creation_summary "$chat_id" "$domain" "$host_ip" "$username" "$password" "$limite" "$expire_date" "$slowdns_key" "$slowdns_ns"
+    send_user_test_creation_summary "$chat_id" "$DOMAIN" "$host_ip" "$username" "$password" "$limite" "$expire_date" "$slowdns_key" "$slowdns_ns"
   else
     send_message "$chat_id" "<b>Erreur lors de création utilisateur test.</b>"
   fi
@@ -162,7 +165,7 @@ process_callbacks() {
         ;;
       info_vps_callback)
         ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Infos VPS"
-        local info="Uptime: $(uptime -p)\nRAM libre: $(free -h | awk '/^Mem:/ {print $4}')\nCPU load: $(top -bn1 | grep 'Cpu(s)' | awk '{print $2 + $4}' )%"
+        local info="Uptime: $(uptime -p)\nRAM libre: $(free -h | awk '/^Mem:/ {print $4}')\nCPU load: $(top -bn1 | grep 'Cpu(s)' | awk '{print $2 + $4}')%"
         send_message "${callback_query_message_chat_id[$id]}" "<b>Infos VPS :</b>\n$info"
         ;;
       *)
