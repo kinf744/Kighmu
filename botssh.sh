@@ -1,5 +1,5 @@
 #!/bin/bash
-# KIGHMU Telegram VPS Bot Manager complet avec suppression utilisateur et menu interactif ASCII
+# KIGHMU Telegram VPS Bot Manager complet avec gestion utilisateur et menu interactif ASCII
 
 BLUE_BG="\e[44m"
 RESET="\e[0m"
@@ -181,15 +181,12 @@ create_user_test() {
 edit_user() {
   local chat_id=$1 username=$2 new_password=$3 new_days=$4
   local USER_FILE="/etc/kighmu/users.list"
-
   user_line=$(grep "^$username|" "$USER_FILE")
   if [ -z "$user_line" ]; then
     send_message "$chat_id" "<b>Erreur :</b> Utilisateur $username introuvable."
     return
   fi
-
   IFS='|' read -r user pass limite expire_date hostip domain slowdns_ns <<< "$user_line"
-
   if [[ -n "$new_days" && "$new_days" =~ ^[0-9]+$ ]]; then
     if [ "$new_days" -eq 0 ]; then
       new_expire="none"
@@ -199,27 +196,22 @@ edit_user() {
     limite=$new_days
     expire_date=$new_expire
   fi
-
   if [[ -n "$new_password" && "$new_password" != "skip" ]]; then
     pass=$new_password
     echo -e "$new_password\n$new_password" | sudo passwd "$username" >/dev/null 2>&1
   fi
-
   new_line="${user}|${pass}|${limite}|${expire_date}|${hostip}|${domain}|${slowdns_ns}"
   sed -i "s/^$user|.*/$new_line/" "$USER_FILE"
-
   send_message "$chat_id" "<b>Utilisateur $username modifié avec succès ✅</b>"
 }
 
 delete_user() {
   local chat_id=$1 username=$2
   local USER_FILE="/etc/kighmu/users.list"
-
   if ! grep -q "^$username|" "$USER_FILE"; then
     send_message "$chat_id" "<b>❌ Utilisateur '$username' introuvable dans la liste.</b>"
     return 1
   fi
-
   if id "$username" &>/dev/null; then
     if sudo userdel -r "$username" &>/dev/null; then
       send_message "$chat_id" "<b>✅ Utilisateur système '$username' supprimé avec succès.</b>"
@@ -230,14 +222,12 @@ delete_user() {
   else
     send_message "$chat_id" "<b>⚠️ Utilisateur système '$username' introuvable ou déjà supprimé.</b>"
   fi
-
   if grep -v "^$username|" "$USER_FILE" > "${USER_FILE}.tmp" && sudo mv "${USER_FILE}.tmp" "$USER_FILE"; then
     send_message "$chat_id" "<b>✅ Utilisateur '$username' supprimé de la liste utilisateurs.</b>"
   else
     send_message "$chat_id" "<b>❌ Erreur lors de la mise à jour de la liste des utilisateurs.</b>"
     return 1
   fi
-
   return 0
 }
 
@@ -272,24 +262,24 @@ process_callbacks() {
         ShellBot.sendMessage --chat_id "$chat_id" --text "Envoyez: username password limite minutes" --reply_markup "$(ShellBot.ForceReply)"
         ;;
       connected_devices_callback)
-        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_data[$id]}" --text "Appareils connectés"
+        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Appareils connectés"
         send_connected_devices "$chat_id"
         ;;
       edit_user_callback)
-        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_data[$id]}" --text "Modifier utilisateur"
+        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Modifier utilisateur"
         ShellBot.sendMessage --chat_id "$chat_id" --text "Envoyez: username new_password new_days" --reply_markup "$(ShellBot.ForceReply)"
         ;;
       delete_user_callback)
-        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_data[$id]}" --text "Suppression utilisateur sélectionnée"
+        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Suppression utilisateur sélectionnée"
         ShellBot.sendMessage --chat_id "$chat_id" --text "Envoyez le nom d’utilisateur à supprimer :" --reply_markup "$(ShellBot.ForceReply)"
         ;;
       info_vps_callback)
-        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_data[$id]}" --text "Infos VPS"
+        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Infos VPS"
         local info="Uptime: $(uptime -p)\nRAM libre: $(free -h | awk '/^Mem:/ {print $4}')\nCPU load: $(top -bn1 | grep 'Cpu(s)' | awk '{print $2 + $4}')%"
         send_message "$chat_id" "<b>Infos VPS :</b>\n$info"
         ;;
       *)
-        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_data[$id]}" --text "Option inconnue"
+        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Option inconnue"
         ;;
     esac
   done
@@ -300,7 +290,6 @@ process_forcereply() {
     local replied_text=${message_reply_to_message_text[$id]}
     local chat_id=${message_chat_id[$id]}
     local text=${message_text[$id]}
-
     if [[ "$replied_text" =~ "Envoyez: username password limite days" ]]; then
       IFS=' ' read -r username password limite days <<< "$text"
       create_user "$chat_id" "$username" "$password" "$limite" "$days"
@@ -321,16 +310,13 @@ start_bot() {
   install_shellbot
   check_sudo
   source /etc/kighmu/ShellBot.sh
-
   if [ -f ~/.kighmu_info ]; then
     source ~/.kighmu_info
   else
     echo "⚠️ ~/.kighmu_info introuvable, variables globales manquantes."
   fi
-
   ShellBot.init --token "$API_TOKEN" --monitor --return map --flush
   ShellBot.username
-
   while true; do
     offset=$(ShellBot.Offset)
     ShellBot.getUpdates --limit 100 --offset "$offset" --timeout 0
