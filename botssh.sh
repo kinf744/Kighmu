@@ -1,5 +1,5 @@
 #!/bin/bash
-# KIGHMU Telegram VPS Bot Manager complet
+# KIGHMU Telegram VPS Bot Manager complet avec suppression utilisateur
 
 install_shellbot() {
   if [[ ! -f /etc/DARKssh/ShellBot.sh ]]; then
@@ -224,6 +224,41 @@ edit_user() {
   send_message "$chat_id" "<b>Utilisateur $username modifié avec succès ✅</b>"
 }
 
+# Nouvelle fonction pour supprimer utilisateur directement
+delete_user() {
+  local chat_id=$1
+  local username=$2
+  local USER_FILE="/etc/kighmu/users.list"
+
+  # Vérifier que l'utilisateur existe dans la liste
+  if ! grep -q "^$username|" "$USER_FILE"; then
+    send_message "$chat_id" "<b>❌ Utilisateur '$username' introuvable dans la liste.</b>"
+    return 1
+  fi
+
+  # Supprimer utilisateur système
+  if id "$username" &>/dev/null; then
+    if sudo userdel -r "$username" &>/dev/null; then
+      send_message "$chat_id" "<b>✅ Utilisateur système '$username' supprimé avec succès.</b>"
+    else
+      send_message "$chat_id" "<b>❌ Erreur lors de la suppression de l'utilisateur système '$username'.</b>"
+      return 1
+    fi
+  else
+    send_message "$chat_id" "<b>⚠️ Utilisateur système '$username' introuvable ou déjà supprimé.</b>"
+  fi
+
+  # Supprimer la ligne de la liste
+  if grep -v "^$username|" "$USER_FILE" > "${USER_FILE}.tmp" && sudo mv "${USER_FILE}.tmp" "$USER_FILE"; then
+    send_message "$chat_id" "<b>✅ Utilisateur '$username' supprimé de la liste utilisateurs.</b>"
+  else
+    send_message "$chat_id" "<b>❌ Erreur lors de la mise à jour de la liste des utilisateurs.</b>"
+    return 1
+  fi
+
+  return 0
+}
+
 handle_command() {
   local chat_id=$1 user=$2 msg=$3
   if [[ "$msg" == "/start" || "$msg" == "/menu" ]]; then
@@ -232,6 +267,7 @@ handle_command() {
       --button '🧪 Création Utilisateur Test' create_user_test_callback \
       --button '📶 Appareils Connectés' connected_devices_callback \
       --button '✏️ Modifier Utilisateur' edit_user_callback \
+      --button '❌ Supprimer Utilisateur' delete_user_callback \
       --button '🏢 Infos VPS' info_vps_callback)
     send_message "$chat_id" "<b>KIGHMU BOT</b> - Menu Principal"
     ShellBot.sendMessage --chat_id "$chat_id" --text "Choisissez une option :" --reply_markup "$keyboard" --parse_mode html
@@ -262,6 +298,10 @@ process_callbacks() {
         ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Modifier utilisateur"
         ShellBot.sendMessage --chat_id "$chat_id" --text "Envoyez: username new_password new_days" --reply_markup "$(ShellBot.ForceReply)"
         ;;
+      delete_user_callback)
+        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Suppression utilisateur sélectionnée"
+        ShellBot.sendMessage --chat_id "$chat_id" --text "Envoyez le nom d’utilisateur à supprimer :" --reply_markup "$(ShellBot.ForceReply)"
+        ;;
       info_vps_callback)
         ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Infos VPS"
         local info="Uptime: $(uptime -p)\nRAM libre: $(free -h | awk '/^Mem:/ {print $4}')\nCPU load: $(top -bn1 | grep 'Cpu(s)' | awk '{print $2 + $4}')%"
@@ -289,6 +329,9 @@ process_forcereply() {
     elif [[ "$replied_text" =~ "Envoyez: username new_password new_days" ]]; then
       IFS=' ' read -r username new_password new_days <<< "$text"
       edit_user "$chat_id" "$username" "$new_password" "$new_days"
+    elif [[ "$replied_text" =~ "Envoyez le nom d’utilisateur à supprimer" ]]; then
+      local username=$text
+      delete_user "$chat_id" "$username"
     fi
   done
 }
