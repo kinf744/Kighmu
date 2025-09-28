@@ -177,6 +177,7 @@ FILES=(
   "POpen.py"
   "sockspy.sh"
   "hysteria.sh"
+  "ShellBot.sh"
   "botssh.sh"
 )
 
