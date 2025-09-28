@@ -28,11 +28,11 @@ if [[ -z "$API_TOKEN" || -z "$ADMIN_ID" ]]; then
   exit 1
 fi
 
-# Charger info globales depuis l'installation Kighmu
+# Charger variables globales install Kighmu
 if [[ -f ~/.kighmu_info ]]; then
   source ~/.kighmu_info
 else
-  echo "⚠️ Fichier ~/.kighmu_info introuvable. Variables globales non chargées."
+  echo "⚠️ ~/.kighmu_info introuvable, variables globales manquantes."
 fi
 
 KIGHMU_DIR="$HOME/Kighmu"
@@ -44,7 +44,6 @@ send_message() {
   ShellBot.sendMessage --chat_id "$1" --text "$2" --parse_mode html
 }
 
-# Messages formatés (normal)
 send_user_creation_summary() {
   local chat_id=$1 domain=$2 host_ip=$3 username=$4 password=$5 limite=$6 expire_date=$7 slowdns_key=$8 slowdns_ns=$9
   local msg="<b>+=================================================================+</b>
@@ -75,12 +74,10 @@ En APPS comme HTTP Injector, CUSTOM, SOCKSIP TUNNEL, SSC, etc.
 <pre>$slowdns_key</pre>
 <b>NameServer (NS) :</b> $slowdns_ns
 <b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>
-<b>Compte créé avec succès</b>
-"
+<b>Compte créé avec succès</b>"
   send_message "$chat_id" "$msg"
 }
 
-# Messages formatés (test)
 send_user_test_creation_summary() {
   local chat_id=$1 domain=$2 host_ip=$3 username=$4 password=$5 limite=$6 expire_date=$7 slowdns_key=$8 slowdns_ns=$9
   local msg="<b>+==================================================+</b>
@@ -105,9 +102,65 @@ En APPS comme HTTP Injector, Netmod, SSC, etc.
 <b>NameServer (NS) :</b> $slowdns_ns
 <b>──────────────────────────────────────────────────</b>
 <b>Le compte sera supprimé automatiquement après $limite minutes.</b>
-<b>Compte créé avec succès</b>
-"
+<b>Compte créé avec succès</b>"
   send_message "$chat_id" "$msg"
+}
+
+send_connected_devices() {
+  local chat_id=$1
+  local output
+
+  output=$(bash << 'EOF'
+RED="\e[31m"
+GREEN="\e[32m"
+YELLOW="\e[33m"
+CYAN="\e[36m"
+BOLD="\e[1m"
+RESET="\e[0m"
+
+USER_FILE="/etc/kighmu/users.list"
+AUTH_LOG="/var/log/auth.log"
+
+if [ ! -f "$USER_FILE" ]; then
+    echo -e "${RED}Fichier utilisateur introuvable.${RESET}"
+    exit 1
+fi
+
+declare -A user_counts
+
+while read -r pid user cmd; do
+  if [[ "$cmd" == *sshd* && "$user" != "root" ]]; then
+    ((user_counts[$user]++))
+  fi
+done < <(ps -eo pid,user,comm)
+
+if [[ -f $AUTH_LOG ]]; then
+  drop_pids=$(ps aux | grep '[d]ropbear' | awk '{print $2}')
+  for pid in $drop_pids; do
+    user=$(grep -a "sshd.*$pid" $AUTH_LOG | tail -1 | awk '{print $10}')
+    if [[ -n "$user" ]]; then
+      ((user_counts[$user]++))
+    fi
+  done
+fi
+
+if [[ -f /etc/openvpn/openvpn-status.log ]]; then
+  while read -r line; do
+    user=$(echo "$line" | cut -d',' -f2)
+    ((user_counts[$user]++))
+  done < <(grep CLIENT_LIST /etc/openvpn/openvpn-status.log)
+fi
+
+printf "${BOLD}%-20s %-15s\n${RESET}" "UTILISATEUR" "CONNECTÉS"
+echo -e "${CYAN}-----------------------------------------${RESET}"
+
+for username in "${!user_counts[@]}"; do
+  printf "%-20s %-15d\n" "$username" "${user_counts[$username]}"
+done
+EOF
+)
+
+  send_message "$chat_id" "<pre>$output</pre>"
 }
 
 create_user() {
@@ -144,9 +197,10 @@ handle_command() {
     local keyboard=$(ShellBot.InlineKeyboard \
       --button '👤 Création Utilisateur' create_user_callback \
       --button '🧪 Création Utilisateur Test' create_user_test_callback \
+      --button '📶 Appareils Connectés' connected_devices_callback \
       --button '🏢 Infos VPS' info_vps_callback)
     send_message "$chat_id" "<b>KIGHMU BOT</b> - Menu Principal"
-    ShellBot.sendMessage --chat_id "$chat_id" --text "Choisissez une option:" --reply_markup "$keyboard" --parse_mode html
+    ShellBot.sendMessage --chat_id "$chat_id" --text "Choisissez une option :" --reply_markup "$keyboard" --parse_mode html
   else
     send_message "$chat_id" "<b>Commande inconnue. Utilisez /menu.</b>"
   fi
@@ -154,19 +208,26 @@ handle_command() {
 
 process_callbacks() {
   for id in "${!callback_query_data[@]}"; do
-    case "${callback_query_data[$id]}" in
+    local data=${callback_query_data[$id]}
+    local chat_id=${callback_query_message_chat_id[$id]}
+
+    case "$data" in
       create_user_callback)
         ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Création utilisateur sélectionnée"
-        ShellBot.sendMessage --chat_id "${callback_query_message_chat_id[$id]}" --text "Envoyez: username password limite days" --reply_markup "$(ShellBot.ForceReply)"
+        ShellBot.sendMessage --chat_id "$chat_id" --text "Envoyez: username password limite days" --reply_markup "$(ShellBot.ForceReply)"
         ;;
       create_user_test_callback)
         ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Création utilisateur test sélectionnée"
-        ShellBot.sendMessage --chat_id "${callback_query_message_chat_id[$id]}" --text "Envoyez: username password limite minutes" --reply_markup "$(ShellBot.ForceReply)"
+        ShellBot.sendMessage --chat_id "$chat_id" --text "Envoyez: username password limite minutes" --reply_markup "$(ShellBot.ForceReply)"
+        ;;
+      connected_devices_callback)
+        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Appareils connectés"
+        send_connected_devices "$chat_id"
         ;;
       info_vps_callback)
         ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Infos VPS"
         local info="Uptime: $(uptime -p)\nRAM libre: $(free -h | awk '/^Mem:/ {print $4}')\nCPU load: $(top -bn1 | grep 'Cpu(s)' | awk '{print $2 + $4}')%"
-        send_message "${callback_query_message_chat_id[$id]}" "<b>Infos VPS :</b>\n$info"
+        send_message "$chat_id" "<b>Infos VPS :</b>\n$info"
         ;;
       *)
         ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Option inconnue"
