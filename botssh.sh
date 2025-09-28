@@ -179,7 +179,7 @@ create_user() {
 
 create_user_test() {
   local chat_id=$1 username=$2 password=$3 limite=$4 minutes=$5
-  bash "$KIGHMU_DIR/menu_test.sh" "$username" "$password" "$limite" "$minutes"
+  bash "$KIGHMU_DIR/menu2.sh" "$username" "$password" "$limite" "$minutes"
   if [[ $? -eq 0 ]]; then
     local host_ip=$(curl -s https://api.ipify.org)
     local expire_date=$(date -d "+$minutes minutes" '+%Y-%m-%d %H:%M:%S')
@@ -191,6 +191,39 @@ create_user_test() {
   fi
 }
 
+edit_user() {
+  local chat_id=$1 username=$2 new_password=$3 new_days=$4
+  local USER_FILE="/etc/kighmu/users.list"
+
+  user_line=$(grep "^$username|" "$USER_FILE")
+  if [ -z "$user_line" ]; then
+    send_message "$chat_id" "<b>Erreur :</b> Utilisateur $username introuvable."
+    return
+  fi
+
+  IFS="|" read -r user pass limite expire_date hostip domain slowdns_ns <<< "$user_line"
+
+  if [[ -n "$new_days" && "$new_days" =~ ^[0-9]+$ ]]; then
+    if [ "$new_days" -eq 0 ]; then
+      new_expire="none"
+    else
+      new_expire=$(date -d "+$new_days days" +%Y-%m-%d)
+    fi
+    limite=$new_days
+    expire_date=$new_expire
+  fi
+
+  if [[ -n "$new_password" && "$new_password" != "skip" ]]; then
+    pass=$new_password
+    echo -e "$new_password\n$new_password" | sudo passwd "$username" >/dev/null 2>&1
+  fi
+
+  new_line="${user}|${pass}|${limite}|${expire_date}|${hostip}|${domain}|${slowdns_ns}"
+  sed -i "s/^$user|.*/$new_line/" "$USER_FILE"
+
+  send_message "$chat_id" "<b>Utilisateur $username modifié avec succès ✅</b>"
+}
+
 handle_command() {
   local chat_id=$1 user=$2 msg=$3
   if [[ "$msg" == "/start" || "$msg" == "/menu" ]]; then
@@ -198,6 +231,7 @@ handle_command() {
       --button '👤 Création Utilisateur' create_user_callback \
       --button '🧪 Création Utilisateur Test' create_user_test_callback \
       --button '📶 Appareils Connectés' connected_devices_callback \
+      --button '✏️ Modifier Utilisateur' edit_user_callback \
       --button '🏢 Infos VPS' info_vps_callback)
     send_message "$chat_id" "<b>KIGHMU BOT</b> - Menu Principal"
     ShellBot.sendMessage --chat_id "$chat_id" --text "Choisissez une option :" --reply_markup "$keyboard" --parse_mode html
@@ -224,6 +258,10 @@ process_callbacks() {
         ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Appareils connectés"
         send_connected_devices "$chat_id"
         ;;
+      edit_user_callback)
+        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Modifier utilisateur"
+        ShellBot.sendMessage --chat_id "$chat_id" --text "Envoyez: username new_password new_days" --reply_markup "$(ShellBot.ForceReply)"
+        ;;
       info_vps_callback)
         ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Infos VPS"
         local info="Uptime: $(uptime -p)\nRAM libre: $(free -h | awk '/^Mem:/ {print $4}')\nCPU load: $(top -bn1 | grep 'Cpu(s)' | awk '{print $2 + $4}')%"
@@ -248,6 +286,9 @@ process_forcereply() {
     elif [[ "$replied_text" =~ "Envoyez: username password limite minutes" ]]; then
       IFS=' ' read -r username password limite minutes <<< "$text"
       create_user_test "$chat_id" "$username" "$password" "$limite" "$minutes"
+    elif [[ "$replied_text" =~ "Envoyez: username new_password new_days" ]]; then
+      IFS=' ' read -r username new_password new_days <<< "$text"
+      edit_user "$chat_id" "$username" "$new_password" "$new_days"
     fi
   done
 }
