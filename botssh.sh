@@ -262,24 +262,24 @@ process_callbacks() {
         ShellBot.sendMessage --chat_id "$chat_id" --text "Envoyez: username password limite minutes" --reply_markup "$(ShellBot.ForceReply)"
         ;;
       connected_devices_callback)
-        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Appareils connectés"
+        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_data[$id]}" --text "Appareils connectés"
         send_connected_devices "$chat_id"
         ;;
       edit_user_callback)
-        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Modifier utilisateur"
+        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_data[$id]}" --text "Modifier utilisateur"
         ShellBot.sendMessage --chat_id "$chat_id" --text "Envoyez: username new_password new_days" --reply_markup "$(ShellBot.ForceReply)"
         ;;
       delete_user_callback)
-        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Suppression utilisateur sélectionnée"
+        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_data[$id]}" --text "Suppression utilisateur sélectionnée"
         ShellBot.sendMessage --chat_id "$chat_id" --text "Envoyez le nom d’utilisateur à supprimer :" --reply_markup "$(ShellBot.ForceReply)"
         ;;
       info_vps_callback)
-        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Infos VPS"
+        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_data[$id]}" --text "Infos VPS"
         local info="Uptime: $(uptime -p)\nRAM libre: $(free -h | awk '/^Mem:/ {print $4}')\nCPU load: $(top -bn1 | grep 'Cpu(s)' | awk '{print $2 + $4}')%"
         send_message "$chat_id" "<b>Infos VPS :</b>\n$info"
         ;;
       *)
-        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_id[$id]}" --text "Option inconnue"
+        ShellBot.answerCallbackQuery --callback_query_id "${callback_query_data[$id]}" --text "Option inconnue"
         ;;
     esac
   done
@@ -306,49 +306,18 @@ process_forcereply() {
   done
 }
 
-start_bot() {
-  install_shellbot
-  check_sudo
-  source /etc/kighmu/ShellBot.sh
-  if [ -f ~/.kighmu_info ]; then
-    source ~/.kighmu_info
-  else
-    echo "⚠️ ~/.kighmu_info introuvable, variables globales manquantes."
-  fi
-  ShellBot.init --token "$API_TOKEN" --monitor --return map --flush
-  ShellBot.username
-  local offset=0
-  while true; do
-    ShellBot.getUpdates --limit 100 --offset "$offset" --timeout 0
-    for id in "${!message_text[@]}"; do
-      handle_command "${message_chat_id[$id]}" "${message_from_username[$id]}" "${message_text[$id]}"
-    done
-    process_callbacks
-    process_forcereply
-    if [ "${#update_update_id[@]}" -gt 0 ]; then
-      local max=0
-      for id in "${!update_update_id[@]}"; do
-        if (( update_update_id[id] > max )); then
-          max=${update_update_id[id]}
-        fi
-      done
-      offset=$((max + 1))
-    fi
-  done
-}
-
 main_menu() {
   print_header
-  echo -e "${BLUE_BG}${WHITE} 1) Démarrer le bot                              ${RESET}"
-  echo -e "${BLUE_BG}${WHITE} 2) Entrer / modifier API_TOKEN et ADMIN_ID    ${RESET}"
-  echo -e "${BLUE_BG}${WHITE} 3) Quitter                                    ${RESET}"
-  echo -e "${BLUE_BG}${WHITE}====================================================${RESET}"
+  echo -e "${BLUE_BG}${WHITE} 1) Démarrer le bot                            ${RESET}"
+  echo -e "${BLUE_BG}${WHITE} 2) Entrer / modifier API_TOKEN et ADMIN_ID  ${RESET}"
+  echo -e "${BLUE_BG}${WHITE} 3) Quitter                                  ${RESET}"
+  echo -e "${BLUE_BG}${WHITE}==================================================${RESET}"
   echo -n "Choisissez une option [1-3] : "
   read -r choice
   case "$choice" in
     1)
       if [ -z "$API_TOKEN" ] || [ -z "$ADMIN_ID" ]; then
-        echo "⚠️ Veuillez d'abord entrer le API_TOKEN et l'ADMIN_ID."
+        echo "⚠️ Veuillez saisir d'abord le API_TOKEN et l'ADMIN_ID."
         ask_credentials
       fi
       start_bot
