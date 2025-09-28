@@ -6,6 +6,10 @@ BLUE_BG="\e[44m"
 RESET="\e[0m"
 WHITE="\e[97m"
 
+API_TOKEN=""
+ADMIN_ID=""
+KIGHMU_DIR="$HOME/Kighmu"
+
 install_shellbot() {
   if [[ ! -f /etc/kighmu/ShellBot.sh ]]; then
     sudo mkdir -p /etc/kighmu
@@ -21,45 +25,10 @@ check_sudo() {
   fi
 }
 
-API_TOKEN=""
-ADMIN_ID=""
-KIGHMU_DIR="$HOME/Kighmu"
-
 print_header() {
   echo -e "${BLUE_BG}${WHITE}====================================================${RESET}"
   echo -e "${BLUE_BG}${WHITE}   KIGHMU Telegram VPS Bot Manager - Menu Principal  ${RESET}"
   echo -e "${BLUE_BG}${WHITE}====================================================${RESET}"
-}
-
-main_menu() {
-  print_header
-  echo -e "${BLUE_BG}${WHITE} 1) Démarrer le bot                              ${RESET}"
-  echo -e "${BLUE_BG}${WHITE} 2) Entrer / modifier API_TOKEN et ADMIN_ID    ${RESET}"
-  echo -e "${BLUE_BG}${WHITE} 3) Quitter                                    ${RESET}"
-  echo -e "${BLUE_BG}${WHITE}====================================================${RESET}"
-  echo -n "Choisissez une option [1-3] : "
-  read choice
-  case "$choice" in
-    1)
-      if [[ -z "$API_TOKEN" || -z "$ADMIN_ID" ]]; then
-        echo "⚠️ Veuillez d'abord entrer le API_TOKEN et l'ADMIN_ID."
-        ask_credentials
-      fi
-      start_bot
-      ;;
-    2)
-      ask_credentials
-      main_menu
-      ;;
-    3)
-      echo "Au revoir!"
-      exit 0
-      ;;
-    *)
-      echo "Choix invalide."
-      main_menu
-      ;;
-  esac
 }
 
 ask_credentials() {
@@ -67,6 +36,7 @@ ask_credentials() {
   read API_TOKEN
   echo -n "Entrez l'ADMIN_TELEGRAM_ID (ID administrateur Telegram) : "
   read ADMIN_ID
+  echo ""
 }
 
 send_message() {
@@ -358,6 +328,37 @@ process_forcereply() {
       delete_user "$chat_id" "$username"
     fi
   done
+}
+
+main_menu() {
+  print_header
+  echo -e "${BLUE_BG}${WHITE} 1) Démarrer le bot                              ${RESET}"
+  echo -e "${BLUE_BG}${WHITE} 2) Entrer / modifier API_TOKEN et ADMIN_ID    ${RESET}"
+  echo -e "${BLUE_BG}${WHITE} 3) Quitter                                    ${RESET}"
+  echo -e "${BLUE_BG}${WHITE}====================================================${RESET}"
+  echo -n "Choisissez une option [1-3] : "
+  read choice
+  case "$choice" in
+    1)
+      if [[ -z "$API_TOKEN" || -z "$ADMIN_ID" ]]; then
+        echo "⚠️ Veuillez d'abord entrer le API_TOKEN et l'ADMIN_ID."
+        ask_credentials
+      fi
+      start_bot
+      ;;
+    2)
+      ask_credentials
+      main_menu
+      ;;
+    3)
+      echo "Au revoir!"
+      exit 0
+      ;;
+    *)
+      echo "Choix invalide."
+      main_menu
+      ;;
+  esac
 }
 
 # Démarrer le menu principal
