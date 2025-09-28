@@ -1,151 +1,95 @@
 #!/bin/bash
-
-set -euo pipefail
-IFS=$'\n\t'
-
-DIR=/var/www/html
-ARCHIVO=monitor.html
-
-mkdir -p "$DIR"
+RED="\e[31m"
+GREEN="\e[32m"
+YELLOW="\e[33m"
+CYAN="\e[36m"
+BOLD="\e[1m"
+RESET="\e[0m"
 
 USER_FILE="/etc/kighmu/users.list"
-AUTH_LOG="/var/log/auth.log"
-OPENVPN_STATUS="/etc/openvpn/openvpn-status.log"
 
-FECHA=$(date +'%d/%m/%Y %H:%M:%S')
+clear
+echo -e "${CYAN}+==============================================+${RESET}"
+echo -e "|            GESTION DES UTILISATEURS         |"
+echo -e "${CYAN}+==============================================+${RESET}"
 
-service_exists() {
-    systemctl list-unit-files --type=service | grep -q "^$1"
-}
+if [ ! -f "$USER_FILE" ]; then
+    echo -e "${RED}Fichier utilisateur introuvable.${RESET}"
+    exit 1
+fi
 
-EstadoServicio() {
-    local service=$1
-    if ! service_exists "$service.service"; then
-        echo "<p>Service $service non installé ou introuvable.</p>" >> "$DIR/$ARCHIVO"
-        return 1
-    fi
-    if systemctl --quiet is-active "$service"; then
-        echo "<p>Service status $service is || <span class='encendido'> ACTIVE</span>.</p>" >> "$DIR/$ARCHIVO"
-    else
-        echo "<p>Service status $service is || <span class='detenido'> OFF | REBOOTING</span>.</p>" >> "$DIR/$ARCHIVO"
-        if service "$service" restart; then
-            echo "<p>$service redémarré avec succès.</p>" >> "$DIR/$ARCHIVO"
-        else
-            echo "<p>Échec lors du redémarrage de $service.</p>" >> "$DIR/$ARCHIVO"
+printf "${BOLD}%-20s %-10s %-10s${RESET}\n" "UTILISATEUR" "LIMITÉ" "APPAREILS"
+echo -e "${CYAN}----------------------------------------------${RESET}"
+
+# Connexions SSH/Dropbear via 'who'
+declare -A ssh_counts
+while read -r user _; do
+    ((ssh_counts[$user]++))
+done < <(who)
+
+# Connexions Dropbear extraites de logs (fonction adaptée, exemple très basique)
+fun_drop() {
+    port_dropbear=$(ps aux | grep dropbear | awk 'NR==1 {print $17}')
+    log=/var/log/auth.log
+    loginsukses='Password auth succeeded'
+    pids=$(ps ax | grep dropbear | grep " $port_dropbear" | awk '{print $1}')
+    declare -A dropd
+
+    for pid in $pids; do
+        login=$(grep "$pid" "$log" | grep "$loginsukses" | tail -1)
+        if [[ $login ]]; then
+            user=$(echo "$login" | awk '{print $10}')
+            ((dropd[$user]++))
         fi
-        NOM=$(< /etc/VPS-AGN/controller/nombre.log || echo "Unknown")
-        IDB=$(< /etc/VPS-AGN/controller/IDT.log || echo "")
-        KEY="862633455:AAEgkSywlAHQQOMXzGHJ13gctV6wO1hm25Y"
-        if [[ -n "$IDB" ]]; then
-            URL="https://api.telegram.org/bot$KEY/sendMessage"
-            MSG="⚠️ _VPS NOTICE:_ *$NOM* ⚠️\n❗️ _Protocol_ *[ $service ]* _with Fail_ ❗️ \n🛠 _-- Restarting Protocol_ -- 🛠 "
-            curl -s --max-time 10 -d "chat_id=$IDB&disable_web_page_preview=true&parse_mode=markdown&text=$MSG" "$URL" || echo "Erreur notification Telegram"
-        else
-            echo "<p>Chat Telegram ID manquant, notification non envoyée.</p>" >> "$DIR/$ARCHIVO"
-        fi
-    fi
+    done
+
+    for u in "${!dropd[@]}"; do
+        echo "$u ${dropd[$u]}"
+    done
 }
 
-cat > "$DIR/$ARCHIVO" <<EOF
-<!DOCTYPE html>
-<html lang='en'>
-<head>
-<meta charset='UTF-8' />
-<meta name='viewport' content='width=device-width, initial-scale=1' />
-<title>VPS-AGN Service Monitor</title>
-<link rel='stylesheet' href='estilos.css'>
-<style>
-.encendido { color: green; font-weight: bold; }
-.detenido { color: red; font-weight: bold; }
-table { border-collapse: collapse; width: 100%; }
-th, td { border: 1px solid #ddd; padding: 8px; }
-th { background-color: #4CAF50; color: white; }
-pre.cadre-title {
-  color: cyan;
-  border: 2px solid cyan;
-  padding: 5px;
-  width: fit-content;
-  font-family: monospace;
-  white-space: pre;
-  margin-bottom: 10px;
-}
-</style>
-</head>
-<body>
-<h1>Monitor Service By @KhaledAGN</h1>
-<p id='ultact'>Dernière mise à jour : $FECHA</p>
-<hr>
-EOF
-
-SERVICES=(v2ray ssh dropbear stunnel4 squid squid3 apache2)
-for srv in "${SERVICES[@]}"; do
-  EstadoServicio "$srv"
-done
-
-if pgrep -x badvpn >/dev/null 2>&1; then
-  echo "<p>Badvpn service status is || <span class='encendido'> ACTIVE</span>.</p>" >> "$DIR/$ARCHIVO"
-else
-  echo "<p>Badvpn service status is || <span class='detenido'> OFF | REBOOTING</span>.</p>" >> "$DIR/$ARCHIVO"
-  screen -dmS badvpn2 /bin/badvpn-udpgw --listen-addr 127.0.0.1:7300 --max-clients 1000 --max-connections-for-client 10
+declare -A drop_counts
+if netstat -nltp | grep -q 'dropbear'; then
+    while read -r user count; do
+        drop_counts["$user"]=$count
+    done < <(fun_drop)
 fi
 
-if [[ -f /etc/VPS-AGN/PortPD.log ]]; then
-  while IFS= read -r port; do
-    if ! pgrep -f "pydic-$port" >/dev/null 2>&1; then
-      screen -dmS "pydic-$port" python /etc/VPS-AGN/protocolos/PDirect.py "$port"
-    fi
-  done < <(grep -v nobody /etc/VPS-AGN/PortPD.log | cut -d' ' -f1)
+# Connexions OpenVPN (très basique)
+declare -A ovpn_counts
+if [[ -f /etc/openvpn/openvpn-status.log ]]; then
+    while read -r line; do
+        user=$(echo "$line" | cut -d',' -f2)
+        ((ovpn_counts[$user]++))
+    done < <(grep CLIENT_LIST /etc/openvpn/openvpn-status.log)
 fi
 
-if [[ -f /etc/VPS-AGN/PySSL.log ]]; then
-  while IFS= read -r port; do
-    if ! pgrep -f "pyssl-$port" >/dev/null 2>&1; then
-      screen -dmS "pyssl-$port" python /etc/VPS-AGN/protocolos/python.py "$port"
-    fi
-  done < <(grep -v nobody /etc/VPS-AGN/PySSL.log | cut -d' ' -f1)
-fi
+# IPs clients SlowDNS/UDP Custom/SOCKS Python
+mapfile -t slowdns_ips < <(ss -u -a | grep ":5300" | awk '{print $5}' | cut -d':' -f1 | sort | uniq)
+mapfile -t udp_custom_ips < <(ss -u -a | grep ":54000" | awk '{print $5}' | cut -d':' -f1 | sort | uniq)
+mapfile -t socks_ips < <(ss -tn src :8080 | awk 'NR>1 {print $5}' | cut -d':' -f1 | sort | uniq)
 
-if pgrep -f PDirect.py >/dev/null 2>&1; then
-  P3="<span class='encendido'> ACTIF </span>"
-else
-  P3="<span class='detenido'> DESACTIVÉ | REDEMARRAGE </span>"
-fi
-echo "<p>PythonDirec service status is || $P3</p>" >> "$DIR/$ARCHIVO"
+while IFS="|" read -r username password limite expire_date hostip domain slowdns_ns; do
+    ssh_connected=${ssh_counts[$username]:-0}
+    drop_connected=${drop_counts[$username]:-0}
+    ovpn_connected=${ovpn_counts[$username]:-0}
 
-if [[ -f "$USER_FILE" ]]; then
-  # Titre cadre console exact
-  echo "<pre class='cadre-title'>" >> "$DIR/$ARCHIVO"
-  echo "+==============================================+" >> "$DIR/$ARCHIVO"
-  echo "|            UTILISATEURS ET CONNEXIONS        |" >> "$DIR/$ARCHIVO"
-  echo "+==============================================+" >> "$DIR/$ARCHIVO"
-  echo "</pre>" >> "$DIR/$ARCHIVO"
-  
-  echo "<table><thead><tr><th>Utilisateur</th><th>Limite</th><th>Connexions</th><th>Appareils</th><th>Connexions OpenVPN</th></tr></thead><tbody>" >> "$DIR/$ARCHIVO"
-  
-  while IFS="|" read -r username password limite expire_date hostip domain slowdns_ns; do
-    ssh_connexions=$(ps aux | grep "sshd: $username@" | grep -v grep | wc -l || echo 0)
-    ssh_unique_ips=$(ss -tnp 2>/dev/null | grep sshd | grep ESTAB | grep "$username@" | awk '{print $5}' | cut -d':' -f1 | sort | uniq | wc -l || echo 0)
-    drop_connexions=$(pgrep -u "$username" dropbear | wc -l || echo 0)
-    drop_unique_ips=$(grep "dropbear.*Password auth succeeded" "$AUTH_LOG" 2>/dev/null | grep "for $username" | awk '{print $(NF-3)}' | sort | uniq | wc -l || echo 0)
-    if ! pgrep dropbear >/dev/null 2>&1; then
-      drop_connexions=0
-      drop_unique_ips=0
-    fi
-    if [[ -f "$OPENVPN_STATUS" ]]; then
-      openvpn_connexions=$(grep -w "$username" "$OPENVPN_STATUS" | wc -l || echo 0)
-    else
-      openvpn_connexions=0
-    fi
-    
-    total_connexions=$((ssh_connexions + drop_connexions))
-    total_unique_ips=$((ssh_unique_ips + drop_unique_ips))
+    total_conn=$((ssh_connected + drop_connected + ovpn_connected))
 
-    echo "<tr><td>$username</td><td>$limite</td><td>$total_connexions</td><td>$total_unique_ips</td><td>$openvpn_connexions</td></tr>" >> "$DIR/$ARCHIVO"
-  done < "$USER_FILE"
+    for ip in "${slowdns_ips[@]}"; do
+        [[ "$ip" == "$hostip" ]] && total_conn=$((total_conn + 1)) && break
+    done
 
-  echo "</tbody></table>" >> "$DIR/$ARCHIVO"
-else
-  echo "<p>Fichier utilisateurs $USER_FILE introuvable.</p>" >> "$DIR/$ARCHIVO"
-fi
+    for ip in "${udp_custom_ips[@]}"; do
+        [[ "$ip" == "$hostip" ]] && total_conn=$((total_conn + 1)) && break
+    done
 
-echo "</body></html>" >> "$DIR/$ARCHIVO"
+    for ip in "${socks_ips[@]}"; do
+        [[ "$ip" == "$hostip" ]] && total_conn=$((total_conn + 1)) && break
+    done
+
+    printf "%-20s %-10s %-10d\n" "$username" "$limite" "$total_conn"
+done < "$USER_FILE"
+
+echo -e "${CYAN}+==============================================+${RESET}"
+read -p "Appuyez sur Entrée pour revenir au menu..."
