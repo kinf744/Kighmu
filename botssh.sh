@@ -2,10 +2,11 @@
 # KIGHMU Telegram VPS Bot Manager complet avec suppression utilisateur
 
 install_shellbot() {
-  if [[ ! -f /etc/DARKssh/ShellBot.sh ]]; then
-    sudo mkdir -p /etc/DARKssh
-    sudo wget -qO /etc/DARKssh/ShellBot.sh https://raw.githubusercontent.com/shellscriptx/shellbot/master/ShellBot.sh
-    sudo chmod +x /etc/DARKssh/ShellBot.sh
+  if [[ ! -f /etc/kighmu/ShellBot.sh ]]; then
+    sudo mkdir -p /etc/kighmu
+    # Téléchargement depuis ton dépôt GitHub
+    sudo wget -qO /etc/kighmu/ShellBot.sh https://raw.githubusercontent.com/kinf744/Kighmu/main/ShellBot.sh
+    sudo chmod +x /etc/kighmu/ShellBot.sh
   fi
 }
 
