@@ -1,7 +1,7 @@
 #!/bin/bash
 # KIGHMU Telegram VPS Bot Manager complet avec suppression utilisateur et menu interactif ASCII
 
-# Codes couleurs ANSI
+# Couleurs ANSI
 BLUE_BG="\e[44m"
 RESET="\e[0m"
 WHITE="\e[97m"
@@ -11,7 +11,7 @@ ADMIN_ID=""
 KIGHMU_DIR="$HOME/Kighmu"
 
 install_shellbot() {
-  if [[ ! -f /etc/kighmu/ShellBot.sh ]]; then
+  if [ ! -f /etc/kighmu/ShellBot.sh ]; then
     sudo mkdir -p /etc/kighmu
     sudo wget -qO /etc/kighmu/ShellBot.sh https://raw.githubusercontent.com/kinf744/Kighmu/main/ShellBot.sh
     sudo chmod +x /etc/kighmu/ShellBot.sh
@@ -33,9 +33,9 @@ print_header() {
 
 ask_credentials() {
   echo -n "Entrez le API_TOKEN de votre bot Telegram : "
-  read API_TOKEN
+  read -r API_TOKEN
   echo -n "Entrez l'ADMIN_TELEGRAM_ID (ID administrateur Telegram) : "
-  read ADMIN_ID
+  read -r ADMIN_ID
   echo ""
 }
 
@@ -165,7 +165,7 @@ EOF
 create_user() {
   local chat_id=$1 username=$2 password=$3 limite=$4 days=$5
   bash "$KIGHMU_DIR/menu1.sh" "$username" "$password" "$limite" "$days"
-  if [[ $? -eq 0 ]]; then
+  if [ $? -eq 0 ]; then
     local host_ip=$(curl -s https://api.ipify.org)
     local expire_date=$(date -d "+$days days" '+%Y-%m-%d')
     local slowdns_key=$(sed ':a;N;$!ba;s/\n/\\n/g' /etc/slowdns/server.pub 2>/dev/null || echo "N/A")
@@ -179,7 +179,7 @@ create_user() {
 create_user_test() {
   local chat_id=$1 username=$2 password=$3 limite=$4 minutes=$5
   bash "$KIGHMU_DIR/menu2.sh" "$username" "$password" "$limite" "$minutes"
-  if [[ $? -eq 0 ]]; then
+  if [ $? -eq 0 ]; then
     local host_ip=$(curl -s https://api.ipify.org)
     local expire_date=$(date -d "+$minutes minutes" '+%Y-%m-%d %H:%M:%S')
     local slowdns_key=$(sed ':a;N;$!ba;s/\n/\\n/g' /etc/slowdns/server.pub 2>/dev/null || echo "N/A")
@@ -200,7 +200,7 @@ edit_user() {
     return
   fi
 
-  IFS="|" read -r user pass limite expire_date hostip domain slowdns_ns <<< "$user_line"
+  IFS='|' read -r user pass limite expire_date hostip domain slowdns_ns <<< "$user_line"
 
   if [[ -n "$new_days" && "$new_days" =~ ^[0-9]+$ ]]; then
     if [ "$new_days" -eq 0 ]; then
@@ -224,8 +224,7 @@ edit_user() {
 }
 
 delete_user() {
-  local chat_id=$1
-  local username=$2
+  local chat_id=$1 username=$2
   local USER_FILE="/etc/kighmu/users.list"
 
   if ! grep -q "^$username|" "$USER_FILE"; then
@@ -330,6 +329,30 @@ process_forcereply() {
   done
 }
 
+start_bot() {
+  install_shellbot
+  check_sudo
+  source /etc/kighmu/ShellBot.sh
+
+  if [ -f ~/.kighmu_info ]; then
+    source ~/.kighmu_info
+  else
+    echo "⚠️ ~/.kighmu_info introuvable, variables globales manquantes."
+  fi
+
+  ShellBot.init --token "$API_TOKEN" --monitor --return map --flush
+  ShellBot.username
+
+  while true; do
+    ShellBot.getUpdates --limit 100 --offset "$(ShellBot.Offset)" --timeout 0
+    for id in "${!message_text[@]}"; do
+      handle_command "${message_chat_id[$id]}" "${message_from_username[$id]}" "${message_text[$id]}"
+    done
+    process_callbacks
+    process_forcereply
+  done
+}
+
 main_menu() {
   print_header
   echo -e "${BLUE_BG}${WHITE} 1) Démarrer le bot                              ${RESET}"
@@ -337,10 +360,10 @@ main_menu() {
   echo -e "${BLUE_BG}${WHITE} 3) Quitter                                    ${RESET}"
   echo -e "${BLUE_BG}${WHITE}====================================================${RESET}"
   echo -n "Choisissez une option [1-3] : "
-  read choice
+  read -r choice
   case "$choice" in
     1)
-      if [[ -z "$API_TOKEN" || -z "$ADMIN_ID" ]]; then
+      if [ -z "$API_TOKEN" ] || [ -z "$ADMIN_ID" ]; then
         echo "⚠️ Veuillez d'abord entrer le API_TOKEN et l'ADMIN_ID."
         ask_credentials
       fi
@@ -361,5 +384,6 @@ main_menu() {
   esac
 }
 
-# Démarrer le menu principal
+################
+# Lancer le panneau de contrôle
 main_menu
