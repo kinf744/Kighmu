@@ -305,6 +305,134 @@ process_forcereply() {
   done
 }
 
+start_bot() {
+  install_shellbot
+  source /etc/kighmu/ShellBot.sh
+
+  if [[ -z "$API_TOKEN" || -z "$ADMIN_ID" ]]; then
+    echo "⚠️ Le API_TOKEN ou ADMIN_ID est vide. Veuillez configurer avant de démarrer."
+    return 1
+  fi
+
+  ShellBot.init --token "$API_TOKEN" --monitor --return map --flush
+
+  echo "🤖 Bot démarré. En attente des commandes..."
+
+  offset=0
+
+  while true; do
+    response=$(ShellBot.getUpdates --limit 100 --offset "$offset" --timeout 30)
+    if [[ $? -ne 0 ]]; then
+      echo "Erreur lors de la récupération des mises à jour."
+      sleep 10
+      continue
+    fi
+
+    mapfile -t update_ids < <(jq -r '.result[].update_id' <<<"$response")
+
+    for update_id in "${update_ids[@]}"; do
+      offset=$((update_id + 1))
+    done
+
+    mapfile -t message_chat_id < <(jq -r '.result[].message.chat.id // empty' <<<"$response")
+    mapfile -t message_text < <(jq -r '.result[].message.text // empty' <<<"$response")
+    mapfile -t message_from_id < <(jq -r '.result[].message.from.id // empty' <<<"$response")
+    mapfile -t message_reply_text < <(jq -r '.result[].message.reply_to_message.text // empty' <<<"$response")
+
+    local_msgs_count=${#message_text[@]}
+    for ((i = 0; i < local_msgs_count; i++)); do
+      chat_id=${message_chat_id[i]}
+      text=${message_text[i]}
+      from_id=${message_from_id[i]}
+      replied_text=${message_reply_text[i]}
+
+      if [[ "$from_id" != "$ADMIN_ID" ]]; then
+        ShellBot.sendMessage --chat_id "$chat_id" --text "🚫 Accès refusé." --parse_mode html
+        continue
+      fi
+
+      if [[ -n "$replied_text" ]]; then
+        if [[ "$replied_text" == *"Envoyez: username password limite days"* ]]; then
+          IFS=' ' read -r username password limite days <<<"$text"
+          create_user "$chat_id" "$username" "$password" "$limite" "$days"
+          continue
+        elif [[ "$replied_text" == *"Envoyez: username password limite minutes"* ]]; then
+          IFS=' ' read -r username password limite minutes <<<"$text"
+          create_user_test "$chat_id" "$username" "$password" "$limite" "$minutes"
+          continue
+        elif [[ "$replied_text" == *"Envoyez: username new_password new_days"* ]]; then
+          IFS=' ' read -r username new_password new_days <<<"$text"
+          edit_user "$chat_id" "$username" "$new_password" "$new_days"
+          continue
+        elif [[ "$replied_text" == *"Envoyez le nom d’utilisateur à supprimer"* ]]; then
+          delete_user "$chat_id" "$text"
+          continue
+        fi
+      fi
+
+      case "$text" in
+      /start | /menu)
+        handle_command "$chat_id" "$from_id" "$text"
+        ;;
+      *)
+        send_message "$chat_id" "<b>Commande inconnue. Utilisez /menu.</b>"
+        ;;
+      esac
+    done
+
+    mapfile -t callback_query_id < <(jq -r '.result[].callback_query.id // empty' <<<"$response")
+    mapfile -t callback_query_data < <(jq -r '.result[].callback_query.data // empty' <<<"$response")
+    mapfile -t callback_query_message_chat_id < <(jq -r '.result[].callback_query.message.chat.id // empty' <<<"$response")
+    mapfile -t callback_query_from_id < <(jq -r '.result[].callback_query.from.id // empty' <<<"$response")
+    mapfile -t callback_query_from_username < <(jq -r '.result[].callback_query.from.username // empty' <<<"$response")
+
+    local_callbacks_count=${#callback_query_id[@]}
+    for ((i = 0; i < local_callbacks_count; i++)); do
+      call_id=${callback_query_id[i]}
+      data=${callback_query_data[i]}
+      chat_id=${callback_query_message_chat_id[i]}
+      from_id=${callback_query_from_id[i]}
+      from_username=${callback_query_from_username[i]}
+
+      if [[ "$from_id" != "$ADMIN_ID" ]]; then
+        ShellBot.answerCallbackQuery --callback_query_id "$call_id" --text "🚫 Accès refusé"
+        continue
+      fi
+
+      case "$data" in
+      create_user_callback)
+        ShellBot.answerCallbackQuery --callback_query_id "$call_id" --text "Création utilisateur sélectionnée"
+        ShellBot.sendMessage --chat_id "$chat_id" --text "Envoyez: username password limite days" --reply_markup "$(ShellBot.ForceReply)"
+        ;;
+      create_user_test_callback)
+        ShellBot.answerCallbackQuery --callback_query_id "$call_id" --text "Création utilisateur test sélectionnée"
+        ShellBot.sendMessage --chat_id "$chat_id" --text "Envoyez: username password limite minutes" --reply_markup "$(ShellBot.ForceReply)"
+        ;;
+      connected_devices_callback)
+        ShellBot.answerCallbackQuery --callback_query_id "$call_id" --text "Appareils connectés"
+        send_connected_devices "$chat_id"
+        ;;
+      edit_user_callback)
+        ShellBot.answerCallbackQuery --callback_query_id "$call_id" --text "Modifier utilisateur"
+        ShellBot.sendMessage --chat_id "$chat_id" --text "Envoyez: username new_password new_days" --reply_markup "$(ShellBot.ForceReply)"
+        ;;
+      delete_user_callback)
+        ShellBot.answerCallbackQuery --callback_query_id "$call_id" --text "Suppression utilisateur sélectionnée"
+        ShellBot.sendMessage --chat_id "$chat_id" --text "Envoyez le nom d’utilisateur à supprimer :" --reply_markup "$(ShellBot.ForceReply)"
+        ;;
+      info_vps_callback)
+        ShellBot.answerCallbackQuery --callback_query_id "$call_id" --text "Infos VPS"
+        local info="Uptime: $(uptime -p)\nRAM libre: $(free -h | awk '/^Mem:/ {print $4}')\nCPU load: $(top -bn1 | grep 'Cpu(s)' | awk '{print $2 + $4}')%"
+        send_message "$chat_id" "<b>Infos VPS :</b>\n$info"
+        ;;
+      *)
+        ShellBot.answerCallbackQuery --callback_query_id "$call_id" --text "Option inconnue"
+        ;;
+      esac
+    done
+  done
+}
+
 main_menu() {
   print_header
   echo -e "${BLUE_BG}${WHITE} 1) Démarrer le bot                            ${RESET}"
@@ -314,25 +442,25 @@ main_menu() {
   echo -n "Choisissez une option [1-3] : "
   read -r choice
   case "$choice" in
-    1)
-      if [ -z "$API_TOKEN" ] || [ -z "$ADMIN_ID" ]; then
-        echo "⚠️ Veuillez saisir le API_TOKEN et l'ADMIN_ID."
-        ask_credentials
-      fi
-      start_bot
-      ;;
-    2)
+  1)
+    if [[ -z "$API_TOKEN" || -z "$ADMIN_ID" ]]; then
+      echo "⚠️ Veuillez saisir le API_TOKEN et l'ADMIN_ID."
       ask_credentials
-      main_menu
-      ;;
-    3)
-      echo "Au revoir!"
-      exit 0
-      ;;
-    *)
-      echo "Choix invalide."
-      main_menu
-      ;;
+    fi
+    start_bot
+    ;;
+  2)
+    ask_credentials
+    main_menu
+    ;;
+  3)
+    echo "Au revoir!"
+    exit 0
+    ;;
+  *)
+    echo "Choix invalide."
+    main_menu
+    ;;
   esac
 }
 
