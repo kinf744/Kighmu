@@ -234,14 +234,14 @@ delete_user() {
 handle_command() {
   local chat_id=$1 user=$2 msg=$3
   if [[ "$msg" == "/start" || "$msg" == "/menu" ]]; then
+    local keyboard_buttons=()
 
-    local buttons=()
-    buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 1 --text '👤 Création Utilisateur' --callback_data 'create_user_callback')" )
-    buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 2 --text '🧪 Création Utilisateur Test' --callback_data 'create_user_test_callback')" )
-    buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 3 --text '📶 Appareils Connectés' --callback_data 'connected_devices_callback')" )
-    buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 4 --text '✏️ Modifier Utilisateur' --callback_data 'edit_user_callback')" )
-    buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 5 --text '❌ Supprimer Utilisateur' --callback_data 'delete_user_callback')" )
-    buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 6 --text '🏢 Infos VPS' --callback_data 'info_vps_callback')" )
+    keyboard_buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 1 --text '👤 Création Utilisateur' --callback_data 'create_user_callback')" )
+    keyboard_buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 2 --text '🧪 Création Utilisateur Test' --callback_data 'create_user_test_callback')" )
+    keyboard_buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 3 --text '📶 Appareils Connectés' --callback_data 'connected_devices_callback')" )
+    keyboard_buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 4 --text '✏️ Modifier Utilisateur' --callback_data 'edit_user_callback')" )
+    keyboard_buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 5 --text '❌ Supprimer Utilisateur' --callback_data 'delete_user_callback')" )
+    keyboard_buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 6 --text '🏢 Infos VPS' --callback_data 'info_vps_callback')" )
 
     local keyboard=$(ShellBot.InlineKeyboardMarkup --button keyboard_buttons)
 
