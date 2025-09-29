@@ -45,61 +45,59 @@ send_message() {
 send_user_creation_summary() {
   local chat_id=$1 domain=$2 host_ip=$3 username=$4 password=$5 limite=$6 expire_date=$7 slowdns_key=$8 slowdns_ns=$9
   local msg="<b>+=================================================================+</b>
-<b>*NOUVEAU UTILISATEUR CRÉÉ*</b>
-<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>
-∘ SSH: 22                  ∘ System-DNS: 53
-∘ SOCKS/PYTHON: 8080       ∘ WEB-NGINX: 81
-∘ DROPBEAR: 90             ∘ SSL: 443
-∘ BadVPN: 7200             ∘ BadVPN: 7300
-∘ SlowDNS: 5300            ∘ UDP-Custom: 1-65535
-∘ Hysteria: 22000          ∘ Proxy WS: 80
-<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>
-<b>DOMAIN         :</b> $domain
-<b>Host/IP-Address:</b> $host_ip
-<b>UTILISATEUR    :</b> $username
-<b>MOT DE PASSE   :</b> $password
-<b>LIMITE         :</b> $limite
-<b>DATE EXPIRÉE   :</b> $expire_date
-<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>
-En APPS comme HTTP Injector, CUSTOM, SOCKSIP TUNNEL, SSC, etc.
-🙍 HTTP-Direct     : <code>$host_ip:8080@$username:$password</code>
-🙍 SSL/TLS(SNI)    : <code>$host_ip:444@$username:$password</code>
-🙍 Proxy(WS)       : <code>$domain:80@$username:$password</code>
-🙍 SSH UDP         : <code>$host_ip:1-65535@$username:$password</code>
-🙍 Hysteria (UDP)  : <code>$domain:22000@$username:$password</code>
-<b>━━━━━━━━━━━  CONFIGS SLOWDNS PORT 5300 ━━━━━━━━━━━</b>
-<b>Pub KEY :</b>
-<pre>$slowdns_key</pre>
-<b>NameServer (NS) :</b> $slowdns_ns
-<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>
+<b>*NOUVEAU UTILISATEUR CRÉÉ*</b>\n\
+<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>\n\
+∘ SSH: 22                  ∘ System-DNS: 53\n\
+∘ SOCKS/PYTHON: 8080       ∘ WEB-NGINX: 81\n\
+∘ DROPBEAR: 90             ∘ SSL: 443\n\
+∘ BadVPN: 7200             ∘ BadVPN: 7300\n\
+∘ SlowDNS: 5300            ∘ UDP-Custom: 1-65535\n\
+∘ Hysteria: 22000          ∘ Proxy WS: 80\n\
+<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>\n\
+<b>DOMAIN         :</b> $domain\n\
+<b>Host/IP-Address:</b> $host_ip\n\
+<b>UTILISATEUR    :</b> $username\n\
+<b>MOT DE PASSE   :</b> $password\n\
+<b>LIMITE         :</b> $limite\n\
+<b>DATE EXPIRÉE   :</b> $expire_date\n\
+<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>\n\
+En APPS comme HTTP Injector, CUSTOM, SOCKSIP TUNNEL, SSC, etc.\n\
+🙍 HTTP-Direct     : <code>$host_ip:8080@$username:$password</code>\n\
+🙍 SSL/TLS(SNI)    : <code>$host_ip:444@$username:$password</code>\n\
+🙍 Proxy(WS)       : <code>$domain:80@$username:$password</code>\n\
+🙍 SSH UDP         : <code>$host_ip:1-65535@$username:$password</code>\n\
+🙍 Hysteria (UDP)  : <code>$domain:22000@$username:$password</code>\n\
+<b>━━━━━━━━━━━  CONFIGS SLOWDNS PORT 5300 ━━━━━━━━━━━</b>\n\
+<b>Pub KEY :</b>\n<pre>$slowdns_key</pre>\n\
+<b>NameServer (NS) :</b> $slowdns_ns\n\
+<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>\n\
 <b>Compte créé avec succès</b>"
   send_message "$chat_id" "$msg"
 }
 
 send_user_test_creation_summary() {
   local chat_id=$1 domain=$2 host_ip=$3 username=$4 password=$5 limite=$6 expire_date=$7 slowdns_key=$8 slowdns_ns=$9
-  local msg="<b>+==================================================+</b>
-<b>*NOUVEAU UTILISATEUR TEST CRÉÉ*</b>
-<b>──────────────────────────────────────────────────</b>
-<b>DOMAIN        :</b> $domain
-<b>Adresse IP    :</b> $host_ip
-<b>Utilisateur   :</b> $username
-<b>Mot de passe  :</b> $password
-<b>Limite        :</b> $limite
-<b>Date d'expire :</b> $expire_date
-<b>──────────────────────────────────────────────────</b>
-En APPS comme HTTP Injector, Netmod, SSC, etc.
-🙍 HTTP-Direct  : <code>$host_ip:90@$username:$password</code>
-🙍 SSL/TLS(SNI) : <code>$host_ip:443@$username:$password</code>
-🙍 Proxy(WS)    : <code>$domain:8080@$username:$password</code>
-🙍 SSH UDP      : <code>$host_ip:1-65535@$username:$password</code>
-🙍 Hysteria (UDP): <code>$domain:22000@$username:$password</code>
-<b>───────────── CONFIG SLOWDNS 5300 ───────────────</b>
-<b>Pub Key :</b>
-<pre>$slowdns_key</pre>
-<b>NameServer (NS) :</b> $slowdns_ns
-<b>──────────────────────────────────────────────────</b>
-<b>Le compte sera supprimé automatiquement après $limite minutes.</b>
+  local msg="<b>+==================================================+</b>\n\
+<b>*NOUVEAU UTILISATEUR TEST CRÉÉ*</b>\n\
+<b>──────────────────────────────────────────────────</b>\n\
+<b>DOMAIN        :</b> $domain\n\
+<b>Adresse IP    :</b> $host_ip\n\
+<b>Utilisateur   :</b> $username\n\
+<b>Mot de passe  :</b> $password\n\
+<b>Limite        :</b> $limite\n\
+<b>Date d'expire :</b> $expire_date\n\
+<b>──────────────────────────────────────────────────</b>\n\
+En APPS comme HTTP Injector, Netmod, SSC, etc.\n\
+🙍 HTTP-Direct  : <code>$host_ip:90@$username:$password</code>\n\
+🙍 SSL/TLS(SNI) : <code>$host_ip:443@$username:$password</code>\n\
+🙍 Proxy(WS)    : <code>$domain:8080@$username:$password</code>\n\
+🙍 SSH UDP      : <code>$host_ip:1-65535@$username:$password</code>\n\
+🙍 Hysteria (UDP): <code>$domain:22000@$username:$password</code>\n\
+<b>───────────── CONFIG SLOWDNS 5300 ───────────────</b>\n\
+<b>Pub Key :</b>\n<pre>$slowdns_key</pre>\n\
+<b>NameServer (NS) :</b> $slowdns_ns\n\
+<b>──────────────────────────────────────────────────</b>\n\
+<b>Le compte sera supprimé automatiquement après $limite minutes.</b>\n\
 <b>Compte créé avec succès</b>"
   send_message "$chat_id" "$msg"
 }
@@ -316,6 +314,9 @@ start_bot() {
 
   ShellBot.init --token "$API_TOKEN" --monitor --return map --flush
 
+  # Afficher le menu directement au démarrage
+  handle_command "$ADMIN_ID" "$ADMIN_ID" "/menu"
+
   echo "🤖 Bot démarré. En attente des commandes..."
 
   offset=0
@@ -328,16 +329,16 @@ start_bot() {
       continue
     fi
 
-    mapfile -t update_ids < <(jq -r '.result[].update_id' <<<"$response")
+    mapfile -t update_ids < <(jq -r '.result[].update_id' <<< "$response")
 
     for update_id in "${update_ids[@]}"; do
       offset=$((update_id + 1))
     done
 
-    mapfile -t message_chat_id < <(jq -r '.result[].message.chat.id // empty' <<<"$response")
-    mapfile -t message_text < <(jq -r '.result[].message.text // empty' <<<"$response")
-    mapfile -t message_from_id < <(jq -r '.result[].message.from.id // empty' <<<"$response")
-    mapfile -t message_reply_text < <(jq -r '.result[].message.reply_to_message.text // empty' <<<"$response")
+    mapfile -t message_chat_id < <(jq -r '.result[].message.chat.id // empty' <<< "$response")
+    mapfile -t message_text < <(jq -r '.result[].message.text // empty' <<< "$response")
+    mapfile -t message_from_id < <(jq -r '.result[].message.from.id // empty' <<< "$response")
+    mapfile -t message_reply_text < <(jq -r '.result[].message.reply_to_message.text // empty' <<< "$response")
 
     local_msgs_count=${#message_text[@]}
     for ((i = 0; i < local_msgs_count; i++)); do
@@ -380,11 +381,11 @@ start_bot() {
       esac
     done
 
-    mapfile -t callback_query_id < <(jq -r '.result[].callback_query.id // empty' <<<"$response")
-    mapfile -t callback_query_data < <(jq -r '.result[].callback_query.data // empty' <<<"$response")
-    mapfile -t callback_query_message_chat_id < <(jq -r '.result[].callback_query.message.chat.id // empty' <<<"$response")
-    mapfile -t callback_query_from_id < <(jq -r '.result[].callback_query.from.id // empty' <<<"$response")
-    mapfile -t callback_query_from_username < <(jq -r '.result[].callback_query.from.username // empty' <<<"$response")
+    mapfile -t callback_query_id < <(jq -r '.result[].callback_query.id // empty' <<< "$response")
+    mapfile -t callback_query_data < <(jq -r '.result[].callback_query.data // empty' <<< "$response")
+    mapfile -t callback_query_message_chat_id < <(jq -r '.result[].callback_query.message.chat.id // empty' <<< "$response")
+    mapfile -t callback_query_from_id < <(jq -r '.result[].callback_query.from.id // empty' <<< "$response")
+    mapfile -t callback_query_from_username < <(jq -r '.result[].callback_query.from.username // empty' <<< "$response")
 
     local_callbacks_count=${#callback_query_id[@]}
     for ((i = 0; i < local_callbacks_count; i++)); do
