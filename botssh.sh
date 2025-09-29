@@ -234,13 +234,17 @@ delete_user() {
 handle_command() {
   local chat_id=$1 user=$2 msg=$3
   if [[ "$msg" == "/start" || "$msg" == "/menu" ]]; then
-    local keyboard=$(ShellBot.InlineKeyboard \
-      --button '👤 Création Utilisateur' create_user_callback \
-      --button '🧪 Création Utilisateur Test' create_user_test_callback \
-      --button '📶 Appareils Connectés' connected_devices_callback \
-      --button '✏️ Modifier Utilisateur' edit_user_callback \
-      --button '❌ Supprimer Utilisateur' delete_user_callback \
-      --button '🏢 Infos VPS' info_vps_callback)
+
+    local buttons=()
+    buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 1 --text '👤 Création Utilisateur' --callback_data 'create_user_callback')" )
+    buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 2 --text '🧪 Création Utilisateur Test' --callback_data 'create_user_test_callback')" )
+    buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 3 --text '📶 Appareils Connectés' --callback_data 'connected_devices_callback')" )
+    buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 4 --text '✏️ Modifier Utilisateur' --callback_data 'edit_user_callback')" )
+    buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 5 --text '❌ Supprimer Utilisateur' --callback_data 'delete_user_callback')" )
+    buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 6 --text '🏢 Infos VPS' --callback_data 'info_vps_callback')" )
+
+    local keyboard=$(ShellBot.InlineKeyboardMarkup --button keyboard_buttons)
+
     send_message "$chat_id" "<b>KIGHMU BOT</b> - Menu Principal"
     ShellBot.sendMessage --chat_id "$chat_id" --text "Choisissez une option :" --reply_markup "$keyboard" --parse_mode html
   else
