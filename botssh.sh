@@ -235,7 +235,8 @@ handle_command() {
   local chat_id=$1 user=$2 msg=$3
 
   if [[ "$msg" == "/start" || "$msg" == "/menu" ]]; then
-    local keyboard_buttons=() # Initialisation obligatoire
+
+    local keyboard_buttons=()  # IMPORTANT : initialisation tableau
 
     keyboard_buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 1 --text '👤 Création Utilisateur' --callback_data 'create_user_callback')" )
     keyboard_buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 2 --text '🧪 Création Utilisateur Test' --callback_data 'create_user_test_callback')" )
