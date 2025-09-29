@@ -1,5 +1,5 @@
 #!/bin/bash
-# KIGHMU Telegram VPS Bot Manager complet avec menu interactif
+# KIGHMU Telegram VPS Bot Manager complet avec menu interactif intégré
 
 BLUE_BG="\e[44m"
 RESET="\e[0m"
@@ -14,13 +14,6 @@ install_shellbot() {
     sudo mkdir -p /etc/kighmu
     sudo wget -qO /etc/kighmu/ShellBot.sh https://raw.githubusercontent.com/kinf744/Kighmu/main/ShellBot.sh
     sudo chmod +x /etc/kighmu/ShellBot.sh
-  fi
-}
-
-check_sudo() {
-  if ! sudo -v &>/dev/null; then
-    echo "Run 'sudo -v' before running this script."
-    exit 1
   fi
 }
 
@@ -236,14 +229,14 @@ handle_command() {
 
   if [[ "$msg" == "/start" || "$msg" == "/menu" ]]; then
 
-    local keyboard_buttons=()  # IMPORTANT : initialisation tableau
+    keyboard_buttons=()  # IMPORTANT: Pas local, doit être accessible par ShellBot
 
-    keyboard_buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 1 --text '👤 Création Utilisateur' --callback_data 'create_user_callback')" )
-    keyboard_buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 2 --text '🧪 Création Utilisateur Test' --callback_data 'create_user_test_callback')" )
-    keyboard_buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 3 --text '📶 Appareils Connectés' --callback_data 'connected_devices_callback')" )
-    keyboard_buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 4 --text '✏️ Modifier Utilisateur' --callback_data 'edit_user_callback')" )
-    keyboard_buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 5 --text '❌ Supprimer Utilisateur' --callback_data 'delete_user_callback')" )
-    keyboard_buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 6 --text '🏢 Infos VPS' --callback_data 'info_vps_callback')" )
+    keyboard_buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 1 --text '👤 Création Utilisateur' --callback_data create_user_callback)" )
+    keyboard_buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 2 --text '🧪 Création Utilisateur Test' --callback_data create_user_test_callback)" )
+    keyboard_buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 3 --text '📶 Appareils Connectés' --callback_data connected_devices_callback)" )
+    keyboard_buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 4 --text '✏️ Modifier Utilisateur' --callback_data edit_user_callback)" )
+    keyboard_buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 5 --text '❌ Supprimer Utilisateur' --callback_data delete_user_callback)" )
+    keyboard_buttons+=( "$(ShellBot.InlineKeyboardButton --button keyboard_buttons --line 6 --text '🏢 Infos VPS' --callback_data info_vps_callback)" )
 
     local keyboard=$(ShellBot.InlineKeyboardMarkup --button keyboard_buttons)
 
@@ -323,7 +316,7 @@ start_bot() {
 
   ShellBot.init --token "$API_TOKEN" --monitor --return map --flush
 
-  # Affiche le menu directement à l'admin dès démarrage
+  # Affiche le menu au démarrage
   handle_command "$ADMIN_ID" "$ADMIN_ID" "/menu"
 
   echo "🤖 Bot démarré. En attente des commandes..."
@@ -362,22 +355,8 @@ start_bot() {
       fi
 
       if [[ -n "$replied_text" ]]; then
-        if [[ "$replied_text" == *"Envoyez: username password limite days"* ]]; then
-          IFS=' ' read -r username password limite days <<< "$text"
-          create_user "$chat_id" "$username" "$password" "$limite" "$days"
-          continue
-        elif [[ "$replied_text" == *"Envoyez: username password limite minutes"* ]]; then
-          IFS=' ' read -r username password limite minutes <<< "$text"
-          create_user_test "$chat_id" "$username" "$password" "$limite" "$minutes"
-          continue
-        elif [[ "$replied_text" == *"Envoyez: username new_password new_days"* ]]; then
-          IFS=' ' read -r username new_password new_days <<< "$text"
-          edit_user "$chat_id" "$username" "$new_password" "$new_days"
-          continue
-        elif [[ "$replied_text" == *"Envoyez le nom d’utilisateur à supprimer"* ]]; then
-          delete_user "$chat_id" "$text"
-          continue
-        fi
+        process_forcereply
+        continue
       fi
 
       case "$text" in
@@ -393,16 +372,12 @@ start_bot() {
     mapfile -t callback_query_id < <(jq -r '.result[].callback_query.id // empty' <<< "$response")
     mapfile -t callback_query_data < <(jq -r '.result[].callback_query.data // empty' <<< "$response")
     mapfile -t callback_query_message_chat_id < <(jq -r '.result[].callback_query.message.chat.id // empty' <<< "$response")
-    mapfile -t callback_query_from_id < <(jq -r '.result[].callback_query.from.id // empty' <<< "$response")
-    mapfile -t callback_query_from_username < <(jq -r '.result[].callback_query.from.username // empty' <<< "$response")
 
     local_callbacks_count=${#callback_query_id[@]}
     for ((i = 0; i < local_callbacks_count; i++)); do
       call_id=${callback_query_id[i]}
       data=${callback_query_data[i]}
       chat_id=${callback_query_message_chat_id[i]}
-      from_id=${callback_query_from_id[i]}
-      from_username=${callback_query_from_username[i]}
 
       if [[ "$from_id" != "$ADMIN_ID" ]]; then
         ShellBot.answerCallbackQuery --callback_query_id "$call_id" --text "🚫 Accès refusé"
@@ -425,7 +400,6 @@ main_menu() {
   case "$choice" in
   1)
     if [[ -z "$API_TOKEN" || -z "$ADMIN_ID" ]]; then
-      echo "⚠️ Veuillez saisir le API_TOKEN et l'ADMIN_ID."
       ask_credentials
     fi
     start_bot
