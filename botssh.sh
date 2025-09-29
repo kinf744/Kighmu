@@ -45,59 +45,61 @@ send_message() {
 send_user_creation_summary() {
   local chat_id=$1 domain=$2 host_ip=$3 username=$4 password=$5 limite=$6 expire_date=$7 slowdns_key=$8 slowdns_ns=$9
   local msg="<b>+=================================================================+</b>
-<b>*NOUVEAU UTILISATEUR CRÉÉ*</b>\n\
-<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>\n\
-∘ SSH: 22                  ∘ System-DNS: 53\n\
-∘ SOCKS/PYTHON: 8080       ∘ WEB-NGINX: 81\n\
-∘ DROPBEAR: 90             ∘ SSL: 443\n\
-∘ BadVPN: 7200             ∘ BadVPN: 7300\n\
-∘ SlowDNS: 5300            ∘ UDP-Custom: 1-65535\n\
-∘ Hysteria: 22000          ∘ Proxy WS: 80\n\
-<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>\n\
-<b>DOMAIN         :</b> $domain\n\
-<b>Host/IP-Address:</b> $host_ip\n\
-<b>UTILISATEUR    :</b> $username\n\
-<b>MOT DE PASSE   :</b> $password\n\
-<b>LIMITE         :</b> $limite\n\
-<b>DATE EXPIRÉE   :</b> $expire_date\n\
-<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>\n\
-En APPS comme HTTP Injector, CUSTOM, SOCKSIP TUNNEL, SSC, etc.\n\
-🙍 HTTP-Direct     : <code>$host_ip:8080@$username:$password</code>\n\
-🙍 SSL/TLS(SNI)    : <code>$host_ip:444@$username:$password</code>\n\
-🙍 Proxy(WS)       : <code>$domain:80@$username:$password</code>\n\
-🙍 SSH UDP         : <code>$host_ip:1-65535@$username:$password</code>\n\
-🙍 Hysteria (UDP)  : <code>$domain:22000@$username:$password</code>\n\
-<b>━━━━━━━━━━━  CONFIGS SLOWDNS PORT 5300 ━━━━━━━━━━━</b>\n\
-<b>Pub KEY :</b>\n<pre>$slowdns_key</pre>\n\
-<b>NameServer (NS) :</b> $slowdns_ns\n\
-<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>\n\
+<b>*NOUVEAU UTILISATEUR CRÉÉ*</b>
+<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>
+∘ SSH: 22                  ∘ System-DNS: 53
+∘ SOCKS/PYTHON: 8080       ∘ WEB-NGINX: 81
+∘ DROPBEAR: 90             ∘ SSL: 443
+∘ BadVPN: 7200             ∘ BadVPN: 7300
+∘ SlowDNS: 5300            ∘ UDP-Custom: 1-65535
+∘ Hysteria: 22000          ∘ Proxy WS: 80
+<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>
+<b>DOMAIN         :</b> $domain
+<b>Host/IP-Address:</b> $host_ip
+<b>UTILISATEUR    :</b> $username
+<b>MOT DE PASSE   :</b> $password
+<b>LIMITE         :</b> $limite
+<b>DATE EXPIRÉE   :</b> $expire_date
+<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>
+En APPS comme HTTP Injector, CUSTOM, SOCKSIP TUNNEL, SSC, etc.
+🙍 HTTP-Direct     : <code>$host_ip:8080@$username:$password</code>
+🙍 SSL/TLS(SNI)    : <code>$host_ip:444@$username:$password</code>
+🙍 Proxy(WS)       : <code>$domain:80@$username:$password</code>
+🙍 SSH UDP         : <code>$host_ip:1-65535@$username:$password</code>
+🙍 Hysteria (UDP)  : <code>$domain:22000@$username:$password</code>
+<b>━━━━━━━━━━━  CONFIGS SLOWDNS PORT 5300 ━━━━━━━━━━━</b>
+<b>Pub KEY :</b>
+<pre>$slowdns_key</pre>
+<b>NameServer (NS) :</b> $slowdns_ns
+<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>
 <b>Compte créé avec succès</b>"
   send_message "$chat_id" "$msg"
 }
 
 send_user_test_creation_summary() {
   local chat_id=$1 domain=$2 host_ip=$3 username=$4 password=$5 limite=$6 expire_date=$7 slowdns_key=$8 slowdns_ns=$9
-  local msg="<b>+==================================================+</b>\n\
-<b>*NOUVEAU UTILISATEUR TEST CRÉÉ*</b>\n\
-<b>──────────────────────────────────────────────────</b>\n\
-<b>DOMAIN        :</b> $domain\n\
-<b>Adresse IP    :</b> $host_ip\n\
-<b>Utilisateur   :</b> $username\n\
-<b>Mot de passe  :</b> $password\n\
-<b>Limite        :</b> $limite\n\
-<b>Date d'expire :</b> $expire_date\n\
-<b>──────────────────────────────────────────────────</b>\n\
-En APPS comme HTTP Injector, Netmod, SSC, etc.\n\
-🙍 HTTP-Direct  : <code>$host_ip:90@$username:$password</code>\n\
-🙍 SSL/TLS(SNI) : <code>$host_ip:443@$username:$password</code>\n\
-🙍 Proxy(WS)    : <code>$domain:8080@$username:$password</code>\n\
-🙍 SSH UDP      : <code>$host_ip:1-65535@$username:$password</code>\n\
-🙍 Hysteria (UDP): <code>$domain:22000@$username:$password</code>\n\
-<b>───────────── CONFIG SLOWDNS 5300 ───────────────</b>\n\
-<b>Pub Key :</b>\n<pre>$slowdns_key</pre>\n\
-<b>NameServer (NS) :</b> $slowdns_ns\n\
-<b>──────────────────────────────────────────────────</b>\n\
-<b>Le compte sera supprimé automatiquement après $limite minutes.</b>\n\
+  local msg="<b>+==================================================+</b>
+<b>*NOUVEAU UTILISATEUR TEST CRÉÉ*</b>
+<b>──────────────────────────────────────────────────</b>
+<b>DOMAIN        :</b> $domain
+<b>Adresse IP    :</b> $host_ip
+<b>Utilisateur   :</b> $username
+<b>Mot de passe  :</b> $password
+<b>Limite        :</b> $limite
+<b>Date d'expire :</b> $expire_date
+<b>──────────────────────────────────────────────────</b>
+En APPS comme HTTP Injector, Netmod, SSC, etc.
+🙍 HTTP-Direct  : <code>$host_ip:90@$username:$password</code>
+🙍 SSL/TLS(SNI) : <code>$host_ip:443@$username:$password</code>
+🙍 Proxy(WS)    : <code>$domain:8080@$username:$password</code>
+🙍 SSH UDP      : <code>$host_ip:1-65535@$username:$password</code>
+🙍 Hysteria (UDP): <code>$domain:22000@$username:$password</code>
+<b>───────────── CONFIG SLOWDNS 5300 ───────────────</b>
+<b>Pub Key :</b>
+<pre>$slowdns_key</pre>
+<b>NameServer (NS) :</b> $slowdns_ns
+<b>──────────────────────────────────────────────────</b>
+<b>Le compte sera supprimé automatiquement après $limite minutes.</b>
 <b>Compte créé avec succès</b>"
   send_message "$chat_id" "$msg"
 }
@@ -232,12 +234,13 @@ delete_user() {
 handle_command() {
   local chat_id=$1 user=$2 msg=$3
   if [[ "$msg" == "/start" || "$msg" == "/menu" ]]; then
-    local keyboard=$(ShellBot.InlineKeyboard --button '👤 Création Utilisateur' create_user_callback \
-                                            --button '🧪 Création Utilisateur Test' create_user_test_callback \
-                                            --button '📶 Appareils Connectés' connected_devices_callback \
-                                            --button '✏️ Modifier Utilisateur' edit_user_callback \
-                                            --button '❌ Supprimer Utilisateur' delete_user_callback \
-                                            --button '🏢 Infos VPS' info_vps_callback)
+    local keyboard=$(ShellBot.InlineKeyboard \
+      --button '👤 Création Utilisateur' create_user_callback \
+      --button '🧪 Création Utilisateur Test' create_user_test_callback \
+      --button '📶 Appareils Connectés' connected_devices_callback \
+      --button '✏️ Modifier Utilisateur' edit_user_callback \
+      --button '❌ Supprimer Utilisateur' delete_user_callback \
+      --button '🏢 Infos VPS' info_vps_callback)
     send_message "$chat_id" "<b>KIGHMU BOT</b> - Menu Principal"
     ShellBot.sendMessage --chat_id "$chat_id" --text "Choisissez une option :" --reply_markup "$keyboard" --parse_mode html
   else
@@ -314,7 +317,7 @@ start_bot() {
 
   ShellBot.init --token "$API_TOKEN" --monitor --return map --flush
 
-  # Afficher le menu directement au démarrage
+  # Affiche le menu directement à l'admin dès démarrage
   handle_command "$ADMIN_ID" "$ADMIN_ID" "/menu"
 
   echo "🤖 Bot démarré. En attente des commandes..."
@@ -354,15 +357,15 @@ start_bot() {
 
       if [[ -n "$replied_text" ]]; then
         if [[ "$replied_text" == *"Envoyez: username password limite days"* ]]; then
-          IFS=' ' read -r username password limite days <<<"$text"
+          IFS=' ' read -r username password limite days <<< "$text"
           create_user "$chat_id" "$username" "$password" "$limite" "$days"
           continue
         elif [[ "$replied_text" == *"Envoyez: username password limite minutes"* ]]; then
-          IFS=' ' read -r username password limite minutes <<<"$text"
+          IFS=' ' read -r username password limite minutes <<< "$text"
           create_user_test "$chat_id" "$username" "$password" "$limite" "$minutes"
           continue
         elif [[ "$replied_text" == *"Envoyez: username new_password new_days"* ]]; then
-          IFS=' ' read -r username new_password new_days <<<"$text"
+          IFS=' ' read -r username new_password new_days <<< "$text"
           edit_user "$chat_id" "$username" "$new_password" "$new_days"
           continue
         elif [[ "$replied_text" == *"Envoyez le nom d’utilisateur à supprimer"* ]]; then
@@ -400,36 +403,7 @@ start_bot() {
         continue
       fi
 
-      case "$data" in
-      create_user_callback)
-        ShellBot.answerCallbackQuery --callback_query_id "$call_id" --text "Création utilisateur sélectionnée"
-        ShellBot.sendMessage --chat_id "$chat_id" --text "Envoyez: username password limite days" --reply_markup "$(ShellBot.ForceReply)"
-        ;;
-      create_user_test_callback)
-        ShellBot.answerCallbackQuery --callback_query_id "$call_id" --text "Création utilisateur test sélectionnée"
-        ShellBot.sendMessage --chat_id "$chat_id" --text "Envoyez: username password limite minutes" --reply_markup "$(ShellBot.ForceReply)"
-        ;;
-      connected_devices_callback)
-        ShellBot.answerCallbackQuery --callback_query_id "$call_id" --text "Appareils connectés"
-        send_connected_devices "$chat_id"
-        ;;
-      edit_user_callback)
-        ShellBot.answerCallbackQuery --callback_query_id "$call_id" --text "Modifier utilisateur"
-        ShellBot.sendMessage --chat_id "$chat_id" --text "Envoyez: username new_password new_days" --reply_markup "$(ShellBot.ForceReply)"
-        ;;
-      delete_user_callback)
-        ShellBot.answerCallbackQuery --callback_query_id "$call_id" --text "Suppression utilisateur sélectionnée"
-        ShellBot.sendMessage --chat_id "$chat_id" --text "Envoyez le nom d’utilisateur à supprimer :" --reply_markup "$(ShellBot.ForceReply)"
-        ;;
-      info_vps_callback)
-        ShellBot.answerCallbackQuery --callback_query_id "$call_id" --text "Infos VPS"
-        local info="Uptime: $(uptime -p)\nRAM libre: $(free -h | awk '/^Mem:/ {print $4}')\nCPU load: $(top -bn1 | grep 'Cpu(s)' | awk '{print $2 + $4}')%"
-        send_message "$chat_id" "<b>Infos VPS :</b>\n$info"
-        ;;
-      *)
-        ShellBot.answerCallbackQuery --callback_query_id "$call_id" --text "Option inconnue"
-        ;;
-      esac
+      process_callbacks
     done
   done
 }
