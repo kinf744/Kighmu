@@ -12,21 +12,21 @@ DEBUG() {
 }
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo -e "\e[31m[ERREUR]\e[0m Veuillez exécuter ce script en root."
+    echo -e "e[31m[ERREUR]e[0m Veuillez exécuter ce script en root."
     exit 1
 fi
 
 # Couleurs
-RED="\e[31m"
-GREEN="\e[32m"
-YELLOW="\e[33m"
-BLUE="\e[34m"
-MAGENTA="\e[35m"
-MAGENTA_VIF="\e[1;35m"
-CYAN="\e[36m"
-CYAN_VIF="\e[1;36m"
-BOLD="\e[1m"
-RESET="\e[0m"
+RED="e[31m"
+GREEN="e[32m"
+YELLOW="e[33m"
+BLUE="e[34m"
+MAGENTA="e[35m"
+MAGENTA_VIF="e[1;35m"
+CYAN="e[36m"
+CYAN_VIF="e[1;36m"
+BOLD="e[1m"
+RESET="e[0m"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 USER_FILE="/etc/kighmu/users.list"
@@ -41,7 +41,7 @@ bytes_to_gb() {
 }
 
 count_ssh_users() {
-  awk -F: '($3 >= 1000) && ($7 ~ /^\/(bin\/bash|bin\/sh|bin\/false)$/) {print $1}' /etc/passwd | wc -l
+  awk -F: '($3 >= 1000) && ($7 ~ /^/(bin/bash|bin/sh|bin/false)$/) {print $1}' /etc/passwd | wc -l
 }
 
 count_connected_devices() {
@@ -64,7 +64,8 @@ while true; do
     
     TOTAL_RAM_RAW=$(free -m | awk 'NR==2{print $2}')
     RAM_GB=$(echo "scale=2; $TOTAL_RAM_RAW/1024" | bc)
-    RAM_GB_ARR=$(echo "$RAM_GB" | awk '{printf "%d\n", ($1 == int($1)) ? $1 : int($1)+1}')
+    RAM_GB_ARR=$(echo "$RAM_GB" | awk '{printf "%d
+", ($1 == int($1)) ? $1 : int($1)+1}')
     
     CPU_CORES=$(nproc)
     RAM_USAGE=$(free -m | awk 'NR==2{printf "%.2f%%", $3*100/$2}')
@@ -80,15 +81,15 @@ while true; do
     DATA_MONTH_BYTES=0
 
     for iface in "${NET_INTERFACES[@]}"; do
-      day_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d\; -f9)
-      month_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d\; -f15)
+      day_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d; -f9)
+      month_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d; -f15)
       day_bytes=$(echo "$day_raw" | tr -cd '0-9')
       month_bytes=$(echo "$month_raw" | tr -cd '0-9')
       day_bytes=${day_bytes:-0}
       month_bytes=${month_bytes:-0}
       DEBUG "Interface $iface - Jour: $day_bytes octets, Mois: $month_bytes octets"
-      DATA_DAY_BYTES=$((DATA_DAY_BYTES + day_bytes))
-      DATA_MONTH_BYTES=$((DATA_MONTH_BYTES + month_bytes))
+      DATA_DAY_BYTES=$((10#$DATA_DAY_BYTES + 10#$day_bytes))
+      DATA_MONTH_BYTES=$((10#$DATA_MONTH_BYTES + 10#$month_bytes))
     done
 
     DATA_DAY_GB=$(bytes_to_gb "$DATA_DAY_BYTES")
@@ -98,16 +99,21 @@ while true; do
     echo -e "${BOLD}${MAGENTA}|                  🚀 KIGHMU MANAGER 🇨🇲 🚀             |${RESET}"
     echo -e "${CYAN}+======================================================+${RESET}"
 
-    printf " OS: %-20s | IP: %-15s\n" "$OS_INFO" "$IP"
-    printf " Taille RAM totale: ${GREEN}%-6s${RESET} | Nombre de cœurs CPU: ${YELLOW}%-6s${RESET}\n" "$RAM_GB_ARR" "$CPU_CORES"
-    printf " RAM utilisée: ${GREEN}%-6s${RESET} | CPU utilisé: ${YELLOW}%-6s${RESET}\n" "$RAM_USAGE" "$CPU_USAGE"
+    printf " OS: %-20s | IP: %-15s
+" "$OS_INFO" "$IP"
+    printf " Taille RAM totale: ${GREEN}%-6s${RESET} | Nombre de cœurs CPU: ${YELLOW}%-6s${RESET}
+" "$RAM_GB_ARR" "$CPU_CORES"
+    printf " RAM utilisée: ${GREEN}%-6s${RESET} | CPU utilisé: ${YELLOW}%-6s${RESET}
+" "$RAM_USAGE" "$CPU_USAGE"
 
     echo -e "${CYAN}+======================================================+${RESET}"
 
     # Seule la consommation globale jour/mois affichée
-    printf " Consommation aujourd'hui: ${MAGENTA_VIF}%.2f Go${RESET} | Ce mois-ci: ${CYAN_VIF}%.2f Go${RESET}\n" "$DATA_DAY_GB" "$DATA_MONTH_GB"
+    printf " Consommation aujourd'hui: ${MAGENTA_VIF}%.2f Go${RESET} | Ce mois-ci: ${CYAN_VIF}%.2f Go${RESET}
+" "$DATA_DAY_GB" "$DATA_MONTH_GB"
 
-    printf " Utilisateurs SSH: ${BLUE}%-4d${RESET} | Appareils connectés: ${MAGENTA}%-4d${RESET}\n" "$SSH_USERS_COUNT" "$total_connected"
+    printf " Utilisateurs SSH: ${BLUE}%-4d${RESET} | Appareils connectés: ${MAGENTA}%-4d${RESET}
+" "$SSH_USERS_COUNT" "$total_connected"
 
     echo -e "${CYAN}+======================================================+${RESET}"
 
