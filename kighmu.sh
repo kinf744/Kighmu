@@ -16,7 +16,7 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-# Vérifier si la sortie est un terminal pour activer les couleurs
+# Gestion des couleurs uniquement si la sortie est un terminal
 if [ -t 1 ]; then
   RED="\u001B[31m"
   GREEN="\u001B[32m"
@@ -94,8 +94,8 @@ while true; do
     DATA_MONTH_BYTES=0
 
     for iface in "${NET_INTERFACES[@]}"; do
-      day_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d; -f9)
-      month_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d; -f15)
+      day_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d';' -f9)
+      month_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d';' -f15)
       day_bytes=$(echo "$day_raw" | tr -cd '0-9')
       month_bytes=$(echo "$month_raw" | tr -cd '0-9')
       day_bytes=${day_bytes:-0}
