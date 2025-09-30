@@ -12,21 +12,34 @@ DEBUG() {
 }
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo -e "e[31m[ERREUR]e[0m Veuillez exécuter ce script en root."
+    echo -e "\u001B[31m[ERREUR]\u001B[0m Veuillez exécuter ce script en root."
     exit 1
 fi
 
-# Couleurs
-RED="e[31m"
-GREEN="e[32m"
-YELLOW="e[33m"
-BLUE="e[34m"
-MAGENTA="e[35m"
-MAGENTA_VIF="e[1;35m"
-CYAN="e[36m"
-CYAN_VIF="e[1;36m"
-BOLD="e[1m"
-RESET="e[0m"
+# Gestion des couleurs uniquement si la sortie est un terminal
+if [ -t 1 ]; then
+  RED="\u001B[31m"
+  GREEN="\u001B[32m"
+  YELLOW="\u001B[33m"
+  BLUE="\u001B[34m"
+  MAGENTA="\u001B[35m"
+  MAGENTA_VIF="\u001B[1;35m"
+  CYAN="\u001B[36m"
+  CYAN_VIF="\u001B[1;36m"
+  BOLD="\u001B[1m"
+  RESET="\u001B[0m"
+else
+  RED=""
+  GREEN=""
+  YELLOW=""
+  BLUE=""
+  MAGENTA=""
+  MAGENTA_VIF=""
+  CYAN=""
+  CYAN_VIF=""
+  BOLD=""
+  RESET=""
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 USER_FILE="/etc/kighmu/users.list"
@@ -126,11 +139,12 @@ while true; do
     echo -e "${GREEN}${BOLD}[06]${RESET} ${YELLOW}Message du serveur${RESET}"
     echo -e "${GREEN}${BOLD}[07]${RESET} ${YELLOW}Installation de mode${RESET}"
     echo -e "${GREEN}${BOLD}[08]${RESET} ${YELLOW}V2ray slowdns mode${RESET}"
-    echo -e "${GREEN}${BOLD}[09]${RESET} ${YELLOW}Désinstaller le script${RESET}"
-    echo -e "${GREEN}${BOLD}[10]${RESET} ${YELLOW}Blocage de torrents${RESET}"
+    echo -e "${GREEN}${BOLD}[09]${RESET} ${YELLOW}Bot Telegram${RESET}"
+    echo -e "${GREEN}${BOLD}[10]${RESET} ${YELLOW}Désinstaller le script${RESET}"
+    echo -e "${GREEN}${BOLD}[11]${RESET} ${YELLOW}Blocage de torrents${RESET}"
     echo -e "${RED}[00] Quitter${RESET}"
     echo -e "${CYAN}+======================================================+${RESET}"
-    echo -ne "${BOLD}${YELLOW} Entrez votre choix [1-10]: ${RESET}"
+    echo -ne "${BOLD}${YELLOW} Entrez votre choix [1-11]: ${RESET}"
     read -r choix
     echo -e "${CYAN}+------------------------------------------------------+${RESET}"
 
@@ -143,7 +157,8 @@ while true; do
         6) bash "$SCRIPT_DIR/menu4_2.sh" ;;
         7) bash "$SCRIPT_DIR/menu5.sh" ;;
         8) bash "$SCRIPT_DIR/menu_5.sh" ;;
-        9)
+        9) bash "$SCRIPT_DIR/botssh.sh" ;;
+        10)
             echo -e "${YELLOW}⚠️  Vous êtes sur le point de désinstaller le script.${RESET}"
             read -p "Voulez-vous vraiment continuer ? (o/N): " confirm
             if [[ "$confirm" =~ ^[Oo]$ ]]; then
@@ -157,7 +172,7 @@ while true; do
                 echo -e "${GREEN}Opération annulée, retour au menu...${RESET}"
             fi
             ;;
-        10) bash "$SCRIPT_DIR/menu7.sh" ;;
+        11) bash "$SCRIPT_DIR/menu7.sh" ;;
         00)
             clear
             echo -e "${RED}Au revoir !${RESET}"
