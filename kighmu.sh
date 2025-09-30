@@ -54,7 +54,6 @@ bytes_to_gb() {
 }
 
 count_ssh_users() {
-  # Correction : guillemets simples, slash échappés, sur une seule ligne
   awk -F: '($3 >= 1000) && ($7 ~ /^/(bin/bash|bin/sh|bin/false)$/) {print $1}' /etc/passwd | wc -l
 }
 
@@ -145,6 +144,7 @@ while true; do
   echo -e "${GREEN}${BOLD}[11]${RESET} ${YELLOW}Blocage de torrents${RESET}"
   echo -e "${RED}[00] Quitter${RESET}"
   echo -e "${CYAN}+======================================================+${RESET}"
+
   echo -ne "${BOLD}${YELLOW} Entrez votre choix [1-11]: ${RESET}"
   read -r choix
   echo -e "${CYAN}+------------------------------------------------------+${RESET}"
