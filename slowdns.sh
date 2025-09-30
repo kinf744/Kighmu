@@ -22,7 +22,7 @@ check_root() {
 install_dependencies() {
   log "Mise à jour des paquets et installation des dépendances..."
   apt-get update -q
-  apt-get install -y iptables screen tcpdump wget
+  apt-get install -y iptables ufw tcpdump wget
 }
 
 get_active_interface() {
