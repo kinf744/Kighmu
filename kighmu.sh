@@ -12,21 +12,34 @@ DEBUG() {
 }
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo -e "e[31m[ERREUR]e[0m Veuillez exécuter ce script en root."
+    echo -e "\u001B[31m[ERREUR]\u001B[0m Veuillez exécuter ce script en root."
     exit 1
 fi
 
-# Couleurs
-RED="e[31m"
-GREEN="e[32m"
-YELLOW="e[33m"
-BLUE="e[34m"
-MAGENTA="e[35m"
-MAGENTA_VIF="e[1;35m"
-CYAN="e[36m"
-CYAN_VIF="e[1;36m"
-BOLD="e[1m"
-RESET="e[0m"
+# Vérifier si la sortie est un terminal pour activer les couleurs
+if [ -t 1 ]; then
+  RED="\u001B[31m"
+  GREEN="\u001B[32m"
+  YELLOW="\u001B[33m"
+  BLUE="\u001B[34m"
+  MAGENTA="\u001B[35m"
+  MAGENTA_VIF="\u001B[1;35m"
+  CYAN="\u001B[36m"
+  CYAN_VIF="\u001B[1;36m"
+  BOLD="\u001B[1m"
+  RESET="\u001B[0m"
+else
+  RED=""
+  GREEN=""
+  YELLOW=""
+  BLUE=""
+  MAGENTA=""
+  MAGENTA_VIF=""
+  CYAN=""
+  CYAN_VIF=""
+  BOLD=""
+  RESET=""
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 USER_FILE="/etc/kighmu/users.list"
@@ -108,7 +121,6 @@ while true; do
 
     echo -e "${CYAN}+======================================================+${RESET}"
 
-    # Seule la consommation globale jour/mois affichée
     printf " Consommation aujourd'hui: ${MAGENTA_VIF}%.2f Go${RESET} | Ce mois-ci: ${CYAN_VIF}%.2f Go${RESET}
 " "$DATA_DAY_GB" "$DATA_MONTH_GB"
 
