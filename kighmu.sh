@@ -12,34 +12,21 @@ DEBUG() {
 }
 
 if [ "$(id -u)" -ne 0 ]; then
-  echo -e "\u001B[31m[ERREUR]\u001B[0m Veuillez exécuter ce script en root."
-  exit 1
+    echo -e "\e[31m[ERREUR]\e[0m Veuillez exécuter ce script en root."
+    exit 1
 fi
 
-# Gestion des couleurs uniquement si la sortie est un terminal
-if [ -t 1 ]; then
-  RED="\u001B[31m"
-  GREEN="\u001B[32m"
-  YELLOW="\u001B[33m"
-  BLUE="\u001B[34m"
-  MAGENTA="\u001B[35m"
-  MAGENTA_VIF="\u001B[1;35m"
-  CYAN="\u001B[36m"
-  CYAN_VIF="\u001B[1;36m"
-  BOLD="\u001B[1m"
-  RESET="\u001B[0m"
-else
-  RED=""
-  GREEN=""
-  YELLOW=""
-  BLUE=""
-  MAGENTA=""
-  MAGENTA_VIF=""
-  CYAN=""
-  CYAN_VIF=""
-  BOLD=""
-  RESET=""
-fi
+# Couleurs
+RED="\e[31m"
+GREEN="\e[32m"
+YELLOW="\e[33m"
+BLUE="\e[34m"
+MAGENTA="\e[35m"
+MAGENTA_VIF="\e[1;35m"
+CYAN="\e[36m"
+CYAN_VIF="\e[1;36m"
+BOLD="\e[1m"
+RESET="\e[0m"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 USER_FILE="/etc/kighmu/users.list"
@@ -54,7 +41,7 @@ bytes_to_gb() {
 }
 
 count_ssh_users() {
-  awk -F: '($3 >= 1000) && ($7 ~ /^/(bin/bash|bin/sh|bin/false)$/) {print $1}' /etc/passwd | wc -l
+  awk -F: '($3 >= 1000) && ($7 ~ /^\/(bin\/bash|bin\/sh|bin\/false)$/) {print $1}' /etc/passwd | wc -l
 }
 
 count_connected_devices() {
@@ -70,43 +57,42 @@ count_connected_devices() {
 }
 
 while true; do
-  clear
+    clear
 
-  OS_INFO=$(if [ -f /etc/os-release ]; then . /etc/os-release; echo "$NAME $VERSION_ID"; else uname -s; fi)
-  IP=$(hostname -I | awk '{print $1}')
+    OS_INFO=$(if [ -f /etc/os-release ]; then . /etc/os-release; echo "$NAME $VERSION_ID"; else uname -s; fi)
+    IP=$(hostname -I | awk '{print $1}')
+    
+    TOTAL_RAM_RAW=$(free -m | awk 'NR==2{print $2}')
+    RAM_GB=$(echo "scale=2; $TOTAL_RAM_RAW/1024" | bc)
+    RAM_GB_ARR=$(echo "$RAM_GB" | awk '{printf "%d\n", ($1 == int($1)) ? $1 : int($1)+1}')
+    
+    CPU_CORES=$(nproc)
+    RAM_USAGE=$(free -m | awk 'NR==2{printf "%.2f%%", $3*100/$2}')
+    CPU_USAGE=$(grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf "%.2f%%", usage}')
 
-  TOTAL_RAM_RAW=$(free -m | awk 'NR==2{print $2}')
-  RAM_GB=$(echo "scale=2; $TOTAL_RAM_RAW/1024" | bc)
-  RAM_GB_ARR=$(echo "$RAM_GB" | awk '{printf "%d
-", ($1 == int($1)) ? $1 : int($1)+1}')
+    total_connected=$(count_connected_devices)
+    SSH_USERS_COUNT=$(count_ssh_users)
 
-  CPU_CORES=$(nproc)
-  RAM_USAGE=$(free -m | awk 'NR==2{printf "%.2f%%", $3*100/$2}')
-  CPU_USAGE=$(grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf "%.2f%%", usage}')
+    mapfile -t NET_INTERFACES < <(detect_interfaces)
+    DEBUG "Interfaces détectées : ${NET_INTERFACES[*]}"
 
-  total_connected=$(count_connected_devices)
-  SSH_USERS_COUNT=$(count_ssh_users)
+    DATA_DAY_BYTES=0
+    DATA_MONTH_BYTES=0
 
-  mapfile -t NET_INTERFACES < <(detect_interfaces)
-  DEBUG "Interfaces détectées : ${NET_INTERFACES[*]}"
+    for iface in "${NET_INTERFACES[@]}"; do
+      day_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d\; -f9)
+      month_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d\; -f15)
+      day_bytes=$(echo "$day_raw" | tr -cd '0-9')
+      month_bytes=$(echo "$month_raw" | tr -cd '0-9')
+      day_bytes=${day_bytes:-0}
+      month_bytes=${month_bytes:-0}
+      DEBUG "Interface $iface - Jour: $day_bytes octets, Mois: $month_bytes octets"
+      DATA_DAY_BYTES=$((DATA_DAY_BYTES + day_bytes))
+      DATA_MONTH_BYTES=$((DATA_MONTH_BYTES + month_bytes))
+    done
 
-  DATA_DAY_BYTES=0
-  DATA_MONTH_BYTES=0
-
-  for iface in "${NET_INTERFACES[@]}"; do
-    day_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d';' -f9)
-    month_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d';' -f15)
-    day_bytes=$(echo "$day_raw" | tr -cd '0-9')
-    month_bytes=$(echo "$month_raw" | tr -cd '0-9')
-    day_bytes=${day_bytes:-0}
-    month_bytes=${month_bytes:-0}
-    DEBUG "Interface $iface - Jour: $day_bytes octets, Mois: $month_bytes octets"
-    DATA_DAY_BYTES=$((10#$DATA_DAY_BYTES + 10#$day_bytes))
-    DATA_MONTH_BYTES=$((10#$DATA_MONTH_BYTES + 10#$month_bytes))
-  done
-
-  DATA_DAY_GB=$(bytes_to_gb "$DATA_DAY_BYTES")
-  DATA_MONTH_GB=$(bytes_to_gb "$DATA_MONTH_BYTES")
+    DATA_DAY_GB=$(bytes_to_gb "$DATA_DAY_BYTES")
+    DATA_MONTH_GB=$(bytes_to_gb "$DATA_MONTH_BYTES")
 
   echo -e "${CYAN}+======================================================+${RESET}"
   echo -e "${BOLD}${MAGENTA}|                  🚀 KIGHMU MANAGER 🇨🇲 🚀             |${RESET}"
