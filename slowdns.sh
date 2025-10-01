@@ -163,7 +163,7 @@ main() {
   fi
   log "Interface réseau détectée : $interface"
 
-  MTU_VALUE=$(($(cat /sys/class/net/$interface/mtu) - 1500))
+  MTU_VALUE=$(($(cat /sys/class/net/$interface/mtu) - 100))
   log "Réglage MTU sur interface $interface à $MTU_VALUE..."
   ip link set dev "$interface" mtu "$MTU_VALUE"
 
