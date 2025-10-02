@@ -101,7 +101,6 @@ net.ipv4.tcp_fin_timeout=10
 net.ipv4.tcp_tw_reuse=1
 net.ipv4.tcp_mtu_probing=1
 net.ipv4.udp_mem=262144 349525 524288
-net.ipv4.udp_max_size=26214400
 EOF
 
   sysctl -p
