@@ -73,6 +73,10 @@ enable_ip_forwarding() {
 
 optimize_sysctl() {
   log "Application des optimisations sysctl..."
+
+  # Nettoyage des anciennes optimisations pour éviter les doublons
+  sed -i '/Optimisations SlowDNS/,+10d' /etc/sysctl.conf
+
   cat <<EOF >> /etc/sysctl.conf
 
 # Optimisations SlowDNS
@@ -88,11 +92,14 @@ net.ipv4.tcp_fin_timeout=10
 net.ipv4.tcp_tw_reuse=1
 net.ipv4.tcp_mtu_probing=1
 EOF
+
   sysctl -p
 }
 
 create_systemd_service() {
   SERVICE_PATH="/etc/systemd/system/slowdns.service"
+  ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
+  [ -z "$ssh_port" ] && ssh_port=22
 
   log "Création du fichier systemd slowdns.service..."
 
@@ -105,7 +112,7 @@ Wants=network.target
 [Service]
 Type=simple
 User=root
-ExecStart=$SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY \$(cat $CONFIG_FILE) 0.0.0.0:\$(ss -tlnp | grep sshd | head -1 | awk '{print \$4}' | cut -d: -f2)
+ExecStart=$SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY --idle-timeout 30 --dns-ttl 60 --payload-size 120 \$(cat $CONFIG_FILE) 0.0.0.0:$ssh_port
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -155,7 +162,6 @@ main() {
   install_fixed_keys
   PUB_KEY=$(cat "$SERVER_PUB")
 
-  local interface
   interface=$(get_active_interface)
   if [ -z "$interface" ]; then
     echo "Échec détection interface réseau. Veuillez spécifier manuellement." >&2
@@ -163,30 +169,13 @@ main() {
   fi
   log "Interface réseau détectée : $interface"
 
-  MTU_VALUE=$(($(cat /sys/class/net/$interface/mtu) - 650))
+  MTU_VALUE=1440
   log "Réglage MTU sur interface $interface à $MTU_VALUE..."
   ip link set dev "$interface" mtu "$MTU_VALUE"
 
   optimize_sysctl
   setup_iptables "$interface"
   enable_ip_forwarding
-
-  ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
-  [ -z "$ssh_port" ] && ssh_port=22
-
-  log "Démarrage SlowDNS via screen..."
-  screen -dmS slowdns_session "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NAMESERVER" 0.0.0.0:"$ssh_port"
-
-  sleep 3
-  if pgrep -f "sldns-server" >/dev/null; then
-    log "SlowDNS démarré avec succès (screen)."
-    log "Pour voir les logs : screen -r slowdns_session"
-  else
-    echo "ERREUR : SlowDNS n'a pas pu démarrer." >&2
-    exit 1
-  fi
-
-  # On garde aussi le service systemd comme backup
   create_systemd_service
 
   if command -v ufw >/dev/null 2>&1; then
@@ -205,7 +194,7 @@ main() {
   echo ""
   echo "NameServer  : $NAMESERVER"
   echo ""
-  log "Installation et configuration SlowDNS terminées avec optimisations et support screen."
+  log "Installation et configuration SlowDNS terminées avec optimisations."
 }
 
 main "$@"
