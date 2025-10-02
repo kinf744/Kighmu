@@ -7,7 +7,6 @@ SERVER_PUB="$SLOWDNS_DIR/server.pub"
 SLOWDNS_BIN="/usr/local/bin/sldns-server"
 PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
-MTU_MIN=800
 
 log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
@@ -23,7 +22,7 @@ check_root() {
 install_dependencies() {
   log "Mise à jour des paquets et installation des dépendances..."
   apt-get update -q
-  apt-get install -y iptables ufw tcpdump wget haveged
+  apt-get install -y iptables ufw tcpdump wget
 }
 
 get_active_interface() {
@@ -31,16 +30,6 @@ get_active_interface() {
     | grep -v '^lo$' \
     | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' \
     | head -n1
-}
-
-detect_mtu() {
-  for MTU in 1500 1460 1440 1300 1200 1000 900 800; do
-    if ping -c1 -M do -s $((MTU - 28)) 8.8.8.8 >/dev/null 2>&1; then
-      echo $MTU
-      return
-    fi
-  done
-  echo "$MTU_MIN"
 }
 
 install_fixed_keys() {
@@ -84,7 +73,7 @@ enable_ip_forwarding() {
 
 optimize_sysctl() {
   log "Application des optimisations sysctl..."
-  sed -i '/# Optimisations SlowDNS/,+15d' /etc/sysctl.conf || true
+  sed -i '/# Optimisations SlowDNS/,+10d' /etc/sysctl.conf || true
 
   cat <<EOF >> /etc/sysctl.conf
 
@@ -100,17 +89,9 @@ net.ipv4.tcp_fastopen=3
 net.ipv4.tcp_fin_timeout=10
 net.ipv4.tcp_tw_reuse=1
 net.ipv4.tcp_mtu_probing=1
-net.ipv4.udp_mem=262144 349525 524288
 EOF
 
   sysctl -p
-}
-
-restore_iptables() {
-  if [ -f /etc/iptables/rules.v4 ]; then
-    log "Restauration des règles iptables persistantes..."
-    iptables-restore < /etc/iptables/rules.v4
-  fi
 }
 
 create_systemd_service() {
@@ -131,9 +112,11 @@ Wants=network.target
 Type=simple
 User=root
 ExecStart=$SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY $NS 0.0.0.0:$ssh_port
-Restart=on-failure
-RestartSec=2
-WatchdogSec=40
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=slowdns-server
 LimitNOFILE=1048576
 Nice=-5
 CPUSchedulingPolicy=fifo
@@ -154,7 +137,6 @@ main() {
   check_root
   install_dependencies
   mkdir -p "$SLOWDNS_DIR"
-  restore_iptables
   stop_old_instance
 
   read -rp "Entrez le NameServer (NS) (ex: ns.example.com) : " NAMESERVER
@@ -186,8 +168,8 @@ main() {
   fi
   log "Interface réseau détectée : $interface"
 
-  MTU_VALUE=$(detect_mtu)
-  log "Réglage automatique MTU sur interface $interface à $MTU_VALUE..."
+  MTU_VALUE=1440
+  log "Réglage MTU sur interface $interface à $MTU_VALUE..."
   ip link set dev "$interface" mtu "$MTU_VALUE"
 
   optimize_sysctl
