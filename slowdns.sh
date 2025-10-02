@@ -22,7 +22,7 @@ check_root() {
 install_dependencies() {
   log "Mise à jour des paquets et installation des dépendances..."
   apt-get update -q
-  apt-get install -y iptables ufw tcpdump wget
+  apt-get install -y iptables ufw tcpdump wget screen
 }
 
 get_active_interface() {
@@ -73,9 +73,7 @@ enable_ip_forwarding() {
 
 optimize_sysctl() {
   log "Application des optimisations sysctl..."
-
-  # Nettoyage des anciennes optimisations pour éviter les doublons
-  sed -i '/Optimisations SlowDNS/,+10d' /etc/sysctl.conf
+  sed -i '/# Optimisations SlowDNS/,+10d' /etc/sysctl.conf || true
 
   cat <<EOF >> /etc/sysctl.conf
 
@@ -101,8 +99,9 @@ create_systemd_service() {
   ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
   [ -z "$ssh_port" ] && ssh_port=22
 
-  log "Création du fichier systemd slowdns.service..."
+  NS=$(cat "$CONFIG_FILE")
 
+  log "Création du fichier systemd slowdns.service..."
   cat <<EOF > "$SERVICE_PATH"
 [Unit]
 Description=SlowDNS Server Tunnel
@@ -112,7 +111,7 @@ Wants=network.target
 [Service]
 Type=simple
 User=root
-ExecStart=$SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY --idle-timeout 30 --dns-ttl 60 --payload-size 120 \$(cat $CONFIG_FILE) 0.0.0.0:$ssh_port
+ExecStart=$SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY $NS 0.0.0.0:$ssh_port
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -194,7 +193,7 @@ main() {
   echo ""
   echo "NameServer  : $NAMESERVER"
   echo ""
-  log "Installation et configuration SlowDNS terminées avec optimisations."
+  log "Installation et configuration SlowDNS terminées avec succès."
 }
 
 main "$@"
