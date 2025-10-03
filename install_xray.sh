@@ -351,12 +351,29 @@ function uninstall_services() {
     return
   fi
 
-  systemctl stop xray nginx
-  systemctl disable xray nginx
+  if systemctl is-active --quiet xray.service; then
+    systemctl stop xray.service
+  else
+    echo "[INFO] Service xray non démarré, arrêt ignoré."
+  fi
+
+  if systemctl is-enabled --quiet xray.service; then
+    systemctl disable xray.service
+  else
+    echo "[INFO] Service xray non activé, désactivation ignorée."
+  fi
+
   rm -f /usr/local/bin/xray
   rm -rf /etc/xray /var/log/xray /home/vps/public_html
-  apt purge -y nginx certbot
-  apt autoremove -y
+
+  if [[ -f /etc/nginx/conf.d/xray.conf ]]; then
+    rm -f /etc/nginx/conf.d/xray.conf
+    systemctl restart nginx
+  fi
+
+  apt purge -y nginx certbot || echo "[INFO] nginx ou certbot peut ne pas être installé."
+  apt autoremove -y || true
+
   systemctl daemon-reload
   echo "Désinstallation terminée."
 }
@@ -398,13 +415,6 @@ function menu() {
   esac
   read -n1 -s -r -p "Appuyez sur une touche pour revenir au menu..."
   menu
-}
-
-function draw_header() {
-  clear
-  echo "===== Panneau de contrôle XRAY ====="
-  echo "  Domaine : ${domain:-Non défini}"
-  echo "===================================="
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
