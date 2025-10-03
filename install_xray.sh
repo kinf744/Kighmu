@@ -19,12 +19,6 @@ function install_dependencies() {
 }
 
 function install_xray() {
-  if [[ -z "${DOMAIN:-}" ]]; then
-    echo "[ERREUR] La variable d'environnement DOMAIN doit être définie pour installer XRAY."
-    return 1
-  fi
-  domain="$DOMAIN"
-
   echo "[INFO] Installation de Xray..."
   latest=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest | jq -r '.tag_name')
   url="https://github.com/XTLS/Xray-core/releases/download/${latest}/xray-linux-64.zip"
@@ -382,13 +376,13 @@ function menu() {
 
   case "$choice" in
     1)
-      if [[ -z "${DOMAIN:-}" ]]; then
-        echo "[ERREUR] La variable d'environnement DOMAIN doit être définie pour installer XRAY."
+      read -rp "Veuillez entrer votre nom de domaine (doit pointer vers ce serveur) : " domain
+      if [[ -z "$domain" ]]; then
+        echo "Erreur : domaine invalide."
         read -n1 -s -r -p "Appuyez sur une touche pour revenir au menu..."
         menu
         return
       fi
-      domain="$DOMAIN"
       install_dependencies
       install_xray
       setup_ssl
