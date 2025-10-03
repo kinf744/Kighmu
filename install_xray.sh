@@ -38,6 +38,8 @@ function setup_ssl() {
   if ! command -v acme.sh &>/dev/null; then
     curl https://get.acme.sh | sh
   fi
+  
+  ~/.acme.sh/acme.sh --register-account -m adrienyourie@gmail.com || true
 
   ~/.acme.sh/acme.sh --issue -d "$domain" --standalone --keylength ec-256
   ~/.acme.sh/acme.sh --install-cert -d "$domain" --ecc --fullchain-file /etc/xray/xray.crt --key-file /etc/xray/xray.key
