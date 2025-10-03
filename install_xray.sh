@@ -13,12 +13,16 @@ function draw_header {
 }
 
 function clean_git_repo() {
-  echo "[INFO] Nettoyage automatique du dépôt git (reset hard + clean)."
-  branch=$(git rev-parse --abbrev-ref HEAD)
-  git fetch --all
-  git reset --hard origin/"$branch"
-  git clean -fd
-  echo "[INFO] Dépôt git remis à l'état propre."
+  if git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
+    echo "[INFO] Nettoyage automatique du dépôt git (reset hard + clean)."
+    branch=$(git rev-parse --abbrev-ref HEAD)
+    git fetch --all
+    git reset --hard origin/"$branch"
+    git clean -fd
+    echo "[INFO] Dépôt git remis à l'état propre."
+  else
+    echo "[INFO] Pas un dépôt git, nettoyage git ignoré."
+  fi
 }
 
 function install_dependencies() {
