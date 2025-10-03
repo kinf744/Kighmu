@@ -42,8 +42,8 @@ function install_xray() {
   mv -f xray /usr/local/bin/xray
   chmod +x /usr/local/bin/xray
 
-  mkdir -p /etc/xray /var/log/xray /home/vps/public_html
-  chown www-data:www-data /etc/xray /var/log/xray /home/vps/public_html
+  mkdir -p /usr/local/etc/xray /var/log/xray /home/vps/public_html
+  chown www-data:www-data /usr/local/etc/xray /var/log/xray /home/vps/public_html
   echo "[OK] Xray installé."
 }
 
@@ -152,13 +152,13 @@ EOF
 function configure_xray() {
   echo "[INFO] Configuration Xray..."
 
-  mkdir -p /etc/xray
+  mkdir -p /usr/local/etc/xray
 
   uuid_vless=$(cat /proc/sys/kernel/random/uuid)
   uuid_vmess=$(cat /proc/sys/kernel/random/uuid)
   password_trojan=$(openssl rand -base64 12)
 
-  cat > /etc/xray/config.json <<EOF
+  cat > /usr/local/etc/xray/config.json <<EOF
 {
   "log": {
     "access": "/var/log/xray/access.log",
@@ -227,6 +227,7 @@ EOF
   cat > /etc/systemd/system/xray.service <<EOF
 [Unit]
 Description=Xray Service
+Documentation=https://github.com/XTLS/Xray-core
 After=network.target nss-lookup.target network-online.target
 Wants=network-online.target
 
@@ -236,13 +237,16 @@ StartLimitBurst=5
 [Service]
 Type=simple
 User=www-data
-ExecStart=/usr/local/bin/xray run -config /etc/xray/config.json
-Restart=always
-RestartSec=5s
-TimeoutStopSec=30
+ExecStart=/usr/local/bin/xray run -config /usr/local/etc/xray/config.json
+Restart=on-failure
+RestartPreventExitStatus=23
+LimitNPROC=10000
+LimitNOFILE=1048576
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
 StandardOutput=append:/var/log/xray/access.log
 StandardError=append:/var/log/xray/error.log
-LimitNOFILE=1048576
 
 [Install]
 WantedBy=multi-user.target
@@ -256,12 +260,12 @@ EOF
 
 function add_user_vmess() {
   echo "[INFO] Ajout utilisateur VMESS"
-  if [[ ! -f /etc/xray/config.json ]]; then
-    echo "[ERREUR] Le fichier /etc/xray/config.json est absent. Veuillez d'abord installer Xray via le menu (option 1)."
+  if [[ ! -f /usr/local/etc/xray/config.json ]]; then
+    echo "[ERREUR] Le fichier /usr/local/etc/xray/config.json est absent. Veuillez d'abord installer Xray via le menu (option 1)."
     return
   fi
   read -rp "Nom utilisateur : " user
-  if grep -qw "$user" /etc/xray/config.json; then
+  if grep -qw "$user" /usr/local/etc/xray/config.json; then
     echo "[ERREUR] L'utilisateur existe déjà."
     return
   fi
@@ -269,7 +273,7 @@ function add_user_vmess() {
   exp_date=$(date -d "+30 days" +%Y-%m-%d)
   sed -i "/\"clients\": \[/a\\
     \ \ \ \ \ \ \ \ { \"id\": \"$uuid\", \"alterId\": 0, \"email\": \"$user\" },
-  " /etc/xray/config.json
+  " /usr/local/etc/xray/config.json
   systemctl restart xray
 
   vmess_json_none="{\"v\":\"2\",\"ps\":\"$user\",\"add\":\"$domain\",\"port\":\"$port_none\",\"id\":\"$uuid\",\"aid\":\"0\",\"net\":\"ws\",\"path\":\"/vmess\",\"type\":\"none\",\"host\":\"$domain\",\"tls\":\"none\"}"
@@ -293,12 +297,12 @@ Lien Non-TLS  : $vmess_link_none
 
 function add_user_vless() {
   echo "[INFO] Ajout utilisateur VLESS"
-  if [[ ! -f /etc/xray/config.json ]]; then
-    echo "[ERREUR] Le fichier /etc/xray/config.json est absent. Veuillez d'abord installer Xray via le menu (option 1)."
+  if [[ ! -f /usr/local/etc/xray/config.json ]]; then
+    echo "[ERREUR] Le fichier /usr/local/etc/xray/config.json est absent. Veuillez d'abord installer Xray via le menu (option 1)."
     return
   fi
   read -rp "Nom utilisateur : " user
-  if grep -qw "$user" /etc/xray/config.json; then
+  if grep -qw "$user" /usr/local/etc/xray/config.json; then
     echo "[ERREUR] L'utilisateur existe déjà."
     return
   fi
@@ -306,7 +310,7 @@ function add_user_vless() {
   exp_date=$(date -d "+30 days" +%Y-%m-%d)
   sed -i "/\"clients\": \[/a\\
     \ \ \ \ \ \ \ \ { \"id\": \"$uuid\", \"email\": \"$user\" },
-  " /etc/xray/config.json
+  " /usr/local/etc/xray/config.json
   systemctl restart xray
 
   vless_link_tls="vless://$uuid@$domain:$port_tls?path=/vless&security=tls&type=ws#$user"
@@ -328,12 +332,12 @@ Lien Non-TLS  : $vless_link_none
 
 function add_user_trojan() {
   echo "[INFO] Ajout utilisateur TROJAN"
-  if [[ ! -f /etc/xray/config.json ]]; then
-    echo "[ERREUR] Le fichier /etc/xray/config.json est absent. Veuillez d'abord installer Xray via le menu (option 1)."
+  if [[ ! -f /usr/local/etc/xray/config.json ]]; then
+    echo "[ERREUR] Le fichier /usr/local/etc/xray/config.json est absent. Veuillez d'abord installer Xray via le menu (option 1)."
     return
   fi
   read -rp "Nom utilisateur : " user
-  if grep -qw "$user" /etc/xray/config.json; then
+  if grep -qw "$user" /usr/local/etc/xray/config.json; then
     echo "[ERREUR] L'utilisateur existe déjà."
     return
   fi
@@ -341,7 +345,7 @@ function add_user_trojan() {
   exp_date=$(date -d "+30 days" +%Y-%m-%d)
   sed -i "/\"password\": \[/a\\
     \ \ \ \ \ \ \ \ { \"password\": \"$password\", \"email\": \"$user\" },
-  " /etc/xray/config.json
+  " /usr/local/etc/xray/config.json
   systemctl restart xray
 
   trojan_link_tls="trojan://$password@$domain:$port_tls?path=/trojan-ws&security=tls&type=ws#$user"
@@ -363,11 +367,11 @@ Lien Non-TLS  : $trojan_link_none
 
 function delete_user() {
   echo "[INFO] Suppression utilisateur XRAY"
-  if [[ ! -f /etc/xray/config.json ]]; then
-    echo "[ERREUR] Le fichier /etc/xray/config.json est absent. Veuillez d'abord installer Xray via le menu (option 1)."
+  if [[ ! -f /usr/local/etc/xray/config.json ]]; then
+    echo "[ERREUR] Le fichier /usr/local/etc/xray/config.json est absent. Veuillez d'abord installer Xray via le menu (option 1)."
     return
   fi
-  users=$(grep -oP '(?<="email": ")[^"]+' /etc/xray/config.json | sort -u)
+  users=$(grep -oP '(?<="email": ")[^"]+' /usr/local/etc/xray/config.json | sort -u)
   if [[ -z "$users" ]]; then
     echo "Aucun utilisateur à supprimer."
     return
@@ -386,7 +390,7 @@ function delete_user() {
   fi
 
   userdel="${arr[choice-1]}"
-  sed -i "/\"email\": \"$userdel\"/,/}/d" /etc/xray/config.json
+  sed -i "/\"email\": \"$userdel\"/,/}/d" /usr/local/etc/xray/config.json
   systemctl restart xray
   echo "Utilisateur $userdel supprimé."
 }
@@ -412,7 +416,7 @@ function uninstall_services() {
   fi
 
   rm -f /usr/local/bin/xray
-  rm -rf /etc/xray /var/log/xray /home/vps/public_html
+  rm -rf /usr/local/etc/xray /var/log/xray /home/vps/public_html
 
   if [[ -f /etc/nginx/conf.d/xray.conf ]]; then
     rm -f /etc/nginx/conf.d/xray.conf
