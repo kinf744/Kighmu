@@ -76,20 +76,18 @@ while true; do
     mapfile -t NET_INTERFACES < <(detect_interfaces)
     DEBUG "Interfaces détectées : ${NET_INTERFACES[*]}"
 
-    DATA_DAY_BYTES=0
-    DATA_MONTH_BYTES=0
+    DATA_DAY_GB=0
+    DATA_MONTH_GB=0
 
-    for iface in "${NET_INTERFACES[@]}"; do
-      day_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d';' -f9)
-      month_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d';' -f15)
-      day_bytes=$(echo "$day_raw" | tr -cd '0-9')
-      month_bytes=$(echo "$month_raw" | tr -cd '0-9')
-      day_bytes=${day_bytes:-0}
-      month_bytes=${month_bytes:-0}
-      DEBUG "Interface $iface - Jour: $day_bytes octets, Mois: $month_bytes octets"
-      DATA_DAY_BYTES=$((DATA_DAY_BYTES + day_bytes))
-      DATA_MONTH_BYTES=$((DATA_MONTH_BYTES + month_bytes))
-    done
+for iface in "${NET_INTERFACES[@]}"; do
+  day_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d';' -f9)
+  month_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d';' -f15)
+  day_gb=$(convert_to_gb "$day_raw")
+  month_gb=$(convert_to_gb "$month_raw")
+  DEBUG "Interface $iface - Jour: $day_raw ($day_gb Go), Mois: $month_raw ($month_gb Go)"
+  DATA_DAY_GB=$(echo "$DATA_DAY_GB + $day_gb" | bc)
+  DATA_MONTH_GB=$(echo "$DATA_MONTH_GB + $month_gb" | bc)
+done
 
     DATA_DAY_GB=$(bytes_to_gb "$DATA_DAY_BYTES")
     DATA_MONTH_GB=$(bytes_to_gb "$DATA_MONTH_BYTES")
