@@ -151,6 +151,9 @@ EOF
 
 function configure_xray() {
   echo "[INFO] Configuration Xray..."
+
+  mkdir -p /etc/xray
+
   uuid_vless=$(cat /proc/sys/kernel/random/uuid)
   uuid_vmess=$(cat /proc/sys/kernel/random/uuid)
   password_trojan=$(openssl rand -base64 12)
@@ -253,6 +256,10 @@ EOF
 
 function add_user_vmess() {
   echo "[INFO] Ajout utilisateur VMESS"
+  if [[ ! -f /etc/xray/config.json ]]; then
+    echo "[ERREUR] Le fichier /etc/xray/config.json est absent. Veuillez d'abord installer Xray via le menu (option 1)."
+    return
+  fi
   read -rp "Nom utilisateur : " user
   if grep -qw "$user" /etc/xray/config.json; then
     echo "[ERREUR] L'utilisateur existe déjà."
@@ -286,6 +293,10 @@ Lien Non-TLS  : $vmess_link_none
 
 function add_user_vless() {
   echo "[INFO] Ajout utilisateur VLESS"
+  if [[ ! -f /etc/xray/config.json ]]; then
+    echo "[ERREUR] Le fichier /etc/xray/config.json est absent. Veuillez d'abord installer Xray via le menu (option 1)."
+    return
+  fi
   read -rp "Nom utilisateur : " user
   if grep -qw "$user" /etc/xray/config.json; then
     echo "[ERREUR] L'utilisateur existe déjà."
@@ -317,6 +328,10 @@ Lien Non-TLS  : $vless_link_none
 
 function add_user_trojan() {
   echo "[INFO] Ajout utilisateur TROJAN"
+  if [[ ! -f /etc/xray/config.json ]]; then
+    echo "[ERREUR] Le fichier /etc/xray/config.json est absent. Veuillez d'abord installer Xray via le menu (option 1)."
+    return
+  fi
   read -rp "Nom utilisateur : " user
   if grep -qw "$user" /etc/xray/config.json; then
     echo "[ERREUR] L'utilisateur existe déjà."
@@ -348,6 +363,10 @@ Lien Non-TLS  : $trojan_link_none
 
 function delete_user() {
   echo "[INFO] Suppression utilisateur XRAY"
+  if [[ ! -f /etc/xray/config.json ]]; then
+    echo "[ERREUR] Le fichier /etc/xray/config.json est absent. Veuillez d'abord installer Xray via le menu (option 1)."
+    return
+  fi
   users=$(grep -oP '(?<="email": ")[^"]+' /etc/xray/config.json | sort -u)
   if [[ -z "$users" ]]; then
     echo "Aucun utilisateur à supprimer."
