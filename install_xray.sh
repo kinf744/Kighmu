@@ -38,7 +38,7 @@ function setup_ssl() {
   if ! command -v acme.sh &>/dev/null; then
     curl https://get.acme.sh | sh
   fi
-  source ~/.bashrc
+
   ~/.acme.sh/acme.sh --issue -d "$domain" --standalone --keylength ec-256
   ~/.acme.sh/acme.sh --install-cert -d "$domain" --ecc --fullchain-file /etc/xray/xray.crt --key-file /etc/xray/xray.key
   chmod 644 /etc/xray/xray.crt /etc/xray/xray.key
@@ -46,8 +46,7 @@ function setup_ssl() {
 }
 
 function configure_nginx() {
-  echo "[INFO] Configuration Nginx..."
-  cat > /etc/nginx/conf.d/xray.conf <<EOF
+cat > /etc/nginx/conf.d/xray.conf <<EOF
 server {
   listen 80;
   server_name $domain;
