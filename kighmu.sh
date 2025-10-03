@@ -96,9 +96,6 @@ for iface in "${NET_INTERFACES[@]}"; do
   DATA_MONTH_GB=$(echo "$DATA_MONTH_GB + $month_gb" | bc)
 done
 
-    DATA_DAY_GB=$(bytes_to_gb "$DATA_DAY_BYTES")
-    DATA_MONTH_GB=$(bytes_to_gb "$DATA_MONTH_BYTES")
-
   echo -e "${CYAN}+======================================================+${RESET}"
   echo -e "${BOLD}${MAGENTA}|                  🚀 KIGHMU MANAGER 🇨🇲 🚀             |${RESET}"
   echo -e "${CYAN}+======================================================+${RESET}"
