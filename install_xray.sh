@@ -3,7 +3,7 @@ set -euo pipefail
 
 domain=""
 port_tls=443
-port_none=80
+port_none=81  # HTTP Nginx shifted to 81
 
 function draw_header {
   clear
@@ -50,7 +50,6 @@ function install_xray() {
 function setup_ssl() {
   echo "[INFO] Configuration certificat SSL pour $domain..."
 
-  # Vérifie et crée le dossier avant génération des certificats
   sudo mkdir -p /etc/xray
 
   if ! command -v acme.sh &>/dev/null; then
@@ -70,7 +69,8 @@ function setup_ssl() {
 function configure_nginx() {
   cat > /etc/nginx/conf.d/xray.conf <<EOF
 server {
-  listen 80;
+  listen 81;
+  listen [::]:81;
   server_name $domain;
 
   location / {
@@ -152,7 +152,7 @@ EOF
 
   systemctl enable nginx
   systemctl restart nginx
-  echo "[OK] Nginx configuré."
+  echo "[OK] Nginx configuré pour écouter sur le port 81."
 }
 
 function configure_xray() {
@@ -438,7 +438,7 @@ function uninstall_services() {
 
 function menu() {
   draw_header
-  echo "1) Installer tout (dépendances, Xray, SSL, Nginx)"
+  echo "1) Installer tout (dépendances, Xray, SSL, Nginx port 81)"
   echo "2) Ajouter utilisateur VMESS"
   echo "3) Ajouter utilisateur VLESS"
   echo "4) Ajouter utilisateur TROJAN"
