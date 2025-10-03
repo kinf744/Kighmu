@@ -3,7 +3,7 @@ set -euo pipefail
 
 domain=""
 port_tls=443
-port_none=81  # HTTP Nginx shifted to 81
+port_none=80
 
 function draw_header {
   clear
@@ -50,7 +50,10 @@ function install_xray() {
 function setup_ssl() {
   echo "[INFO] Configuration certificat SSL pour $domain..."
 
+  # Création dossiers nécessaires
   sudo mkdir -p /etc/xray
+  mkdir -p /home/vps/public_html/.well-known/acme-challenge
+  sudo chown -R www-data:www-data /home/vps/public_html/.well-known
 
   if ! command -v acme.sh &>/dev/null; then
     curl https://get.acme.sh | sh
@@ -58,8 +61,11 @@ function setup_ssl() {
 
   ~/.acme.sh/acme.sh --register-account -m adrienyourie@gmail.com || true
 
-  ~/.acme.sh/acme.sh --issue -d "$domain" --standalone --keylength ec-256 --force
+  # Génération du certificat avec méthode webroot
+  ~/.acme.sh/acme.sh --issue -d "$domain" --webroot /home/vps/public_html --keylength ec-256 --force
+
   ~/.acme.sh/acme.sh --install-cert -d "$domain" --ecc --fullchain-file /etc/xray/xray.crt --key-file /etc/xray/xray.key --force
+
   sudo chown www-data:www-data /etc/xray/xray.crt /etc/xray/xray.key
   sudo chmod 644 /etc/xray/xray.crt /etc/xray/xray.key
 
@@ -69,12 +75,18 @@ function setup_ssl() {
 function configure_nginx() {
   cat > /etc/nginx/conf.d/xray.conf <<EOF
 server {
-  listen 81;
-  listen [::]:81;
+  listen 80;
+  listen [::]:80;
   server_name $domain;
 
   location / {
     return 301 https://\$host\$request_uri;
+  }
+
+  location ^~ /.well-known/acme-challenge/ {
+    root /home/vps/public_html;
+    default_type "text/plain";
+    allow all;
   }
 
   location = /vless {
@@ -152,7 +164,7 @@ EOF
 
   systemctl enable nginx
   systemctl restart nginx
-  echo "[OK] Nginx configuré pour écouter sur le port 81."
+  echo "[OK] Nginx configuré."
 }
 
 function configure_xray() {
@@ -438,7 +450,7 @@ function uninstall_services() {
 
 function menu() {
   draw_header
-  echo "1) Installer tout (dépendances, Xray, SSL, Nginx port 81)"
+  echo "1) Installer tout (dépendances, Xray, SSL, Nginx)"
   echo "2) Ajouter utilisateur VMESS"
   echo "3) Ajouter utilisateur VLESS"
   echo "4) Ajouter utilisateur TROJAN"
