@@ -49,16 +49,22 @@ function install_xray() {
 
 function setup_ssl() {
   echo "[INFO] Configuration certificat SSL pour $domain..."
+
+  # Vérifie et crée le dossier avant génération des certificats
+  sudo mkdir -p /etc/xray
+
   if ! command -v acme.sh &>/dev/null; then
     curl https://get.acme.sh | sh
   fi
 
   ~/.acme.sh/acme.sh --register-account -m adrienyourie@gmail.com || true
 
-  ~/.acme.sh/acme.sh --issue -d "$domain" --standalone --keylength ec-256
-  ~/.acme.sh/acme.sh --install-cert -d "$domain" --ecc --fullchain-file /etc/xray/xray.crt --key-file /etc/xray/xray.key
-  chmod 644 /etc/xray/xray.crt /etc/xray/xray.key
-  echo "[OK] Certificat SSL généré."
+  ~/.acme.sh/acme.sh --issue -d "$domain" --standalone --keylength ec-256 --force
+  ~/.acme.sh/acme.sh --install-cert -d "$domain" --ecc --fullchain-file /etc/xray/xray.crt --key-file /etc/xray/xray.key --force
+  sudo chown www-data:www-data /etc/xray/xray.crt /etc/xray/xray.key
+  sudo chmod 644 /etc/xray/xray.crt /etc/xray/xray.key
+
+  echo "[OK] Certificat SSL généré et installé."
 }
 
 function configure_nginx() {
