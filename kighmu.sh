@@ -12,21 +12,21 @@ DEBUG() {
 }
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo -e "\e[31m[ERREUR]\e[0m Veuillez exécuter ce script en root."
+    echo -e "e[31m[ERREUR]e[0m Veuillez exécuter ce script en root."
     exit 1
 fi
 
 # Couleurs
-RED="\e[31m"
-GREEN="\e[32m"
-YELLOW="\e[33m"
-BLUE="\e[34m"
-MAGENTA="\e[35m"
-MAGENTA_VIF="\e[1;35m"
-CYAN="\e[36m"
-CYAN_VIF="\e[1;36m"
-BOLD="\e[1m"
-RESET="\e[0m"
+RED="e[31m"
+GREEN="e[32m"
+YELLOW="e[33m"
+BLUE="e[34m"
+MAGENTA="e[35m"
+MAGENTA_VIF="e[1;35m"
+CYAN="e[36m"
+CYAN_VIF="e[1;36m"
+BOLD="e[1m"
+RESET="e[0m"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 USER_FILE="/etc/kighmu/users.list"
@@ -36,12 +36,21 @@ detect_interfaces() {
   ip -o link show up | awk -F': ' '{print $2}' | grep -v '^lo$' | grep -vE '^(docker|veth|br|virbr|wl|vmnet|vboxnet)'
 }
 
-bytes_to_gb() {
-  echo "scale=2; $1/1024/1024/1024" | bc
+# Conversion des valeurs vnStat avec unité vers Go
+convert_to_gb() {
+    local size_str=$1
+    local num=$(echo "$size_str" | awk '{print $1}')
+    local unit=$(echo "$size_str" | awk '{print $2}')
+    case $unit in
+        KiB) echo "scale=4; $num/1024/1024" | bc ;;
+        MiB) echo "scale=4; $num/1024" | bc ;;
+        GiB) echo "scale=4; $num" | bc ;;
+        *) echo "0" ;;
+    esac
 }
 
 count_ssh_users() {
-  awk -F: '($3 >= 1000) && ($7 ~ /^\/(bin\/bash|bin\/sh|bin\/false)$/) {print $1}' /etc/passwd | wc -l
+  awk -F: '($3 >= 1000) && ($7 ~ /^/(bin/bash|bin/sh|bin/false)$/) {print $1}' /etc/passwd | wc -l
 }
 
 count_connected_devices() {
@@ -64,7 +73,8 @@ while true; do
     
     TOTAL_RAM_RAW=$(free -m | awk 'NR==2{print $2}')
     RAM_GB=$(echo "scale=2; $TOTAL_RAM_RAW/1024" | bc)
-    RAM_GB_ARR=$(echo "$RAM_GB" | awk '{printf "%d\n", ($1 == int($1)) ? $1 : int($1)+1}')
+    RAM_GB_ARR=$(echo "$RAM_GB" | awk '{printf "%d
+", ($1 == int($1)) ? $1 : int($1)+1}')
     
     CPU_CORES=$(nproc)
     RAM_USAGE=$(free -m | awk 'NR==2{printf "%.2f%%", $3*100/$2}')
@@ -79,18 +89,15 @@ while true; do
     DATA_DAY_GB=0
     DATA_MONTH_GB=0
 
-for iface in "${NET_INTERFACES[@]}"; do
-  day_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d';' -f9)
-  month_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d';' -f15)
-  day_gb=$(convert_to_gb "$day_raw")
-  month_gb=$(convert_to_gb "$month_raw")
-  DEBUG "Interface $iface - Jour: $day_raw ($day_gb Go), Mois: $month_raw ($month_gb Go)"
-  DATA_DAY_GB=$(echo "$DATA_DAY_GB + $day_gb" | bc)
-  DATA_MONTH_GB=$(echo "$DATA_MONTH_GB + $month_gb" | bc)
-done
-
-    DATA_DAY_GB=$(bytes_to_gb "$DATA_DAY_BYTES")
-    DATA_MONTH_GB=$(bytes_to_gb "$DATA_MONTH_BYTES")
+    for iface in "${NET_INTERFACES[@]}"; do
+      day_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d';' -f9)
+      month_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d';' -f15)
+      day_gb=$(convert_to_gb "$day_raw")
+      month_gb=$(convert_to_gb "$month_raw")
+      DEBUG "Interface $iface - Jour: $day_raw ($day_gb Go), Mois: $month_raw ($month_gb Go)"
+      DATA_DAY_GB=$(echo "$DATA_DAY_GB + $day_gb" | bc)
+      DATA_MONTH_GB=$(echo "$DATA_MONTH_GB + $month_gb" | bc)
+    done
 
   echo -e "${CYAN}+======================================================+${RESET}"
   echo -e "${BOLD}${MAGENTA}|                  🚀 KIGHMU MANAGER 🇨🇲 🚀             |${RESET}"
