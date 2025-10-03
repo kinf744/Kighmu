@@ -12,6 +12,15 @@ function draw_header {
   echo "===================================="
 }
 
+function clean_git_repo() {
+  echo "[INFO] Nettoyage automatique du dépôt git (reset hard + clean)."
+  branch=$(git rev-parse --abbrev-ref HEAD)
+  git fetch --all
+  git reset --hard origin/"$branch"
+  git clean -fd
+  echo "[INFO] Dépôt git remis à l'état propre."
+}
+
 function install_dependencies() {
   echo "[INFO] Installation dépendances..."
   apt update
@@ -19,6 +28,7 @@ function install_dependencies() {
 }
 
 function install_xray() {
+  clean_git_repo
   echo "[INFO] Installation de Xray..."
   latest=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest | jq -r '.tag_name')
   url="https://github.com/XTLS/Xray-core/releases/download/${latest}/xray-linux-64.zip"
@@ -38,7 +48,7 @@ function setup_ssl() {
   if ! command -v acme.sh &>/dev/null; then
     curl https://get.acme.sh | sh
   fi
-  
+
   ~/.acme.sh/acme.sh --register-account -m adrienyourie@gmail.com || true
 
   ~/.acme.sh/acme.sh --issue -d "$domain" --standalone --keylength ec-256
@@ -48,7 +58,7 @@ function setup_ssl() {
 }
 
 function configure_nginx() {
-cat > /etc/nginx/conf.d/xray.conf <<EOF
+  cat > /etc/nginx/conf.d/xray.conf <<EOF
 server {
   listen 80;
   server_name $domain;
@@ -137,7 +147,6 @@ EOF
 
 function configure_xray() {
   echo "[INFO] Configuration Xray..."
-
   uuid_vless=$(cat /proc/sys/kernel/random/uuid)
   uuid_vmess=$(cat /proc/sys/kernel/random/uuid)
   password_trojan=$(openssl rand -base64 12)
@@ -220,7 +229,6 @@ EOF
   systemctl daemon-reload
   systemctl enable xray
   systemctl restart xray
-
   echo "[OK] Xray configuré et démarré."
 }
 
