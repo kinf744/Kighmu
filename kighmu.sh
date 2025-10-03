@@ -127,7 +127,7 @@ done
   echo -e "${GREEN}${BOLD}[06]${RESET} ${YELLOW}Message du serveur${RESET}"
   echo -e "${GREEN}${BOLD}[07]${RESET} ${YELLOW}Installation de mode${RESET}"
   echo -e "${GREEN}${BOLD}[08]${RESET} ${YELLOW}V2ray slowdns mode${RESET}"
-  echo -e "${GREEN}${BOLD}[09]${RESET} ${YELLOW}Xray All mode{RESET}"
+  echo -e "${GREEN}${BOLD}[09]${RESET} ${YELLOW}Xray All mode${RESET}"
   echo -e "${GREEN}${BOLD}[10]${RESET} ${YELLOW}Bot Telegram${RESET}"
   echo -e "${GREEN}${BOLD}[11]${RESET} ${YELLOW}Désinstaller le script${RESET}"
   echo -e "${GREEN}${BOLD}[12]${RESET} ${YELLOW}Blocage de torrents${RESET}"
