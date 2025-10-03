@@ -36,8 +36,16 @@ detect_interfaces() {
   ip -o link show up | awk -F': ' '{print $2}' | grep -v '^lo$' | grep -vE '^(docker|veth|br|virbr|wl|vmnet|vboxnet)'
 }
 
-bytes_to_gb() {
-  echo "scale=2; $1/1024/1024/1024" | bc
+convert_to_gb() {
+    local size_str=$1
+    local num=$(echo "$size_str" | awk '{print $1}')
+    local unit=$(echo "$size_str" | awk '{print $2}')
+    case $unit in
+        KiB) echo "scale=4; $num/1024/1024" | bc ;;
+        MiB) echo "scale=4; $num/1024" | bc ;;
+        GiB) echo "scale=4; $num" | bc ;;
+        *) echo "0" ;;
+    esac
 }
 
 count_ssh_users() {
@@ -84,7 +92,6 @@ for iface in "${NET_INTERFACES[@]}"; do
   month_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d';' -f15)
   day_gb=$(convert_to_gb "$day_raw")
   month_gb=$(convert_to_gb "$month_raw")
-  DEBUG "Interface $iface - Jour: $day_raw ($day_gb Go), Mois: $month_raw ($month_gb Go)"
   DATA_DAY_GB=$(echo "$DATA_DAY_GB + $day_gb" | bc)
   DATA_MONTH_GB=$(echo "$DATA_MONTH_GB + $month_gb" | bc)
 done
