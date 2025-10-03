@@ -9,6 +9,21 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+detect_interfaces() {
+  ip -o link show up | awk -F': ' '{print $2}' | grep -v '^lo$' | grep -vE '^(docker|veth|br|virbr|wl|vmnet|vboxnet)'
+}
+
+echo "Réinitialisation des compteurs vnStat avant installation..."
+INTERFACES=$(detect_interfaces)
+for iface in $INTERFACES; do
+  echo "Réinitialisation des statistiques vnStat pour l'interface $iface"
+  rm -f /var/lib/vnstat/"$iface"
+done
+systemctl restart vnstat
+echo "Bases vnStat réinitialisées."
+
+echo "Vérification et installation de curl si nécessaire..."
+
 echo "Vérification et installation de curl si nécessaire..."
 
 install_package_if_missing() {
