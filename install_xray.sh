@@ -10,15 +10,20 @@ domain="$DOMAIN"
 port_tls=443
 port_none=80
 
-echo "[INFO] Domaine utilisé : $domain"
+function draw_header {
+  clear
+  echo "===== Panneau de contrôle XRAY ====="
+  echo "  Domaine : $domain"
+  echo "===================================="
+}
 
-install_dependencies() {
+function install_dependencies() {
   echo "[INFO] Installation dépendances..."
   apt update
   apt install -y curl wget unzip socat cron ntpdate jq nginx certbot
 }
 
-install_xray() {
+function install_xray() {
   echo "[INFO] Installation de Xray..."
   latest=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest | jq -r '.tag_name')
   url="https://github.com/XTLS/Xray-core/releases/download/${latest}/xray-linux-64.zip"
@@ -33,7 +38,7 @@ install_xray() {
   echo "[OK] Xray installé."
 }
 
-setup_ssl() {
+function setup_ssl() {
   echo "[INFO] Configuration certificat SSL pour $domain..."
   if ! command -v acme.sh &>/dev/null; then
     curl https://get.acme.sh | sh
@@ -45,7 +50,7 @@ setup_ssl() {
   echo "[OK] Certificat SSL généré."
 }
 
-configure_nginx() {
+function configure_nginx() {
   echo "[INFO] Configuration Nginx..."
   cat > /etc/nginx/conf.d/xray.conf <<EOF
 server {
@@ -134,7 +139,7 @@ EOF
   echo "[OK] Nginx configuré."
 }
 
-configure_xray() {
+function configure_xray() {
   echo "[INFO] Configuration Xray..."
 
   uuid_vless=$(cat /proc/sys/kernel/random/uuid)
@@ -223,7 +228,7 @@ EOF
   echo "[OK] Xray configuré et démarré."
 }
 
-add_user_vmess() {
+function add_user_vmess() {
   echo "[INFO] Ajout utilisateur VMESS"
   read -rp "Nom utilisateur : " user
   if grep -qw "$user" /etc/xray/config.json; then
@@ -256,7 +261,7 @@ Lien Non-TLS  : $vmess_link_none
 "
 }
 
-add_user_vless() {
+function add_user_vless() {
   echo "[INFO] Ajout utilisateur VLESS"
   read -rp "Nom utilisateur : " user
   if grep -qw "$user" /etc/xray/config.json; then
@@ -287,7 +292,7 @@ Lien Non-TLS  : $vless_link_none
 "
 }
 
-add_user_trojan() {
+function add_user_trojan() {
   echo "[INFO] Ajout utilisateur TROJAN"
   read -rp "Nom utilisateur : " user
   if grep -qw "$user" /etc/xray/config.json; then
@@ -318,7 +323,7 @@ Lien Non-TLS  : $trojan_link_none
 "
 }
 
-delete_user() {
+function delete_user() {
   echo "[INFO] Suppression utilisateur XRAY"
   users=$(grep -oP '(?<="email": ")[^"]+' /etc/xray/config.json | sort -u)
   if [[ -z "$users" ]]; then
@@ -344,7 +349,7 @@ delete_user() {
   echo "Utilisateur $userdel supprimé."
 }
 
-uninstall_services() {
+function uninstall_services() {
   echo "[INFO] Désinstallation complète de Xray et services associés"
   read -rp "Confirmer la désinstallation complète ? (o/N) : " confirm
   if [[ "${confirm,,}" != "o" ]]; then
@@ -362,9 +367,8 @@ uninstall_services() {
   echo "Désinstallation terminée."
 }
 
-menu() {
-  clear
-  echo "===== Gestion XRAY ====="
+function menu() {
+  draw_header
   echo "1) Installer tout (dépendances, Xray, SSL, Nginx)"
   echo "2) Ajouter utilisateur VMESS"
   echo "3) Ajouter utilisateur VLESS"
@@ -372,21 +376,30 @@ menu() {
   echo "5) Supprimer un utilisateur"
   echo "6) Désinstaller XRAY"
   echo "7) Quitter"
+  echo
   read -rp "Choix: " choice
 
   case "$choice" in
-    1) install_dependencies; install_xray; setup_ssl; configure_nginx; configure_xray; menu ;;
-    2) add_user_vmess; read -n1 -s -r -p "Appuyez sur une touche..."; menu ;;
-    3) add_user_vless; read -n1 -s -r -p "Appuyez sur une touche..."; menu ;;
-    4) add_user_trojan; read -n1 -s -r -p "Appuyez sur une touche..."; menu ;;
-    5) delete_user; read -n1 -s -r -p "Appuyez sur une touche..."; menu ;;
-    6) uninstall_services; read -n1 -s -r -p "Appuyez sur une touche..."; menu ;;
+    1) install_dependencies; install_xray; setup_ssl; configure_nginx; configure_xray ;;
+    2) add_user_vmess ;;
+    3) add_user_vless ;;
+    4) add_user_trojan ;;
+    5) delete_user ;;
+    6) uninstall_services ;;
     7) exit 0 ;;
-    *) echo "Choix invalide."; sleep 1; menu ;;
+    *) echo "Choix invalide."; sleep 1 ;;
   esac
+  read -n1 -s -r -p "Appuyez sur une touche pour revenir au menu..."
+  menu
 }
 
-# Si exécuté directement, lancer menu
+function draw_header() {
+  clear
+  echo "===== Panneau de contrôle XRAY ====="
+  echo "  Domaine : $domain"
+  echo "===================================="
+}
+
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   menu
 fi
