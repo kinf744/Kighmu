@@ -7,12 +7,14 @@ _DEBUG="off"  # mettre "on" pour activer le mode debug réseau
 
 DEBUG() {
   if [ "$_DEBUG" = "on" ]; then
-    echo -e "${YELLOW}[DEBUG] $*${RESET}"
+    printf "%b
+" "${YELLOW}[DEBUG] $*${RESET}"
   fi
 }
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo -e "e[31m[ERREUR]e[0m Veuillez exécuter ce script en root."
+    printf "%b
+" "e[31m[ERREUR]e[0m Veuillez exécuter ce script en root."
     exit 1
 fi
 
@@ -36,7 +38,6 @@ detect_interfaces() {
   ip -o link show up | awk -F': ' '{print $2}' | grep -v '^lo$' | grep -vE '^(docker|veth|br|virbr|wl|vmnet|vboxnet)'
 }
 
-# Conversion des valeurs vnStat avec unité vers Go
 convert_to_gb() {
     local size_str=$1
     local num=$(echo "$size_str" | awk '{print $1}')
@@ -99,9 +100,12 @@ while true; do
       DATA_MONTH_GB=$(echo "$DATA_MONTH_GB + $month_gb" | bc)
     done
 
-  echo -e "${CYAN}+======================================================+${RESET}"
-  echo -e "${BOLD}${MAGENTA}|                  🚀 KIGHMU MANAGER 🇨🇲 🚀             |${RESET}"
-  echo -e "${CYAN}+======================================================+${RESET}"
+  printf "%b
+" "${CYAN}+======================================================+${RESET}"
+  printf "%b
+" "${BOLD}${MAGENTA}|                  🚀 KIGHMU MANAGER 🇨🇲 🚀             |${RESET}"
+  printf "%b
+" "${CYAN}+======================================================+${RESET}"
 
   printf " OS: %-20s | IP: %-15s
 " "$OS_INFO" "$IP"
@@ -110,7 +114,8 @@ while true; do
   printf " RAM utilisée: ${GREEN}%-6s${RESET} | CPU utilisé: ${YELLOW}%-6s${RESET}
 " "$RAM_USAGE" "$CPU_USAGE"
 
-  echo -e "${CYAN}+======================================================+${RESET}"
+  printf "%b
+" "${CYAN}+======================================================+${RESET}"
 
   printf " Consommation aujourd'hui: ${MAGENTA_VIF}%.2f Go${RESET} | Ce mois-ci: ${CYAN_VIF}%.2f Go${RESET}
 " "$DATA_DAY_GB" "$DATA_MONTH_GB"
@@ -118,27 +123,44 @@ while true; do
   printf " Utilisateurs SSH: ${BLUE}%-4d${RESET} | Appareils connectés: ${MAGENTA}%-4d${RESET}
 " "$SSH_USERS_COUNT" "$total_connected"
 
-  echo -e "${CYAN}+======================================================+${RESET}"
+  printf "%b
+" "${CYAN}+======================================================+${RESET}"
 
-  echo -e "${BOLD}${YELLOW}|                    MENU PRINCIPAL:                   |${RESET}"
-  echo -e "${CYAN}+======================================================+${RESET}"
-  echo -e "${GREEN}${BOLD}[01]${RESET} ${YELLOW}Créer un utilisateur SSH${RESET}"
-  echo -e "${GREEN}${BOLD}[02]${RESET} ${YELLOW}Créer un test utilisateur${RESET}"
-  echo -e "${GREEN}${BOLD}[03]${RESET} ${YELLOW}Voir les utilisateurs en ligne${RESET}"
-  echo -e "${GREEN}${BOLD}[04]${RESET} ${YELLOW}Modifier durée / mot de passe utilisateur${RESET}"
-  echo -e "${GREEN}${BOLD}[05]${RESET} ${YELLOW}Supprimer un utilisateur${RESET}"
-  echo -e "${GREEN}${BOLD}[06]${RESET} ${YELLOW}Message du serveur${RESET}"
-  echo -e "${GREEN}${BOLD}[07]${RESET} ${YELLOW}Installation de mode${RESET}"
-  echo -e "${GREEN}${BOLD}[08]${RESET} ${YELLOW}V2ray slowdns mode${RESET}"
-  echo -e "${GREEN}${BOLD}[09]${RESET} ${YELLOW}Bot Telegram${RESET}"
-  echo -e "${GREEN}${BOLD}[10]${RESET} ${YELLOW}Désinstaller le script${RESET}"
-  echo -e "${GREEN}${BOLD}[11]${RESET} ${YELLOW}Blocage de torrents${RESET}"
-  echo -e "${RED}[00] Quitter${RESET}"
-  echo -e "${CYAN}+======================================================+${RESET}"
+  printf "%b
+" "${BOLD}${YELLOW}|                    MENU PRINCIPAL:                   |${RESET}"
+  printf "%b
+" "${CYAN}+======================================================+${RESET}"
+  printf "${GREEN}${BOLD}[01]${RESET} ${YELLOW}Créer un utilisateur SSH${RESET}
+"
+  printf "${GREEN}${BOLD}[02]${RESET} ${YELLOW}Créer un test utilisateur${RESET}
+"
+  printf "${GREEN}${BOLD}[03]${RESET} ${YELLOW}Voir les utilisateurs en ligne${RESET}
+"
+  printf "${GREEN}${BOLD}[04]${RESET} ${YELLOW}Modifier durée / mot de passe utilisateur${RESET}
+"
+  printf "${GREEN}${BOLD}[05]${RESET} ${YELLOW}Supprimer un utilisateur${RESET}
+"
+  printf "${GREEN}${BOLD}[06]${RESET} ${YELLOW}Message du serveur${RESET}
+"
+  printf "${GREEN}${BOLD}[07]${RESET} ${YELLOW}Installation de mode${RESET}
+"
+  printf "${GREEN}${BOLD}[08]${RESET} ${YELLOW}V2ray slowdns mode${RESET}
+"
+  printf "${GREEN}${BOLD}[09]${RESET} ${YELLOW}Bot Telegram${RESET}
+"
+  printf "${GREEN}${BOLD}[10]${RESET} ${YELLOW}Désinstaller le script${RESET}
+"
+  printf "${GREEN}${BOLD}[11]${RESET} ${YELLOW}Blocage de torrents${RESET}
+"
+  printf "${RED}[00] Quitter${RESET}
+"
+  printf "%b
+" "${CYAN}+======================================================+${RESET}"
 
-  echo -ne "${BOLD}${YELLOW} Entrez votre choix [1-11]: ${RESET}"
+  printf "%b" "${BOLD}${YELLOW} Entrez votre choix [1-11]: ${RESET}"
   read -r choix
-  echo -e "${CYAN}+------------------------------------------------------+${RESET}"
+  printf "%b
+" "${CYAN}+------------------------------------------------------+${RESET}"
 
   case $choix in
     1) bash "$SCRIPT_DIR/menu1.sh" ;;
@@ -151,29 +173,37 @@ while true; do
     8) bash "$SCRIPT_DIR/menu_5.sh" ;;
     9) bash "$SCRIPT_DIR/botssh.sh" ;;
     10)
-      echo -e "${YELLOW}⚠️  Vous êtes sur le point de désinstaller le script.${RESET}"
+      printf "%b
+" "${YELLOW}⚠️  Vous êtes sur le point de désinstaller le script.${RESET}"
       read -p "Voulez-vous vraiment continuer ? (o/N): " confirm
       if [[ "$confirm" =~ ^[Oo]$ ]]; then
-        echo -e "${RED}Désinstallation en cours...${RESET}"
+        printf "%b
+" "${RED}Désinstallation en cours...${RESET}"
         rm -rf "$SCRIPT_DIR"
         clear
-        echo -e "${RED}✅ Script désinstallé avec succès.${RESET}"
-        echo -e "${CYAN}Le panneau de contrôle est maintenant désactivé.${RESET}"
+        printf "%b
+" "${RED}✅ Script désinstallé avec succès.${RESET}"
+        printf "%b
+" "${CYAN}Le panneau de contrôle est maintenant désactivé.${RESET}"
         exit 0
       else
-        echo -e "${GREEN}Opération annulée, retour au menu...${RESET}"
+        printf "%b
+" "${GREEN}Opération annulée, retour au menu...${RESET}"
       fi
       ;;
     11) bash "$SCRIPT_DIR/menu7.sh" ;;
     00)
       clear
-      echo -e "${RED}Au revoir !${RESET}"
+      printf "%b
+" "${RED}Au revoir !${RESET}"
       exit 0
       ;;
     *)
-      echo -e "${RED}Choix invalide !${RESET}" ;;
+      printf "%b
+" "${RED}Choix invalide !${RESET}" ;;
   esac
 
-  echo ""
+  printf "
+"
   read -p "Appuyez sur Entrée pour revenir au menu..."
 done
