@@ -160,16 +160,31 @@ function configure_xray() {
   },
   "inbounds": [
     {
-      "listen": "127.0.0.1",
-      "port": 10000,
+      "listen": "0.0.0.0",
+      "port": $port_tls,
       "protocol": "vless",
       "settings": {
-        "clients": [{ "id": "$uuid_vless", "email": "vless_user" }],
+        "clients": [
+          {
+            "id": "$uuid_vless",
+            "flow": "xtls-rprx-vision",
+            "email": "vless_user"
+          }
+        ],
         "decryption": "none"
       },
       "streamSettings": {
-        "network": "ws",
-        "wsSettings": { "path": "/vless" }
+        "network": "tcp",
+        "security": "xtls",
+        "xtlsSettings": {
+          "alpn": [ "h2", "http/1.1" ],
+          "certificates": [
+            {
+              "certificateFile": "/etc/xray/xray.crt",
+              "keyFile": "/etc/xray/xray.key"
+            }
+          ]
+        }
       }
     },
     {
@@ -229,7 +244,7 @@ EOF
   systemctl daemon-reload
   systemctl enable xray
   systemctl restart xray
-  echo "[OK] Xray configuré et démarré."
+  echo "[OK] Xray configuré et démarré avec flow xtls-rprx-vision et TLS activé."
 }
 
 function add_user_vmess() {
