@@ -1,19 +1,14 @@
 #!/bin/bash
 set -euo pipefail
 
-if [[ -z "${DOMAIN:-}" ]]; then
-  echo "Erreur critique : la variable d'environnement DOMAIN doit être définie."
-  exit 1
-fi
-
-domain="$DOMAIN"
+domain=""
 port_tls=443
 port_none=80
 
 function draw_header {
   clear
   echo "===== Panneau de contrôle XRAY ====="
-  echo "  Domaine : $domain"
+  echo "  Domaine : ${domain:-Non défini}"
   echo "===================================="
 }
 
@@ -24,6 +19,12 @@ function install_dependencies() {
 }
 
 function install_xray() {
+  if [[ -z "${DOMAIN:-}" ]]; then
+    echo "[ERREUR] La variable d'environnement DOMAIN doit être définie pour installer XRAY."
+    return 1
+  fi
+  domain="$DOMAIN"
+
   echo "[INFO] Installation de Xray..."
   latest=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest | jq -r '.tag_name')
   url="https://github.com/XTLS/Xray-core/releases/download/${latest}/xray-linux-64.zip"
@@ -380,7 +381,20 @@ function menu() {
   read -rp "Choix: " choice
 
   case "$choice" in
-    1) install_dependencies; install_xray; setup_ssl; configure_nginx; configure_xray ;;
+    1)
+      if [[ -z "${DOMAIN:-}" ]]; then
+        echo "[ERREUR] La variable d'environnement DOMAIN doit être définie pour installer XRAY."
+        read -n1 -s -r -p "Appuyez sur une touche pour revenir au menu..."
+        menu
+        return
+      fi
+      domain="$DOMAIN"
+      install_dependencies
+      install_xray
+      setup_ssl
+      configure_nginx
+      configure_xray
+      ;;
     2) add_user_vmess ;;
     3) add_user_vless ;;
     4) add_user_trojan ;;
@@ -396,7 +410,7 @@ function menu() {
 function draw_header() {
   clear
   echo "===== Panneau de contrôle XRAY ====="
-  echo "  Domaine : $domain"
+  echo "  Domaine : ${domain:-Non défini}"
   echo "===================================="
 }
 
