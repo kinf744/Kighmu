@@ -24,8 +24,6 @@ echo "Bases vnStat réinitialisées."
 
 echo "Vérification et installation de curl si nécessaire..."
 
-echo "Vérification et installation de curl si nécessaire..."
-
 install_package_if_missing() {
   local pkg=$1
   echo "Installation de $pkg..."
