@@ -100,7 +100,7 @@ done
   echo -e "${BOLD}${MAGENTA}|                  🚀 KIGHMU MANAGER 🇨🇲 🚀             |${RESET}"
   echo -e "${CYAN}+=========================================================+${RESET}"
 
-  printf " OS: ${YELLOW}%-20s${RESET} | IP: %-15s
+  printf " OS: ${YELLOW}%-20s${RESET} | IP: ${RED}%-15s${RESET}
 " "$OS_INFO" "$IP"
   printf " Taille RAM totale: ${GREEN}%-6s${RESET} | Nombre de cœurs CPU: ${YELLOW}%-6s${RESET}
 " "$RAM_GB_ARR" "$CPU_CORES"
