@@ -39,35 +39,38 @@ function install_xray() {
   wget -qO xray.zip "$url"
   unzip -q xray.zip
   rm -f xray.zip
-  mv -f xray /usr/local/bin/xray
+  if [[ -f xray ]]; then
+    mv -f xray /usr/local/bin/xray
+  elif [[ -f xray-linux-64 ]]; then
+    mv -f xray-linux-64 /usr/local/bin/xray
+  else
+    echo "Binaire Xray introuvable après extraction"
+    exit 1
+  fi
   chmod +x /usr/local/bin/xray
 
   mkdir -p /usr/local/etc/xray /var/log/xray /home/vps/public_html
-  chown www-data:www-data /usr/local/etc/xray /var/log/xray /home/vps/public_html
+  chown -R www-data:www-data /usr/local/etc/xray /var/log/xray /home/vps/public_html
   echo "[OK] Xray installé."
 }
 
 function setup_ssl() {
   echo "[INFO] Configuration certificat SSL pour $domain..."
 
-  # Création dossiers nécessaires
-  sudo mkdir -p /etc/xray
+  mkdir -p /etc/xray
   mkdir -p /home/vps/public_html/.well-known/acme-challenge
-  sudo chown -R www-data:www-data /home/vps/public_html/.well-known
+  chown -R www-data:www-data /home/vps/public_html/.well-known
 
   if ! command -v acme.sh &>/dev/null; then
     curl https://get.acme.sh | sh
   fi
 
   ~/.acme.sh/acme.sh --register-account -m adrienyourie@gmail.com || true
-
-  # Génération du certificat avec méthode webroot
   ~/.acme.sh/acme.sh --issue -d "$domain" --webroot /home/vps/public_html --keylength ec-256 --force
-
   ~/.acme.sh/acme.sh --install-cert -d "$domain" --ecc --fullchain-file /etc/xray/xray.crt --key-file /etc/xray/xray.key --force
 
-  sudo chown www-data:www-data /etc/xray/xray.crt /etc/xray/xray.key
-  sudo chmod 644 /etc/xray/xray.crt /etc/xray/xray.key
+  chown www-data:www-data /etc/xray/xray.crt /etc/xray/xray.key
+  chmod 644 /etc/xray/xray.crt /etc/xray/xray.key
 
   echo "[OK] Certificat SSL généré et installé."
 }
@@ -172,8 +175,8 @@ function configure_xray() {
 
   mkdir -p /usr/local/etc/xray
 
-  uuid_vless=$(cat /proc/sys/kernel/random/uuid)
-  uuid_vmess=$(cat /proc/sys/kernel/random/uuid)
+  uuid_vless=$(uuidgen)
+  uuid_vmess=$(uuidgen)
   password_trojan=$(openssl rand -base64 12)
 
   cat > /usr/local/etc/xray/config.json <<EOF
@@ -279,21 +282,28 @@ EOF
 function add_user_vmess() {
   echo "[INFO] Ajout utilisateur VMESS"
   if [[ ! -f /usr/local/etc/xray/config.json ]]; then
-    echo "[ERREUR] Le fichier /usr/local/etc/xray/config.json est absent. Veuillez d'abord installer Xray via le menu (option 1)."
+    echo "[ERREUR] Le fichier /usr/local/etc/xray/config.json est absent. Veuillez d'abord installer Xray."
     return
   fi
   read -rp "Nom utilisateur : " user
-  if grep -qw "$user" /usr/local/etc/xray/config.json; then
+  if jq --arg user "$user" '.inbounds[].settings.clients[] | select(.email==$user)' /usr/local/etc/xray/config.json | grep -q .; then
     echo "[ERREUR] L'utilisateur existe déjà."
     return
   fi
-  uuid=$(cat /proc/sys/kernel/random/uuid)
-  exp_date=$(date -d "+30 days" +%Y-%m-%d)
-  sed -i "/\"clients\": \[/a\\
-    \ \ \ \ \ \ \ \ { \"id\": \"$uuid\", \"alterId\": 0, \"email\": \"$user\" },
-  " /usr/local/etc/xray/config.json
+  uuid=$(uuidgen)
+  tmpfile=$(mktemp)
+  jq --arg uuid "$uuid" --arg user "$user" '
+    (.inbounds[] | select(.protocol=="vmess").settings.clients) += [{"id":$uuid,"alterId":0,"email":$user}]
+  ' /usr/local/etc/xray/config.json > "$tmpfile" && mv "$tmpfile" /usr/local/etc/xray/config.json
+
+  if ! jq empty /usr/local/etc/xray/config.json; then
+    echo "[ERREUR] Fichier config.json non valide après modification !"
+    return
+  fi
+
   systemctl restart xray
 
+  exp_date=$(date -d "+30 days" +%Y-%m-%d)
   vmess_json_none="{\"v\":\"2\",\"ps\":\"$user\",\"add\":\"$domain\",\"port\":\"$port_none\",\"id\":\"$uuid\",\"aid\":\"0\",\"net\":\"ws\",\"path\":\"/vmess\",\"type\":\"none\",\"host\":\"$domain\",\"tls\":\"none\"}"
   vmess_json_tls="{\"v\":\"2\",\"ps\":\"$user TLS\",\"add\":\"$domain\",\"port\":\"$port_tls\",\"id\":\"$uuid\",\"aid\":\"0\",\"net\":\"ws\",\"path\":\"/vmess\",\"type\":\"none\",\"host\":\"$domain\",\"tls\":\"tls\"}"
   vmess_link_none="vmess://$(echo -n "$vmess_json_none" | base64 -w 0)"
@@ -316,21 +326,28 @@ Lien Non-TLS  : $vmess_link_none
 function add_user_vless() {
   echo "[INFO] Ajout utilisateur VLESS"
   if [[ ! -f /usr/local/etc/xray/config.json ]]; then
-    echo "[ERREUR] Le fichier /usr/local/etc/xray/config.json est absent. Veuillez d'abord installer Xray via le menu (option 1)."
+    echo "[ERREUR] Le fichier /usr/local/etc/xray/config.json est absent. Veuillez d'abord installer Xray."
     return
   fi
   read -rp "Nom utilisateur : " user
-  if grep -qw "$user" /usr/local/etc/xray/config.json; then
+  if jq --arg user "$user" '.inbounds[].settings.clients[] | select(.email==$user)' /usr/local/etc/xray/config.json | grep -q .; then
     echo "[ERREUR] L'utilisateur existe déjà."
     return
   fi
-  uuid=$(cat /proc/sys/kernel/random/uuid)
-  exp_date=$(date -d "+30 days" +%Y-%m-%d)
-  sed -i "/\"clients\": \[/a\\
-    \ \ \ \ \ \ \ \ { \"id\": \"$uuid\", \"email\": \"$user\" },
-  " /usr/local/etc/xray/config.json
+  uuid=$(uuidgen)
+  tmpfile=$(mktemp)
+  jq --arg uuid "$uuid" --arg user "$user" '
+    (.inbounds[] | select(.protocol=="vless").settings.clients) += [{"id":$uuid,"email":$user}]
+  ' /usr/local/etc/xray/config.json > "$tmpfile" && mv "$tmpfile" /usr/local/etc/xray/config.json
+
+  if ! jq empty /usr/local/etc/xray/config.json; then
+    echo "[ERREUR] Fichier config.json non valide après modification !"
+    return
+  fi
+
   systemctl restart xray
 
+  exp_date=$(date -d "+30 days" +%Y-%m-%d)
   vless_link_tls="vless://$uuid@$domain:$port_tls?path=/vless&security=tls&type=ws#$user"
   vless_link_none="vless://$uuid@$domain:$port_none?path=/vless&security=none&type=ws#$user"
 
@@ -351,21 +368,28 @@ Lien Non-TLS  : $vless_link_none
 function add_user_trojan() {
   echo "[INFO] Ajout utilisateur TROJAN"
   if [[ ! -f /usr/local/etc/xray/config.json ]]; then
-    echo "[ERREUR] Le fichier /usr/local/etc/xray/config.json est absent. Veuillez d'abord installer Xray via le menu (option 1)."
+    echo "[ERREUR] Le fichier /usr/local/etc/xray/config.json est absent. Veuillez d'abord installer Xray."
     return
   fi
   read -rp "Nom utilisateur : " user
-  if grep -qw "$user" /usr/local/etc/xray/config.json; then
+  if jq --arg user "$user" '.inbounds[].settings.clients[] | select(.email==$user)' /usr/local/etc/xray/config.json | grep -q .; then
     echo "[ERREUR] L'utilisateur existe déjà."
     return
   fi
   password=$(openssl rand -base64 12)
-  exp_date=$(date -d "+30 days" +%Y-%m-%d)
-  sed -i "/\"password\": \[/a\\
-    \ \ \ \ \ \ \ \ { \"password\": \"$password\", \"email\": \"$user\" },
-  " /usr/local/etc/xray/config.json
+  tmpfile=$(mktemp)
+  jq --arg password "$password" --arg user "$user" '
+    (.inbounds[] | select(.protocol=="trojan").settings.clients) += [{"password":$password,"email":$user}]
+  ' /usr/local/etc/xray/config.json > "$tmpfile" && mv "$tmpfile" /usr/local/etc/xray/config.json
+
+  if ! jq empty /usr/local/etc/xray/config.json; then
+    echo "[ERREUR] Fichier config.json non valide après modification !"
+    return
+  fi
+
   systemctl restart xray
 
+  exp_date=$(date -d "+30 days" +%Y-%m-%d)
   trojan_link_tls="trojan://$password@$domain:$port_tls?path=/trojan-ws&security=tls&type=ws#$user"
   trojan_link_none="trojan://$password@$domain:$port_none?path=/trojan-ws&security=none&type=ws#$user"
 
@@ -386,17 +410,17 @@ Lien Non-TLS  : $trojan_link_none
 function delete_user() {
   echo "[INFO] Suppression utilisateur XRAY"
   if [[ ! -f /usr/local/etc/xray/config.json ]]; then
-    echo "[ERREUR] Le fichier /usr/local/etc/xray/config.json est absent. Veuillez d'abord installer Xray via le menu (option 1)."
+    echo "[ERREUR] Le fichier /usr/local/etc/xray/config.json est absent. Veuillez d'abord installer Xray."
     return
   fi
-  users=$(grep -oP '(?<="email": ")[^"]+' /usr/local/etc/xray/config.json | sort -u)
+  users=$(jq -r '.inbounds[].settings.clients[].email' /usr/local/etc/xray/config.json | sort -u)
   if [[ -z "$users" ]]; then
     echo "Aucun utilisateur à supprimer."
     return
   fi
 
   mapfile -t arr <<< "$users"
-  echo "Utilisateurs XRAY:"
+  echo "Utilisateurs XRAY :"
   for i in "${!arr[@]}"; do
     echo "$((i+1))) ${arr[i]}"
   done
@@ -408,7 +432,14 @@ function delete_user() {
   fi
 
   userdel="${arr[choice-1]}"
-  sed -i "/\"email\": \"$userdel\"/,/}/d" /usr/local/etc/xray/config.json
+  tmpfile=$(mktemp)
+  jq "(.inbounds[].settings.clients) |= map(select(.email != \"$userdel\"))" /usr/local/etc/xray/config.json > "$tmpfile" && mv "$tmpfile" /usr/local/etc/xray/config.json
+
+  if ! jq empty /usr/local/etc/xray/config.json; then
+    echo "[ERREUR] Fichier config.json non valide après suppression !"
+    return
+  fi
+
   systemctl restart xray
   echo "Utilisateur $userdel supprimé."
 }
@@ -458,6 +489,7 @@ function menu() {
   echo "6) Désinstaller XRAY"
   echo "7) Quitter"
   echo
+
   read -rp "Choix: " choice
 
   case "$choice" in
@@ -469,6 +501,7 @@ function menu() {
         menu
         return
       fi
+      export domain
       install_dependencies
       install_xray
       setup_ssl
