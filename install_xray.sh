@@ -66,7 +66,10 @@ function setup_ssl() {
   fi
 
   ~/.acme.sh/acme.sh --register-account -m adrienyourie@gmail.com || true
-  ~/.acme.sh/acme.sh --issue -d "$domain" --webroot /home/vps/public_html --keylength ec-256 --force
+
+  # Ajout des options --debug 2 --log pour débogage détaillé
+  ~/.acme.sh/acme.sh --issue -d "$domain" --webroot /home/vps/public_html --keylength ec-256 --force --debug 2 --log
+
   ~/.acme.sh/acme.sh --install-cert -d "$domain" --ecc --fullchain-file /etc/xray/xray.crt --key-file /etc/xray/xray.key --force
 
   chown www-data:www-data /etc/xray/xray.crt /etc/xray/xray.key
