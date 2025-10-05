@@ -9,16 +9,24 @@ if [ -z "$DOMAIN" ]; then
 fi
 echo "$DOMAIN" > /tmp/.xray_domain
 
-# Installation dépendances et outils système complets
+# Mise à jour paquets et installation dépendances complètes
 apt update && apt install -y curl unzip sudo socat snapd iptables iptables-persistent \
   xz-utils apt-transport-https gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony || { echo "Erreur installation dépendances"; exit 1; }
 
-# Synchronisation temps et timezone
-ntpdate pool.ntp.org
-timedatectl set-ntp true
-systemctl enable chronyd && systemctl restart chronyd
-systemctl enable chrony && systemctl restart chrony
-timedatectl set-timezone Asia/Kuala_Lumpur
+# Configuration Chrony - installation et configuration de la synchronisation temps
+echo "Configuration et démarrage de Chrony..."
+cat > /etc/chrony/chrony.conf << 'EOF'
+server 0.pool.ntp.org iburst
+server 1.pool.ntp.org iburst
+server 2.pool.ntp.org iburst
+driftfile /var/lib/chrony/drift
+makestep 1.0 3
+logdir /var/log/chrony
+EOF
+
+systemctl enable --now chrony
+sleep 3
+chronyc tracking
 
 # Téléchargement de la dernière version Xray Core depuis GitHub
 latest_version="$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases | grep tag_name | sed -E 's/.*"v(.*)".*/\1/' | head -n 1)"
