@@ -59,7 +59,7 @@ systemctl stop nginx 2>/dev/null || true
 systemctl stop apache2 2>/dev/null || true
 sudo lsof -t -i tcp:80 -s tcp:listen | sudo xargs kill -9 2>/dev/null || true
 
-# Installation Xray
+# Install Xray
 mkdir -p /usr/local/bin
 cd $(mktemp -d)
 curl -sL "$xraycore_link" -o xray.zip
@@ -68,10 +68,13 @@ mv xray /usr/local/bin/xray
 chmod +x /usr/local/bin/xray
 setcap 'cap_net_bind_service=+ep' /usr/local/bin/xray
 
+# Préparation dossier et logs avec bonnes permissions
 mkdir -p /var/log/xray /etc/xray
-chown -R nobody:nogroup /var/log/xray
+touch /var/log/xray/access.log /var/log/xray/error.log
+chown -R root:root /var/log/xray
+chmod 644 /var/log/xray/access.log /var/log/xray/error.log
 
-# Installation acme.sh et génération certs
+# Installation acme.sh et génération certificats
 cd /root/
 wget https://raw.githubusercontent.com/NevermoreSSH/hop/main/acme.sh
 bash acme.sh --install
@@ -81,13 +84,13 @@ bash acme.sh --register-account -m "$EMAIL"
 bash acme.sh --issue --standalone -d "$DOMAIN" --force
 bash acme.sh --installcert -d "$DOMAIN" --fullchainpath /etc/xray/xray.crt --keypath /etc/xray/xray.key
 
-# Vérifier certifs TLS
+# Vérifier certificats TLS
 if [[ ! -f "/etc/xray/xray.crt" || ! -f "/etc/xray/xray.key" ]]; then
   echo -e "${RED}Erreur : certificats TLS non trouvés.${NC}"
   exit 1
 fi
 
-# Génération UUID Trojan
+# Génération UUID
 uuid1=$(cat /proc/sys/kernel/random/uuid)
 uuid2=$(cat /proc/sys/kernel/random/uuid)
 uuid3=$(cat /proc/sys/kernel/random/uuid)
@@ -105,7 +108,7 @@ cat > /etc/xray/users.json << EOF
 }
 EOF
 
-# Configuration Xray
+# Configuration Xray complète
 cat > /etc/xray/config.json << EOF
 {
   "log": {"access": "/var/log/xray/access.log", "error": "/var/log/xray/error.log", "loglevel": "info"},
@@ -193,6 +196,7 @@ RestartPreventExitStatus=23
 WantedBy=multi-user.target
 EOF
 
+# Reload and enable xray service
 systemctl daemon-reload
 systemctl enable xray
 systemctl restart xray
@@ -257,7 +261,7 @@ cat > /etc/trojan-go/config.json << EOF
 }
 EOF
 
-# Configuration UFW (redondante mais pour garantir ouverture ports)
+# Configuration UFW (garantir ouverture des ports)
 ufw allow ssh
 ufw allow 80/tcp
 ufw allow 80/udp
@@ -266,7 +270,7 @@ ufw allow 8443/udp
 ufw allow 2083/tcp
 ufw allow 2083/udp
 
-# Activer UFW (auto confirmation)
+# Activer UFW avec validation automatique
 echo "y" | ufw enable
 ufw status verbose
 
