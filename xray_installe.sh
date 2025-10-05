@@ -12,6 +12,10 @@ if [[ -z "$DOMAIN" ]]; then
   echo -e "${RED}Erreur : nom de domaine non valide.${NC}"
   exit 1
 fi
+
+# Écriture pour menu
+echo "$DOMAIN" > /tmp/.xray_domain
+
 EMAIL="adrienkiaje@gmail.com"
 
 # Mise à jour et dépendances
