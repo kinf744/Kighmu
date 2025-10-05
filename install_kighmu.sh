@@ -130,6 +130,8 @@ else
   ufw allow 5300
   ufw allow 54000
   ufw allow 8080
+  ufw allow 8443
+  ufw allow 2083
 
   ufw --force enable
 
