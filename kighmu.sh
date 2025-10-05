@@ -147,7 +147,7 @@ done
     6) bash "$SCRIPT_DIR/menu4_2.sh" ;;
     7) bash "$SCRIPT_DIR/menu5.sh" ;;
     8) bash "$SCRIPT_DIR/menu_5.sh" ;;
-    9) bash "$SCRIPT_DIR/install_xray.sh" ;;
+    9) bash "$SCRIPT_DIR/xray-panel-unified.sh" ;;
     10) bash "$SCRIPT_DIR/botssh.sh" ;;
     11)
       echo -e "${YELLOW}⚠️  Vous êtes sur le point de désinstaller le script.${RESET}"
