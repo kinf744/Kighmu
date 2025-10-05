@@ -63,6 +63,26 @@ count_connected_devices() {
   echo $((_ons + _onop + _ondrp))
 }
 
+count_ssh_expired() {
+  local today
+  today=$(date +%Y-%m-%d)
+  if [[ ! -f "$USER_FILE" ]]; then
+    echo 0
+    return
+  fi
+  awk -F'|' -v today="$today" '$4 < today {count++} END {print count+0}' "$USER_FILE"
+}
+
+count_xray_expired() {
+  local expiry_file="/etc/xray/users_expiry.list"
+  local today=$(date +%Y-%m-%d)
+  if [[ ! -f "$expiry_file" ]]; then
+    echo 0
+    return
+  fi
+  awk -F'|' -v today="$today" '$2 < today {count++} END {print count+0}' "$expiry_file"
+}
+
 while true; do
     clear
 
@@ -87,6 +107,10 @@ while true; do
       XRAY_USERS_COUNT=0
     fi
 
+    SSH_EXPIRED=$(count_ssh_expired)
+    XRAY_EXPIRED=$(count_xray_expired)
+    TOTAL_EXPIRED=$(( SSH_EXPIRED + XRAY_EXPIRED ))
+
     mapfile -t NET_INTERFACES < <(detect_interfaces)
     DEBUG "Interfaces détectées : ${NET_INTERFACES[*]}"
 
@@ -102,9 +126,9 @@ while true; do
       DATA_MONTH_GB=$(echo "$DATA_MONTH_GB + $month_gb" | bc)
     done
 
-  echo -e "${CYAN}╔☆=======================================================☆╗${RESET}"
-  echo -e "${BOLD}${MAGENTA}                   🚀 KIGHMU MANAGER 🇨🇲 🚀               ${RESET}"
-  echo -e "${CYAN}╚☆=======================================================☆╝${RESET}"
+  echo -e "${CYAN}╔☆=======================================================☆${RESET}"
+  echo -e "${BOLD}${MAGENTA}                   🚀 KIGHMU MANAGER 🇨🇲 🚀              | ${RESET}"
+  echo -e "${CYAN}╚☆=======================================================☆${RESET}"
 
   printf " OS: ${YELLOW}%-20s${RESET} | IP: ${RED}%-15s${RESET}\n" "$OS_INFO" "$IP"
   printf " Taille RAM totale: ${GREEN}%-6s${RESET} | Nombre de cœurs CPU: ${YELLOW}%-6s${RESET}\n" "$RAM_GB_ARR" "$CPU_CORES"
@@ -115,7 +139,7 @@ while true; do
   printf " Consommation aujourd'hui: ${MAGENTA_VIF}%.2f Go${RESET} | Ce mois-ci: ${CYAN_VIF}%.2f Go${RESET}\n" "$DATA_DAY_GB" "$DATA_MONTH_GB"
 
   printf " Utilisateurs SSH: ${BLUE}%-4d${RESET} | Utilisateurs Xray: ${MAGENTA}%-4d${RESET}\n" "$SSH_USERS_COUNT" "$XRAY_USERS_COUNT"
-  printf " Appareils connectés: ${MAGENTA}%-4d${RESET}\n" "$total_connected"
+  printf " Appareils connectés: ${MAGENTA}%-4d${RESET} | Utilisateurs expirés: ${RED}%-4d${RESET}\n" "$total_connected" "$TOTAL_EXPIRED"
 
   echo -e "${CYAN}+==========================================================+${RESET}"
 
