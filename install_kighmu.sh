@@ -26,7 +26,6 @@ install_package_if_missing() {
 
 apt-get update -y
 apt-get install dnsutils -y
-apt-get install ufw -y
 
 install_package_if_missing "curl"
 
@@ -103,10 +102,6 @@ install_package_if_missing "iproute2"
 install_package_if_missing "net-tools"
 install_package_if_missing "tmux"
 install_package_if_missing "git"
-install_package_if_missing "vnstat"
-install_package_if_missing "iftop"
-install_package_if_missing "bmon"
-install_package_if_missing "nethogs"
 install_package_if_missing "iptables-persistent"
 install_package_if_missing "build-essential"
 install_package_if_missing "libssl-dev"
@@ -173,14 +168,6 @@ FILES=(
   "setup_ssh_config.sh"
   "create_ssh_user.sh"
   "menu4_2.sh"
-  "ws2_proxy.py"
-  "POpen.py"
-  "sockspy.sh"
-  "hysteria.sh"
-  "ShellBot.sh"
-  "botssh.sh"
-  "menu_6.sh"
-  "xray_installe.sh"
 )
 
 BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
@@ -195,7 +182,7 @@ for file in "${FILES[@]}"; do
   fi
 done
 
-# Récupération dynamique du NS depuis la configuration DNS locale
+# Récupération dynamique du NS depuis la configuration DNS locale du système
 NS=$(awk '/^nameserver/ {print $2; exit}' /etc/resolv.conf)
 if [[ -z "$NS" ]]; then
   echo "⚠️ Erreur : aucun serveur DNS trouvé dans /etc/resolv.conf, continuez prudemment."
@@ -249,31 +236,30 @@ if ! grep -q "/usr/local/bin" ~/.bashrc; then
   echo "Ajout de /usr/local/bin au PATH dans ~/.bashrc"
 fi
 
-# Création du script kighmu-panel.sh dans /usr/local/bin (nouvelle version avec KIGHMU VPS en rouge vif)
+# Création du script kighmu-panel.sh dans /usr/local/bin
 cat > /usr/local/bin/kighmu-panel.sh << 'EOF'
 #!/bin/bash
 
 clear
 
-RED='\033[0;31m'
+BLUE='\033[0;34m'
 YELLOW='\033[0;33m'
 GREEN='\033[0;32m'
-CYAN='\033[0;36m'
 NC='\033[0m'
 
-echo -e "${RED}
-K   K  III  GGG  H   H M   M U   U     V   V PPPP   SSS
-K  K    I  G     H   H MM MM U   U     V   V P   P S
-KKK     I  G  GG HHHHH M M M U   U     V   V PPPP   SSS
-K  K    I  G   G H   H M   M U   U      V V  P         S
-K   K  III  GGG  H   H M   M  UUU        V   P      SSS
+echo -e "${BLUE}
+K   K  III  GGG  H   H M   M U   U
+K  K    I  G     H   H MM MM U   U
+KKK     I  G  GG HHHHH M M M U   U
+K  K    I  G   G H   H M   M U   U
+K   K  III  GGG  H   H M   M  UUU
 ${NC}"
 
 echo
 echo -e "Saisir et valider: ${YELLOW}source ~/.bashrc${NC}"
 
 echo -e "${GREEN}Version du script : 2.5${NC}"
-echo -e "${CYAN}Inbox Telegramme : @KIGHMU${NC}"
+echo -e "${BLUE}Inbox Telegramme : @KIGHMU${NC}"
 echo
 echo -e "Pour ouvrir le panneau de contrôle principal, tapez : ${YELLOW}kighmu${NC}"
 echo
