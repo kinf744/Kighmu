@@ -102,6 +102,7 @@ install_package_if_missing "iproute2"
 install_package_if_missing "net-tools"
 install_package_if_missing "tmux"
 install_package_if_missing "git"
+install_package_if_missing "vnstat"
 install_package_if_missing "chrony"
 install_package_if_missing "iptables-persistent"
 install_package_if_missing "build-essential"
@@ -248,9 +249,10 @@ cat > /usr/local/bin/kighmu-panel.sh << 'EOF'
 
 clear
 
-BLUE='\033[0;34m'
+RED='\033[0;31m'
 YELLOW='\033[0;33m'
 GREEN='\033[0;32m'
+CYAN='\033[0;36m'
 NC='\033[0m'
 
 echo -e "${RED}
@@ -265,7 +267,7 @@ echo
 echo -e "Saisir et valider: ${YELLOW}source ~/.bashrc${NC}"
 
 echo -e "${GREEN}Version du script : 2.5${NC}"
-echo -e "${BLUE}Inbox Telegramme : @KIGHMU${NC}"
+echo -e "${CYAN}Inbox Telegramme : @KIGHMU${NC}"
 echo
 echo -e "Pour ouvrir le panneau de contrôle principal, tapez : ${YELLOW}kighmu${NC}"
 echo
