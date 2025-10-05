@@ -1,12 +1,12 @@
 #!/bin/bash
-# Mod By NevermoreSSH, version complète Xray + Trojan Go
+# Installation complète Xray + Trojan Go, avec users.json pour menu
 
 # Couleurs terminal
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m'
 
-# Domaine et email
+# Demander domaine
 read -rp "Entrez votre nom de domaine (ex: monsite.com) : " DOMAIN
 if [[ -z "$DOMAIN" ]]; then
   echo -e "${RED}Erreur : nom de domaine non valide.${NC}"
@@ -17,9 +17,9 @@ EMAIL="adrienkiaje@gmail.com"
 # Mise à jour et dépendances
 apt update
 apt install -y iptables iptables-persistent curl socat xz-utils wget apt-transport-https \
-  gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip
+  gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq
 
-# Synchronisation temporelle
+# Synchronisation temps
 ntpdate pool.ntp.org
 timedatectl set-ntp true
 systemctl enable chronyd
@@ -28,21 +28,21 @@ systemctl enable chrony
 systemctl restart chrony
 timedatectl set-timezone Asia/Kuala_Lumpur
 
-# Infos chrono
+# Info chrony
 chronyc sourcestats -v
 chronyc tracking -v
 date
 
-# Téléchargement Xray version dernière
+# Dernière version Xray
 latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases | grep tag_name | sed -E 's/.*"v(.*)".*/\1/' | head -n1)
 xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v${latest_version}/xray-linux-64.zip"
 
-# Arrêt des services sur port 80
+# Arrêt services sur port 80
 systemctl stop nginx 2>/dev/null || true
 systemctl stop apache2 2>/dev/null || true
 sudo lsof -t -i tcp:80 -s tcp:listen | sudo xargs kill -9 2>/dev/null || true
 
-# Installation Xray
+# Install Xray
 mkdir -p /usr/local/bin
 cd $(mktemp -d)
 curl -sL "$xraycore_link" -o xray.zip
@@ -54,7 +54,7 @@ setcap 'cap_net_bind_service=+ep' /usr/local/bin/xray
 mkdir -p /var/log/xray /etc/xray
 chown -R nobody:nogroup /var/log/xray
 
-# Installation acme.sh depuis dépôt
+# Install acme.sh
 cd /root/
 wget https://raw.githubusercontent.com/NevermoreSSH/hop/main/acme.sh
 bash acme.sh --install
@@ -64,20 +64,31 @@ bash acme.sh --register-account -m "$EMAIL"
 bash acme.sh --issue --standalone -d "$DOMAIN" --force
 bash acme.sh --installcert -d "$DOMAIN" --fullchainpath /etc/xray/xray.crt --keypath /etc/xray/xray.key
 
-# Validation certificats
+# Verification certificates
 if [[ ! -f "/etc/xray/xray.crt" || ! -f "/etc/xray/xray.key" ]]; then
   echo -e "${RED}Erreur : certificats TLS non trouvés.${NC}"
   exit 1
 fi
 
-# UUID pour clients
+# Génération UUID / mot passe Trojan
 uuid1=$(cat /proc/sys/kernel/random/uuid)
 uuid2=$(cat /proc/sys/kernel/random/uuid)
 uuid3=$(cat /proc/sys/kernel/random/uuid)
 uuid4=$(cat /proc/sys/kernel/random/uuid)
 uuid5=$(cat /proc/sys/kernel/random/uuid)
 
-# Configuration Xray (format JSON ici)
+# Ecriture users.json (pour menu)
+cat > /etc/xray/users.json << EOF
+{
+  "vmess_tls": "$uuid1",
+  "vmess_ntls": "$uuid2",
+  "vless_tls": "$uuid3",
+  "vless_ntls": "$uuid4",
+  "trojan_pass": "$uuid5"
+}
+EOF
+
+# Configuration Xray
 cat > /etc/xray/config.json << EOF
 {
   "log": {"access": "/var/log/xray/access.log", "error": "/var/log/xray/error.log", "loglevel": "info"},
@@ -86,47 +97,61 @@ cat > /etc/xray/config.json << EOF
       "port": 8443,
       "protocol": "vmess",
       "settings": {"clients": [{"id": "$uuid1", "alterId": 0}]},
-      "streamSettings": {"network": "ws", "security": "tls",
+      "streamSettings": {
+        "network": "ws",
+        "security": "tls",
         "tlsSettings": {"certificates": [{"certificateFile": "/etc/xray/xray.crt", "keyFile": "/etc/xray/xray.key"}]},
-        "wsSettings": {"path": "/vmess", "headers": {"Host": "$DOMAIN"}}}
+        "wsSettings": {"path": "/vmess", "headers": {"Host": "$DOMAIN"}}
+      }
     },
     {
       "port": 80,
       "protocol": "vmess",
       "settings": {"clients": [{"id": "$uuid2", "alterId": 0}]},
-      "streamSettings": {"network": "ws", "security": "none", "wsSettings": {"path": "/vmess", "headers": {"Host": "$DOMAIN"}}},
+      "streamSettings": {
+        "network": "ws",
+        "security": "none",
+        "wsSettings": {"path": "/vmess", "headers": {"Host": "$DOMAIN"}}
+      },
       "sniffing": {"enabled": true, "destOverride": ["http", "tls"]}
     },
     {
       "port": 8443,
       "protocol": "vless",
       "settings": {"clients": [{"id": "$uuid3"}], "decryption": "none"},
-      "streamSettings": {"network": "ws", "security": "tls",
+      "streamSettings": {
+        "network": "ws",
+        "security": "tls",
         "tlsSettings": {"certificates": [{"certificateFile": "/etc/xray/xray.crt", "keyFile": "/etc/xray/xray.key"}]},
-        "wsSettings": {"path": "/vless", "headers": {"Host": "$DOMAIN"}}},
+        "wsSettings": {"path": "/vless", "headers": {"Host": "$DOMAIN"}}
+      },
       "sniffing": {"enabled": true, "destOverride": ["http", "tls"]}
     },
     {
       "port": 80,
       "protocol": "vless",
       "settings": {"clients": [{"id": "$uuid4"}], "decryption": "none"},
-      "streamSettings": {"network": "ws", "security": "none", "wsSettings": {"path": "/vless", "headers": {"Host": "$DOMAIN"}}},
+      "streamSettings": {
+        "network": "ws",
+        "security": "none",
+        "wsSettings": {"path": "/vless", "headers": {"Host": "$DOMAIN"}}
+      },
       "sniffing": {"enabled": true, "destOverride": ["http", "tls"]}
     },
     {
       "port": 2083,
       "protocol": "trojan",
       "settings": {"clients": [{"password": "$uuid5"}], "fallbacks": [{"dest": 80}]},
-      "streamSettings": {"network": "tcp", "security": "tls", "tlsSettings": {"certificates": [{"certificateFile": "/etc/xray/xray.crt", "keyFile": "/etc/xray/xray.key"}], "alpn": ["http/1.1"]}}
+      "streamSettings": {"network": "tcp",
+        "security": "tls",
+        "tlsSettings": {"certificates": [{"certificateFile": "/etc/xray/xray.crt","keyFile": "/etc/xray/xray.key"}],
+          "alpn": ["http/1.1"]}
+      }
     }
   ],
-  "outbounds": [{"protocol": "freedom", "settings": {}}, {"protocol": "blackhole", "settings": {}, "tag": "blocked"}],
-  "routing": {
-    "rules": [
-      {"type": "field", "ip": ["0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "169.254.0.0/16", "172.16.0.0/12", "192.0.0.0/24", "192.0.2.0/24", "192.168.0.0/16", "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24", "::1/128", "fc00::/7", "fe80::/10"], "outboundTag": "blocked"}
-    ]
-  },
-  "policy": {"levels": {"0": {"statsUserDownlink": true, "statsUserUplink": true}}, "system": {"statsInboundUplink": true, "statsInboundDownlink": true}},
+  "outbounds": [{"protocol": "freedom","settings": {}},{"protocol": "blackhole","settings": {}, "tag": "blocked"}],
+  "routing": {"rules": [{"type": "field", "ip": ["0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "169.254.0.0/16", "172.16.0.0/12", "192.0.0.0/24", "192.0.2.0/24","192.168.0.0/16", "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24", "::1/128","fc00::/7","fe80::/10"], "outboundTag": "blocked"}]},
+  "policy": {"levels": {"0": {"statsUserDownlink":true,"statsUserUplink":true}}, "system": {"statsInboundUplink":true,"statsInboundDownlink":true}},
   "stats": {},
   "api": {"services": ["StatsService"], "tag": "api"}
 }
@@ -151,7 +176,7 @@ RestartPreventExitStatus=23
 WantedBy=multi-user.target
 EOF
 
-# Firewall iptables
+# Firewall rules
 for port in 80 443 8443 2083; do
   iptables -I INPUT -m state --state NEW -m tcp -p tcp --dport $port -j ACCEPT
   iptables -I INPUT -m state --state NEW -m udp -p udp --dport $port -j ACCEPT
