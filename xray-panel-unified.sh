@@ -471,4 +471,90 @@ check_ws_users() {
       else
         echo "$ip" >> /tmp/other.txt
       fi
-      jum2=$(cat /
+      jum2=$(cat /tmp/ipxray.txt 2>/dev/null || true)
+      sed -i "/$jum2/d" /tmp/other.txt >/dev/null 2>&1 || true
+    done
+    jum=$(cat /tmp/ipxray.txt 2>/dev/null || true)
+    if [[ -n "$jum" ]]; then
+      jum2=$(nl -ba /tmp/ipxray.txt | sed 's/^[[:space:]]*//' )
+      lastlogin=$(grep -w "$akun" /var/log/xray/access.log 2>/dev/null | tail -n 500 | awk '{print $2}' | tail -1)
+      echo -e "user :${GREEN} ${akun} ${NC}\n${RED}Online Jam ${NC}: ${lastlogin} wib"
+      echo -e "$jum2"
+      echo "-------------------------------"
+    fi
+    rm -f /tmp/ipxray.txt
+  done
+  rm -f /tmp/other.txt
+  read -n1 -s -r -p "Press any key to back to menu"
+}
+
+# ------------------ uninstall ------------------
+uninstall_all() {
+  read -rp "Confirmer suppression complète ? (o/N) : " confirm
+  if [[ "${confirm,,}" != "o" ]]; then echo "Annulé."; return 0; fi
+  systemctl stop xray || true
+  systemctl disable xray || true
+  rm -f "$xray_bin"
+  rm -rf /usr/local/etc/xray /var/log/xray /home/vps/public_html
+  rm -f "$systemd_unit" /etc/nginx/conf.d/xray.conf
+  systemctl daemon-reload || true
+  apt purge -y nginx || true
+  apt autoremove -y || true
+  echo "Désinstallation terminée."
+}
+
+# ------------------ main menu ------------------
+main_menu() {
+  while true; do
+    clear
+    echo -e "${BICyan} ┌─────────────────────────────────────────────────────┐${NC}"
+    echo -e "       ${BIWhite}${UWhite}XRAY PANEL UNIFIED${NC}"
+    echo -e "${BICyan} └─────────────────────────────────────────────────────┘${NC}"
+    echo ""
+    echo "Domain: ${domain:-Not set}"
+    echo ""
+    echo "1) Installer tout (dépendances, xray, cert, nginx)"
+    echo "2) Ajouter utilisateur VLESS"
+    echo "3) Ajouter utilisateur VMESS"
+    echo "4) Ajouter utilisateur TROJAN"
+    echo "5) Supprimer utilisateur"
+    echo "6) Renouveler utilisateur"
+    echo "7) Vérifier connexions WebSocket (online)"
+    echo "8) Désinstaller XRAY"
+    echo "9) Quitter"
+    echo ""
+    read -rp "Choix: " choice
+    case "$choice" in
+      1)
+        read -rp "Entrez votre domaine (doit pointer sur ce serveur): " domain
+        export domain
+        install_dependencies
+        install_xray_binary
+        setup_acme_and_cert
+        configure_nginx
+        create_default_xray_config
+        install_systemd_service
+        ;;
+      2) add_vless ;;
+      3) add_vmess ;;
+      4) add_trojan ;;
+      5)
+        echo "Type? (vless/vmess/trojan)"
+        read -rp "Type: " t
+        delete_user_type "$t"
+        ;;
+      6)
+        echo "Type? (vless/vmess/trojan)"
+        read -rp "Type: " t
+        renew_user_type "$t"
+        ;;
+      7) check_ws_users ;;
+      8) uninstall_all ;;
+      9) exit 0 ;;
+      *) echo "Choix invalide." ; sleep 1 ;;
+    esac
+    read -n1 -s -r -p "Appuyez sur une touche pour continuer..."
+  done
+}
+
+main_menu
