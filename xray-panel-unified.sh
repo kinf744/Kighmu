@@ -231,28 +231,58 @@ create_default_xray_config() {
 
   cat > "$config_file" <<EOF
 {
-  "log": { "access": "/var/log/xray/access.log", "error": "/var/log/xray/error.log", "loglevel": "info" },
+  "log": { 
+    "access": "/var/log/xray/access.log", 
+    "error": "/var/log/xray/error.log", 
+    "loglevel": "info" 
+  },
   "inbounds": [
     {
       "listen": "0.0.0.0",
       "port": $port_tls,
       "protocol": "vless",
-      "settings": { "clients": [ { "id": "$uuid_vless", "flow": "xtls-rprx-vision", "email": "vless_user" } ], "decryption": "none" },
-      "streamSettings": { "network": "tcp", "security": "xtls", "xtlsSettings": { "alpn": [ "h2", "http/1.1" ], "certificates": [ { "certificateFile": "/etc/xray/xray.crt", "keyFile": "/etc/xray/xray.key" } ] } }
+      "settings": { 
+        "clients": [ { "id": "$uuid_vless", "email": "vless_user" } ], 
+        "decryption": "none" 
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "tls",
+        "tlsSettings": {
+          "certificates": [
+            {
+              "certificateFile": "/etc/xray/xray.crt",
+              "keyFile": "/etc/xray/xray.key"
+            }
+          ]
+        },
+        "wsSettings": { "path": "/vless" }
+      }
     },
     {
       "listen": "127.0.0.1",
       "port": 10001,
       "protocol": "vmess",
-      "settings": { "clients": [{ "id": "$uuid_vmess", "alterId": 0, "email": "vmess_user" }] },
-      "streamSettings": { "network": "ws", "wsSettings": { "path": "/vmess" } }
+      "settings": { 
+        "clients": [{ "id": "$uuid_vmess", "alterId": 0, "email": "vmess_user" }] 
+      },
+      "streamSettings": { 
+        "network": "ws",
+        "wsSettings": { "path": "/vmess" }
+      }
     },
     {
       "listen": "127.0.0.1",
       "port": 10002,
       "protocol": "trojan",
-      "settings": { "clients": [{ "password": "$password_trojan", "email": "trojan_user" }], "decryption": "none" },
-      "streamSettings": { "network": "ws", "wsSettings": { "path": "/trojan-ws" } }
+      "settings": { 
+        "clients": [{ "password": "$password_trojan", "email": "trojan_user" }],
+        "decryption": "none" 
+      },
+      "streamSettings": { 
+        "network": "ws",
+        "wsSettings": { "path": "/trojan-ws" }
+      }
     }
   ],
   "outbounds": [{ "protocol": "freedom", "settings": {} }]
@@ -260,7 +290,7 @@ create_default_xray_config() {
 EOF
 
   validate_json || err_exit "config.json created is invalid"
-  log_ok "Default Xray config created."
+  log_ok "Default Xray config created with TLS simple."
 }
 
 install_systemd_service() {
