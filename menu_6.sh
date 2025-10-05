@@ -51,6 +51,16 @@ load_user_data() {
   fi
 }
 
+count_xray_expired() {
+  local today
+  today=$(date +%Y-%m-%d)
+  if [[ ! -f /etc/xray/users_expiry.list ]]; then
+    echo 0
+    return
+  fi
+  awk -F'|' -v today="$today" '$2 < today {count++} END {print count+0}' /etc/xray/users_expiry.list
+}
+
 create_config() {
   local proto=$1
   local name=$2
@@ -61,7 +71,6 @@ create_config() {
     return
   fi
 
-  # Générer nouvel UUID/mot de passe
   local new_uuid
   local link_tls=""
   local link_ntls=""
@@ -78,14 +87,9 @@ create_config() {
       jq --arg id "$new_uuid" --arg proto "vmess" '
         (.inbounds[] | select(.protocol==$proto) | .settings.clients) += [{"id": $id, "alterId": 0}]
       ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
-
       jq --arg id "$new_uuid" '.vmess_tls = $id' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
-
       link_tls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$new_uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"\",\"path\":\"$path_ws\",\"tls\":\"tls\"}" | base64 -w0)"
       link_ntls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_ntls\",\"id\":\"$new_uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"\",\"path\":\"$path_ws\",\"tls\":\"\"}" | base64 -w0)"
-
-      echo -e "  • TLS : $link_tls"
-      echo -e "  • Non-TLS : $link_ntls"
       ;;
     vless)
       path_ws="/vless"
@@ -94,14 +98,9 @@ create_config() {
       jq --arg id "$new_uuid" --arg proto "vless" '
         (.inbounds[] | select(.protocol==$proto) | .settings.clients) += [{"id": $id}]
       ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
-
       jq --arg id "$new_uuid" '.vless_tls = $id' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
-
       link_tls="vless://$new_uuid@$DOMAIN:$port_tls?path=$path_ws&security=tls&encryption=none&type=ws#$name"
       link_ntls="vless://$new_uuid@$DOMAIN:$port_ntls?path=$path_ws&encryption=none&type=ws#$name"
-
-      echo -e "  • TLS : $link_tls"
-      echo -e "  • Non-TLS : $link_ntls"
       ;;
     trojan)
       echo -ne "${YELLOW}Voulez-vous créer un utilisateur Trojan avec TLS ? (o/n) : ${RESET}"
@@ -111,21 +110,15 @@ create_config() {
         jq --arg id "$new_uuid" '
           (.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="tls") | .settings.clients) += [{"password": $id}]
         ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
-
         jq --arg id "$new_uuid" '.trojan_pass = $id' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
-
         link_tls="trojan://$new_uuid@$DOMAIN:$port_tls?security=tls&type=ws&path=/trojanws#$name"
-        echo -e "  • TLS : $link_tls"
       else
         new_uuid=$(cat /proc/sys/kernel/random/uuid)
         jq --arg id "$new_uuid" '
           (.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="none") | .settings.clients) += [{"password": $id}]
         ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
-
         jq --arg id "$new_uuid" '.trojan_ntls_pass = $id' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
-
         link_ntls="trojan://$new_uuid@$DOMAIN:$port_ntls?type=ws&path=/trojanws#$name"
-        echo -e "  • Non-TLS : $link_ntls"
       fi
       ;;
     *)
@@ -133,6 +126,13 @@ create_config() {
       return 1
       ;;
   esac
+
+  # Ajouter la date d'expiration dans users_expiry.list
+  local exp_date_iso
+  exp_date_iso=$(date -d "+$days days" +"%Y-%m-%d")
+  touch /etc/xray/users_expiry.list
+  chmod 600 /etc/xray/users_expiry.list
+  echo "$new_uuid|$exp_date_iso" >> /etc/xray/users_expiry.list
 
   # Calcul date expiration
   local expiry_date
@@ -184,6 +184,7 @@ delete_user() {
   local id=$2
   local tmp_config="/tmp/config.tmp.json"
   local tmp_users="/tmp/users.tmp.json"
+  local tmp_expiry="/tmp/expiry.tmp.list"
 
   if [[ -z "$proto" || -z "$id" ]]; then
     echo -e "${RED}Erreur : protocole et identifiant requis.${RESET}"
@@ -227,6 +228,11 @@ delete_user() {
       ' "$USERS_FILE" > "$tmp_users" && mv "$tmp_users" "$USERS_FILE"
       ;;
   esac
+
+  # Nettoyer expiration dans users_expiry.list
+  if [[ -f /etc/xray/users_expiry.list ]]; then
+    grep -v "^$id|" /etc/xray/users_expiry.list > "$tmp_expiry" && mv "$tmp_expiry" /etc/xray/users_expiry.list
+  fi
 
   systemctl restart xray
   echo -e "${GREEN}Utilisateur supprimé : protocole=$proto, ID=$id${RESET}"
