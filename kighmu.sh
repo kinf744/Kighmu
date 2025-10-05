@@ -97,7 +97,7 @@ for iface in "${NET_INTERFACES[@]}"; do
 done
 
   echo -e "${CYAN}+=========================================================+${RESET}"
-  echo -e "${BOLD}${MAGENTA}|                  🚀 KIGHMU MANAGER 🇨🇲 🚀             |${RESET}"
+  echo -e "${BOLD}${MAGENTA}|                   🚀 KIGHMU MANAGER 🇨🇲 🚀               |${RESET}"
   echo -e "${CYAN}+=========================================================+${RESET}"
 
   printf " OS: ${YELLOW}%-20s${RESET} | IP: ${RED}%-15s${RESET}
@@ -117,7 +117,7 @@ done
 
   echo -e "${CYAN}+=========================================================+${RESET}"
 
-  echo -e "${BOLD}${YELLOW}|                    MENU PRINCIPAL:                   |${RESET}"
+  echo -e "${BOLD}${YELLOW}|                     MENU PRINCIPAL:                     |${RESET}"
   echo -e "${CYAN}+=========================================================+${RESET}"
   echo -e "${GREEN}${BOLD}[01]${RESET} ${YELLOW}Créer un utilisateur SSH${RESET}"
   echo -e "${GREEN}${BOLD}[02]${RESET} ${YELLOW}Créer un test utilisateur${RESET}"
