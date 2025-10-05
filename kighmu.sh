@@ -96,9 +96,9 @@ for iface in "${NET_INTERFACES[@]}"; do
   DATA_MONTH_GB=$(echo "$DATA_MONTH_GB + $month_gb" | bc)
 done
 
-  echo -e "${CYAN}╔☆=========================================================☆╗${RESET}"
+  echo -e "${CYAN}╔☆=======================================================☆╗${RESET}"
   echo -e "${BOLD}${MAGENTA}                   🚀 KIGHMU MANAGER 🇨🇲 🚀               ${RESET}"
-  echo -e "${CYAN}╚☆=========================================================☆╝${RESET}"
+  echo -e "${CYAN}╚☆=======================================================☆╝${RESET}"
 
   printf " OS: ${YELLOW}%-20s${RESET} | IP: ${RED}%-15s${RESET}
 " "$OS_INFO" "$IP"
@@ -107,7 +107,7 @@ done
   printf " RAM utilisée: ${GREEN}%-6s${RESET} | CPU utilisé: ${YELLOW}%-6s${RESET}
 " "$RAM_USAGE" "$CPU_USAGE"
 
-  echo -e "${CYAN}+===========================================================+${RESET}"
+  echo -e "${CYAN}+==========================================================+${RESET}"
 
   printf " Consommation aujourd'hui: ${MAGENTA_VIF}%.2f Go${RESET} | Ce mois-ci: ${CYAN_VIF}%.2f Go${RESET}
 " "$DATA_DAY_GB" "$DATA_MONTH_GB"
@@ -117,7 +117,7 @@ done
 
   echo -e "${CYAN}+===========================================================+${RESET}"
 
-  echo -e "${BOLD}${YELLOW}|                     MENU PRINCIPAL:                     |${RESET}"
+  echo -e "${BOLD}${YELLOW}|                     MENU PRINCIPAL:                      |${RESET}"
   echo -e "${CYAN}+===========================================================+${RESET}"
   echo -e "${GREEN}${BOLD}[01]${RESET} ${YELLOW}Créer un utilisateur SSH${RESET}"
   echo -e "${GREEN}${BOLD}[02]${RESET} ${YELLOW}Créer un test utilisateur${RESET}"
@@ -132,11 +132,11 @@ done
   echo -e "${GREEN}${BOLD}[11]${RESET} ${YELLOW}Désinstaller le script${RESET}"
   echo -e "${GREEN}${BOLD}[12]${RESET} ${YELLOW}Blocage de torrents${RESET}"
   echo -e "${RED}[00] Quitter${RESET}"
-  echo -e "${CYAN}+===========================================================+${RESET}"
+  echo -e "${CYAN}+==========================================================+${RESET}"
 
   echo -ne "${BOLD}${YELLOW} Entrez votre choix [1-12]: ${RESET}"
   read -r choix
-  echo -e "${CYAN}+-----------------------------------------------------------+${RESET}"
+  echo -e "${CYAN}+----------------------------------------------------------+${RESET}"
 
   case $choix in
     1) bash "$SCRIPT_DIR/menu1.sh" ;;
