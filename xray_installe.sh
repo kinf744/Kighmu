@@ -28,10 +28,24 @@ echo -e "${GREEN}Domaine : $DOMAIN${NC}"
 
 # Synchronisation du temps et fuseau horaire
 apt update
-apt install -y ntpdate chrony socat curl wget unzip bash-completion iptables-persistent nginx
+apt install -y ntpdate chrony socat curl wget unzip bash-completion iptables-persistent nginx ufw
 ntpdate -u pool.ntp.org
 timedatectl set-ntp true
 timedatectl set-timezone Etc/UTC
+
+# Ouvrir les ports 80 et 443 dans le firewall
+echo -e "${GREEN}Ouverture des ports 80 (HTTP) et 443 (HTTPS) dans le firewall.${NC}"
+ufw allow 80/tcp
+ufw allow 443/tcp
+
+# Activer UFW si inactif (attention à ne pas bloquer SSH)
+ufw status | grep -q inactive && {
+  echo -e "${GREEN}Le firewall UFW est inactif, activation en cours.${NC}"
+  ufw --force enable
+}
+
+echo -e "${GREEN}Statut du firewall UFW :${NC}"
+ufw status verbose
 
 # Installer acme.sh et certificat ECC
 curl https://get.acme.sh | sh
@@ -58,12 +72,14 @@ trojangrpc=$((RANDOM + 15000))
 
 UUID=$(cat /proc/sys/kernel/random/uuid)
 
-# Installer Xray binaire (version 25.8.3 par exemple)
-wget -q https://github.com/XTLS/Xray-core/releases/download/v25.8.3/Xray-linux-64.zip -O /tmp/xray.zip
-unzip -o /tmp/xray.zip -d /tmp/xray
-mv /tmp/xray/xray /usr/local/bin/xray
-chmod +x /usr/local/bin/xray
-rm -rf /tmp/xray /tmp/xray.zip
+# Installer Xray binaire (version 25.8.3)
+if ! command -v xray > /dev/null; then
+  wget -q https://github.com/XTLS/Xray-core/releases/download/v25.8.3/Xray-linux-64.zip -O /tmp/xray.zip
+  unzip -o /tmp/xray.zip -d /tmp/xray
+  mv /tmp/xray/xray /usr/local/bin/xray
+  chmod +x /usr/local/bin/xray
+  rm -rf /tmp/xray /tmp/xray.zip
+fi
 
 # Écrire config Xray
 cat > /etc/xray/config.json << EOF
@@ -71,7 +87,7 @@ cat > /etc/xray/config.json << EOF
   "log": {
     "access": "/var/log/xray/access.log",
     "error": "/var/log/xray/error.log",
-    "loglevel": "warning"
+    "loglevel": "debug"
   },
   "inbounds": [
     {
@@ -282,7 +298,38 @@ EOF
 chmod +x /usr/local/bin/renew-cert.sh
 (crontab -l 2>/dev/null; echo "15 3 */3 * * /usr/local/bin/renew-cert.sh") | crontab -
 
-# Affichage d'informations utiles
+# Fonction interactive d'affichage et suivi des logs Xray
+show_xray_logs () {
+  echo -e "\n=== Dernières connexions VPN (access.log) ==="
+  if [ -f /var/log/xray/access.log ]; then
+    tail -n 20 /var/log/xray/access.log || echo "Pas de logs d'accès disponibles."
+  else
+    echo "Fichier /var/log/xray/access.log introuvable."
+  fi
+
+  echo -e "\n=== Dernières erreurs VPN (error.log) ==="
+  if [ -f /var/log/xray/error.log ]; then
+    tail -n 20 /var/log/xray/error.log || echo "Pas de logs d'erreurs disponibles."
+  else
+    echo "Fichier /var/log/xray/error.log introuvable."
+  fi
+
+  echo -e "\nSouhaites-tu suivre les logs en temps réel ? (y/n) "
+  read -r tail_choice
+  if [[ "$tail_choice" == "y" || "$tail_choice" == "Y" ]]; then
+    echo "Appuie sur Ctrl+C pour arrêter la surveillance"
+    sudo tail -f /var/log/xray/access.log /var/log/xray/error.log
+  fi
+}
+
+# Proposer l'affichage des logs après installation
+echo -e "\nVoulez-vous voir les logs récents des connexions VPN et erreurs ? (y/n)"
+read -r view_logs
+if [[ "$view_logs" == "y" || "$view_logs" == "Y" ]]; then
+  show_xray_logs
+fi
+
+# Affichage d'informations utiles à la fin
 echo -e "${GREEN}----- Xray installé avec TLS ECC & Nginx reverse proxy -----${NC}"
 echo -e "Domaine : $DOMAIN"
 echo -e "UUID : $UUID"
