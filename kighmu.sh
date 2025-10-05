@@ -115,10 +115,10 @@ done
   printf " Utilisateurs SSH: ${BLUE}%-4d${RESET} | Appareils connectés: ${MAGENTA}%-4d${RESET}
 " "$SSH_USERS_COUNT" "$total_connected"
 
-  echo -e "${CYAN}+===========================================================+${RESET}"
+  echo -e "${CYAN}+==========================================================+${RESET}"
 
   echo -e "${BOLD}${YELLOW}|                     MENU PRINCIPAL:                      |${RESET}"
-  echo -e "${CYAN}+===========================================================+${RESET}"
+  echo -e "${CYAN}+==========================================================+${RESET}"
   echo -e "${GREEN}${BOLD}[01]${RESET} ${YELLOW}Créer un utilisateur SSH${RESET}"
   echo -e "${GREEN}${BOLD}[02]${RESET} ${YELLOW}Créer un test utilisateur${RESET}"
   echo -e "${GREEN}${BOLD}[03]${RESET} ${YELLOW}Voir les utilisateurs en ligne${RESET}"
@@ -132,11 +132,11 @@ done
   echo -e "${GREEN}${BOLD}[11]${RESET} ${YELLOW}Désinstaller le script${RESET}"
   echo -e "${GREEN}${BOLD}[12]${RESET} ${YELLOW}Blocage de torrents${RESET}"
   echo -e "${RED}[00] Quitter${RESET}"
-  echo -e "${CYAN}+==========================================================+${RESET}"
+  echo -e "${CYAN}+=========================================================+${RESET}"
 
   echo -ne "${BOLD}${YELLOW} Entrez votre choix [1-12]: ${RESET}"
   read -r choix
-  echo -e "${CYAN}+----------------------------------------------------------+${RESET}"
+  echo -e "${CYAN}+---------------------------------------------------------+${RESET}"
 
   case $choix in
     1) bash "$SCRIPT_DIR/menu1.sh" ;;
