@@ -3,7 +3,7 @@
 # Kighmu VPS Manager - Version Dynamique & SSH Fix + Mode Debug
 # ==============================================
 
-_DEBUG="off"  # mettre "on" pour activer le mode debug réseau
+_DEBUG="off"
 
 DEBUG() {
   if [ "$_DEBUG" = "on" ]; then
@@ -16,7 +16,6 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-# Couleurs
 RED="\e[31m"
 GREEN="\e[32m"
 YELLOW="\e[33m"
@@ -81,7 +80,6 @@ while true; do
     total_connected=$(count_connected_devices)
     SSH_USERS_COUNT=$(count_ssh_users)
 
-    # Ajout comptage utilisateurs Xray
     XRAY_USERS_FILE="/etc/xray/users.json"
     if [[ -f "$XRAY_USERS_FILE" ]]; then
       XRAY_USERS_COUNT=$(jq 'length' "$XRAY_USERS_FILE")
@@ -116,8 +114,8 @@ while true; do
 
   printf " Consommation aujourd'hui: ${MAGENTA_VIF}%.2f Go${RESET} | Ce mois-ci: ${CYAN_VIF}%.2f Go${RESET}\n" "$DATA_DAY_GB" "$DATA_MONTH_GB"
 
-  # Ligne modifiée affichant utilisateurs SSH + Xray + appareils connectés
-  printf " Utilisateurs SSH: ${BLUE}%-4d${RESET} | Utilisateurs Xray: ${MAGENTA}%-4d${RESET} | Appareils connectés: ${MAGENTA}%-4d${RESET}\n" "$SSH_USERS_COUNT" "$XRAY_USERS_COUNT" "$total_connected"
+  printf " Utilisateurs SSH: ${BLUE}%-4d${RESET} | Utilisateurs Xray: ${MAGENTA}%-4d${RESET}\n" "$SSH_USERS_COUNT" "$XRAY_USERS_COUNT"
+  printf " Appareils connectés: ${MAGENTA}%-4d${RESET}\n" "$total_connected"
 
   echo -e "${CYAN}+==========================================================+${RESET}"
 
