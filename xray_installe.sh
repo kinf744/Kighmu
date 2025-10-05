@@ -279,6 +279,17 @@ cat > /etc/trojan-go/config.json << EOF
 }
 EOF
 
+# Configuration UFW (garantir ouverture des ports)
+ufw allow ssh
+ufw allow 80/tcp
+ufw allow 80/udp
+ufw allow 8443/tcp
+ufw allow 8443/udp
+
+# Activer UFW avec validation automatique
+echo "y" | ufw enable
+ufw status verbose
+
 echo -e "${GREEN}Installation complète terminée.${NC}"
 echo "Domaine : $DOMAIN"
 echo "UUID VMess TLS : $uuid1"
