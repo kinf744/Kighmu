@@ -68,21 +68,22 @@ create_config() {
   local path_ws=""
   local grpc_name=""
   local encryption="none"
-  local port_tls=443
+  local port_tls=8443
   local port_ntls=80
+  local port_trojan=2083
 
   case "$proto" in
     vmess)
       uuid="$VMESS_TLS"
-      path_ws="/vmessws"
+      path_ws="/vmess"
       grpc_name="vmess-grpc"
-      link_tls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$uuid\",\"aid\":\"0\",\"net\":\"ws\",\"type\":\"none\",\"host\":\"\",\"path\":\"$path_ws\",\"tls\":\"tls\"}" | base64 -w0)"
-      link_ntls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_ntls\",\"id\":\"$uuid\",\"aid\":\"0\",\"net\":\"ws\",\"type\":\"none\",\"host\":\"\",\"path\":\"$path_ws\",\"tls\":\"\"}" | base64 -w0)"
-      link_grpc="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$uuid\",\"aid\":\"0\",\"net\":\"grpc\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"\",\"tls\":\"tls\",\"serviceName\":\"$grpc_name\"}" | base64 -w0)"
+      link_tls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"\",\"path\":\"$path_ws\",\"tls\":\"tls\"}" | base64 -w0)"
+      link_ntls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_ntls\",\"id\":\"$uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"\",\"path\":\"$path_ws\",\"tls\":\"\"}" | base64 -w0)"
+      link_grpc="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$uuid\",\"aid\":0,\"net\":\"grpc\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"\",\"tls\":\"tls\",\"serviceName\":\"$grpc_name\"}" | base64 -w0)"
       ;;
     vless)
       uuid="$VLESS_TLS"
-      path_ws="/vlessws"
+      path_ws="/vless"
       grpc_name="vless-grpc"
       link_tls="vless://$uuid@$DOMAIN:$port_tls?path=$path_ws&security=tls&encryption=$encryption&type=ws#$name"
       link_ntls="vless://$uuid@$DOMAIN:$port_ntls?path=$path_ws&encryption=$encryption&type=ws#$name"
@@ -90,11 +91,11 @@ create_config() {
       ;;
     trojan)
       trojan_pass="$TROJAN_PASS"
-      path_ws="/trojanws"
+      path_ws="/trojan"
       grpc_name="trojan-grpc"
-      link_tls="trojan://$trojan_pass@$DOMAIN:$port_tls?security=tls&type=ws&path=$path_ws#$name"
+      link_tls="trojan://$trojan_pass@$DOMAIN:$port_trojan?security=tls&type=ws&path=$path_ws#$name"
       link_ntls="trojan://$trojan_pass@$DOMAIN:$port_ntls?type=ws&path=$path_ws#$name"
-      link_grpc="trojan://$trojan_pass@$DOMAIN:$port_tls?mode=gun&security=tls&type=grpc&serviceName=$grpc_name&sni=$DOMAIN#$name"
+      link_grpc="trojan://$trojan_pass@$DOMAIN:$port_trojan?mode=gun&security=tls&type=grpc&serviceName=$grpc_name&sni=$DOMAIN#$name"
       ;;
   esac
 
@@ -113,7 +114,7 @@ create_config() {
   fi
   echo
   echo -e "${YELLOW}➤ Durée de validité :${RESET} $days jours (expire le $expiry_date)"
-  echo -e "➤ Ports utilisés : TLS=$port_tls, Non-TLS=$port_ntls"
+  echo -e "➤ Ports utilisés : TLS=$port_tls, Non-TLS=$port_ntls, Trojan=$port_trojan"
   echo
   echo -e "${YELLOW}➤ Liens de configuration :${RESET}"
   echo -e "  • TLS : $link_tls"
