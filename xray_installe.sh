@@ -29,8 +29,6 @@ ufw allow 80/tcp
 ufw allow 80/udp
 ufw allow 8443/tcp
 ufw allow 8443/udp
-ufw allow 2083/tcp
-ufw allow 2083/udp
 
 # Activer UFW automatiquement (valider par 'y')
 echo "y" | ufw enable
@@ -59,7 +57,7 @@ systemctl stop nginx 2>/dev/null || true
 systemctl stop apache2 2>/dev/null || true
 sudo lsof -t -i tcp:80 -s tcp:listen | sudo xargs kill -9 2>/dev/null || true
 
-# Install Xray
+# Installation Xray
 mkdir -p /usr/local/bin
 cd $(mktemp -d)
 curl -sL "$xraycore_link" -o xray.zip
@@ -96,6 +94,7 @@ uuid2=$(cat /proc/sys/kernel/random/uuid)
 uuid3=$(cat /proc/sys/kernel/random/uuid)
 uuid4=$(cat /proc/sys/kernel/random/uuid)
 uuid5=$(cat /proc/sys/kernel/random/uuid)
+uuid6=$(cat /proc/sys/kernel/random/uuid)
 
 # users.json pour menu
 cat > /etc/xray/users.json << EOF
@@ -104,7 +103,8 @@ cat > /etc/xray/users.json << EOF
   "vmess_ntls": "$uuid2",
   "vless_tls": "$uuid3",
   "vless_ntls": "$uuid4",
-  "trojan_pass": "$uuid5"
+  "trojan_pass": "$uuid5",
+  "trojan_ntls_pass": "$uuid6"
 }
 EOF
 
@@ -159,13 +159,24 @@ cat > /etc/xray/config.json << EOF
       "sniffing": {"enabled": true, "destOverride": ["http", "tls"]}
     },
     {
-      "port": 2083,
+      "port": 8443,
       "protocol": "trojan",
-      "settings": {"clients": [{"password": "$uuid5"}], "fallbacks": [{"dest": 80}]},
-      "streamSettings": {"network": "tcp",
+      "settings": {"clients": [{"password": "$uuid5"}]},
+      "streamSettings": {
+        "network": "ws",
         "security": "tls",
-        "tlsSettings": {"certificates": [{"certificateFile": "/etc/xray/xray.crt","keyFile": "/etc/xray/xray.key"}],
-          "alpn": ["http/1.1"]}
+        "tlsSettings": {"certificates": [{"certificateFile": "/etc/xray/xray.crt","keyFile": "/etc/xray/xray.key"}]},
+        "wsSettings": {"path": "/trojanws", "headers": {"Host": "$DOMAIN"}}
+      }
+    },
+    {
+      "port": 80,
+      "protocol": "trojan",
+      "settings": {"clients": [{"password": "$uuid6"}]},
+      "streamSettings": {
+        "network": "ws",
+        "security": "none",
+        "wsSettings": {"path": "/trojanws", "headers": {"Host": "$DOMAIN"}}
       }
     }
   ],
@@ -228,7 +239,7 @@ cat > /etc/trojan-go/config.json << EOF
 {
   "run_type": "server",
   "local_addr": "0.0.0.0",
-  "local_port": 2087,
+  "local_port": 8443,
   "remote_addr": "127.0.0.1",
   "remote_port": 89,
   "log_level": 1,
@@ -256,23 +267,10 @@ cat > /etc/trojan-go/config.json << EOF
   },
   "tcp": {"no_delay": true,"keep_alive": true,"prefer_ipv4": true},
   "mux": {"enabled": false,"concurrency": 8,"idle_timeout": 60},
-  "websocket": {"enabled": true,"path": "/trojango","host": "$DOMAIN"},
+  "websocket": {"enabled": true,"path": "/trojanws","host": "$DOMAIN"},
   "api": {"enabled": false,"api_addr": "","api_port": 0,"ssl": {"enabled": false,"key": "","cert": "","verify_client": false,"client_cert": []}}
 }
 EOF
-
-# Configuration UFW (garantir ouverture des ports)
-ufw allow ssh
-ufw allow 80/tcp
-ufw allow 80/udp
-ufw allow 8443/tcp
-ufw allow 8443/udp
-ufw allow 2083/tcp
-ufw allow 2083/udp
-
-# Activer UFW avec validation automatique
-echo "y" | ufw enable
-ufw status verbose
 
 echo -e "${GREEN}Installation complète terminée.${NC}"
 echo "Domaine : $DOMAIN"
@@ -280,4 +278,5 @@ echo "UUID VMess TLS : $uuid1"
 echo "UUID VMess Non-TLS : $uuid2"
 echo "UUID VLESS TLS : $uuid3"
 echo "UUID VLESS Non-TLS : $uuid4"
-echo "Mot de passe Trojan (TLS 2083) : $uuid5"
+echo "Mot de passe Trojan WS TLS : $uuid5"
+echo "Mot de passe Trojan WS Non-TLS : $uuid6"
