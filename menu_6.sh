@@ -40,11 +40,16 @@ show_menu() {
   read -r choice
 }
 
-generate_uuid() {
-  if command -v uuidgen >/dev/null 2>&1; then
-    uuidgen
+load_user_data() {
+  local json_file="/etc/xray/users.json"
+  if [[ -f "$json_file" ]]; then
+    VMESS_TLS=$(jq -r '.vmess_tls' "$json_file")
+    VMESS_NTLS=$(jq -r '.vmess_ntls' "$json_file")
+    VLESS_TLS=$(jq -r '.vless_tls' "$json_file")
+    VLESS_NTLS=$(jq -r '.vless_ntls' "$json_file")
+    TROJAN_PASS=$(jq -r '.trojan_pass' "$json_file")
   else
-    cat /proc/sys/kernel/random/uuid
+    echo -e "${RED}Fichier /etc/xray/users.json introuvable.${RESET}"
   fi
 }
 
@@ -58,20 +63,17 @@ create_config() {
     return
   fi
 
-  local uuid=$(generate_uuid)
-  local trojan_pass=$(openssl rand -base64 16)
-  local expiry_date=$(date -d "+$days days" +"%d/%m/%Y")
-  local port_tls=443
-  local port_ntls=80
+  local uuid=""
+  local trojan_pass=""
   local path_ws=""
   local grpc_name=""
-  local link_tls=""
-  local link_ntls=""
-  local link_grpc=""
   local encryption="none"
+  local port_tls=443
+  local port_ntls=80
 
   case "$proto" in
     vmess)
+      uuid="$VMESS_TLS"
       path_ws="/vmessws"
       grpc_name="vmess-grpc"
       link_tls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$uuid\",\"aid\":\"0\",\"net\":\"ws\",\"type\":\"none\",\"host\":\"\",\"path\":\"$path_ws\",\"tls\":\"tls\"}" | base64 -w0)"
@@ -79,6 +81,7 @@ create_config() {
       link_grpc="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$uuid\",\"aid\":\"0\",\"net\":\"grpc\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"\",\"tls\":\"tls\",\"serviceName\":\"$grpc_name\"}" | base64 -w0)"
       ;;
     vless)
+      uuid="$VLESS_TLS"
       path_ws="/vlessws"
       grpc_name="vless-grpc"
       link_tls="vless://$uuid@$DOMAIN:$port_tls?path=$path_ws&security=tls&encryption=$encryption&type=ws#$name"
@@ -86,6 +89,7 @@ create_config() {
       link_grpc="vless://$uuid@$DOMAIN:$port_tls?mode=gun&security=tls&encryption=$encryption&type=grpc&serviceName=$grpc_name&sni=$DOMAIN#$name"
       ;;
     trojan)
+      trojan_pass="$TROJAN_PASS"
       path_ws="/trojanws"
       grpc_name="trojan-grpc"
       link_tls="trojan://$trojan_pass@$DOMAIN:$port_tls?security=tls&type=ws&path=$path_ws#$name"
@@ -94,14 +98,18 @@ create_config() {
       ;;
   esac
 
+  local expiry_date
+  expiry_date=$(date -d "+$days days" +"%d/%m/%Y")
+
   echo
   echo -e "${CYAN}==================================================${RESET}"
   echo -e "${BOLD}${MAGENTA}📄 Configuration $proto générée pour l'utilisateur : $name${RESET}"
   echo -e "${CYAN}--------------------------------------------------${RESET}"
   echo -e "${YELLOW}➤ UUID / Mot de passe :${RESET}"
-  echo -e "    UUID (VMESS/VLESS) : $uuid"
   if [[ "$proto" == "trojan" ]]; then
     echo -e "    Mot de passe Trojan : $trojan_pass"
+  else
+    echo -e "    UUID : $uuid"
   fi
   echo
   echo -e "${YELLOW}➤ Durée de validité :${RESET} $days jours (expire le $expiry_date)"
@@ -123,6 +131,8 @@ if [[ -f /tmp/.xray_domain ]]; then
   DOMAIN=$(cat /tmp/.xray_domain)
 fi
 
+load_user_data  # Charge UUID et mots de passe depuis /etc/xray/users.json
+
 while true; do
   clear
   print_header
@@ -137,6 +147,7 @@ while true; do
         DOMAIN=""
         echo -e "${RED}Aucun domaine enregistré. Veuillez installer Xray d’abord.${RESET}"
       fi
+      load_user_data  # Recharge UUID et mots de passe après installation
       read -p "Appuyez sur Entrée pour revenir au menu..."
       ;;
     2)
