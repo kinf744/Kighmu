@@ -23,7 +23,7 @@ apt update
 apt install -y ufw iptables iptables-persistent curl socat xz-utils wget apt-transport-https \
   gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq
 
-# Configuration UFW
+# Configuration UFW - ouvrir uniquement SSH, 80, 8443
 ufw allow ssh
 ufw allow 80/tcp
 ufw allow 80/udp
@@ -52,7 +52,7 @@ date
 latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases | grep tag_name | sed -E 's/.*"v(.*)".*/\1/' | head -n1)
 xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v${latest_version}/xray-linux-64.zip"
 
-# Arrêt services sur port 80
+# Arrêt services sur port 80 si existants
 systemctl stop nginx 2>/dev/null || true
 systemctl stop apache2 2>/dev/null || true
 sudo lsof -t -i tcp:80 -s tcp:listen | sudo xargs kill -9 2>/dev/null || true
@@ -72,15 +72,22 @@ touch /var/log/xray/access.log /var/log/xray/error.log
 chown -R root:root /var/log/xray
 chmod 644 /var/log/xray/access.log /var/log/xray/error.log
 
-# Installation acme.sh et génération certificats
-cd /root/
-wget https://raw.githubusercontent.com/NevermoreSSH/hop/main/acme.sh
-bash acme.sh --install
-rm acme.sh
-cd ~/.acme.sh || exit
-bash acme.sh --register-account -m "$EMAIL"
-bash acme.sh --issue --standalone -d "$DOMAIN" --force
-bash acme.sh --installcert -d "$DOMAIN" --fullchainpath /etc/xray/xray.crt --keypath /etc/xray/xray.key
+# Installer acme.sh si pas présent
+if ! command -v ~/.acme.sh/acme.sh &> /dev/null; then
+  curl https://get.acme.sh | sh
+  source ~/.bashrc
+fi
+
+# Arrêter Xray avant génération certificat pour libérer port 80
+systemctl stop xray
+
+# Générer et installer certificat TLS
+~/.acme.sh/acme.sh --register-account -m "$EMAIL"
+~/.acme.sh/acme.sh --issue --standalone -d "$DOMAIN" --force
+~/.acme.sh/acme.sh --installcert -d "$DOMAIN" --fullchainpath /etc/xray/xray.crt --keypath /etc/xray/xray.key
+
+# Redémarrer Xray
+systemctl start xray
 
 # Vérifier certificats TLS
 if [[ ! -f "/etc/xray/xray.crt" || ! -f "/etc/xray/xray.key" ]]; then
@@ -181,7 +188,7 @@ cat > /etc/xray/config.json << EOF
     }
   ],
   "outbounds": [{"protocol": "freedom","settings": {}},{"protocol": "blackhole","settings": {}, "tag": "blocked"}],
-  "routing": {"rules": [{"type": "field", "ip": ["0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "169.254.0.0/16", "172.16.0.0/12", "192.0.0.0/24", "192.0.2.0/24","192.168.0.0/16", "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24", "::1/128","fc00::/7","fe80::/10"], "outboundTag": "blocked"}]},
+  "routing": {"rules": [{"type": "field", "ip": ["0.0.0.0/8","10.0.0.0/8","100.64.0.0/10","169.254.0.0/16","172.16.0.0/12","192.0.0.0/24","192.0.2.0/24","192.168.0.0/16","198.18.0.0/15","198.51.100.0/24","203.0.113.0/24","::1/128","fc00::/7","fe80::/10"], "outboundTag": "blocked"}]},
   "policy": {"levels": {"0": {"statsUserDownlink":true,"statsUserUplink":true}}, "system": {"statsInboundUplink":true,"statsInboundDownlink":true}},
   "stats": {},
   "api": {"services": ["StatsService"], "tag": "api"}
@@ -271,17 +278,6 @@ cat > /etc/trojan-go/config.json << EOF
   "api": {"enabled": false,"api_addr": "","api_port": 0,"ssl": {"enabled": false,"key": "","cert": "","verify_client": false,"client_cert": []}}
 }
 EOF
-
-# Configuration UFW (garantir ouverture des ports)
-ufw allow ssh
-ufw allow 80/tcp
-ufw allow 80/udp
-ufw allow 8443/tcp
-ufw allow 8443/udp
-
-# Activer UFW avec validation automatique
-echo "y" | ufw enable
-ufw status verbose
 
 echo -e "${GREEN}Installation complète terminée.${NC}"
 echo "Domaine : $DOMAIN"
