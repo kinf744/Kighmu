@@ -1,180 +1,241 @@
 #!/bin/bash
 
-# Variables
 EMAIL="adrienkiaje@gmail.com"
-DOMAIN_FILE="/root/domain"
 
-# Couleurs
-GREEN='\033[0;32m'
-NC='\033[0m'
-
-# Vérification root
-if [ "$EUID" -ne 0 ]; then
-  echo -e "${GREEN}Erreur: Exécuter ce script en root.${NC}" >&2
+read -rp "Entrez votre nom de domaine (ex: monsite.com) : " DOMAIN
+if [ -z "$DOMAIN" ]; then
+  echo "Erreur : nom de domaine non valide."
   exit 1
 fi
 
-# Récupérer le domaine
-if [ -f "$DOMAIN_FILE" ]; then
-  DOMAIN=$(cat "$DOMAIN_FILE")
-else
-  read -rp "Entrez votre nom de domaine (ex: monsite.com) : " DOMAIN
-  if [ -z "$DOMAIN" ]; then
-    echo "Erreur: nom de domaine invalide"
-    exit 1
-  fi
-fi
-echo -e "${GREEN}Domaine : $DOMAIN${NC}"
+echo "$DOMAIN" > /tmp/.xray_domain
 
-# Synchronisation du temps et fuseau horaire
-apt update
-apt install -y ntpdate chrony socat curl wget unzip bash-completion iptables-persistent nginx ufw
-ntpdate -u pool.ntp.org
-timedatectl set-ntp true
-timedatectl set-timezone Etc/UTC
+UUID="b8a5dc8a-f4b7-4bc6-9848-5c80a310b6ae"
+TROJAN_PASS=$(openssl rand -base64 16)
 
-# Ouvrir les ports 80 et 443 dans le firewall
-echo -e "${GREEN}Ouverture des ports 80 (HTTP) et 443 (HTTPS) dans le firewall.${NC}"
-ufw allow 80/tcp
-ufw allow 443/tcp
+echo "Mise à jour et installation dépendances..."
+apt update && apt install -y curl unzip sudo socat snapd || { echo "Erreur installation dépendances"; exit 1; }
 
-# Activer UFW si inactif (attention à ne pas bloquer SSH)
-ufw status | grep -q inactive && {
-  echo -e "${GREEN}Le firewall UFW est inactif, activation en cours.${NC}"
-  ufw --force enable
-}
+echo "Installation et configuration de snap..."
+snap install core || { echo "Erreur installation snap core"; exit 1; }
+snap refresh core || true
+snap install --classic certbot || { echo "Erreur installation certbot"; exit 1; }
+ln -sf /snap/bin/certbot /usr/bin/certbot
 
-echo -e "${GREEN}Statut du firewall UFW :${NC}"
-ufw status verbose
+echo "Arrêt des services nginx/apache2 pour libérer le port 80..."
+systemctl stop nginx 2>/dev/null || true
+systemctl stop apache2 2>/dev/null || true
 
-# Installer acme.sh et certificat ECC
-curl https://get.acme.sh | sh
-source ~/.bashrc || source ~/.profile
-~/.acme.sh/acme.sh --upgrade --auto-upgrade
-~/.acme.sh/acme.sh --set-default-ca --server letsencrypt
-~/.acme.sh/acme.sh --issue -d "$DOMAIN" --standalone --keylength ec-256
-
-mkdir -p /etc/xray
-~/.acme.sh/acme.sh --install-cert -d "$DOMAIN" --ecc \
-  --fullchain-file /etc/xray/xray.crt \
-  --key-file /etc/xray/xray.key
-
-chmod 644 /etc/xray/xray.crt /etc/xray/xray.key
-chown -R www-data:www-data /etc/xray
-
-# Génération ports dynamiques
-vless=$((RANDOM + 10000))
-vmess=$((RANDOM + 11000))
-trojanws=$((RANDOM + 12000))
-vlessgrpc=$((RANDOM + 13000))
-vmessgrpc=$((RANDOM + 14000))
-trojangrpc=$((RANDOM + 15000))
-
-UUID=$(cat /proc/sys/kernel/random/uuid)
-
-# Installer Xray binaire (version 25.8.3)
-if ! command -v xray > /dev/null; then
-  wget -q https://github.com/XTLS/Xray-core/releases/download/v25.8.3/Xray-linux-64.zip -O /tmp/xray.zip
-  unzip -o /tmp/xray.zip -d /tmp/xray
-  mv /tmp/xray/xray /usr/local/bin/xray
-  chmod +x /usr/local/bin/xray
-  rm -rf /tmp/xray /tmp/xray.zip
+echo "Obtention du certificat TLS Let's Encrypt..."
+certbot certonly --standalone --non-interactive --agree-tos --email "$EMAIL" -d "$DOMAIN"
+if [ $? -ne 0 ]; then
+  echo "❌ Erreur lors de la génération du certificat TLS."
+  exit 1
 fi
 
-# Écrire config Xray
-cat > /etc/xray/config.json << EOF
+CRT_PATH="/etc/letsencrypt/live/$DOMAIN/fullchain.pem"
+KEY_PATH="/etc/letsencrypt/live/$DOMAIN/privkey.pem"
+if [[ ! -f "$CRT_PATH" ]] || [[ ! -f "$KEY_PATH" ]]; then
+  echo "Erreur : certificats TLS non trouvés."
+  exit 1
+fi
+
+echo "Gestion des permissions pour l'utilisateur nobody..."
+groupadd -f xray
+usermod -aG xray nobody
+chgrp -R xray /etc/letsencrypt/live /etc/letsencrypt/archive /etc/letsencrypt/renewal
+chmod 750 /etc/letsencrypt/live/"$DOMAIN" /etc/letsencrypt/archive/"$DOMAIN"
+chmod 640 /etc/letsencrypt/live/"$DOMAIN"/* /etc/letsencrypt/archive/"$DOMAIN"/*
+chmod 755 /etc/letsencrypt /etc/letsencrypt/live /etc/letsencrypt/archive
+
+echo "Téléchargement et installation de Xray 25.8.3..."
+wget -q https://github.com/XTLS/Xray-core/releases/download/v25.8.3/Xray-linux-64.zip -O /tmp/xray.zip || { echo "Erreur téléchargement Xray"; exit 1; }
+unzip -o /tmp/xray.zip -d /tmp/xray || { echo "Erreur extraction Xray"; exit 1; }
+mv /tmp/xray/xray /usr/local/bin/xray
+chmod +x /usr/local/bin/xray
+
+# Ajout automatique des capacités pour écouter les ports privilégiés
+sudo setcap 'cap_net_bind_service=+ep' /usr/local/bin/xray
+
+rm -rf /tmp/xray /tmp/xray.zip
+
+echo "Création du dossier de configuration Xray..."
+mkdir -p /usr/local/etc/xray
+
+echo "Création du fichier de configuration..."
+cat > /usr/local/etc/xray/config.json << EOF
 {
   "log": {
     "access": "/var/log/xray/access.log",
     "error": "/var/log/xray/error.log",
-    "loglevel": "debug"
+    "loglevel": "warning"
   },
   "inbounds": [
     {
-      "listen": "127.0.0.1",
-      "port": $vless,
+      "port": 443,
       "protocol": "vless",
       "settings": {
-        "clients": [{"id": "$UUID"}],
+        "clients": [
+          {
+            "id": "$UUID",
+            "flow": "xtls-rprx-vision"
+          }
+        ],
         "decryption": "none"
       },
       "streamSettings": {
         "network": "ws",
+        "security": "tls",
+        "tlsSettings": {
+          "certificates": [
+            {
+              "certificateFile": "$CRT_PATH",
+              "keyFile": "$KEY_PATH"
+            }
+          ]
+        },
         "wsSettings": {
-          "path": "/vless"
+          "path": "/vlessws",
+          "headers": {
+            "Host": "$DOMAIN"
+          }
         }
-      }
-    },
-    {
-      "listen": "127.0.0.1",
-      "port": $vmess,
-      "protocol": "vmess",
-      "settings": {
-        "clients": [{"id": "$UUID", "alterId": 0}]
       },
-      "streamSettings": {
-        "network": "ws",
-        "wsSettings": {
-          "path": "/vmess"
-        }
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls"]
       }
     },
     {
-      "listen": "127.0.0.1",
-      "port": $trojanws,
-      "protocol": "trojan",
-      "settings": {
-        "clients": [{"password": "$UUID"}],
-        "udp": true
-      },
-      "streamSettings": {
-        "network": "ws",
-        "wsSettings": {
-          "path": "/trojan-ws"
-        }
-      }
-    },
-    {
-      "listen": "127.0.0.1",
-      "port": $vlessgrpc,
+      "port": 80,
       "protocol": "vless",
       "settings": {
-        "clients": [{"id": "$UUID"}],
+        "clients": [
+          {
+            "id": "$UUID"
+          }
+        ],
         "decryption": "none"
       },
       "streamSettings": {
-        "network": "grpc",
-        "grpcSettings": {
-          "serviceName": "vless-grpc"
+        "network": "ws",
+        "security": "none",
+        "wsSettings": {
+          "path": "/vlessws"
         }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http"]
       }
     },
     {
-      "listen": "127.0.0.1",
-      "port": $vmessgrpc,
+      "port": 443,
       "protocol": "vmess",
       "settings": {
-        "clients": [{"id": "$UUID", "alterId": 0}]
+        "clients": [
+          {
+            "id": "$UUID",
+            "alterId": 0
+          }
+        ]
       },
       "streamSettings": {
-        "network": "grpc",
-        "grpcSettings": {
-          "serviceName": "vmess-grpc"
+        "network": "ws",
+        "security": "tls",
+        "tlsSettings": {
+          "certificates": [
+            {
+              "certificateFile": "$CRT_PATH",
+              "keyFile": "$KEY_PATH"
+            }
+          ]
+        },
+        "wsSettings": {
+          "path": "/vmessws",
+          "headers": {
+            "Host": "$DOMAIN"
+          }
         }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls"]
       }
     },
     {
-      "listen": "127.0.0.1",
-      "port": $trojangrpc,
+      "port": 80,
+      "protocol": "vmess",
+      "settings": {
+        "clients": [
+          {
+            "id": "$UUID",
+            "alterId": 0
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "none",
+        "wsSettings": {
+          "path": "/vmessws"
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http"]
+      }
+    },
+    {
+      "port": 443,
       "protocol": "trojan",
       "settings": {
-        "clients": [{"password": "$UUID"}],
-        "decryption": "none"
+        "clients": [
+          {
+            "password": "$TROJAN_PASS"
+          }
+        ]
       },
       "streamSettings": {
         "network": "grpc",
+        "security": "tls",
+        "tlsSettings": {
+          "certificates": [
+            {
+              "certificateFile": "$CRT_PATH",
+              "keyFile": "$KEY_PATH"
+            }
+          ]
+        },
         "grpcSettings": {
           "serviceName": "trojan-grpc"
+        }
+      }
+    },
+    {
+      "port": 443,
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "$UUID"
+          }
+        ],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "grpc",
+        "security": "tls",
+        "tlsSettings": {
+          "certificates": [
+            {
+              "certificateFile": "$CRT_PATH",
+              "keyFile": "$KEY_PATH"
+            }
+          ]
+        },
+        "grpcSettings": {
+          "serviceName": "vless-grpc"
         }
       }
     }
@@ -188,159 +249,49 @@ cat > /etc/xray/config.json << EOF
 }
 EOF
 
-# Config Nginx avec slash / final et headers complets
-cat > /etc/nginx/conf.d/xray.conf << EOF
-server {
-  listen 80;
-  listen 443 ssl http2;
-  server_name $DOMAIN;
-
-  ssl_certificate /etc/xray/xray.crt;
-  ssl_certificate_key /etc/xray/xray.key;
-  ssl_protocols TLSv1.2 TLSv1.3;
-  ssl_ciphers EECDH+AESGCM:EDH+AESGCM;
-
-  location /vless {
-    proxy_redirect off;
-    proxy_pass http://127.0.0.1:$vless/;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade \$http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host \$host;
-    proxy_set_header X-Real-IP \$remote_addr;
-    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-  }
-  location /vmess {
-    proxy_redirect off;
-    proxy_pass http://127.0.0.1:$vmess/;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade \$http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host \$host;
-    proxy_set_header X-Real-IP \$remote_addr;
-    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-  }
-  location /trojan-ws {
-    proxy_redirect off;
-    proxy_pass http://127.0.0.1:$trojanws/;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade \$http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host \$host;
-    proxy_set_header X-Real-IP \$remote_addr;
-    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-  }
-  location ^~ /vless-grpc {
-    grpc_pass grpc://127.0.0.1:$vlessgrpc;
-    grpc_set_header X-Real-IP \$remote_addr;
-    grpc_set_header Host \$host;
-  }
-  location ^~ /vmess-grpc {
-    grpc_pass grpc://127.0.0.1:$vmessgrpc;
-    grpc_set_header X-Real-IP \$remote_addr;
-    grpc_set_header Host \$host;
-  }
-  location ^~ /trojan-grpc {
-    grpc_pass grpc://127.0.0.1:$trojangrpc;
-    grpc_set_header X-Real-IP \$remote_addr;
-    grpc_set_header Host \$host;
-  }
-}
-EOF
-
-# Permissions
-chown -R www-data:www-data /etc/xray
-mkdir -p /var/log/xray
-chown -R www-data:www-data /var/log/xray
-
-# Service systemd Xray
+# Création fichier de service systemd pour Xray
 cat > /etc/systemd/system/xray.service << EOF
 [Unit]
 Description=Xray Service
-Documentation=https://github.com/XTLS/Xray-core
-After=network.target nss-lookup.target
+After=network.target
 
 [Service]
-User=www-data
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
-AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
-NoNewPrivileges=true
-ExecStart=/usr/local/bin/xray run -config /etc/xray/config.json
+User=nobody
+ExecStart=/usr/local/bin/xray -config /usr/local/etc/xray/config.json
 Restart=on-failure
-RestartPreventExitStatus=23
-LimitNOFILE=100000
-LimitNPROC=10000
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
+echo "Recharge systemd et active le service Xray..."
 systemctl daemon-reload
-systemctl enable xray nginx
-systemctl restart xray nginx
+systemctl enable xray
+systemctl restart xray
 
-if systemctl is-active --quiet xray && systemctl is-active --quiet nginx; then
-  echo -e "${GREEN}Xray et Nginx démarrés avec succès.${NC}"
+if systemctl is-active --quiet xray; then
+  echo "Xray service démarré avec succès."
 else
-  echo "Erreur : échec du démarrage des services Xray ou Nginx."
+  echo "Erreur : le service Xray ne démarre pas."
   journalctl -u xray -n 20 --no-pager
-  journalctl -u nginx -n 20 --no-pager
   exit 1
 fi
 
-# Script renouvellement automatique certificat
-cat > /usr/local/bin/renew-cert.sh << 'EOF'
+# Script renouvellement automatique Certbot + Restart Xray
+cat > /usr/local/bin/renew-cert-xray.sh << 'EOS'
 #!/bin/bash
-~/.acme.sh/acme.sh --cron --home ~/.acme.sh > /root/renew_cert.log 2>&1
-systemctl restart nginx
-systemctl restart xray
-EOF
-chmod +x /usr/local/bin/renew-cert.sh
-(crontab -l 2>/dev/null; echo "15 3 */3 * * /usr/local/bin/renew-cert.sh") | crontab -
+certbot renew --quiet --post-hook "systemctl restart xray"
+EOS
+chmod +x /usr/local/bin/renew-cert-xray.sh
+(crontab -l 2>/dev/null; echo "0 3 * * * /usr/local/bin/renew-cert-xray.sh") | crontab -
 
-# Fonction interactive d'affichage et suivi des logs Xray
-show_xray_logs () {
-  echo -e "\n=== Dernières connexions VPN (access.log) ==="
-  if [ -f /var/log/xray/access.log ]; then
-    tail -n 20 /var/log/xray/access.log || echo "Pas de logs d'accès disponibles."
-  else
-    echo "Fichier /var/log/xray/access.log introuvable."
-  fi
-
-  echo -e "\n=== Dernières erreurs VPN (error.log) ==="
-  if [ -f /var/log/xray/error.log ]; then
-    tail -n 20 /var/log/xray/error.log || echo "Pas de logs d'erreurs disponibles."
-  else
-    echo "Fichier /var/log/xray/error.log introuvable."
-  fi
-
-  echo -e "\nSouhaites-tu suivre les logs en temps réel ? (y/n) "
-  read -r tail_choice
-  if [[ "$tail_choice" == "y" || "$tail_choice" == "Y" ]]; then
-    echo "Appuie sur Ctrl+C pour arrêter la surveillance"
-    sudo tail -f /var/log/xray/access.log /var/log/xray/error.log
-  fi
-}
-
-# Proposer l'affichage des logs après installation
-echo -e "\nVoulez-vous voir les logs récents des connexions VPN et erreurs ? (y/n)"
-read -r view_logs
-if [[ "$view_logs" == "y" || "$view_logs" == "Y" ]]; then
-  show_xray_logs
-fi
-
-# Affichage d'informations utiles à la fin
-echo -e "${GREEN}----- Xray installé avec TLS ECC & Nginx reverse proxy -----${NC}"
-echo -e "Domaine : $DOMAIN"
-echo -e "UUID : $UUID"
-echo -e "Ports WS:"
-echo -e "  VLESS: $vless (ws)"
-echo -e "  VMESS: $vmess (ws)"
-echo -e "  TROJAN WS: $trojanws (ws)"
-echo -e "Ports gRPC:"
-echo -e "  VLESS gRPC: $vlessgrpc"
-echo -e "  VMESS gRPC: $vmessgrpc"
-echo -e "  TROJAN gRPC: $trojangrpc"
-echo -e "Certificat TLS: /etc/xray/xray.crt"
-echo -e "Clé TLS: /etc/xray/xray.key"
-echo -e "N’oublie pas d’ouvrir les ports 80 et 443 dans le firewall."
+echo "----- XRAY v25.8.3 installé avec TLS Let’s Encrypt et renouvellement automatique -----"
+echo "Domaine : $DOMAIN"
+echo "UUID : $UUID"
+echo "Mot de passe Trojan (gRPC) : $TROJAN_PASS"
+echo "Certificats TLS :"
+echo "  Certificat : $CRT_PATH"
+echo "  Clé privée : $KEY_PATH"
+echo "Ports : 80 (ws sans TLS), 443 (ws TLS, grpc TLS)"
+echo ""
+echo "Assure-toi d'ouvrir les ports 80 et 443 dans le firewall."
