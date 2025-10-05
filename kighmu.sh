@@ -81,39 +81,43 @@ while true; do
     total_connected=$(count_connected_devices)
     SSH_USERS_COUNT=$(count_ssh_users)
 
+    # Ajout comptage utilisateurs Xray
+    XRAY_USERS_FILE="/etc/xray/users.json"
+    if [[ -f "$XRAY_USERS_FILE" ]]; then
+      XRAY_USERS_COUNT=$(jq 'length' "$XRAY_USERS_FILE")
+    else
+      XRAY_USERS_COUNT=0
+    fi
+
     mapfile -t NET_INTERFACES < <(detect_interfaces)
     DEBUG "Interfaces détectées : ${NET_INTERFACES[*]}"
 
     DATA_DAY_GB=0
     DATA_MONTH_GB=0
 
-for iface in "${NET_INTERFACES[@]}"; do
-  day_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d';' -f9)
-  month_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d';' -f15)
-  day_gb=$(convert_to_gb "$day_raw")
-  month_gb=$(convert_to_gb "$month_raw")
-  DATA_DAY_GB=$(echo "$DATA_DAY_GB + $day_gb" | bc)
-  DATA_MONTH_GB=$(echo "$DATA_MONTH_GB + $month_gb" | bc)
-done
+    for iface in "${NET_INTERFACES[@]}"; do
+      day_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d';' -f9)
+      month_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d';' -f15)
+      day_gb=$(convert_to_gb "$day_raw")
+      month_gb=$(convert_to_gb "$month_raw")
+      DATA_DAY_GB=$(echo "$DATA_DAY_GB + $day_gb" | bc)
+      DATA_MONTH_GB=$(echo "$DATA_MONTH_GB + $month_gb" | bc)
+    done
 
   echo -e "${CYAN}╔☆=======================================================☆╗${RESET}"
   echo -e "${BOLD}${MAGENTA}                   🚀 KIGHMU MANAGER 🇨🇲 🚀               ${RESET}"
   echo -e "${CYAN}╚☆=======================================================☆╝${RESET}"
 
-  printf " OS: ${YELLOW}%-20s${RESET} | IP: ${RED}%-15s${RESET}
-" "$OS_INFO" "$IP"
-  printf " Taille RAM totale: ${GREEN}%-6s${RESET} | Nombre de cœurs CPU: ${YELLOW}%-6s${RESET}
-" "$RAM_GB_ARR" "$CPU_CORES"
-  printf " RAM utilisée: ${GREEN}%-6s${RESET} | CPU utilisé: ${YELLOW}%-6s${RESET}
-" "$RAM_USAGE" "$CPU_USAGE"
+  printf " OS: ${YELLOW}%-20s${RESET} | IP: ${RED}%-15s${RESET}\n" "$OS_INFO" "$IP"
+  printf " Taille RAM totale: ${GREEN}%-6s${RESET} | Nombre de cœurs CPU: ${YELLOW}%-6s${RESET}\n" "$RAM_GB_ARR" "$CPU_CORES"
+  printf " RAM utilisée: ${GREEN}%-6s${RESET} | CPU utilisé: ${YELLOW}%-6s${RESET}\n" "$RAM_USAGE" "$CPU_USAGE"
 
   echo -e "${CYAN}+==========================================================+${RESET}"
 
-  printf " Consommation aujourd'hui: ${MAGENTA_VIF}%.2f Go${RESET} | Ce mois-ci: ${CYAN_VIF}%.2f Go${RESET}
-" "$DATA_DAY_GB" "$DATA_MONTH_GB"
+  printf " Consommation aujourd'hui: ${MAGENTA_VIF}%.2f Go${RESET} | Ce mois-ci: ${CYAN_VIF}%.2f Go${RESET}\n" "$DATA_DAY_GB" "$DATA_MONTH_GB"
 
-  printf " Utilisateurs SSH: ${BLUE}%-4d${RESET} | Appareils connectés: ${MAGENTA}%-4d${RESET}
-" "$SSH_USERS_COUNT" "$total_connected"
+  # Ligne modifiée affichant utilisateurs SSH + Xray + appareils connectés
+  printf " Utilisateurs SSH: ${BLUE}%-4d${RESET} | Utilisateurs Xray: ${MAGENTA}%-4d${RESET} | Appareils connectés: ${MAGENTA}%-4d${RESET}\n" "$SSH_USERS_COUNT" "$XRAY_USERS_COUNT" "$total_connected"
 
   echo -e "${CYAN}+==========================================================+${RESET}"
 
