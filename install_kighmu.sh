@@ -192,7 +192,7 @@ FILES=(
   "hysteria.sh"
   "ShellBot.sh"
   "botssh.sh"
-  "install_xray.sh"
+  "xray-panel-unified.sh"
 )
 
 BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
