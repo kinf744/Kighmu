@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Variables
-EMAIL="adrienkiaje@gmail.com"     # Peut servir pour acme.sh si besoin
-DOMAIN_FILE="/root/domain"         # Fichier contenant le domaine préféré
+EMAIL="adrienkiaje@gmail.com"
+DOMAIN_FILE="/root/domain"
 
 # Couleurs
 GREEN='\033[0;32m'
@@ -26,32 +26,29 @@ else
 fi
 echo -e "${GREEN}Domaine : $DOMAIN${NC}"
 
-# Synchronisation temps et fuseau horaire
+# Synchronisation du temps et fuseau horaire
 apt update
-apt install -y ntpdate chrony socat curl wget unzip bash-completion iptables-persistent
+apt install -y ntpdate chrony socat curl wget unzip bash-completion iptables-persistent nginx
 ntpdate -u pool.ntp.org
 timedatectl set-ntp true
 timedatectl set-timezone Etc/UTC
 
-# Installer nginx
-apt install -y nginx
-
-# Installer acme.sh (certificat ECC)
+# Installer acme.sh et certificat ECC
 curl https://get.acme.sh | sh
 source ~/.bashrc || source ~/.profile
 ~/.acme.sh/acme.sh --upgrade --auto-upgrade
 ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt
 ~/.acme.sh/acme.sh --issue -d "$DOMAIN" --standalone --keylength ec-256
 
-# Installer certificat dans /etc/xray
 mkdir -p /etc/xray
 ~/.acme.sh/acme.sh --install-cert -d "$DOMAIN" --ecc \
   --fullchain-file /etc/xray/xray.crt \
   --key-file /etc/xray/xray.key
+
 chmod 644 /etc/xray/xray.crt /etc/xray/xray.key
 chown -R www-data:www-data /etc/xray
 
-# Génération ports randomisés
+# Génération ports dynamiques
 vless=$((RANDOM + 10000))
 vmess=$((RANDOM + 11000))
 trojanws=$((RANDOM + 12000))
@@ -59,10 +56,16 @@ vlessgrpc=$((RANDOM + 13000))
 vmessgrpc=$((RANDOM + 14000))
 trojangrpc=$((RANDOM + 15000))
 
-# Génération UUID
 UUID=$(cat /proc/sys/kernel/random/uuid)
 
-# Écrire configuration Xray JSON
+# Installer Xray binaire (version 25.8.3 par exemple)
+wget -q https://github.com/XTLS/Xray-core/releases/download/v25.8.3/Xray-linux-64.zip -O /tmp/xray.zip
+unzip -o /tmp/xray.zip -d /tmp/xray
+mv /tmp/xray/xray /usr/local/bin/xray
+chmod +x /usr/local/bin/xray
+rm -rf /tmp/xray /tmp/xray.zip
+
+# Écrire config Xray
 cat > /etc/xray/config.json << EOF
 {
   "log": {
@@ -169,7 +172,7 @@ cat > /etc/xray/config.json << EOF
 }
 EOF
 
-# Configuration Nginx reverse proxy
+# Config Nginx avec slash / final et headers complets
 cat > /etc/nginx/conf.d/xray.conf << EOF
 server {
   listen 80;
@@ -180,33 +183,36 @@ server {
   ssl_certificate_key /etc/xray/xray.key;
   ssl_protocols TLSv1.2 TLSv1.3;
   ssl_ciphers EECDH+AESGCM:EDH+AESGCM;
-  
+
   location /vless {
     proxy_redirect off;
-    proxy_pass http://127.0.0.1:$vless;
+    proxy_pass http://127.0.0.1:$vless/;
     proxy_http_version 1.1;
     proxy_set_header Upgrade \$http_upgrade;
     proxy_set_header Connection "upgrade";
     proxy_set_header Host \$host;
     proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
   }
   location /vmess {
     proxy_redirect off;
-    proxy_pass http://127.0.0.1:$vmess;
+    proxy_pass http://127.0.0.1:$vmess/;
     proxy_http_version 1.1;
     proxy_set_header Upgrade \$http_upgrade;
     proxy_set_header Connection "upgrade";
     proxy_set_header Host \$host;
     proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
   }
   location /trojan-ws {
     proxy_redirect off;
-    proxy_pass http://127.0.0.1:$trojanws;
+    proxy_pass http://127.0.0.1:$trojanws/;
     proxy_http_version 1.1;
     proxy_set_header Upgrade \$http_upgrade;
     proxy_set_header Connection "upgrade";
     proxy_set_header Host \$host;
     proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
   }
   location ^~ /vless-grpc {
     grpc_pass grpc://127.0.0.1:$vlessgrpc;
@@ -226,11 +232,12 @@ server {
 }
 EOF
 
-# Ajuster permissions
+# Permissions
 chown -R www-data:www-data /etc/xray
-chown -R www-data:www-data /var/log/xray 2>/dev/null || mkdir -p /var/log/xray && chown -R www-data:www-data /var/log/xray
+mkdir -p /var/log/xray
+chown -R www-data:www-data /var/log/xray
 
-# Création fichier service systemd Xray
+# Service systemd Xray
 cat > /etc/systemd/system/xray.service << EOF
 [Unit]
 Description=Xray Service
@@ -252,7 +259,6 @@ LimitNPROC=10000
 WantedBy=multi-user.target
 EOF
 
-# Rechargement daemon et lancement services
 systemctl daemon-reload
 systemctl enable xray nginx
 systemctl restart xray nginx
@@ -266,7 +272,7 @@ else
   exit 1
 fi
 
-# Script renouvellement automatique certificat & redémarrage services
+# Script renouvellement automatique certificat
 cat > /usr/local/bin/renew-cert.sh << 'EOF'
 #!/bin/bash
 ~/.acme.sh/acme.sh --cron --home ~/.acme.sh > /root/renew_cert.log 2>&1
@@ -274,11 +280,9 @@ systemctl restart nginx
 systemctl restart xray
 EOF
 chmod +x /usr/local/bin/renew-cert.sh
-
-# Cron renewal tous les 3 jours à 3h15
 (crontab -l 2>/dev/null; echo "15 3 */3 * * /usr/local/bin/renew-cert.sh") | crontab -
 
-# Affichage infos d’installation
+# Affichage d'informations utiles
 echo -e "${GREEN}----- Xray installé avec TLS ECC & Nginx reverse proxy -----${NC}"
 echo -e "Domaine : $DOMAIN"
 echo -e "UUID : $UUID"
