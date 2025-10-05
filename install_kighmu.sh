@@ -170,6 +170,7 @@ FILES=(
   "menu4_2.sh"
   "botssh.sh"
   "menu_6.sh"
+  "xray_installe.sh"
 )
 
 BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
