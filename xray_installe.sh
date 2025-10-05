@@ -1,5 +1,5 @@
 #!/bin/bash
-# Installation complète Xray + Trojan Go, avec users.json pour menu
+# Installation complète Xray + Trojan Go + UFW, avec users.json pour menu
 
 # Couleurs terminal
 RED='\033[0;31m'
@@ -13,15 +13,28 @@ if [[ -z "$DOMAIN" ]]; then
   exit 1
 fi
 
-# Écriture pour menu
+# Écriture domaine pour menu
 echo "$DOMAIN" > /tmp/.xray_domain
 
 EMAIL="adrienkiaje@gmail.com"
 
 # Mise à jour et dépendances
 apt update
-apt install -y iptables iptables-persistent curl socat xz-utils wget apt-transport-https \
+apt install -y ufw iptables iptables-persistent curl socat xz-utils wget apt-transport-https \
   gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq
+
+# Configuration UFW
+ufw allow ssh
+ufw allow 80/tcp
+ufw allow 80/udp
+ufw allow 8443/tcp
+ufw allow 8443/udp
+ufw allow 2083/tcp
+ufw allow 2083/udp
+
+# Activer UFW automatiquement (valider par 'y')
+echo "y" | ufw enable
+ufw status verbose
 
 # Synchronisation temps
 ntpdate pool.ntp.org
@@ -46,7 +59,7 @@ systemctl stop nginx 2>/dev/null || true
 systemctl stop apache2 2>/dev/null || true
 sudo lsof -t -i tcp:80 -s tcp:listen | sudo xargs kill -9 2>/dev/null || true
 
-# Install Xray
+# Installation Xray
 mkdir -p /usr/local/bin
 cd $(mktemp -d)
 curl -sL "$xraycore_link" -o xray.zip
@@ -58,7 +71,7 @@ setcap 'cap_net_bind_service=+ep' /usr/local/bin/xray
 mkdir -p /var/log/xray /etc/xray
 chown -R nobody:nogroup /var/log/xray
 
-# Install acme.sh
+# Installation acme.sh et génération certs
 cd /root/
 wget https://raw.githubusercontent.com/NevermoreSSH/hop/main/acme.sh
 bash acme.sh --install
@@ -68,20 +81,20 @@ bash acme.sh --register-account -m "$EMAIL"
 bash acme.sh --issue --standalone -d "$DOMAIN" --force
 bash acme.sh --installcert -d "$DOMAIN" --fullchainpath /etc/xray/xray.crt --keypath /etc/xray/xray.key
 
-# Verification certificates
+# Vérifier certifs TLS
 if [[ ! -f "/etc/xray/xray.crt" || ! -f "/etc/xray/xray.key" ]]; then
   echo -e "${RED}Erreur : certificats TLS non trouvés.${NC}"
   exit 1
 fi
 
-# Génération UUID / mot passe Trojan
+# Génération UUID Trojan
 uuid1=$(cat /proc/sys/kernel/random/uuid)
 uuid2=$(cat /proc/sys/kernel/random/uuid)
 uuid3=$(cat /proc/sys/kernel/random/uuid)
 uuid4=$(cat /proc/sys/kernel/random/uuid)
 uuid5=$(cat /proc/sys/kernel/random/uuid)
 
-# Ecriture users.json (pour menu)
+# users.json pour menu
 cat > /etc/xray/users.json << EOF
 {
   "vmess_tls": "$uuid1",
@@ -180,17 +193,6 @@ RestartPreventExitStatus=23
 WantedBy=multi-user.target
 EOF
 
-# Firewall rules
-for port in 80 443 8443 2083; do
-  iptables -I INPUT -m state --state NEW -m tcp -p tcp --dport $port -j ACCEPT
-  iptables -I INPUT -m state --state NEW -m udp -p udp --dport $port -j ACCEPT
-done
-
-iptables-save > /etc/iptables.up.rules
-iptables-restore -t < /etc/iptables.up.rules
-netfilter-persistent save
-netfilter-persistent reload
-
 systemctl daemon-reload
 systemctl enable xray
 systemctl restart xray
@@ -204,12 +206,12 @@ else
 fi
 
 # Installation Trojan Go
-latest_version="$(curl -s https://api.github.com/NevermoreSSH/addons/releases | grep tag_name | sed -E 's/.*\"v(.*)\".*/\1/' | head -n 1)"
-trojango_link="https://github.com/NevermoreSSH/addons/releases/download/0.10.6/trojan-go-linux-amd64.zip"
+latest_version=$(curl -s https://api.github.com/NevermoreSSH/addons/releases | grep tag_name | sed -E 's/.*\"v(.*)\".*/\1/' | head -n 1)
+trojan_link="https://github.com/NevermoreSSH/addons/releases/download/0.10.6/trojan-go-linux-amd64.zip"
 
 mkdir -p /usr/bin/trojan-go /etc/trojan-go
 cd $(mktemp -d)
-curl -sL "${trojango_link}" -o trojan-go.zip
+curl -sL "$trojan_link" -o trojan-go.zip
 unzip -q trojan-go.zip && rm -f trojan-go.zip
 mv trojan-go /usr/local/bin/trojan-go
 chmod +x /usr/local/bin/trojan-go
@@ -255,35 +257,18 @@ cat > /etc/trojan-go/config.json << EOF
 }
 EOF
 
-cat > /etc/systemd/system/trojan-go.service << EOF
-[Unit]
-Description=Trojan-Go Service Mod By NevermoreSSH
-After=network.target nss-lookup.target
+# Configuration UFW (redondante mais pour garantir ouverture ports)
+ufw allow ssh
+ufw allow 80/tcp
+ufw allow 80/udp
+ufw allow 8443/tcp
+ufw allow 8443/udp
+ufw allow 2083/tcp
+ufw allow 2083/udp
 
-[Service]
-User=root
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
-AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
-NoNewPrivileges=true
-ExecStart=/usr/local/bin/trojan-go -config /etc/trojan-go/config.json
-Restart=on-failure
-RestartPreventExitStatus=23
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-iptables -I INPUT -m state --state NEW -m tcp -p tcp --dport 2086 -j ACCEPT
-iptables -I INPUT -m state --state NEW -m udp -p udp --dport 2087 -j ACCEPT
-
-iptables-save > /etc/iptables.up.rules
-iptables-restore -t < /etc/iptables.up.rules
-netfilter-persistent save
-netfilter-persistent reload
-
-systemctl daemon-reload
-systemctl enable trojan-go
-systemctl restart trojan-go
+# Activer UFW (auto confirmation)
+echo "y" | ufw enable
+ufw status verbose
 
 echo -e "${GREEN}Installation complète terminée.${NC}"
 echo "Domaine : $DOMAIN"
