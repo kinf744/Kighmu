@@ -45,6 +45,7 @@ load_user_data() {
     VLESS_TLS=$(jq -r '.vless_tls' "$USERS_FILE")
     VLESS_NTLS=$(jq -r '.vless_ntls' "$USERS_FILE")
     TROJAN_PASS=$(jq -r '.trojan_pass' "$USERS_FILE")
+    TROJAN_NTLS_PASS=$(jq -r '.trojan_ntls_pass' "$USERS_FILE")
   else
     echo -e "${RED}Fichier $USERS_FILE introuvable.${RESET}"
   fi
@@ -62,44 +63,70 @@ create_config() {
 
   # Générer nouvel UUID/mot de passe
   local new_uuid
-  new_uuid=$(cat /proc/sys/kernel/random/uuid)
-
+  local link_tls=""
+  local link_ntls=""
   local path_ws=""
   local grpc_name=""
-  local encryption="none"
   local port_tls=8443
   local port_ntls=80
-  local port_trojan=2083
 
   case "$proto" in
     vmess)
       path_ws="/vmess"
       grpc_name="vmess-grpc"
-      # Mise à jour config.json: ajoute client au protocole vmess TLS/non-TLS
-      jq --arg id "$new_uuid" --argjson altid 0 --arg proto "vmess" '
-        (.inbounds[] | select(.protocol==$proto) | .settings.clients) += [{"id": $id, "alterId": $altid}]
+      new_uuid=$(cat /proc/sys/kernel/random/uuid)
+      jq --arg id "$new_uuid" --arg proto "vmess" '
+        (.inbounds[] | select(.protocol==$proto) | .settings.clients) += [{"id": $id, "alterId": 0}]
       ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
 
-      # Mise à jour users.json pour garder cohérence (exemple simplifié ici, vous pouvez améliorer)
       jq --arg id "$new_uuid" '.vmess_tls = $id' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+
+      link_tls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$new_uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"\",\"path\":\"$path_ws\",\"tls\":\"tls\"}" | base64 -w0)"
+      link_ntls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_ntls\",\"id\":\"$new_uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"\",\"path\":\"$path_ws\",\"tls\":\"\"}" | base64 -w0)"
+
+      echo -e "  • TLS : $link_tls"
+      echo -e "  • Non-TLS : $link_ntls"
       ;;
     vless)
       path_ws="/vless"
       grpc_name="vless-grpc"
+      new_uuid=$(cat /proc/sys/kernel/random/uuid)
       jq --arg id "$new_uuid" --arg proto "vless" '
         (.inbounds[] | select(.protocol==$proto) | .settings.clients) += [{"id": $id}]
       ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
 
       jq --arg id "$new_uuid" '.vless_tls = $id' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+
+      link_tls="vless://$new_uuid@$DOMAIN:$port_tls?path=$path_ws&security=tls&encryption=none&type=ws#$name"
+      link_ntls="vless://$new_uuid@$DOMAIN:$port_ntls?path=$path_ws&encryption=none&type=ws#$name"
+
+      echo -e "  • TLS : $link_tls"
+      echo -e "  • Non-TLS : $link_ntls"
       ;;
     trojan)
-      path_ws="/trojan"
-      grpc_name="trojan-grpc"
-      jq --arg id "$new_uuid" '
-        (.inbounds[] | select(.protocol=="trojan") | .settings.clients) += [{"password": $id}]
-      ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+      echo -ne "${YELLOW}Voulez-vous créer un utilisateur Trojan avec TLS ? (o/n) : ${RESET}"
+      read -r use_tls
+      if [[ "$use_tls" == "o" || "$use_tls" == "O" ]]; then
+        new_uuid=$(cat /proc/sys/kernel/random/uuid)
+        jq --arg id "$new_uuid" '
+          (.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="tls") | .settings.clients) += [{"password": $id}]
+        ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
 
-      jq --arg id "$new_uuid" '.trojan_pass = $id' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+        jq --arg id "$new_uuid" '.trojan_pass = $id' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+
+        link_tls="trojan://$new_uuid@$DOMAIN:$port_tls?security=tls&type=ws&path=/trojanws#$name"
+        echo -e "  • TLS : $link_tls"
+      else
+        new_uuid=$(cat /proc/sys/kernel/random/uuid)
+        jq --arg id "$new_uuid" '
+          (.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="none") | .settings.clients) += [{"password": $id}]
+        ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+
+        jq --arg id "$new_uuid" '.trojan_ntls_pass = $id' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+
+        link_ntls="trojan://$new_uuid@$DOMAIN:$port_ntls?type=ws&path=/trojanws#$name"
+        echo -e "  • Non-TLS : $link_ntls"
+      fi
       ;;
     *)
       echo -e "${RED}Protocole inconnu.${RESET}"
@@ -124,44 +151,25 @@ create_config() {
   fi
   echo
   echo -e "${YELLOW}➤ Durée de validité :${RESET} $days jours (expire le $expiry_date)"
-  echo -e "➤ Ports utilisés : TLS=$port_tls, Non-TLS=$port_ntls, Trojan=$port_trojan"
+  echo -e "➤ Ports utilisés : TLS=$port_tls, Non-TLS=$port_ntls"
   echo
   echo -e "${YELLOW}➤ Liens de configuration :${RESET}"
-  
-  # Générer liens à afficher :
+
   case "$proto" in
     vmess)
-      local link_tls
-      local link_ntls
-      local link_grpc
-      link_tls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$new_uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"\",\"path\":\"$path_ws\",\"tls\":\"tls\"}" | base64 -w0)"
-      link_ntls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_ntls\",\"id\":\"$new_uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"\",\"path\":\"$path_ws\",\"tls\":\"\"}" | base64 -w0)"
-      link_grpc="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$new_uuid\",\"aid\":0,\"net\":\"grpc\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"\",\"tls\":\"tls\",\"serviceName\":\"$grpc_name\"}" | base64 -w0)"
       echo -e "  • TLS : $link_tls"
       echo -e "  • Non-TLS : $link_ntls"
-      echo -e "  • GRPC : $link_grpc"
       ;;
     vless)
-      local link_tls
-      local link_ntls
-      local link_grpc
-      link_tls="vless://$new_uuid@$DOMAIN:$port_tls?path=$path_ws&security=tls&encryption=none&type=ws#$name"
-      link_ntls="vless://$new_uuid@$DOMAIN:$port_ntls?path=$path_ws&encryption=none&type=ws#$name"
-      link_grpc="vless://$new_uuid@$DOMAIN:$port_tls?mode=gun&security=tls&encryption=none&type=grpc&serviceName=$grpc_name&sni=$DOMAIN#$name"
       echo -e "  • TLS : $link_tls"
       echo -e "  • Non-TLS : $link_ntls"
-      echo -e "  • GRPC : $link_grpc"
       ;;
     trojan)
-      local link_tls
-      local link_ntls
-      local link_grpc
-      link_tls="trojan://$new_uuid@$DOMAIN:$port_trojan?security=tls&type=ws&path=$path_ws#$name"
-      link_ntls="trojan://$new_uuid@$DOMAIN:$port_ntls?type=ws&path=$path_ws#$name"
-      link_grpc="trojan://$new_uuid@$DOMAIN:$port_trojan?mode=gun&security=tls&type=grpc&serviceName=$grpc_name&sni=$DOMAIN#$name"
-      echo -e "  • TLS : $link_tls"
-      echo -e "  • Non-TLS : $link_ntls"
-      echo -e "  • GRPC : $link_grpc"
+      if [[ "$use_tls" == "o" || "$use_tls" == "O" ]]; then
+        echo -e "  • TLS : $link_tls"
+      else
+        echo -e "  • Non-TLS : $link_ntls"
+      fi
       ;;
   esac
 
@@ -172,7 +180,6 @@ create_config() {
 }
 
 delete_user() {
-  # Fonction de suppression fournie précédemment, inchangée
   local proto=$1
   local id=$2
   local tmp_config="/tmp/config.tmp.json"
@@ -215,7 +222,8 @@ delete_user() {
       ;;
     trojan)
       jq --arg id "$id" '
-      if .trojan_pass == $id then .trojan_pass = "" else . end
+      if .trojan_pass == $id then .trojan_pass = "" else . end |
+      if .trojan_ntls_pass == $id then .trojan_ntls_pass = "" else . end
       ' "$USERS_FILE" > "$tmp_users" && mv "$tmp_users" "$USERS_FILE"
       ;;
   esac
