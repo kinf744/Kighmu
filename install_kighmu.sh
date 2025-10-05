@@ -168,6 +168,8 @@ FILES=(
   "setup_ssh_config.sh"
   "create_ssh_user.sh"
   "menu4_2.sh"
+  "botssh.sh"
+  "menu_6.sh"
 )
 
 BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
@@ -247,12 +249,12 @@ YELLOW='\033[0;33m'
 GREEN='\033[0;32m'
 NC='\033[0m'
 
-echo -e "${BLUE}
-K   K  III  GGG  H   H M   M U   U
-K  K    I  G     H   H MM MM U   U
-KKK     I  G  GG HHHHH M M M U   U
-K  K    I  G   G H   H M   M U   U
-K   K  III  GGG  H   H M   M  UUU
+echo -e "${RED}
+K   K  III  GGG  H   H M   M U   U     V   V PPPP   SSS
+K  K    I  G     H   H MM MM U   U     V   V P   P S
+KKK     I  G  GG HHHHH M M M U   U     V   V PPPP   SSS
+K  K    I  G   G H   H M   M U   U      V V  P         S
+K   K  III  GGG  H   H M   M  UUU        V   P      SSS
 ${NC}"
 
 echo
