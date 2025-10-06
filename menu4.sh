@@ -119,7 +119,7 @@ case "$option" in
         fi
         echo -e "${CYAN}Utilisateurs existants :${RESET}"
         cut -d'|' -f1 "$USER_FILE"
-        read -rp "${BOLD}Nom de l'utilisateur à supprimer : ${RESET}" username
+        read -rp "Nom de l'utilisateur à supprimer : " username
         supprimer_utilisateur "$username"
         ;;
     2)
