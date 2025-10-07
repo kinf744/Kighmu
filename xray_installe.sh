@@ -267,13 +267,14 @@ mkdir -p /var/log/trojan-go
 touch /etc/trojan-go/akun.conf
 touch /var/log/trojan-go/trojan-go.log
 
+# Fichier de configuration Trojan Go corrigé (remote_addr et remote_port désactivés)
 cat > /etc/trojan-go/config.json << EOF
 {
   "run_type": "server",
   "local_addr": "0.0.0.0",
   "local_port": 8443,
-  "remote_addr": "127.0.0.1",
-  "remote_port": 89,
+  "remote_addr": "",
+  "remote_port": 0,
   "log_level": 1,
   "log_file": "/var/log/trojan-go/trojan-go.log",
   "password": ["$uuid5"],
@@ -292,10 +293,7 @@ cat > /etc/trojan-go/config.json << EOF
     "alpn": ["http/1.1"],
     "session_ticket": true,
     "reuse_session": true,
-    "plain_http_response": "",
-    "fallback_addr": "127.0.0.1",
-    "fallback_port": 0,
-    "fingerprint": "firefox"
+    "plain_http_response": ""
   },
   "tcp": {"no_delay": true,"keep_alive": true,"prefer_ipv4": true},
   "mux": {"enabled": false,"concurrency": 8,"idle_timeout": 60},
