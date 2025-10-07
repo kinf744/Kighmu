@@ -101,23 +101,22 @@ create_config() {
       link_ntls="vless://$new_uuid@$DOMAIN:$port_ntls?path=$path_ws&encryption=none&type=ws#$name"
       ;;
     trojan)
-      echo -ne "${YELLOW}Voulez-vous créer un utilisateur Trojan avec TLS ? (o/n) : ${RESET}"
-      read -r use_tls
-      if [[ "$use_tls" == "o" || "$use_tls" == "O" ]]; then
-        new_uuid=$(cat /proc/sys/kernel/random/uuid)
-        jq --arg id "$new_uuid" '
-          (.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="tls") | .settings.clients) += [{"password": $id}]
-        ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
-        jq --arg id "$new_uuid" '.trojan_pass = $id' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
-        link_tls="trojan://$new_uuid@$DOMAIN:$port_tls?security=tls&type=ws&path=/trojanws#$name"
-      else
-        new_uuid=$(cat /proc/sys/kernel/random/uuid)
-        jq --arg id "$new_uuid" '
-          (.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="none") | .settings.clients) += [{"password": $id}]
-        ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
-        jq --arg id "$new_uuid" '.trojan_ntls_pass = $id' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
-        link_ntls="trojan://$new_uuid@$DOMAIN:$port_ntls?type=ws&path=/trojanws#$name"
-      fi
+      local uuid_tls=$(cat /proc/sys/kernel/random/uuid)
+      local uuid_ntls=$(cat /proc/sys/kernel/random/uuid)
+
+      jq --arg idtls "$uuid_tls" '
+        (.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="tls") | .settings.clients) += [{"password": $idtls}]
+      ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+
+      jq --arg idntls "$uuid_ntls" '
+        (.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="none") | .settings.clients) += [{"password": $idntls}]
+      ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+
+      jq --arg idtls "$uuid_tls" --arg idntls "$uuid_ntls" \
+        '.trojan_pass = $idtls | .trojan_ntls_pass = $idntls' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+
+      link_tls="trojan://${uuid_tls}@${DOMAIN}:8443?security=tls&type=ws&path=/trojanws#${name}"
+      link_ntls="trojan://${uuid_ntls}@${DOMAIN}:80?type=ws&path=/trojanws#${name}"
       ;;
     *)
       echo -e "${RED}Protocole inconnu.${RESET}"
@@ -125,18 +124,15 @@ create_config() {
       ;;
   esac
 
-  # Ajouter la date d'expiration dans users_expiry.list
   local exp_date_iso
   exp_date_iso=$(date -d "+$days days" +"%Y-%m-%d")
   touch /etc/xray/users_expiry.list
   chmod 600 /etc/xray/users_expiry.list
   echo "$new_uuid|$exp_date_iso" >> /etc/xray/users_expiry.list
 
-  # Calcul date expiration
   local expiry_date
   expiry_date=$(date -d "+$days days" +"%d/%m/%Y")
 
-  # Affichage config générée avec encadrement
   echo
   echo "========================="
   echo -e "🧩 ${proto^^}"
@@ -145,7 +141,8 @@ create_config() {
   echo "--------------------------------------------------"
   echo -e "➤ UUID / Mot de passe :"
   if [[ "$proto" == "trojan" ]]; then
-    echo -e "    Mot de passe : $new_uuid"
+    echo -e "    Mot de passe TLS : $uuid_tls"
+    echo -e "    Mot de passe Non-TLS : $uuid_ntls"
   else
     echo -e "    UUID : $new_uuid"
   fi
@@ -153,28 +150,13 @@ create_config() {
   echo
   echo -e "●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
   echo -e "┃ TLS  :"
-  if [[ "$proto" == "trojan" ]]; then
-    if [[ "$use_tls" == "o" || "$use_tls" == "O" ]]; then
-      echo -e "┃ $link_tls"
-      echo -e "┃"
-      echo -e "┃ Non-TLS :"
-      echo -e "┃ Aucun accès Non-TLS configuré"
-    else
-      echo -e "┃ Aucun accès TLS configuré"
-      echo -e "┃"
-      echo -e "┃ Non-TLS :"
-      echo -e "┃ $link_ntls"
-    fi
-  else
-    echo -e "┃ $link_tls"
-    echo -e "┃"
-    echo -e "┃ Non-TLS :"
-    echo -e "┃ $link_ntls"
-  fi
+  echo -e "┃ $link_tls"
+  echo -e "┃"
+  echo -e "┃ Non-TLS :"
+  echo -e "┃ $link_ntls"
   echo -e "●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
   echo
 
-  # Redémarrer Xray pour appliquer les changements
   systemctl restart xray
 }
 
@@ -228,7 +210,6 @@ delete_user() {
       ;;
   esac
 
-  # Nettoyer expiration dans users_expiry.list
   if [[ -f /etc/xray/users_expiry.list ]]; then
     grep -v "^$id|" /etc/xray/users_expiry.list > "$tmp_expiry" && mv "$tmp_expiry" /etc/xray/users_expiry.list
   fi
@@ -291,22 +272,18 @@ while true; do
     6)
       echo -e "${YELLOW}Désinstallation complète de Xray et Trojan-Go en cours...${RESET}"
 
-      # Arrêter et désactiver les services
       systemctl stop xray trojan-go 2>/dev/null || true
       systemctl disable xray trojan-go 2>/dev/null || true
 
-      # Tuer processus sur ports 80 et 8443
       for port in 80 8443; do
         lsof -i tcp:$port -t | xargs -r kill -9
         lsof -i udp:$port -t | xargs -r kill -9
       done
 
-      # Supprimer fichiers et dossiers liés
       rm -rf /etc/xray /var/log/xray /usr/local/bin/xray /etc/systemd/system/xray.service
       rm -rf /etc/trojan-go /var/log/trojan-go /usr/local/bin/trojan-go /etc/systemd/system/trojan-go.service
       rm -f /tmp/.xray_domain /etc/xray/users_expiry.list /etc/xray/users.json /etc/xray/config.json
 
-      # Reload systemd
       systemctl daemon-reload
 
       echo -e "${GREEN}Désinstallation terminée.${RESET}"
