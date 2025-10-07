@@ -1,5 +1,5 @@
 #!/bin/bash
-# Installation complète Xray + Trojan Go + UFW, avec users.json pour menu
+# Installation complète Xray + Trojan Go + UFW, avec users.json pour menu et robustesse persistante
 
 # Couleurs terminal
 RED='\033[0;31m'
@@ -34,13 +34,14 @@ ufw allow 8443/udp
 echo "y" | ufw enable
 ufw status verbose
 
+# Sauvegarder règles UFW pour persistance
+netfilter-persistent save
+
 # Synchronisation temps
 ntpdate pool.ntp.org
 timedatectl set-ntp true
 systemctl enable chronyd
 systemctl restart chronyd
-systemctl enable chrony
-systemctl restart chrony
 timedatectl set-timezone Asia/Kuala_Lumpur
 
 # Info chrony
@@ -86,7 +87,7 @@ systemctl stop xray
 ~/.acme.sh/acme.sh --issue --standalone -d "$DOMAIN" --force
 ~/.acme.sh/acme.sh --installcert -d "$DOMAIN" --fullchainpath /etc/xray/xray.crt --keypath /etc/xray/xray.key
 
-# Redémarrer Xray
+# Redémarrer Xray (sera stoppé plus tard par systemd service)
 systemctl start xray
 
 # Vérifier certificats TLS
@@ -228,8 +229,8 @@ else
 fi
 
 # Installation Trojan Go
-latest_version=$(curl -s https://api.github.com/NevermoreSSH/addons/releases | grep tag_name | sed -E 's/.*\"v(.*)\".*/\1/' | head -n 1)
-trojan_link="https://github.com/NevermoreSSH/addons/releases/download/0.10.6/trojan-go-linux-amd64.zip"
+latest_version="0.10.6"
+trojan_link="https://github.com/NevermoreSSH/addons/releases/download/$latest_version/trojan-go-linux-amd64.zip"
 
 mkdir -p /usr/bin/trojan-go /etc/trojan-go
 cd $(mktemp -d)
@@ -278,6 +279,41 @@ cat > /etc/trojan-go/config.json << EOF
   "api": {"enabled": false,"api_addr": "","api_port": 0,"ssl": {"enabled": false,"key": "","cert": "","verify_client": false,"client_cert": []}}
 }
 EOF
+
+# Service systemd Trojan Go
+cat > /etc/systemd/system/trojan-go.service << EOF
+[Unit]
+Description=Trojan Go Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/trojan-go -config /etc/trojan-go/config.json
+Restart=on-failure
+RestartSec=5s
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Reload systemd, enable et démarrage du service Trojan Go
+systemctl daemon-reload
+systemctl enable trojan-go
+systemctl restart trojan-go
+
+if systemctl is-active --quiet trojan-go; then
+  echo -e "${GREEN}Trojan Go démarré avec succès.${NC}"
+else
+  echo -e "${RED}Erreur : Trojan Go ne démarre pas.${NC}"
+  journalctl -u trojan-go -n 20 --no-pager
+  exit 1
+fi
+
+# Ajout de jobs cron @reboot pour démarrage automatique en secours
+(crontab -l 2>/dev/null; echo "@reboot /bin/systemctl start xray") | crontab -
+(crontab -l 2>/dev/null; echo "@reboot /bin/systemctl start trojan-go") | crontab -
 
 # Configuration UFW (garantir ouverture des ports)
 ufw allow ssh
