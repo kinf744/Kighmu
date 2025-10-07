@@ -1,10 +1,34 @@
 #!/bin/bash
-# Installation complète Xray + Trojan Go + UFW, avec users.json pour menu et robustesse persistante
+# Installation complète Xray + Trojan Go + UFW, nettoyage avant installation, services systemd robustes
 
 # Couleurs terminal
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m'
+
+# Nettoyage précédent avant installation
+echo -e "${GREEN}Arrêt des services utilisant les ports 80 et 8443...${NC}"
+
+# Trouver et tuer tous processus écoutant sur les ports 80 et 8443 (TCP et UDP)
+for port in 80 8443; do
+    lsof -i tcp:$port -t | xargs -r kill -9
+    lsof -i udp:$port -t | xargs -r kill -9
+done
+
+# Arrêter et désactiver les services systemd potentiellement en conflit
+for srv in xray trojan-go nginx apache2; do
+    systemctl stop $srv 2>/dev/null || true
+    systemctl disable $srv 2>/dev/null || true
+done
+
+echo -e "${GREEN}Nettoyage des fichiers précédents...${NC}"
+
+# Supprimer toutes les anciennes configurations et fichiers
+rm -rf /etc/xray /var/log/xray /usr/local/bin/xray /etc/trojan-go /var/log/trojan-go /usr/local/bin/trojan-go /tmp/.xray_domain \
+/etc/systemd/system/xray.service /etc/systemd/system/trojan-go.service
+
+# Recharger systemd pour appliquer les suppressions
+systemctl daemon-reload
 
 # Demander domaine
 read -rp "Entrez votre nom de domaine (ex: monsite.com) : " DOMAIN
@@ -53,7 +77,7 @@ date
 latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases | grep tag_name | sed -E 's/.*"v(.*)".*/\1/' | head -n1)
 xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v${latest_version}/xray-linux-64.zip"
 
-# Arrêt services sur port 80 si existants
+# Arrêt services sur port 80 si existants (redondant mais sécuritaire)
 systemctl stop nginx 2>/dev/null || true
 systemctl stop apache2 2>/dev/null || true
 sudo lsof -t -i tcp:80 -s tcp:listen | sudo xargs kill -9 2>/dev/null || true
