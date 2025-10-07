@@ -31,7 +31,7 @@ supprimer_utilisateur() {
         return 1
     fi
 
-    read -rp "${YELLOW}Confirmez suppression de l'utilisateur '${username}' ? (o/N) : ${RESET}" confirm
+    read -rp "Confirmez suppression de l'utilisateur ? (o/N) : " confirm
     if [[ ! "$confirm" =~ ^[oO]$ ]]; then
         echo -e "${GREEN}Suppression annulée.${RESET}"
         return 0
@@ -106,15 +106,15 @@ supprimer_expired() {
     if [ $errors -eq 0 ]; then
         echo -e "${GREEN}Tous les utilisateurs expirés ont été supprimés avec succès.${RESET}"
     else
-        echo -e "${RED}Certaines suppressions ont échoué.${RESET}"
+        echo -e "Certaines suppressions ont échoué."
     fi
 }
 
 case "$option" in
     1)
         if [ ! -f "$USER_FILE" ]; then
-            echo -e "${YELLOW}Aucun utilisateur trouvé.${RESET}"
-            read -rp "${BOLD}Appuyez sur Entrée pour revenir au menu...${RESET}"
+            echo -e "Aucun utilisateur trouvé."
+            read -rp "Appuyez sur Entrée pour revenir au menu..."
             exit 0
         fi
         echo -e "${CYAN}Utilisateurs existants :${RESET}"
