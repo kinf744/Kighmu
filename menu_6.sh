@@ -75,14 +75,12 @@ create_config() {
   local link_tls=""
   local link_ntls=""
   local path_ws=""
-  local grpc_name=""
   local port_tls=8443
   local port_ntls=80
 
   case "$proto" in
     vmess)
       path_ws="/vmess"
-      grpc_name="vmess-grpc"
       new_uuid=$(cat /proc/sys/kernel/random/uuid)
       jq --arg id "$new_uuid" --arg proto "vmess" '
         (.inbounds[] | select(.protocol==$proto) | .settings.clients) += [{"id": $id, "alterId": 0}]
@@ -93,7 +91,6 @@ create_config() {
       ;;
     vless)
       path_ws="/vless"
-      grpc_name="vless-grpc"
       new_uuid=$(cat /proc/sys/kernel/random/uuid)
       jq --arg id "$new_uuid" --arg proto "vless" '
         (.inbounds[] | select(.protocol==$proto) | .settings.clients) += [{"id": $id}]
@@ -138,44 +135,45 @@ create_config() {
   local expiry_date
   expiry_date=$(date -d "+$days days" +"%d/%m/%Y")
 
-  # Affichage config générée
+  # Affichage config générée avec encadrement
   echo
-  echo -e "${CYAN}==================================================${RESET}"
-  echo -e "${BOLD}${MAGENTA}📄 Configuration $proto générée pour l'utilisateur : $name${RESET}"
-  echo -e "${CYAN}--------------------------------------------------${RESET}"
-  echo -e "${YELLOW}➤ UUID / Mot de passe :${RESET}"
+  echo "========================="
+  echo -e "🧩 ${proto^^}"
+  echo "========================="
+  echo -e "📄 Configuration $proto générée pour l'utilisateur : $name"
+  echo "--------------------------------------------------"
+  echo -e "➤ UUID / Mot de passe :"
   if [[ "$proto" == "trojan" ]]; then
-    echo -e "    Mot de passe Trojan : $new_uuid"
+    echo -e "    Mot de passe : $new_uuid"
   else
     echo -e "    UUID : $new_uuid"
   fi
+  echo -e "➤ Durée de validité : $days jours (expire le $expiry_date)"
   echo
-  echo -e "${YELLOW}➤ Durée de validité :${RESET} $days jours (expire le $expiry_date)"
-  echo -e "➤ Ports utilisés : TLS=$port_tls, Non-TLS=$port_ntls"
+  echo -e "●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
+  echo -e "┃ TLS  :"
+  if [[ "$proto" == "trojan" ]]; then
+    if [[ "$use_tls" == "o" || "$use_tls" == "O" ]]; then
+      echo -e "┃ $link_tls"
+      echo -e "┃"
+      echo -e "┃ Non-TLS :"
+      echo -e "┃ Aucun accès Non-TLS configuré"
+    else
+      echo -e "┃ Aucun accès TLS configuré"
+      echo -e "┃"
+      echo -e "┃ Non-TLS :"
+      echo -e "┃ $link_ntls"
+    fi
+  else
+    echo -e "┃ $link_tls"
+    echo -e "┃"
+    echo -e "┃ Non-TLS :"
+    echo -e "┃ $link_ntls"
+  fi
+  echo -e "●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
   echo
-  echo -e "${YELLOW}➤ Liens de configuration :${RESET}"
 
-  case "$proto" in
-    vmess)
-      echo -e "  • TLS : $link_tls"
-      echo -e "  • Non-TLS : $link_ntls"
-      ;;
-    vless)
-      echo -e "  • TLS : $link_tls"
-      echo -e "  • Non-TLS : $link_ntls"
-      ;;
-    trojan)
-      if [[ "$use_tls" == "o" || "$use_tls" == "O" ]]; then
-        echo -e "  • TLS : $link_tls"
-      else
-        echo -e "  • Non-TLS : $link_ntls"
-      fi
-      ;;
-  esac
-
-  echo -e "${CYAN}==================================================${RESET}"
-
-  # Redémarrer Xray pour appliquer
+  # Redémarrer Xray pour appliquer les changements
   systemctl restart xray
 }
 
