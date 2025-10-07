@@ -33,8 +33,9 @@ show_menu() {
   echo -e "${GREEN}[03]${RESET} VLESS"
   echo -e "${GREEN}[04]${RESET} TROJAN"
   echo -e "${GREEN}[05]${RESET} Supprimer un utilisateur Xray"
-  echo -e "${RED}[06]${RESET} Quitter"
-  echo -ne "${BOLD}${YELLOW}Votre choix [1-6] : ${RESET}"
+  echo -e "${RED}[06]${RESET} Désinstaller complètement Xray et Trojan-Go"
+  echo -e "${RED}[07]${RESET} Quitter"
+  echo -ne "${BOLD}${YELLOW}Votre choix [1-7] : ${RESET}"
   read -r choice
 }
 
@@ -83,7 +84,7 @@ create_config() {
       path_ws="/vmess"
       new_uuid=$(cat /proc/sys/kernel/random/uuid)
       jq --arg id "$new_uuid" --arg proto "vmess" '
-        (.inbounds[] | select(.protocol==$proto) | .settings.clients) += [{"id": $id, "alterId": 0}]
+        (.inbounds[] | select(.protocol==$proto and .streamSettings.security=="tls") | .settings.clients) += [{"id": $id, "alterId": 0}]
       ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
       jq --arg id "$new_uuid" '.vmess_tls = $id' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
       link_tls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$new_uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"\",\"path\":\"$path_ws\",\"tls\":\"tls\"}" | base64 -w0)"
@@ -93,7 +94,7 @@ create_config() {
       path_ws="/vless"
       new_uuid=$(cat /proc/sys/kernel/random/uuid)
       jq --arg id "$new_uuid" --arg proto "vless" '
-        (.inbounds[] | select(.protocol==$proto) | .settings.clients) += [{"id": $id}]
+        (.inbounds[] | select(.protocol==$proto and .streamSettings.security=="tls") | .settings.clients) += [{"id": $id}]
       ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
       jq --arg id "$new_uuid" '.vless_tls = $id' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
       link_tls="vless://$new_uuid@$DOMAIN:$port_tls?path=$path_ws&security=tls&encryption=none&type=ws#$name"
@@ -288,6 +289,30 @@ while true; do
       read -p "Appuyez sur Entrée pour continuer..."
       ;;
     6)
+      echo -e "${YELLOW}Désinstallation complète de Xray et Trojan-Go en cours...${RESET}"
+
+      # Arrêter et désactiver les services
+      systemctl stop xray trojan-go 2>/dev/null || true
+      systemctl disable xray trojan-go 2>/dev/null || true
+
+      # Tuer processus sur ports 80 et 8443
+      for port in 80 8443; do
+        lsof -i tcp:$port -t | xargs -r kill -9
+        lsof -i udp:$port -t | xargs -r kill -9
+      done
+
+      # Supprimer fichiers et dossiers liés
+      rm -rf /etc/xray /var/log/xray /usr/local/bin/xray /etc/systemd/system/xray.service
+      rm -rf /etc/trojan-go /var/log/trojan-go /usr/local/bin/trojan-go /etc/systemd/system/trojan-go.service
+      rm -f /tmp/.xray_domain /etc/xray/users_expiry.list /etc/xray/users.json /etc/xray/config.json
+
+      # Reload systemd
+      systemctl daemon-reload
+
+      echo -e "${GREEN}Désinstallation terminée.${RESET}"
+      read -p "Appuyez sur Entrée pour continuer..."
+      ;;
+    7)
       echo -e "${RED}Quitter...${RESET}"
       rm -f /tmp/.xray_domain
       break
