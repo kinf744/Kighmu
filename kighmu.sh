@@ -102,7 +102,7 @@ while true; do
 
     XRAY_USERS_FILE="/etc/xray/users.json"
     if [[ -f "$XRAY_USERS_FILE" ]]; then
-      XRAY_USERS_COUNT=$(jq 'length' "$XRAY_USERS_FILE")
+      XRAY_USERS_COUNT=$(jq '[.vmess_tls, .vmess_ntls, .vless_tls, .vless_ntls, .trojan_pass, .trojan_ntls_pass] | map(select(. != "")) | length' "$XRAY_USERS_FILE")
     else
       XRAY_USERS_COUNT=0
     fi
