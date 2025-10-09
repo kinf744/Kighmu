@@ -72,7 +72,7 @@ afficher_xray_actifs() {
   ports_ntls=$(jq -r '.inbounds[] | select(.streamSettings.security=="none") | .port' "$CONFIG_FILE" | sort -u)
 
   echo "${CYAN}+--------------------------------------------------+${RESET}"
-  echo "|            🚀 Xray CONFIG INSTALLER 🚀            |"
+  echo "|            🚀 Xray INSTALLER 🇨🇲🇨🇲💥💥🚀            |"
   echo "${CYAN}+--------------------------------------------------+${RESET}"
   echo "${GREEN}Tunnels Xray actifs:${RESET}"
   if [[ -n "$ports_tls" ]]; then
