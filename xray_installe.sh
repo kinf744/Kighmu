@@ -1,26 +1,29 @@
 #!/bin/bash
-# Installation complète Xray + Trojan Go + UFW, nettoyage avant installation, services systemd robustes
+# Installation complète Xray + Trojan Go + UFW, nettoyage et chrony sync
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m'
 
+# Nettoyage et arrêt services conflit
 echo -e "${GREEN}Arrêt des services utilisant les ports 80 et 8443...${NC}"
 for port in 80 8443; do
-    lsof -i tcp:$port -t | xargs -r kill -9
-    lsof -i udp:$port -t | xargs -r kill -9
+  lsof -i tcp:$port -t | xargs -r kill -9
+  lsof -i udp:$port -t | xargs -r kill -9
 done
 
 for srv in xray trojan-go nginx apache2; do
-    systemctl stop $srv 2>/dev/null || true
-    systemctl disable $srv 2>/dev/null || true
+  systemctl stop $srv 2>/dev/null || true
+  systemctl disable $srv 2>/dev/null || true
 done
 
 echo -e "${GREEN}Nettoyage des fichiers précédents...${NC}"
-rm -rf /etc/xray /var/log/xray /usr/local/bin/xray /etc/trojan-go /var/log/trojan-go /usr/local/bin/trojan-go /tmp/.xray_domain \
-/etc/systemd/system/xray.service /etc/systemd/system/trojan-go.service
+rm -rf /etc/xray /var/log/xray /usr/local/bin/xray \
+  /etc/trojan-go /var/log/trojan-go /usr/local/bin/trojan-go /tmp/.xray_domain \
+  /etc/systemd/system/xray.service /etc/systemd/system/trojan-go.service
 systemctl daemon-reload
 
+# Domaine
 read -rp "Entrez votre nom de domaine (ex: monsite.com) : " DOMAIN
 if [[ -z "$DOMAIN" ]]; then
   echo -e "${RED}Erreur : nom de domaine non valide.${NC}"
@@ -30,9 +33,9 @@ echo "$DOMAIN" > /tmp/.xray_domain
 
 EMAIL="adrienkiaje@gmail.com"
 
+# Installation dépendances et ufw
 apt update
-apt install -y ufw iptables iptables-persistent curl socat xz-utils wget apt-transport-https \
-  gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq
+apt install -y ufw iptables iptables-persistent curl socat xz-utils wget apt-transport-https gnupg dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq
 
 ufw allow ssh
 ufw allow 80/tcp
@@ -46,15 +49,32 @@ netfilter-persistent save
 
 ntpdate pool.ntp.org
 timedatectl set-ntp true
-systemctl enable chronyd
-systemctl restart chronyd
+
+systemctl enable chrony
+systemctl restart chrony
+
 timedatectl set-timezone Asia/Kuala_Lumpur
 
-echo "Vérification état chrony..."
-chronyc sourcestats -v
-chronyc tracking -v
-date
+# Attente synchronisation chrony avant génération certificat
+echo "Attente synchronisation chrony (max 180s)..."
+for i in {1..36}; do
+  leap_status=$(chronyc tracking | grep "Leap status" | awk '{print $3}')
+  if [ "$leap_status" == "Normal" ]; then
+    echo "Chrony synchronisé."
+    break
+  fi
+  echo "Synchronisation non terminée, attente 5 secondes... ($i/36)"
+  sleep 5
+done
 
+leap_status=$(chronyc tracking | grep "Leap status" | awk '{print $3}')
+if [ "$leap_status" != "Normal" ]; then
+  echo -e "${RED}Avertissement : Chrony non synchronisé après attente.${NC}"
+else
+  echo -e "${GREEN}Chrony synchronisation confirmée.${NC}"
+fi
+
+# Téléchargement Xray
 latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest | jq -r '.tag_name' | sed 's/v//')
 xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v${latest_version}/xray-linux-64.zip"
 
@@ -89,6 +109,7 @@ if ! mv xray /usr/local/bin/xray; then
   echo -e "${RED}Erreur lors du déplacement du binaire Xray.${NC}"
   exit 1
 fi
+
 chmod +x /usr/local/bin/xray
 setcap 'cap_net_bind_service=+ep' /usr/local/bin/xray
 echo "Xray installé."
@@ -341,6 +362,7 @@ ufw allow 80/tcp
 ufw allow 80/udp
 ufw allow 8443/tcp
 ufw allow 8443/udp
+
 echo "y" | ufw enable
 ufw status verbose
 
