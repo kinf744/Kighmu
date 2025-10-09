@@ -110,9 +110,6 @@ systemctl stop xray
 ~/.acme.sh/acme.sh --issue --standalone -d "$DOMAIN" --force
 ~/.acme.sh/acme.sh --installcert -d "$DOMAIN" --fullchainpath /etc/xray/xray.crt --keypath /etc/xray/xray.key
 
-# Redémarrer Xray (sera stoppé plus tard par systemd service)
-systemctl start xray
-
 # Vérifier certificats TLS
 if [[ ! -f "/etc/xray/xray.crt" || ! -f "/etc/xray/xray.key" ]]; then
   echo -e "${RED}Erreur : certificats TLS non trouvés.${NC}"
@@ -134,12 +131,12 @@ cat > /etc/xray/users.json << EOF
   "vmess_ntls": "$uuid2",
   "vless_tls": "$uuid3",
   "vless_ntls": "$uuid4",
-  "trojan_pass": "$uuid5",
-  "trojan_ntls_pass": "$uuid6"
+  "trojan_tls": "$uuid5",
+  "trojan_ntls": "$uuid6"
 }
 EOF
 
-# Configuration Xray complète
+# Configuration Xray complète (inclut Trojan WS TLS et non-TLS)
 cat > /etc/xray/config.json << EOF
 {
   "log": {"access": "/var/log/xray/access.log", "error": "/var/log/xray/error.log", "loglevel": "info"},
@@ -188,6 +185,27 @@ cat > /etc/xray/config.json << EOF
         "wsSettings": {"path": "/vless", "headers": {"Host": "$DOMAIN"}}
       },
       "sniffing": {"enabled": true, "destOverride": ["http", "tls"]}
+    },
+    {
+      "port": 8443,
+      "protocol": "trojan",
+      "settings": {"clients": [{"password": "$uuid5"}]},
+      "streamSettings": {
+        "network": "ws",
+        "security": "tls",
+        "tlsSettings": {"certificates": [{"certificateFile": "/etc/xray/xray.crt", "keyFile": "/etc/xray/xray.key"}]},
+        "wsSettings": {"path": "/trojanws", "headers": {"Host": "$DOMAIN"}}
+      }
+    },
+    {
+      "port": 80,
+      "protocol": "trojan",
+      "settings": {"clients": [{"password": "$uuid6"}]},
+      "streamSettings": {
+        "network": "ws",
+        "security": "none",
+        "wsSettings": {"path": "/trojanws", "headers": {"Host": "$DOMAIN"}}
+      }
     }
   ],
   "outbounds": [{"protocol": "freedom","settings": {}},{"protocol": "blackhole","settings": {}, "tag": "blocked"}],
@@ -236,3 +254,5 @@ echo "UUID VMess TLS : $uuid1"
 echo "UUID VMess Non-TLS : $uuid2"
 echo "UUID VLESS TLS : $uuid3"
 echo "UUID VLESS Non-TLS : $uuid4"
+echo "Mot de passe Trojan WS TLS : $uuid5"
+echo "Mot de passe Trojan WS Non-TLS : $uuid6"
