@@ -62,29 +62,28 @@ count_xray_expired() {
   awk -F'|' -v today="$today" '$2 < today {count++} END {print count+0}' /etc/xray/users_expiry.list
 }
 
-# Fonction pour afficher les tunnels Xray actifs seulement si le service est actif
 afficher_xray_actifs() {
   if ! systemctl is-active --quiet xray; then
     return
   fi
 
-  echo -e "\n${CYAN}Tunnels Xray actifs:${RESET}\n"
-
   local ports_tls ports_ntls
-  ports_tls=$(jq -r '.inbounds[] | select(.streamSettings.security=="tls") | .port // empty' "$CONFIG_FILE")
-  ports_ntls=$(jq -r '.inbounds[] | select(.streamSettings.security=="none") | .port // empty' "$CONFIG_FILE")
+  ports_tls=$(jq -r '.inbounds[] | select(.streamSettings.security=="tls") | .port' "$CONFIG_FILE" | sort -u)
+  ports_ntls=$(jq -r '.inbounds[] | select(.streamSettings.security=="none") | .port' "$CONFIG_FILE" | sort -u)
 
-  for p in $ports_tls; do
-    echo -e "  - Port ${GREEN}$p${RESET} (TLS)"
-  done
-
-  for p in $ports_ntls; do
-    echo -e "  - Port ${YELLOW}$p${RESET} (Non-TLS)"
-  done
-
+  echo "+--------------------------------------------------+"
+  echo "|            🚀 Xray CONFIG INSTALLER 🚀            |"
+  echo "+--------------------------------------------------+"
+  echo "Tunnels Xray actifs:"
+  if [[ -n "$ports_tls" ]]; then
+    echo "  - Port ${GREEN}$(echo "$ports_tls" | head -n1)${RESET} (TLS)"
+  fi
+  if [[ -n "$ports_ntls" ]]; then
+    echo "  - Port ${YELLOW}$(echo "$ports_ntls" | head -n1)${RESET} (Non-TLS)"
+  fi
   echo -n "  - Protocoles : "
   jq -r '.inbounds[].protocol' "$CONFIG_FILE" | sort -u | paste -sd "   • " - | awk '{print "• " $0 "."}'
-  echo
+  echo "+--------------------------------------------------+"
 }
 
 create_config() {
@@ -243,6 +242,52 @@ delete_user() {
   echo -e "${GREEN}Utilisateur supprimé : protocole=$proto, ID=$id${RESET}"
 }
 
+# Supprimer un utilisateur via numéro affiché
+delete_user_by_number() {
+  if [[ ! -f "$USERS_FILE" ]]; then
+    echo -e "${RED}Fichier $USERS_FILE introuvable.${RESET}"
+    return
+  fi
+
+  local users=()
+  local count=0
+
+  mapfile -t users < <(jq -r 'to_entries[] | "\(.key):\(.value)"' "$USERS_FILE")
+
+  echo -e "${GREEN}Liste des utilisateurs Xray :${RESET}"
+  for u in "${users[@]}"; do
+    ((count++))
+    proto=$(echo "$u" | cut -d':' -f1)
+    id=$(echo "$u" | cut -d':' -f2)
+    echo -e "[$count] Protocole : ${YELLOW}$proto${RESET} - ID/Pass : ${CYAN}$id${RESET}"
+  done
+
+  if (( count == 0 )); then
+    echo -e "${RED}Aucun utilisateur à supprimer.${RESET}"
+    return
+  fi
+
+  read -rp "Entrez le numéro de l'utilisateur à supprimer (0 pour annuler) : " num
+
+  if [[ ! $num =~ ^[0-9]+$ ]] || (( num < 0 )) || (( num > count )); then
+    echo -e "${RED}Numéro invalide.${RESET}"
+    return
+  fi
+
+  if (( num == 0 )); then
+    echo "Suppression annulée."
+    return
+  fi
+
+  local selected=${users[$((num-1))]}
+  local sel_proto=$(echo "$selected" | cut -d':' -f1)
+  local sel_id=$(echo "$selected" | cut -d':' -f2)
+
+  echo -e "Suppression de l'utilisateur du protocole ${YELLOW}$sel_proto${RESET} avec ID/Pass ${CYAN}$sel_id${RESET}..."
+
+  delete_user "$sel_proto" "$sel_id"
+}
+
 choice=0
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -286,13 +331,7 @@ while true; do
       read -p "Appuyez sur Entrée pour continuer..."
       ;;
     5)
-      read -rp "Protocole (vmess, vless, trojan) : " proto
-      read -rp "UUID ou mot de passe de l'utilisateur à supprimer : " id
-      if [[ -n "$proto" && -n "$id" ]]; then
-        delete_user "$proto" "$id"
-      else
-        echo -e "${RED}Paramètres invalides.${RESET}"
-      fi
+      delete_user_by_number
       read -p "Appuyez sur Entrée pour continuer..."
       ;;
     6)
