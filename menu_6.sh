@@ -76,10 +76,10 @@ afficher_xray_actifs() {
   echo "+--------------------------------------------------+"
   echo "Tunnels Xray actifs:"
   if [[ -n "$ports_tls" ]]; then
-    echo "  - Port ${GREEN}$(echo "$ports_tls" | head -n1)${RESET} (TLS)"
+    echo "  - Port ${GREEN}(echo "$ports_tls" | head -n1)${RESET} (TLS)"
   fi
   if [[ -n "$ports_ntls" ]]; then
-    echo "  - Port ${YELLOW}$(echo "$ports_ntls" | head -n1)${RESET} (Non-TLS)"
+    echo "  - Port ${YELLOW}(echo "$ports_ntls" | head -n1)${RESET} (Non-TLS)"
   fi
   echo -n "  - Protocoles : "
   jq -r '.inbounds[].protocol' "$CONFIG_FILE" | sort -u | paste -sd "   • " - | awk '{print "• " $0 "."}'
