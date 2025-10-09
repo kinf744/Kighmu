@@ -34,8 +34,8 @@ show_menu() {
   echo -e "${GREEN}[04]${RESET} TROJAN"
   echo -e "${GREEN}[05]${RESET} Supprimer un utilisateur Xray"
   echo -e "${RED}[06]${RESET} Désinstaller complètement Xray et Trojan-Go"
-  echo -e "${RED}[07]${RESET} Quitter"
-  echo -ne "${BOLD}${YELLOW}Votre choix [1-7] : ${RESET}"
+  echo -e "${RED}[00]${RESET} Quitter"
+  echo -ne "${BOLD}${YELLOW}Votre choix [1-6] : ${RESET}"
   read -r choice
 }
 
@@ -354,7 +354,7 @@ while true; do
       echo -e "${GREEN}Désinstallation terminée.${RESET}"
       read -p "Appuyez sur Entrée pour continuer..."
       ;;
-    7)
+    0)
       echo -e "${RED}Quitter...${RESET}"
       rm -f /tmp/.xray_domain
       break
