@@ -71,19 +71,19 @@ afficher_xray_actifs() {
   ports_tls=$(jq -r '.inbounds[] | select(.streamSettings.security=="tls") | .port' "$CONFIG_FILE" | sort -u)
   ports_ntls=$(jq -r '.inbounds[] | select(.streamSettings.security=="none") | .port' "$CONFIG_FILE" | sort -u)
 
-  echo "${CYAN}+--------------------------------------------------+${RESET}"
-  echo "|            🚀 Xray INSTALLER 🇨🇲🇨🇲💥💥🚀            |"
-  echo "${CYAN}+--------------------------------------------------+${RESET}"
-  echo "${GREEN}Tunnels Xray actifs:${RESET}"
+  echo "+--------------------------------------------------+"
+  echo "|            🚀 Xray INSTALLER 🇨🇲💥💥🚀            |"
+  echo "+--------------------------------------------------+"
+  echo "Tunnels Xray actifs:"
   if [[ -n "$ports_tls" ]]; then
-    echo "  - Port ${GREEN}(echo "$ports_tls" | head -n1)${RESET} (TLS)"
+    echo "  - Port (echo "$ports_tls" | head -n1) (TLS)"
   fi
   if [[ -n "$ports_ntls" ]]; then
-    echo "  - Port ${YELLOW}(echo "$ports_ntls" | head -n1)${RESET} (Non-TLS)"
+    echo "  - Port (echo "$ports_ntls" | head -n1) (Non-TLS)"
   fi
-  echo -n "  ${YELLOW}- Protocoles :${RESET} "
+  echo -n "  - Protocoles : "
   jq -r '.inbounds[].protocol' "$CONFIG_FILE" | sort -u | paste -sd "   • " - | awk '{print "• " $0 "."}'
-  echo "${CYAN}+--------------------------------------------------+${RESET}"
+  echo "+--------------------------------------------------+"
 }
 
 create_config() {
