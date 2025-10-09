@@ -62,6 +62,31 @@ count_xray_expired() {
   awk -F'|' -v today="$today" '$2 < today {count++} END {print count+0}' /etc/xray/users_expiry.list
 }
 
+# Fonction pour afficher les tunnels Xray actifs seulement si le service est actif
+afficher_xray_actifs() {
+  if ! systemctl is-active --quiet xray; then
+    return
+  fi
+
+  echo -e "\n${CYAN}Tunnels Xray actifs:${RESET}\n"
+
+  local ports_tls ports_ntls
+  ports_tls=$(jq -r '.inbounds[] | select(.streamSettings.security=="tls") | .port // empty' "$CONFIG_FILE")
+  ports_ntls=$(jq -r '.inbounds[] | select(.streamSettings.security=="none") | .port // empty' "$CONFIG_FILE")
+
+  for p in $ports_tls; do
+    echo -e "  - Port ${GREEN}$p${RESET} (TLS)"
+  done
+
+  for p in $ports_ntls; do
+    echo -e "  - Port ${YELLOW}$p${RESET} (Non-TLS)"
+  done
+
+  echo -n "  - Protocoles : "
+  jq -r '.inbounds[].protocol' "$CONFIG_FILE" | sort -u | paste -sd "   • " - | awk '{print "• " $0 "."}'
+  echo
+}
+
 create_config() {
   local proto=$1
   local name=$2
@@ -226,6 +251,7 @@ load_user_data
 
 while true; do
   clear
+  afficher_xray_actifs
   print_header
   show_menu
   case $choice in
