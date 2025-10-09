@@ -5,7 +5,6 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m'
 
-# Nettoyage et arrêt services conflit
 echo -e "${GREEN}Arrêt des services utilisant les ports 80 et 8443...${NC}"
 for port in 80 8443; do
   lsof -i tcp:$port -t | xargs -r kill -9
@@ -23,7 +22,6 @@ rm -rf /etc/xray /var/log/xray /usr/local/bin/xray \
   /etc/systemd/system/xray.service /etc/systemd/system/trojan-go.service
 systemctl daemon-reload
 
-# Domaine
 read -rp "Entrez votre nom de domaine (ex: monsite.com) : " DOMAIN
 if [[ -z "$DOMAIN" ]]; then
   echo -e "${RED}Erreur : nom de domaine non valide.${NC}"
@@ -33,10 +31,10 @@ echo "$DOMAIN" > /tmp/.xray_domain
 
 EMAIL="adrienkiaje@gmail.com"
 
-# Installation dépendances et ufw
 apt update
 apt install -y ufw iptables iptables-persistent curl socat xz-utils wget apt-transport-https gnupg dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq
 
+echo -e "${GREEN}Configuration UFW...${NC}"
 ufw allow ssh
 ufw allow 80/tcp
 ufw allow 80/udp
@@ -47,15 +45,13 @@ echo "y" | ufw enable
 ufw status verbose
 netfilter-persistent save
 
+echo -e "${GREEN}Synchronisation temps avec Chrony...${NC}"
 ntpdate pool.ntp.org
 timedatectl set-ntp true
-
 systemctl enable chrony
 systemctl restart chrony
-
 timedatectl set-timezone Asia/Kuala_Lumpur
 
-# Attente synchronisation chrony avant génération certificat
 echo "Attente synchronisation chrony (max 180s)..."
 for i in {1..36}; do
   leap_status=$(chronyc tracking | grep "Leap status" | awk '{print $3}')
@@ -74,7 +70,6 @@ else
   echo -e "${GREEN}Chrony synchronisation confirmée.${NC}"
 fi
 
-# Téléchargement Xray
 latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest | jq -r '.tag_name' | sed 's/v//')
 xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v${latest_version}/xray-linux-64.zip"
 
@@ -88,12 +83,9 @@ if ! curl -L "$xraycore_link" -o xray.zip; then
 fi
 echo "Téléchargement terminé."
 
-echo "Espace disque sur /tmp :"
-df -h /tmp
-
 space_avail=$(df /tmp --output=avail | tail -n1)
 if (( space_avail < 102400 )); then
-  echo -e "${RED}Espace disque insuffisant sur /tmp pour extraire Xray (moins de 100Mo).${NC}"
+  echo -e "${RED}Espace disque insuffisant sur /tmp.${NC}"
   exit 1
 fi
 
@@ -109,7 +101,6 @@ if ! mv xray /usr/local/bin/xray; then
   echo -e "${RED}Erreur lors du déplacement du binaire Xray.${NC}"
   exit 1
 fi
-
 chmod +x /usr/local/bin/xray
 setcap 'cap_net_bind_service=+ep' /usr/local/bin/xray
 echo "Xray installé."
@@ -276,95 +267,6 @@ else
   journalctl -u xray -n 20 --no-pager
   exit 1
 fi
-
-latest_version_trojan="0.10.6"
-trojan_link="https://github.com/NevermoreSSH/addons/releases/download/$latest_version_trojan/trojan-go-linux-amd64.zip"
-
-mkdir -p /usr/bin/trojan-go /etc/trojan-go
-cd $(mktemp -d)
-curl -sL "$trojan_link" -o trojan-go.zip
-unzip -q trojan-go.zip && rm -f trojan-go.zip
-mv trojan-go /usr/local/bin/trojan-go
-chmod +x /usr/local/bin/trojan-go
-
-mkdir -p /var/log/trojan-go
-touch /etc/trojan-go/akun.conf
-touch /var/log/trojan-go/trojan-go.log
-
-cat > /etc/trojan-go/config.json << EOF
-{
-  "run_type": "server",
-  "local_addr": "0.0.0.0",
-  "local_port": 8443,
-  "remote_addr": "",
-  "remote_port": 0,
-  "log_level": 1,
-  "log_file": "/var/log/trojan-go/trojan-go.log",
-  "password": ["$uuid5"],
-  "disable_http_check": true,
-  "udp_timeout": 60,
-  "ssl": {
-    "verify": false,
-    "verify_hostname": false,
-    "cert": "/etc/xray/xray.crt",
-    "key": "/etc/xray/xray.key",
-    "key_password": "",
-    "cipher": "",
-    "curves": "",
-    "prefer_server_cipher": false,
-    "sni": "$DOMAIN",
-    "alpn": ["http/1.1"],
-    "session_ticket": true,
-    "reuse_session": true,
-    "plain_http_response": ""
-  },
-  "tcp": {"no_delay": true,"keep_alive": true,"prefer_ipv4": true},
-  "mux": {"enabled": false,"concurrency": 8,"idle_timeout": 60},
-  "websocket": {"enabled": true,"path": "/trojanws","host": "$DOMAIN"},
-  "api": {"enabled": false,"api_addr": "","api_port": 0,"ssl": {"enabled": false,"key": "","cert": "","verify_client": false,"client_cert": []}}
-}
-EOF
-
-cat > /etc/systemd/system/trojan-go.service << EOF
-[Unit]
-Description=Trojan Go Service
-After=network.target
-
-[Service]
-Type=simple
-User=root
-ExecStart=/usr/local/bin/trojan-go -config /etc/trojan-go/config.json
-Restart=on-failure
-RestartSec=5s
-LimitNOFILE=65535
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-systemctl daemon-reload
-systemctl enable trojan-go
-systemctl restart trojan-go
-
-if systemctl is-active --quiet trojan-go; then
-  echo -e "${GREEN}Trojan Go démarré avec succès.${NC}"
-else
-  echo -e "${RED}Erreur : Trojan Go ne démarre pas.${NC}"
-  journalctl -u trojan-go -n 20 --no-pager
-  exit 1
-fi
-
-(crontab -l 2>/dev/null; echo "@reboot /bin/systemctl start xray") | crontab -
-(crontab -l 2>/dev/null; echo "@reboot /bin/systemctl start trojan-go") | crontab -
-
-ufw allow ssh
-ufw allow 80/tcp
-ufw allow 80/udp
-ufw allow 8443/tcp
-ufw allow 8443/udp
-
-echo "y" | ufw enable
-ufw status verbose
 
 echo -e "${GREEN}Installation complète terminée.${NC}"
 echo "Domaine : $DOMAIN"
