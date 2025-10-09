@@ -83,7 +83,7 @@ afficher_xray_actifs() {
   fi
   echo -n "  ${YELLOW}- Protocoles :${RESET} "
   jq -r '.inbounds[].protocol' "$CONFIG_FILE" | sort -u | paste -sd "   • " - | awk '{print "• " $0 "."}'
-  echo "+--------------------------------------------------+"
+  echo "${CYAN}+--------------------------------------------------+${RESET}"
 }
 
 create_config() {
