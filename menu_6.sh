@@ -76,10 +76,10 @@ afficher_xray_actifs() {
   echo "+--------------------------------------------------+"
   echo "Tunnels Xray actifs:"
   if [[ -n "$ports_tls" ]]; then
-    echo "  - Port: "$ports_tls" (TLS)"
+    echo "  - Port: $ports_tls (TLS)"
   fi
   if [[ -n "$ports_ntls" ]]; then
-    echo "  - Port : "$ports_ntls" (Non-TLS)"
+    echo "  - Port : $ports_ntls (Non-TLS)"
   fi
   echo -n "  - Protocoles : "
   jq -r '.inbounds[].protocol' "$CONFIG_FILE" | sort -u | paste -sd "   • " - | awk '{print "• " $0 "."}'
@@ -242,24 +242,47 @@ delete_user() {
   echo -e "${GREEN}Utilisateur supprimé : protocole=$proto, ID=$id${RESET}"
 }
 
-# Supprimer un utilisateur via numéro affiché
 delete_user_by_number() {
   if [[ ! -f "$USERS_FILE" ]]; then
     echo -e "${RED}Fichier $USERS_FILE introuvable.${RESET}"
     return
   fi
 
+  # Mapping clé JSON -> protocol + security
+  local -A protocol_map=(
+    ["vmess_tls"]="vmess"
+    ["vmess_ntls"]="vmess"
+    ["vless_tls"]="vless"
+    ["vless_ntls"]="vless"
+    ["trojan_pass"]="trojan"
+    ["trojan_ntls_pass"]="trojan"
+  )
+  local -A key_to_stream=(
+    ["vmess_tls"]="tls"
+    ["vmess_ntls"]="none"
+    ["vless_tls"]="tls"
+    ["vless_ntls"]="none"
+    ["trojan_pass"]="tls"
+    ["trojan_ntls_pass"]="none"
+  )
+
   local users=()
+  local keys=()
   local count=0
 
-  mapfile -t users < <(jq -r 'to_entries[] | "\(.key):\(.value)"' "$USERS_FILE")
+  while IFS=":" read -r proto id; do
+    if [[ -n "$id" ]]; then
+      users+=("$proto:$id")
+      keys+=("$proto")
+      ((count++))
+    fi
+  done < <(jq -r 'to_entries[] | "\(.key):\(.value)"' "$USERS_FILE")
 
   echo -e "${GREEN}Liste des utilisateurs Xray :${RESET}"
-  for u in "${users[@]}"; do
-    ((count++))
-    proto=$(echo "$u" | cut -d':' -f1)
-    id=$(echo "$u" | cut -d':' -f2)
-    echo -e "[$count] Protocole : ${YELLOW}$proto${RESET} - ID/Pass : ${CYAN}$id${RESET}"
+  for (( i=0; i<count; i++ )); do
+    proto="${users[$i]%%:*}"
+    id="${users[$i]#*:}"
+    echo -e "[$((i+1))] Protocole : ${YELLOW}$proto${RESET} - ID/Pass : ${CYAN}$id${RESET}"
   done
 
   if (( count == 0 )); then
@@ -273,19 +296,40 @@ delete_user_by_number() {
     echo -e "${RED}Numéro invalide.${RESET}"
     return
   fi
-
   if (( num == 0 )); then
     echo "Suppression annulée."
     return
   fi
 
-  local selected=${users[$((num-1))]}
-  local sel_proto=$(echo "$selected" | cut -d':' -f1)
-  local sel_id=$(echo "$selected" | cut -d':' -f2)
+  local selected_index=$((num-1))
+  local sel_key="${keys[$selected_index]}"
+  local sel_id="${users[$selected_index]#*:}"
+  local sel_proto="${protocol_map[$sel_key]}"
+  local sel_stream="${key_to_stream[$sel_key]}"
 
-  echo -e "Suppression de l'utilisateur du protocole ${YELLOW}$sel_proto${RESET} avec ID/Pass ${CYAN}$sel_id${RESET}..."
+  echo -e "${YELLOW}[DEBUG] Suppression : JSON: $sel_key, Protocole: $sel_proto, Stream: $sel_stream, ID: $sel_id${RESET}"
 
-  delete_user "$sel_proto" "$sel_id"
+  # Suppression dans config.json ciblée
+  if [[ "$sel_proto" == "vmess" || "$sel_proto" == "vless" ]]; then
+    jq --arg proto "$sel_proto" --arg stream "$sel_stream" --arg id "$sel_id" \
+      '(.inbounds[] | select(.protocol == $proto and .streamSettings.security == $stream) | .settings.clients) |= map(select(.id != $id))' \
+      "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+  elif [[ "$sel_proto" == "trojan" ]]; then
+    jq --arg stream "$sel_stream" --arg id "$sel_id" \
+      '(.inbounds[] | select(.protocol == "trojan" and .streamSettings.security == $stream) | .settings.clients) |= map(select(.password != $id))' \
+      "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+  fi
+
+  # Suppression dans users.json
+  jq --arg k "$sel_key" '.[$k]=""' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+
+  # Suppression de date d'expiration
+  if [[ -f /etc/xray/users_expiry.list ]]; then
+    grep -v "^$sel_id|" /etc/xray/users_expiry.list > /tmp/expiry.tmp && mv /tmp/expiry.tmp /etc/xray/users_expiry.list
+  fi
+
+  systemctl restart xray
+  echo -e "${GREEN}Utilisateur supprimé : $sel_key / $sel_proto ($sel_id)${RESET}"
 }
 
 choice=0
