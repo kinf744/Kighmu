@@ -181,7 +181,6 @@ EOF
 }
 install_persistent_watchdog
 
-# 🔒 Configuration du pare-feu UFW et ouverture des ports (optionnel)
 configure_ufw() {
   if command -v ufw >/dev/null 2>&1; then
     log INFO "UFW détecté. Mise en place des règles pour WS/WSS."
@@ -206,7 +205,6 @@ configure_ufw() {
 }
 configure_ufw
 
-# Informations finales et affichage
 gg_final_report() {
   log INFO ""
   log INFO "=============================================================="
