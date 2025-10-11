@@ -13,9 +13,9 @@ BOLD="\e[1m"
 RESET="\e[0m"
 
 print_header() {
-  echo -e "${CYAN}╔════════════════════════════════════════════════╗${RESET}"
-  echo -e "${CYAN}║      ${BOLD}${MAGENTA}Xray – Gestion des Tunnels Actifs${RESET}${CYAN}      ║${RESET}"
-  echo -e "${CYAN}╚════════════════════════════════════════════════╝${RESET}"
+  echo -e "${CYAN}╔════════════════════════════════════════════════════════╗${RESET}"
+  echo -e "${CYAN}║        ${BOLD}${MAGENTA}Xray – Gestion des Tunnels Actifs${RESET}${CYAN}      ║${RESET}"
+  echo -e "${CYAN}╚════════════════════════════════════════════════════════╝${RESET}"
 }
 
 afficher_xray_actifs() {
@@ -33,7 +33,7 @@ afficher_xray_actifs() {
 }
 
 show_menu() {
-  echo -e "${CYAN}──────────────────────────────────────────────────${RESET}"
+  echo -e "${CYAN}──────────────────────────────────────────────────────────${RESET}"
   echo -e "${BOLD}${YELLOW}[01]${RESET} Installer Xray"
   echo -e "${BOLD}${YELLOW}[02]${RESET} Créer utilisateur VMess"
   echo -e "${BOLD}${YELLOW}[03]${RESET} Créer utilisateur VLESS"
@@ -41,7 +41,7 @@ show_menu() {
   echo -e "${BOLD}${YELLOW}[05]${RESET} Supprimer utilisateur Xray"
   echo -e "${BOLD}${RED}[06]${RESET} Désinstaller Xray (Avec Trojan)"
   echo -e "${BOLD}${RED}[00]${RESET} Quitter"
-  echo -e "${CYAN}──────────────────────────────────────────────────${RESET}"
+  echo -e "${CYAN}──────────────────────────────────────────────────────────${RESET}"
   echo -ne "${BOLD}${YELLOW}Choix → ${RESET}"
   read -r choice
 }
