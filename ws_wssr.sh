@@ -53,7 +53,7 @@ install_dependencies() {
   log INFO "Vérification/installation des dépendances système..."
   apt-get update -y >/dev/null 2>&1
   apt-get install -y --no-install-recommends \
-    python3 python3-venv python3-pip certbot curl wget jq ca-certificates nginx >/dev/null 2>&1 || true
+    python3 python3-venv python3-pip certbot ufw curl wget jq ca-certificates nginx >/dev/null 2>&1 || true
 
   if [[ ! -d "$VENV_DIR" ]]; then
     log INFO "Création d’un environnement virtuel Python dans $VENV_DIR..."
