@@ -83,12 +83,12 @@ Description=Kighmu WS/WSS Tunnel SSH
 After=network.target
 
 [Service]
-ExecStart=${VENV_DIR}/bin/python ${SCRIPT_PATH}
+ExecStart=/root/.ws_wss_venv/bin/python /usr/local/bin/ws_wss_server.py
 Restart=always
 RestartSec=5
 User=root
-StandardOutput=append:${LOG_FILE}
-StandardError=append:${LOG_FILE}
+StandardOutput=append:/var/log/ws_wss_server.log
+StandardError=append:/var/log/ws_wss_server.log
 
 [Install]
 WantedBy=multi-user.target
