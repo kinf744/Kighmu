@@ -9,38 +9,51 @@ NC='\033[0m'
 restart_xray_service() {
   echo -e "${GREEN}Redémarrage du service Xray...${NC}"
   systemctl restart xray
-  sleep 2
-  if systemctl is-active --quiet xray; then
-    echo -e "${GREEN}Xray redémarré avec succès.${NC}"
-  else
-    echo -e "${RED}Erreur lors du redémarrage de Xray.${NC}"
-    journalctl -u xray -n 20 --no-pager
-    exit 1
-  fi
+  sleep 3
+  for i in {1..3}; do
+    if systemctl is-active --quiet xray; then
+      echo -e "${GREEN}Xray redémarré avec succès.${NC}"
+      return 0
+    else
+      echo -e "${RED}Échec du redémarrage, tentative $i...${NC}"
+      sleep 2
+      systemctl restart xray
+    fi
+  done
+  echo -e "${RED}Erreur persistante lors du redémarrage de Xray.${NC}"
+  journalctl -u xray -n 40 --no-pager
+  exit 1
 }
 
-# Nettoyage précédent avant installation
-echo -e "${GREEN}Arrêt des services utilisant les ports 80 et 8443...${NC}"
+clean_xray_environment() {
+  echo -e "${GREEN}Nettoyage complet de l'environnement Xray...${NC}"
 
-# Trouver et tuer tous processus écoutant sur les ports 80 et 8443 (TCP et UDP)
-for port in 80 8443; do
-    lsof -i tcp:$port -t | xargs -r kill -9
-    lsof -i udp:$port -t | xargs -r kill -9
-done
+  # Arrêter et désactiver le service Xray
+  systemctl stop xray 2>/dev/null || true
+  systemctl disable xray 2>/dev/null || true
+  systemctl daemon-reload
 
-# Arrêter et désactiver les services systemd potentiellement en conflit
-for srv in xray nginx apache2; do
-    systemctl stop $srv 2>/dev/null || true
-    systemctl disable $srv 2>/dev/null || true
-done
+  # Tuer processus sur ports 80 et 8443 (TCP et UDP)
+  for port in 80 8443; do
+      lsof -i tcp:$port -t | xargs -r kill -9
+      lsof -i udp:$port -t | xargs -r kill -9
+  done
 
-echo -e "${GREEN}Nettoyage des fichiers précédents...${NC}"
+  # Pause pour libérer les ports
+  sleep 5
 
-# Supprimer toutes les anciennes configurations et fichiers
-rm -rf /etc/xray /var/log/xray /usr/local/bin/xray /tmp/.xray_domain /etc/systemd/system/xray.service
+  # Supprimer anciens fichiers et dossiers liés à Xray
+  rm -rf /etc/xray /var/log/xray /usr/local/bin/xray /tmp/.xray_domain /etc/systemd/system/xray.service
+  rm -rf /tmp/xray-temp /var/run/xray
 
-# Recharger systemd pour appliquer les suppressions
-systemctl daemon-reload
+  systemctl daemon-reload
+
+  echo -e "${GREEN}Nettoyage effectué.${NC}"
+}
+
+# Début script principal
+
+clean_xray_environment
 
 # Demander domaine
 read -rp "Entrez votre nom de domaine (ex: monsite.com) : " DOMAIN
@@ -49,52 +62,41 @@ if [[ -z "$DOMAIN" ]]; then
   exit 1
 fi
 
-# Écriture domaine pour menu
 echo "$DOMAIN" > /tmp/.xray_domain
-
 EMAIL="adrienkiaje@gmail.com"
 
-# Mise à jour et dépendances
+# Mise à jour + dépendances
 apt update
 apt install -y ufw iptables iptables-persistent curl socat xz-utils wget apt-transport-https \
   gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq
 
-# Configuration UFW - ouvrir uniquement SSH, 80, 8443
+# Configuration UFW
 ufw allow ssh
 ufw allow 80/tcp
 ufw allow 80/udp
 ufw allow 8443/tcp
 ufw allow 8443/udp
-
-# Activer UFW automatiquement (valider par 'y')
 echo "y" | ufw enable
 ufw status verbose
-
-# Sauvegarder règles UFW pour persistance
 netfilter-persistent save
 
-# Synchronisation temps
 ntpdate pool.ntp.org
 timedatectl set-ntp true
 systemctl enable chronyd
 systemctl restart chronyd
 timedatectl set-timezone Asia/Kuala_Lumpur
-
-# Info chrony
 chronyc sourcestats -v
 chronyc tracking -v
 date
 
-# Dernière version Xray
+# Télécharger dernière version Xray
 latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases | grep tag_name | sed -E 's/.*"v(.*)".*/\1/' | head -n1)
 xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v${latest_version}/xray-linux-64.zip"
 
-# Arrêt services sur port 80 si existants (redondant mais sécuritaire)
 systemctl stop nginx 2>/dev/null || true
 systemctl stop apache2 2>/dev/null || true
 sudo lsof -t -i tcp:80 -s tcp:listen | sudo xargs kill -9 2>/dev/null || true
 
-# Installation Xray
 mkdir -p /usr/local/bin
 cd $(mktemp -d)
 curl -sL "$xraycore_link" -o xray.zip
@@ -103,33 +105,32 @@ mv xray /usr/local/bin/xray
 chmod +x /usr/local/bin/xray
 setcap 'cap_net_bind_service=+ep' /usr/local/bin/xray
 
-# Préparation dossier et logs avec bonnes permissions
 mkdir -p /var/log/xray /etc/xray
 touch /var/log/xray/access.log /var/log/xray/error.log
 chown -R root:root /var/log/xray
 chmod 644 /var/log/xray/access.log /var/log/xray/error.log
 
-# Installer acme.sh si pas présent
 if ! command -v ~/.acme.sh/acme.sh &> /dev/null; then
   curl https://get.acme.sh | sh
   source ~/.bashrc
 fi
 
-# Arrêter Xray avant génération certificat pour libérer port 80
 systemctl stop xray
 
-# Générer et installer certificat TLS
+# Certificats TLS
 ~/.acme.sh/acme.sh --register-account -m "$EMAIL"
 ~/.acme.sh/acme.sh --issue --standalone -d "$DOMAIN" --force
+
+sleep 5  # pause pour éviter conflit certifs
+
 ~/.acme.sh/acme.sh --installcert -d "$DOMAIN" --fullchainpath /etc/xray/xray.crt --keypath /etc/xray/xray.key
 
-# Vérifier certificats TLS
 if [[ ! -f "/etc/xray/xray.crt" || ! -f "/etc/xray/xray.key" ]]; then
   echo -e "${RED}Erreur : certificats TLS non trouvés.${NC}"
   exit 1
 fi
 
-# Génération UUID
+# Génération des UUID pour utilisateurs
 uuid1=$(cat /proc/sys/kernel/random/uuid)
 uuid2=$(cat /proc/sys/kernel/random/uuid)
 uuid3=$(cat /proc/sys/kernel/random/uuid)
@@ -137,7 +138,6 @@ uuid4=$(cat /proc/sys/kernel/random/uuid)
 uuid5=$(cat /proc/sys/kernel/random/uuid)
 uuid6=$(cat /proc/sys/kernel/random/uuid)
 
-# users.json pour menu
 cat > /etc/xray/users.json << EOF
 {
   "vmess_tls": "$uuid1",
@@ -149,7 +149,6 @@ cat > /etc/xray/users.json << EOF
 }
 EOF
 
-# Configuration Xray complète (inclut Trojan WS TLS et non-TLS)
 cat > /etc/xray/config.json << EOF
 {
   "log": {"access": "/var/log/xray/access.log", "error": "/var/log/xray/error.log", "loglevel": "info"},
@@ -229,7 +228,6 @@ cat > /etc/xray/config.json << EOF
 }
 EOF
 
-# Service systemd Xray
 cat > /etc/systemd/system/xray.service << EOF
 [Unit]
 Description=Xray Service Mod By NevermoreSSH
@@ -248,7 +246,6 @@ RestartPreventExitStatus=23
 WantedBy=multi-user.target
 EOF
 
-# Reload systemd and enable/start service
 systemctl daemon-reload
 systemctl enable xray
 
