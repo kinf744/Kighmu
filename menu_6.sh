@@ -39,7 +39,7 @@ show_menu() {
   echo -e "${BOLD}${YELLOW}[03]${RESET} Créer utilisateur VLESS"
   echo -e "${BOLD}${YELLOW}[04]${RESET} Créer utilisateur Trojan"
   echo -e "${BOLD}${YELLOW}[05]${RESET} Supprimer utilisateur Xray"
-  echo -e "${BOLD}${RED}[06]${RESET} Désinstaller Xray (Avec Trojan)"
+  echo -e "${BOLD}${YELLOW}[06]${RESET} Désinstallation complète Xray"
   echo -e "${BOLD}${RED}[00]${RESET} Quitter"
   echo -e "${CYAN}──────────────────────────────────────────────────────────${RESET}"
   echo -ne "${BOLD}${YELLOW}Choix → ${RESET}"
