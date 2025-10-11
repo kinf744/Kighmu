@@ -63,7 +63,6 @@ install_dependencies() {
   fi
 
   log INFO "Activation du venv et installation de websockets..."
-  # Active le venv et installe websockets
   source "$VENV_DIR/bin/activate"
   pip install --upgrade pip setuptools
   pip install websockets
@@ -167,7 +166,7 @@ EOF
 Description=Watchdog for WS/WSS service
 
 [Service]
-ExecStart=$WATCHDOG
+ExecStart=/usr/local/bin/ws_wss_watchdog.sh
 Restart=always
 User=root
 
@@ -202,7 +201,6 @@ configure_ufw() {
     # Ports réels utilisés
     open_port 8880
     open_port 443
-    # 80 non nécessaire
   else
     log WARNING "UFW n’est pas installé. Pas de configuration de pare-feu."
   fi
