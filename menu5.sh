@@ -2,14 +2,14 @@
 # menu5.sh - Panneau de contrôle installation/désinstallation amélioré
 
 # Définition des couleurs
-RED="e[31m"
-GREEN="e[32m"
-YELLOW="e[33m"
-BLUE="e[34m"
-MAGENTA="e[35m"
-CYAN="e[36m"
-BOLD="e[1m"
-RESET="e[0m"
+RED="\e[31m"
+GREEN="\e[32m"
+YELLOW="\e[33m"
+BLUE="\e[34m"
+MAGENTA="\e[35m"
+CYAN="\e[36m"
+BOLD="\e[1m"
+RESET="\e[0m"
 
 afficher_modes_ports() {
     local any_active=0
@@ -34,7 +34,7 @@ afficher_modes_ports() {
         echo -e "  - OpenSSH: ${GREEN}port 22${RESET}"
     fi
     if systemctl is-active --quiet dropbear || pgrep -x dropbear >/dev/null 2>&1; then
-        DROPBEAR_PORT=$(grep -oP '(?<=-p )d+' /etc/default/dropbear 2>/dev/null || echo "22")
+        DROPBEAR_PORT=$(grep -oP '(?<=-p )\d+' /etc/default/dropbear 2>/dev/null || echo "22")
         echo -e "  - Dropbear: ${GREEN}port $DROPBEAR_PORT${RESET}"
     fi
     if systemctl is-active --quiet slowdns.service || pgrep -f "sldns-server" >/dev/null 2>&1 || screen -list | grep -q slowdns_session; then
@@ -216,7 +216,11 @@ uninstall_ssl_tls() {
 install_badvpn() { echo ">>> Installation BadVPN (à compléter)"; }
 uninstall_badvpn() { echo ">>> Désinstallation BadVPN (à compléter)"; }
 
-# AJOUT WS/WSS SSH
+HYST_PORT=22000
+install_hysteria() { bash "$HOME/Kighmu/hysteria.sh" || echo "Script hysteria introuvable."; }
+uninstall_hysteria() { systemctl stop hysteria.service 2>/dev/null || true; systemctl disable hysteria.service 2>/dev/null || true; rm -f /etc/systemd/system/hysteria.service; systemctl daemon-reload; pkill -f hysteria || true; }
+
+# --- AJOUT WS/WSS SSH ---
 install_ws_wss() {
     echo ">>> Installation du tunnel WS/WSS SSH..."
     if [ -f /usr/local/bin/ws_wssr.sh ]; then
@@ -242,7 +246,7 @@ uninstall_ws_wss() {
     echo -e "${GREEN}[OK] Tunnel WS/WSS SSH désinstallé.${RESET}"
 }
 
-# Interface utilisateur
+# --- Interface utilisateur ---
 manage_mode() {
     MODE_NAME=$1; INSTALL_FUNC=$2; UNINSTALL_FUNC=$3
     while true; do
@@ -285,9 +289,9 @@ while true; do
     echo -e "${GREEN}${BOLD}[09]${RESET} ${YELLOW}Hysteria${RESET}"
     echo -e "${GREEN}${BOLD}[10]${RESET} ${YELLOW}Tunnel WS/WSS SSH${RESET}"
     echo -e "${GREEN}${BOLD}[00]${RESET} ${YELLOW}Quitter${RESET}"
-    echo
-    read -rp "Choix: " choix
-    case "$choix" in
+    echo -ne "${BOLD}${YELLOW}👉 Choisissez un mode : ${RESET}"
+    read choix
+    case $choix in
         1) manage_mode "OpenSSH" install_openssh uninstall_openssh ;;
         2) manage_mode "Dropbear" install_dropbear uninstall_dropbear ;;
         3) manage_mode "SlowDNS" install_slowdns uninstall_slowdns ;;
