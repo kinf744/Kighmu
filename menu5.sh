@@ -22,7 +22,7 @@ afficher_modes_ports() {
     if systemctl is-active --quiet socks_python_ws.service || pgrep -f ws2_proxy.py >/dev/null 2>&1; then any_active=1; fi
     if systemctl is-active --quiet stunnel4.service || pgrep -f stunnel >/dev/null 2>&1; then any_active=1; fi
     if systemctl is-active --quiet hysteria.service || pgrep -f hysteria >/dev/null 2>&1; then any_active=1; fi
-    if systemctl is-active --quiet ws_wss_server.service; then any_active=1; fi
+    if systemctl is-active --quiet ws_wssr.service || pgrep -f ws_wss_server.py >/dev/null 2>&1; then any_active=1; fi
 
     if [[ $any_active -eq 0 ]]; then
         return
@@ -61,7 +61,7 @@ afficher_modes_ports() {
     if systemctl is-active --quiet hysteria.service || pgrep -f hysteria >/dev/null 2>&1; then
         echo -e "  - Hysteria UDP : ${GREEN}port UDP 22000${RESET}"
     fi
-    if systemctl is-active --quiet ws_wss_server.service; then
+    if systemctl is-active --quiet ws_wssr.service; then
         echo -e "  - WS/WSS Tunnel: ${GREEN}WS port 8880 | WSS port 443${RESET}"
     fi
 }
