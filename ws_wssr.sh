@@ -9,7 +9,7 @@
 set -euo pipefail
 
 SERVICE_NAME="ws_wss_server"
-SCRIPT_PATH="/usr/local/bin/ws_wss_server.py"
+SCRIPT_PATH="/root/Kighmu/ws_wss_server.py"
 LOG_FILE="/var/log/ws_wss_server.log"
 LOG_FILE_WD="/var/log/ws_wss_watchdog.log"
 LOG_FILE_BAK="/var/log/ws_wss_server.bak.log"
@@ -63,7 +63,6 @@ install_dependencies() {
   fi
 
   log INFO "Activation du venv et installation de websockets..."
-  # Active le venv et installe websockets
   source "$VENV_DIR/bin/activate"
   pip install --upgrade pip setuptools
   pip install websockets
@@ -83,12 +82,12 @@ Description=Kighmu WS/WSS Tunnel SSH
 After=network.target
 
 [Service]
-ExecStart=/root/.ws_wss_venv/bin/python /usr/local/bin/ws_wss_server.py
+ExecStart=${VENV_DIR}/bin/python ${SCRIPT_PATH}
 Restart=always
 RestartSec=5
 User=root
-StandardOutput=append:/var/log/ws_wss_server.log
-StandardError=append:/var/log/ws_wss_server.log
+StandardOutput=append:${LOG_FILE}
+StandardError=append:${LOG_FILE}
 
 [Install]
 WantedBy=multi-user.target
@@ -199,7 +198,6 @@ configure_ufw() {
         log INFO "Autorisation du port $port/tcp via UFW."
       fi
     }
-    # Ports réels utilisés
     open_port 8880
     open_port 443
   else
