@@ -22,6 +22,7 @@ afficher_modes_ports() {
     if systemctl is-active --quiet socks_python_ws.service || pgrep -f ws2_proxy.py >/dev/null 2>&1; then any_active=1; fi
     if systemctl is-active --quiet stunnel4.service || pgrep -f stunnel >/dev/null 2>&1; then any_active=1; fi
     if systemctl is-active --quiet hysteria.service || pgrep -f hysteria >/dev/null 2>&1; then any_active=1; fi
+    if systemctl is-active --quiet ws_wss_server.service; then any_active=1; fi
 
     if [[ $any_active -eq 0 ]]; then
         return
@@ -46,13 +47,7 @@ afficher_modes_ports() {
         echo -e "  - SOCKS Python: ${GREEN}ports TCP 8080${RESET}"
     fi
     if systemctl is-active --quiet socks_python_ws.service || pgrep -f ws2_proxy.py >/dev/null 2>&1; then
-        if [ -f /etc/systemd/system/socks_python_ws.service ]; then
-            PROXY_WS_PORT=$(grep "ExecStart=" /etc/systemd/system/socks_python_ws.service | awk '{print $NF}')
-        else
-            PROXY_WS_PORT=$(sudo lsof -Pan -p $(pgrep -f ws2_proxy.py | head -n1) -iTCP -sTCP:LISTEN 2>/dev/null | awk 'NR==2 {print $9}' | cut -d: -f2)
-        fi
-        PROXY_WS_PORT=${PROXY_WS_PORT:-80}
-        echo -e "  - proxy ws: ${GREEN}port TCP $PROXY_WS_PORT${RESET}"
+        echo -e "  - Proxy WS: ${GREEN}port TCP 80${RESET}"
     fi
     if systemctl is-active --quiet stunnel4.service || pgrep -f stunnel >/dev/null 2>&1; then
         echo -e "  - Stunnel SSL/TLS: ${GREEN}port TCP 444${RESET}"
@@ -60,222 +55,86 @@ afficher_modes_ports() {
     if systemctl is-active --quiet hysteria.service || pgrep -f hysteria >/dev/null 2>&1; then
         echo -e "  - Hysteria UDP : ${GREEN}port UDP 22000${RESET}"
     fi
-}
-
-# --- Fonctions d'installation et désinstallation ---
-install_slowdns() {
-    echo ">>> Nettoyage avant installation SlowDNS..."
-    pkill -f slowdns || true
-    rm -rf $HOME/.slowdns
-    rm -f /usr/local/bin/slowdns
-    systemctl stop slowdns.service 2>/dev/null || true
-    systemctl disable slowdns.service 2>/dev/null || true
-    rm -f /etc/systemd/system/slowdns.service
-    systemctl daemon-reload
-    ufw delete allow 5300/udp 2>/dev/null || true
-    echo ">>> Installation/configuration SlowDNS..."
-    bash "$HOME/Kighmu/slowdns.sh" || echo "SlowDNS : script introuvable."
-    ufw allow 5300/udp
-}
-
-uninstall_slowdns() {
-    echo ">>> Désinstallation complète SlowDNS..."
-    pkill -f slowdns || true
-    rm -rf $HOME/.slowdns
-    rm -f /usr/local/bin/slowdns
-    systemctl stop slowdns.service 2>/dev/null || true
-    systemctl disable slowdns.service 2>/dev/null || true
-    rm -f /etc/systemd/system/slowdns.service
-    systemctl daemon-reload
-    ufw delete allow 5300/udp 2>/dev/null || true
-    echo -e "${GREEN}[OK] SlowDNS désinstallé.${RESET}"
-}
-
-install_openssh() {
-    echo ">>> Installation d'OpenSSH..."
-    apt-get install -y openssh-server
-    systemctl enable ssh
-    systemctl start ssh
-    echo -e "${GREEN}[OK] OpenSSH installé.${RESET}"
-}
-
-uninstall_openssh() {
-    echo ">>> Désinstallation d'OpenSSH..."
-    apt-get remove -y openssh-server
-    systemctl disable ssh
-    echo -e "${GREEN}[OK] OpenSSH supprimé.${RESET}"
-}
-
-install_dropbear() {
-    echo ">>> Installation de Dropbear..."
-    apt-get install -y dropbear
-    systemctl enable dropbear
-    systemctl start dropbear
-    echo -e "${GREEN}[OK] Dropbear installé.${RESET}"
-}
-
-uninstall_dropbear() {
-    echo ">>> Désinstallation de Dropbear..."
-    apt-get remove -y dropbear
-    systemctl disable dropbear
-    echo -e "${GREEN}[OK] Dropbear supprimé.${RESET}"
-}
-
-install_udp_custom() {
-    echo ">>> Installation UDP Custom via script..."
-    bash "$HOME/Kighmu/udp_custom.sh" || echo "Script introuvable."
-}
-
-uninstall_udp_custom() {
-    echo ">>> Désinstallation UDP Custom..."
-    pids=$(pgrep -f udp-custom-linux-amd64)
-    if [ ! -z "$pids" ]; then
-        kill -15 $pids
-        sleep 2
-        pids=$(pgrep -f udp-custom-linux-amd64)
-        if [ ! -z "$pids" ]; then
-            kill -9 $pids
-        fi
+    if systemctl is-active --quiet ws_wss_server.service; then
+        echo -e "  - WS/WSS Tunnel: ${GREEN}WS port 8880 | WSS port 443${RESET}"
     fi
-    if systemctl list-units --full -all | grep -Fq 'udp_custom.service'; then
-        systemctl stop udp_custom.service
-        systemctl disable udp_custom.service
-        rm -f /etc/systemd/system/udp_custom.service
-        systemctl daemon-reload
-    fi
-    rm -rf /root/udp-custom
-    ufw delete allow 54000/udp 2>/dev/null || true
-    iptables -D INPUT -p udp --dport 54000 -j ACCEPT 2>/dev/null || true
-    iptables -D OUTPUT -p udp --sport 54000 -j ACCEPT 2>/dev/null || true
-    echo -e "${GREEN}[OK] UDP Custom désinstallé.${RESET}"
 }
 
-install_socks_python() {
-    echo ">>> Installation SOCKS Python via script..."
-    bash "$HOME/Kighmu/socks_python.sh" || echo "Script introuvable."
-}
+# ========================================================================
+# Fonctions d'installation / désinstallation pour chaque mode
+# ========================================================================
 
-uninstall_socks_python() {
-    echo ">>> Désinstallation SOCKS Python..."
-    pids=$(pgrep -f KIGHMUPROXY.py)
-    if [ ! -z "$pids" ]; then
-        kill -15 $pids
-        sleep 2
-        pids=$(pgrep -f KIGHMUPROXY.py)
-        if [ ! -z "$pids" ]; then
-            kill -9 $pids
-        fi
-    fi
-    if systemctl list-units --full -all | grep -Fq 'socks_python.service'; then
-        systemctl stop socks_python.service
-        systemctl disable socks_python.service
-        rm -f /etc/systemd/system/socks_python.service
-        systemctl daemon-reload
-    fi
-    rm -f /usr/local/bin/KIGHMUPROXY.py
-    ufw delete allow 8080/tcp 2>/dev/null || true
-    ufw delete allow 9090/tcp 2>/dev/null || true
-    iptables -D INPUT -p tcp --dport 8080 -j ACCEPT 2>/dev/null || true
-    iptables -D OUTPUT -p tcp --sport 8080 -j ACCEPT 2>/dev/null || true
-    iptables -D INPUT -p tcp --dport 9090 -j ACCEPT 2>/dev/null || true
-    iptables -D OUTPUT -p tcp --sport 9090 -j ACCEPT 2>/dev/null || true
-    echo -e "${GREEN}[OK] SOCKS Python désinstallé.${RESET}"
-}
+install_slowdns() { bash "$HOME/Kighmu/slowdns.sh"; }
+uninstall_slowdns() { systemctl stop slowdns.service; systemctl disable slowdns.service; rm -f /etc/systemd/system/slowdns.service; }
 
-install_proxy_ws() {
-    echo ">>> Installation proxy ws via script sockspy.sh..."
-    bash "$HOME/Kighmu/sockspy.sh" || echo "Script sockspy introuvable."
-}
+install_openssh() { apt install -y openssh-server; systemctl enable ssh; systemctl start ssh; }
+uninstall_openssh() { apt remove -y openssh-server; }
 
-uninstall_proxy_ws() {
-    echo ">>> Désinstallation proxy ws..."
+install_dropbear() { apt install -y dropbear; systemctl enable dropbear; systemctl start dropbear; }
+uninstall_dropbear() { apt remove -y dropbear; }
 
-    pids=$(pgrep -f ws2_proxy.py)
-    if [ ! -z "$pids" ]; then
-        kill -15 $pids
-        sleep 2
-        pids=$(pgrep -f ws2_proxy.py)
-        if [ ! -z "$pids" ]; then
-            kill -9 $pids
-        fi
-    fi
+install_udp_custom() { bash "$HOME/Kighmu/udp_custom.sh"; }
+uninstall_udp_custom() { systemctl stop udp_custom.service; systemctl disable udp_custom.service; rm -f /etc/systemd/system/udp_custom.service; }
 
-    if systemctl list-units --full -all | grep -Fq 'socks_python_ws.service'; then
-        systemctl stop socks_python_ws.service
-        systemctl disable socks_python_ws.service
-        rm -f /etc/systemd/system/socks_python_ws.service
-        systemctl daemon-reload
-    fi
+install_socks_python() { bash "$HOME/Kighmu/socks_python.sh"; }
+uninstall_socks_python() { systemctl stop socks_python.service; systemctl disable socks_python.service; rm -f /etc/systemd/system/socks_python.service; }
 
-    rm -f /usr/local/bin/ws2_proxy.py
+install_proxy_ws() { bash "$HOME/Kighmu/sockspy.sh"; }
+uninstall_proxy_ws() { systemctl stop socks_python_ws.service; systemctl disable socks_python_ws.service; rm -f /etc/systemd/system/socks_python_ws.service; }
 
-    ufw delete allow 80/tcp 2>/dev/null || true
-    iptables -D INPUT -p tcp --dport 80 -j ACCEPT 2>/dev/null || true
-    iptables -D OUTPUT -p tcp --sport 80 -j ACCEPT 2>/dev/null || true
+install_ssl_tls() { bash "$HOME/Kighmu/ssl.sh"; }
+uninstall_ssl_tls() { systemctl stop stunnel4; systemctl disable stunnel4; rm -f /etc/stunnel/stunnel.conf; }
 
-    echo -e "${GREEN}[OK] proxy ws désinstallé.${RESET}"
-}
+install_badvpn() { bash "$HOME/Kighmu/badvpn.sh"; }
+uninstall_badvpn() { pkill -f badvpn; }
 
-install_ssl_tls() {
-    echo ">>> Lancement du script d'installation SSL/TLS externe..."
-    bash "$HOME/Kighmu/ssl.sh" || echo "Script SSL/TLS introuvable ou erreur."
-}
+install_hysteria() { bash "$HOME/Kighmu/hysteria.sh"; }
+uninstall_hysteria() { systemctl stop hysteria.service; systemctl disable hysteria.service; rm -f /etc/systemd/system/hysteria.service; }
 
-uninstall_ssl_tls() {
-    echo ">>> Désinstallation complète de Stunnel SSL/TLS..."
-
-    systemctl stop stunnel4 2>/dev/null || true
-    systemctl disable stunnel4 2>/dev/null || true
-
-    rm -f /etc/stunnel/stunnel.key /etc/stunnel/stunnel.crt /etc/stunnel/stunnel.pem
-    rm -f /etc/stunnel/stunnel.conf
-    rm -rf /etc/systemd/system/stunnel4.service.d
-
-    systemctl daemon-reload
-
-    echo "Suppression de la règle firewall UFW (port 444)..."
-    if command -v ufw &> /dev/null; then
-        ufw delete allow 444/tcp 2>/dev/null || true
-        ufw reload
+# ========================================================================
+# 🔥 Nouveau mode : TUNNEL WS/WSS SSH
+# ========================================================================
+install_ws_wss() {
+    echo ">>> Installation du tunnel WS/WSS SSH..."
+    if [ -f /usr/local/bin/ws_wssr.sh ]; then
+        bash /usr/local/bin/ws_wssr.sh
+    elif [ -f "$HOME/Kighmu/ws_wssr.sh" ]; then
+        bash "$HOME/Kighmu/ws_wssr.sh"
     else
-        echo "UFW non détecté, vérifier firewall manuellement."
+        echo "❌ Script ws_wssr.sh introuvable."
+        return 1
+    fi
+    echo -e "${GREEN}[OK] Tunnel WS/WSS installé et lancé.${RESET}"
+}
+
+uninstall_ws_wss() {
+    echo ">>> Désinstallation complète du tunnel WS/WSS..."
+    systemctl stop ws_wss_server.service 2>/dev/null || true
+    systemctl disable ws_wss_server.service 2>/dev/null || true
+    rm -f /etc/systemd/system/ws_wss_server.service
+    rm -f /usr/local/bin/ws_wss_server.py /usr/local/bin/ws_wssr.sh
+    systemctl daemon-reload
+
+    echo "Suppression des certificats Let's Encrypt..."
+    DOMAIN_FILE="$HOME/.kighmu_info"
+    if [[ -f "$DOMAIN_FILE" ]]; then
+        DOMAIN=$(grep -m1 "DOMAIN=" "$DOMAIN_FILE" | cut -d'=' -f2)
+        if [[ -n "$DOMAIN" ]]; then
+            certbot delete --cert-name "$DOMAIN" -n || true
+            rm -rf /etc/letsencrypt/live/$DOMAIN /etc/letsencrypt/archive/$DOMAIN
+        fi
     fi
 
-    echo -e "${GREEN}[OK] Stunnel SSL/TLS désinstallé proprement.${RESET}"
+    echo "Suppression des règles firewall..."
+    ufw delete allow 8880/tcp 2>/dev/null || true
+    ufw delete allow 443/tcp 2>/dev/null || true
+
+    echo -e "${GREEN}[OK] Tunnel WS/WSS désinstallé.${RESET}"
 }
 
-install_badvpn() {
-    echo ">>> Installation BadVPN (à compléter)"
-}
-
-uninstall_badvpn() {
-    echo ">>> Désinstallation BadVPN (à compléter)"
-}
-
-# Variables pour Hysteria
-HYST_PORT=22000
-
-install_hysteria() {
-    echo ">>> Installation Hysteria..."
-    bash "$HOME/Kighmu/hysteria.sh" || echo "Script hysteria introuvable ou erreur."
-    ufw allow ${HYST_PORT}/udp 2>/dev/null || true
-    echo -e "${GREEN}[OK] Hysteria installé.${RESET}"
-}
-
-uninstall_hysteria() {
-    echo ">>> Désinstallation Hysteria..."
-    if systemctl list-units --full -all | grep -Fq 'hysteria.service'; then
-        systemctl stop hysteria.service
-        systemctl disable hysteria.service
-        rm -f /etc/systemd/system/hysteria.service
-        systemctl daemon-reload
-    fi
-    pkill -f hysteria || true
-    rm -f /usr/local/bin/hysteria
-    ufw delete allow ${HYST_PORT}/udp 2>/dev/null || true
-    echo -e "${GREEN}[OK] Hysteria désinstallé.${RESET}"
-}
-
+# ========================================================================
+# Interface utilisateur
+# ========================================================================
 
 manage_mode() {
     MODE_NAME=$1
@@ -290,19 +149,13 @@ manage_mode() {
         echo -e "${GREEN}${BOLD}[1]${RESET} ${YELLOW}Installer${RESET}"
         echo -e "${GREEN}${BOLD}[2]${RESET} ${YELLOW}Désinstaller${RESET}"
         echo -e "${GREEN}${BOLD}[0]${RESET} ${YELLOW}Retour${RESET}"
-        echo -e "${CYAN}+------------------------------------------------------+${RESET}"
         echo -ne "${BOLD}${YELLOW}👉 Choisissez une action : ${RESET}"
         read action
         case $action in
-            1) $INSTALL_FUNC
-               echo -e "${GREEN}Appuyez sur Entrée pour continuer...${RESET}"
-               read ;;
-            2) $UNINSTALL_FUNC
-               echo -e "${GREEN}Appuyez sur Entrée pour continuer...${RESET}"
-               read ;;
+            1) $INSTALL_FUNC; read -p "Appuyez sur Entrée pour continuer..." ;;
+            2) $UNINSTALL_FUNC; read -p "Appuyez sur Entrée pour continuer..." ;;
             0) break ;;
-            *) echo -e "${RED}❌ Mauvais choix, réessayez.${RESET}"
-               sleep 1 ;;
+            *) echo -e "${RED}❌ Mauvais choix.${RESET}"; sleep 1 ;;
         esac
     done
 }
@@ -319,8 +172,6 @@ while true; do
     afficher_modes_ports
 
     echo -e "${CYAN}+======================================================+${RESET}"
-    echo -e "|               🚀 MENU PRINCIPAL DES MODES 🚀         |"
-    echo -e "${CYAN}+======================================================+${RESET}"
     echo -e "${GREEN}${BOLD}[01]${RESET} ${YELLOW}OpenSSH${RESET}"
     echo -e "${GREEN}${BOLD}[02]${RESET} ${YELLOW}Dropbear${RESET}"
     echo -e "${GREEN}${BOLD}[03]${RESET} ${YELLOW}SlowDNS${RESET}"
@@ -328,10 +179,10 @@ while true; do
     echo -e "${GREEN}${BOLD}[05]${RESET} ${YELLOW}SOCKS/Python${RESET}"
     echo -e "${GREEN}${BOLD}[06]${RESET} ${YELLOW}SSL/TLS${RESET}"
     echo -e "${GREEN}${BOLD}[07]${RESET} ${YELLOW}BadVPN${RESET}"
-    echo -e "${GREEN}${BOLD}[08]${RESET} ${YELLOW}proxy ws${RESET}"
+    echo -e "${GREEN}${BOLD}[08]${RESET} ${YELLOW}Proxy WS${RESET}"
     echo -e "${GREEN}${BOLD}[09]${RESET} ${YELLOW}Hysteria${RESET}"
+    echo -e "${GREEN}${BOLD}[10]${RESET} ${YELLOW}Tunnel WS/WSS SSH${RESET}"
     echo -e "${GREEN}${BOLD}[00]${RESET} ${YELLOW}Quitter${RESET}"
-    echo -e "${CYAN}+------------------------------------------------------+${RESET}"
     echo -ne "${BOLD}${YELLOW}👉 Choisissez un mode : ${RESET}"
     read choix
     case $choix in
@@ -342,9 +193,10 @@ while true; do
         5) manage_mode "SOCKS/Python" install_socks_python uninstall_socks_python ;;
         6) manage_mode "SSL/TLS" install_ssl_tls uninstall_ssl_tls ;;
         7) manage_mode "BadVPN" install_badvpn uninstall_badvpn ;;
-        8) manage_mode "proxy ws" install_proxy_ws uninstall_proxy_ws ;;
+        8) manage_mode "Proxy WS" install_proxy_ws uninstall_proxy_ws ;;
         9) manage_mode "Hysteria" install_hysteria uninstall_hysteria ;;
+        10) manage_mode "Tunnel WS/WSS SSH" install_ws_wss uninstall_ws_wss ;;
         0) echo -e "${RED}🚪 Sortie du panneau de contrôle.${RESET}" ; exit 0 ;;
-        *) echo -e "${RED}❌ Option invalide, réessayez.${RESET}" ;;
+        *) echo -e "${RED}❌ Option invalide.${RESET}" ;;
     esac
 done
