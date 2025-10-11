@@ -60,7 +60,7 @@ load_user_data() {
 create_config() {
   local proto=$1 name=$2 days=$3
   [[ -z "$DOMAIN" ]] && { echo -e "${RED}⚠️ Domaine non défini, installe Xray d'abord.${RESET}"; return; }
-  local new_uuid link_tls link_ntls path_ws port_tls=8443 port_ntls=80
+  local new_uuid link_tls link_ntls path_ws port_tls=8443 port_ntls=89
   case "$proto" in
     vmess)
       path_ws="/vmess"
@@ -90,7 +90,7 @@ create_config() {
       jq --arg idtls "$uuid_tls" --arg idntls "$uuid_ntls" \
         '.trojan_pass=$idtls | .trojan_ntls_pass=$idntls' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
       link_tls="trojan://$uuid_tls@$DOMAIN:8443?security=tls&type=ws&path=/trojanws#$name"
-      link_ntls="trojan://$uuid_ntls@$DOMAIN:80?type=ws&path=/trojanws#$name"
+      link_ntls="trojan://$uuid_ntls@$DOMAIN:89?type=ws&path=/trojanws#$name"
       ;;
     *) echo -e "${RED}Protocole inconnu.${RESET}"; return 1;;
   esac
@@ -191,7 +191,7 @@ while true; do
       echo -e "${YELLOW}Désinstallation complète de Xray et Trojan-Go en cours...${RESET}"
       systemctl stop xray trojan-go 2>/dev/null || true
       systemctl disable xray trojan-go 2>/dev/null || true
-      for port in 80 8443; do lsof -i tcp:$port -t | xargs -r kill -9; lsof -i udp:$port -t | xargs -r kill -9; done
+      for port in 89 8443; do lsof -i tcp:$port -t | xargs -r kill -9; lsof -i udp:$port -t | xargs -r kill -9; done
       rm -rf /etc/xray /var/log/xray /usr/local/bin/xray /etc/systemd/system/xray.service
       rm -rf /etc/trojan-go /var/log/trojan-go /usr/local/bin/trojan-go /etc/systemd/system/trojan-go.service
       rm -f /tmp/.xray_domain /etc/xray/users_expiry.list /etc/xray/users.json /etc/xray/config.json
