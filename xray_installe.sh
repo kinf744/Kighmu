@@ -33,8 +33,8 @@ clean_xray_environment() {
   systemctl disable xray 2>/dev/null || true
   systemctl daemon-reload
 
-  # Tuer processus sur ports 80 et 8443 (TCP et UDP)
-  for port in 80 8443; do
+  # Tuer processus sur ports 89 et 8443 (TCP et UDP)
+  for port in 89 8443; do
       lsof -i tcp:$port -t | xargs -r kill -9
       lsof -i udp:$port -t | xargs -r kill -9
   done
@@ -72,8 +72,8 @@ apt install -y ufw iptables iptables-persistent curl socat xz-utils wget apt-tra
 
 # Configuration UFW
 ufw allow ssh
-ufw allow 80/tcp
-ufw allow 80/udp
+ufw allow 89/tcp
+ufw allow 89/udp
 ufw allow 8443/tcp
 ufw allow 8443/udp
 echo "y" | ufw enable
@@ -95,7 +95,7 @@ xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v${latest_ver
 
 systemctl stop nginx 2>/dev/null || true
 systemctl stop apache2 2>/dev/null || true
-sudo lsof -t -i tcp:80 -s tcp:listen | sudo xargs kill -9 2>/dev/null || true
+sudo lsof -t -i tcp:89 -s tcp:listen | sudo xargs kill -9 2>/dev/null || true
 
 mkdir -p /usr/local/bin
 cd $(mktemp -d)
@@ -165,7 +165,7 @@ cat > /etc/xray/config.json << EOF
       }
     },
     {
-      "port": 80,
+      "port": 89,
       "protocol": "vmess",
       "settings": {"clients": [{"id": "$uuid2", "alterId": 0}]},
       "streamSettings": {
@@ -188,7 +188,7 @@ cat > /etc/xray/config.json << EOF
       "sniffing": {"enabled": true, "destOverride": ["http", "tls"]}
     },
     {
-      "port": 80,
+      "port": 89,
       "protocol": "vless",
       "settings": {"clients": [{"id": "$uuid4"}], "decryption": "none"},
       "streamSettings": {
@@ -210,7 +210,7 @@ cat > /etc/xray/config.json << EOF
       }
     },
     {
-      "port": 80,
+      "port": 89,
       "protocol": "trojan",
       "settings": {"clients": [{"password": "$uuid6"}]},
       "streamSettings": {
