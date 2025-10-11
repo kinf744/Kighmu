@@ -63,6 +63,7 @@ install_dependencies() {
   fi
 
   log INFO "Activation du venv et installation de websockets..."
+  # Active le venv et installe websockets
   source "$VENV_DIR/bin/activate"
   pip install --upgrade pip setuptools
   pip install websockets
