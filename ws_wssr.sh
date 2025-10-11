@@ -3,7 +3,7 @@
 # Script : ws_wssr.sh
 # Description : Gestion et supervision du tunnel WS/WSS SSH
 # Auteur : Kinf744
-# Version : 2.0 + persistance + firewall
+# Version : 2.1 + persistance + firewall + venv Python
 # ============================================================
 
 set -euo pipefail
@@ -13,8 +13,8 @@ SCRIPT_PATH="/usr/local/bin/ws_wss_server.py"
 LOG_FILE="/var/log/ws_wss_server.log"
 LOG_FILE_WD="/var/log/ws_wss_watchdog.log"
 LOG_FILE_BAK="/var/log/ws_wss_server.bak.log"
-PYTHON_BIN=$(command -v python3 || command -v python)
 DOMAIN_FILE="$HOME/.kighmu_info"
+VENV_DIR="$HOME/.ws_wss_venv"
 
 # Log helpers
 LOG_DIR=$(dirname "$LOG_FILE")
@@ -48,21 +48,31 @@ verify_and_load_domain() {
 }
 verify_and_load_domain
 
-# 🧩 Vérification de Python et dépendances
+# 🧩 Vérification de Python et dépendances avec venv
 install_dependencies() {
-  log INFO "Vérification/installation des dépendances..."
+  log INFO "Vérification/installation des dépendances système..."
   apt-get update -y >/dev/null 2>&1
   apt-get install -y --no-install-recommends \
-    python3 python3-pip certbot curl wget jq ca-certificates nginx >/dev/null 2>&1 || true
+    python3 python3-venv python3-pip certbot curl wget jq ca-certificates nginx >/dev/null 2>&1 || true
 
-  log INFO "Installation de websockets pour le script Python..."
-  pip3 install --quiet websockets
+  if [[ ! -d "$VENV_DIR" ]]; then
+    log INFO "Création d’un environnement virtuel Python dans $VENV_DIR..."
+    python3 -m venv "$VENV_DIR"
+  else
+    log INFO "Environnement virtuel Python déjà existant ($VENV_DIR)."
+  fi
 
-  log INFO "Dépendances Python installées."
+  log INFO "Activation du venv et installation de websockets..."
+  # Active le venv et installe websockets
+  source "$VENV_DIR/bin/activate"
+  pip install --upgrade pip setuptools
+  pip install websockets
+  deactivate
+  log INFO "Dépendances Python installées dans le venv."
 }
 install_dependencies
 
-# 📜 Création du service systemd
+# 📜 Création du service systemd avec python du venv
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 
 create_systemd_service() {
@@ -73,7 +83,7 @@ Description=Kighmu WS/WSS Tunnel SSH
 After=network.target
 
 [Service]
-ExecStart=${PYTHON_BIN} ${SCRIPT_PATH}
+ExecStart=${VENV_DIR}/bin/python ${SCRIPT_PATH}
 Restart=always
 RestartSec=5
 User=root
@@ -89,7 +99,7 @@ EOF
 }
 create_systemd_service
 
-# 🔐 Gestion des certificats Let's Encrypt
+# 🔐 Gestion des certificats Let's Encrypt (inchangé)
 setup_certificates() {
   CERT_PATH="/etc/letsencrypt/live/${DOMAIN}/fullchain.pem"
   KEY_PATH="/etc/letsencrypt/live/${DOMAIN}/privkey.pem"
@@ -113,7 +123,7 @@ setup_certificates() {
 }
 setup_certificates
 
-# 🚀 Lancement et activation du service avec persistance
+# 🚀 Lancement et activation du service
 enable_and_start_service() {
   log INFO "Activation et démarrage du service WS/WSS..."
   systemctl daemon-reload
@@ -152,12 +162,12 @@ EOF
   chmod +x "$WATCHDOG"
 
   local WD_SERVICE="/etc/systemd/system/ws_wss_watchdog.service"
-  cat > "$WD_SERVICE" <<'EOF'
+  cat > "$WD_SERVICE" <<EOF
 [Unit]
 Description=Watchdog for WS/WSS service
 
 [Service]
-ExecStart=/usr/local/bin/ws_wss_watchdog.sh
+ExecStart=$WATCHDOG
 Restart=always
 User=root
 
@@ -192,14 +202,14 @@ configure_ufw() {
     # Ports réels utilisés
     open_port 8880
     open_port 443
-    # 80 n’est pas nécessaire selon les besoins
+    # 80 non nécessaire
   else
     log WARNING "UFW n’est pas installé. Pas de configuration de pare-feu."
   fi
 }
 configure_ufw
 
-# Informations finales et affichage : affichage final, port et logs
+# Informations finales et affichage
 gg_final_report() {
   log INFO ""
   log INFO "=============================================================="
