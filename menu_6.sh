@@ -99,9 +99,9 @@ create_config() {
   touch /etc/xray/users_expiry.list && chmod 600 /etc/xray/users_expiry.list
   echo "$new_uuid|$exp_date_iso" >> /etc/xray/users_expiry.list
   echo
-  echo "========================="
+  echo "=============================="
   echo -e "🧩 ${proto^^}"
-  echo "========================="
+  echo "=============================="
   echo -e "📄 Configuration générée pour : $name"
   echo "--------------------------------------------------"
   echo -e "➤ UUID/Mot de passe :"
@@ -110,6 +110,7 @@ create_config() {
   echo
   echo -e "●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
   echo -e "┃ TLS  : $link_tls"
+  echo -e ""
   echo -e "┃ Non-TLS : $link_ntls"
   echo -e "●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
   echo
