@@ -24,12 +24,12 @@ afficher_xray_actifs() {
     return
   fi
   local ports_tls ports_ntls protos
-  ports_tls=$(jq -r '.inbounds[] | select(.streamSettings.security=="tls") | .port' "$CONFIG_FILE" | sort -u)
-  ports_ntls=$(jq -r '.inbounds[] | select(.streamSettings.security=="none") | .port' "$CONFIG_FILE" | sort -u)
+  ports_tls=$(jq -r '.inbounds[] | select(.streamSettings.security=="tls") | .port' "$CONFIG_FILE" | sort -u | paste -sd ", ")
+  ports_ntls=$(jq -r '.inbounds[] | select(.streamSettings.security=="none") | .port' "$CONFIG_FILE" | sort -u | paste -sd ", ")
   protos=$(jq -r '.inbounds[].protocol' "$CONFIG_FILE" | sort -u | paste -sd ", ")
   echo -e "${BOLD}Tunnels actifs :${RESET}"
-  [[ -n "$ports_tls" ]] && echo -e " ${GREEN}•${RESET} Port ${YELLOW}$ports_tls${RESET} : TLS – Protocoles [${MAGENTA}$protos${RESET}]"
-  [[ -n "$ports_ntls" ]] && echo -e " ${GREEN}•${RESET} Port ${YELLOW}$ports_ntls${RESET} : Non-TLS – Protocoles [${MAGENTA}$protos${RESET}]"
+  [[ -n "$ports_tls" ]] && echo -e " ${GREEN}•${RESET} Port(s) TLS : ${YELLOW}$ports_tls${RESET} – Protocoles [${MAGENTA}$protos${RESET}]"
+  [[ -n "$ports_ntls" ]] && echo -e " ${GREEN}•${RESET} Port(s) Non-TLS : ${YELLOW}$ports_ntls${RESET} – Protocoles [${MAGENTA}$protos${RESET}]"
 }
 
 show_menu() {
@@ -47,14 +47,14 @@ show_menu() {
 }
 
 load_user_data() {
-  [[ -f "$USERS_FILE" ]] && {
-    VMESS_TLS=$(jq -r '.vmess_tls' "$USERS_FILE")
-    VMESS_NTLS=$(jq -r '.vmess_ntls' "$USERS_FILE")
-    VLESS_TLS=$(jq -r '.vless_tls' "$USERS_FILE")
-    VLESS_NTLS=$(jq -r '.vless_ntls' "$USERS_FILE")
-    TROJAN_PASS=$(jq -r '.trojan_pass' "$USERS_FILE")
-    TROJAN_NTLS_PASS=$(jq -r '.trojan_ntls_pass' "$USERS_FILE")
-  }
+  if [[ -f "$USERS_FILE" ]]; then
+    VMESS_TLS=$(jq -r '.vmess_tls // empty' "$USERS_FILE")
+    VMESS_NTLS=$(jq -r '.vmess_ntls // empty' "$USERS_FILE")
+    VLESS_TLS=$(jq -r '.vless_tls // empty' "$USERS_FILE")
+    VLESS_NTLS=$(jq -r '.vless_ntls // empty' "$USERS_FILE")
+    TROJAN_PASS=$(jq -r '.trojan_pass // empty' "$USERS_FILE")
+    TROJAN_NTLS_PASS=$(jq -r '.trojan_ntls_pass // empty' "$USERS_FILE")
+  fi
 }
 
 create_config() {
