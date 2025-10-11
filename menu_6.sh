@@ -14,7 +14,7 @@ RESET="\e[0m"
 
 print_header() {
   echo -e "${CYAN}╔════════════════════════════════════════════════════════╗${RESET}"
-  echo -e "${CYAN}║                   ${BOLD}${MAGENTA}Xray – Gestion des Tunnels Actifs${RESET}${CYAN}      ║${RESET}"
+  echo -e "${CYAN}║                   ${BOLD}${MAGENTA}Xray – Gestion des Tunnels Actifs${RESET}${CYAN}           ║${RESET}"
   echo -e "${CYAN}╚════════════════════════════════════════════════════════╝${RESET}"
 }
 
