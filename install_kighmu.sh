@@ -175,6 +175,8 @@ FILES=(
   "botssh.sh"
   "menu_6.sh"
   "xray_installe.sh"
+  "ws_wss_server.py"
+  "ws_wssr.sh"
 )
 
 BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
