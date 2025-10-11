@@ -6,6 +6,19 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m'
 
+restart_xray_service() {
+  echo -e "${GREEN}Redémarrage du service Xray...${NC}"
+  systemctl restart xray
+  sleep 2
+  if systemctl is-active --quiet xray; then
+    echo -e "${GREEN}Xray redémarré avec succès.${NC}"
+  else
+    echo -e "${RED}Erreur lors du redémarrage de Xray.${NC}"
+    journalctl -u xray -n 20 --no-pager
+    exit 1
+  fi
+}
+
 # Nettoyage précédent avant installation
 echo -e "${GREEN}Arrêt des services utilisant les ports 80 et 8443...${NC}"
 
@@ -238,15 +251,8 @@ EOF
 # Reload systemd and enable/start service
 systemctl daemon-reload
 systemctl enable xray
-systemctl restart xray
 
-if systemctl is-active --quiet xray; then
-  echo -e "${GREEN}Xray démarré avec succès.${NC}"
-else
-  echo -e "${RED}Erreur : Xray ne démarre pas.${NC}"
-  journalctl -u xray -n 20 --no-pager
-  exit 1
-fi
+restart_xray_service
 
 echo -e "${GREEN}Installation complète terminée.${NC}"
 echo "Domaine : $DOMAIN"
