@@ -129,10 +129,10 @@ while true; do
     done
 
   echo -e "${CYAN}+==========================================================+${RESET}"
-  echo -e "${BOLD}${MAGENTA}|                   🚀 KIGHMU MANAGER 🇨🇲 🚀                | ${RESET}"
+  echo -e "${BOLD}${MAGENTA}|                   🚀 𝙆𝙄𝙂𝙃𝙈𝙐 𝙈𝘼𝙉𝘼𝙂𝙀𝙍 🇨🇲 🚀                | ${RESET}"
   echo -e "${CYAN}+==========================================================+${RESET}"
 
-  printf " OS: ${YELLOW}%-20s${RESET} | IP: ${RED}%-15s${RESET}\n" "$OS_INFO" "$IP"
+  printf " ${WHITE_BOLD} OS:${RESET} ${YELLOW}%-20s${RESET} | IP: ${RED}%-15s${RESET}\n" "$OS_INFO" "$IP"
   printf " Taille RAM totale: ${GREEN}%-6s${RESET} | Nombre de cœurs CPU: ${YELLOW}%-6s${RESET}\n" "$RAM_GB_ARR" "$CPU_CORES"
   printf " RAM utilisée: ${GREEN}%-6s${RESET} | CPU utilisé: ${YELLOW}%-6s${RESET}\n" "$RAM_USAGE" "$CPU_USAGE"
 
@@ -156,9 +156,8 @@ while true; do
   echo -e "${GREEN}${BOLD}[07]${RESET} ${BOLD}${MAGENTA}=➤${RESET} ${YELLOW}Installation de mode${RESET}"
   echo -e "${GREEN}${BOLD}[08]${RESET} ${BOLD}${MAGENTA}=➤${RESET} ${YELLOW}V2ray slowdns mode${RESET}"
   echo -e "${GREEN}${BOLD}[09]${RESET} ${BOLD}${MAGENTA}=➤${RESET} ${YELLOW}Xray All mode${RESET}"
-  echo -e "${GREEN}${BOLD}[10]${RESET} ${BOLD}${MAGENTA}=➤${RESET} ${YELLOW}Bot Telegram${RESET}"
-  echo -e "${GREEN}${BOLD}[11]${RESET} ${BOLD}${MAGENTA}=➤${RESET} ${YELLOW}Désinstaller le script${RESET}"
-  echo -e "${GREEN}${BOLD}[12]${RESET} ${BOLD}${MAGENTA}=➤${RESET} ${YELLOW}Blocage de torrents${RESET}"
+  echo -e "${GREEN}${BOLD}[10]${RESET} ${BOLD}${MAGENTA}=➤${RESET} ${YELLOW}Désinstaller le script${RESET}"
+  echo -e "${GREEN}${BOLD}[11]${RESET} ${BOLD}${MAGENTA}=➤${RESET} ${YELLOW}Blocage de torrents${RESET}"
   echo -e "${RED}[00] =➤ Quitter${RESET}"
   echo -e "${CYAN}+=========================================================+${RESET}"
 
@@ -176,8 +175,7 @@ while true; do
     7) bash "$SCRIPT_DIR/menu5.sh" ;;
     8) bash "$SCRIPT_DIR/menu_5.sh" ;;
     9) bash "$SCRIPT_DIR/menu_6.sh" ;;
-    10) bash "$SCRIPT_DIR/botssh.sh" ;;
-    11)
+    10)
       echo -e "${YELLOW}⚠️  Vous êtes sur le point de désinstaller le script.${RESET}"
       read -p "Voulez-vous vraiment continuer ? (o/N): " confirm
       if [[ "$confirm" =~ ^[Oo]$ ]]; then
@@ -191,7 +189,7 @@ while true; do
         echo -e "${GREEN}Opération annulée, retour au menu...${RESET}"
       fi
       ;;
-    12) bash "$SCRIPT_DIR/menu7.sh" ;;
+    11) bash "$SCRIPT_DIR/menu7.sh" ;;
     00)
       clear
       echo -e "${RED}Au revoir !${RESET}"
