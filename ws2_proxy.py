@@ -12,7 +12,7 @@ LISTENING_ADDR = '0.0.0.0'
 try:
     LISTENING_PORT = int(sys.argv[1])
 except:
-    LISTENING_PORT = 80
+    LISTENING_PORT = 9090   # valeur par défaut changée de 80 à 9090
 BUFLEN = 4096 * 4
 TIMEOUT = 60
 MSG = ''
