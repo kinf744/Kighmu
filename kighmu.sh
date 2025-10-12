@@ -131,36 +131,36 @@ for iface in "${NET_INTERFACES[@]}"; do
   DATA_MONTH_GB=$(echo "$DATA_MONTH_GB + $month_gb" | bc)  
 done
 
+echo -e "${CYAN}+======================================================+${RESET}"
+echo -e "${BOLD}${MAGENTA}|                  🚀 𝙆𝙄𝙂𝙃𝙈𝙐 𝙈𝘼𝙉𝘼𝙂𝙀𝙍 🇨🇲 🚀             |${RESET}"
+echo -e "${CYAN}+======================================================+${RESET}"
+
+printf " OS: ${YELLOW}%-20s${RESET} | IP: ${RED}%-15s${RESET}\n" "$OS_INFO" "$IP"
+printf " Taille RAM totale: ${GREEN}%-6s${RESET} | Nombre de cœurs CPU: ${YELLOW}%-6s${RESET}\n" "$RAM_GB_ARR" "$CPU_CORES"
+printf " RAM utilisée: ${GREEN}%-6s${RESET} | CPU utilisé: ${YELLOW}%-6s${RESET}\n" "$RAM_USAGE" "$CPU_USAGE"
+
 echo -e "${CYAN}+==========================================================+${RESET}"
-echo -e "${BOLD}${MAGENTA}|                  🚀 𝙆𝙄𝙂𝙃𝙈𝙐 𝙈𝘼𝙉𝘼𝙂𝙀𝙍 🇨🇲 🚀                |${RESET}"
-echo -e "${CYAN}+==========================================================+${RESET}"
 
-printf "${WHITE_BOLD} OS:${RESET} ${YELLOW}%-20s${RESET} | ${WHITE_BOLD}IP:${RESET} ${RED}%-15s${RESET}\n" "$OS_INFO" "$IP"
-printf "${WHITE_BOLD} Taille RAM totale:${RESET} ${GREEN}%-6s${RESET} | ${WHITE_BOLD}Nombre de cœurs CPU:${RESET} ${YELLOW}%-6s${RESET}\n" "$RAM_GB_ARR" "$CPU_CORES"
-printf "${WHITE_BOLD} RAM utilisée:${RESET} ${GREEN}%-6s${RESET} | ${WHITE_BOLD}CPU utilisé:${RESET} ${YELLOW}%-6s${RESET}\n" "$RAM_USAGE" "$CPU_USAGE"
+printf " Consommation aujourd'hui: ${MAGENTA_VIF}%.2f Go${RESET} | Ce mois-ci: ${CYAN_VIF}%.2f Go${RESET}\n" "$DATA_DAY_GB" "$DATA_MONTH_GB"
 
-echo -e "${CYAN}+==========================================================+${RESET}"
-
-printf "${WHITE_BOLD} Consommation aujourd'hui:${RESET} ${MAGENTA_VIF}%.2f Go${RESET} | ${WHITE_BOLD}Ce mois-ci:${RESET} ${CYAN_VIF}%.2f Go${RESET}\n" "$DATA_DAY_GB" "$DATA_MONTH_GB"
-
-printf "${WHITE_BOLD} Utilisateurs SSH:${RESET} ${BLUE}%-4d${RESET} | ${WHITE_BOLD}Utilisateurs Xray:${RESET} ${MAGENTA}%-4d${RESET}\n" "$SSH_USERS_COUNT" "$XRAY_USERS_COUNT"
-printf "${WHITE_BOLD} Appareils connectés:${RESET} ${MAGENTA}%-4d${RESET} | ${WHITE_BOLD}Utilisateurs expirés:${RESET} ${RED}%-4d${RESET}\n" "$total_connected" "$TOTAL_EXPIRED"
+printf " Utilisateurs SSH: ${BLUE}%-4d${RESET} | Utilisateurs Xray: ${MAGENTA}%-4d${RESET}\n" "$SSH_USERS_COUNT" "$XRAY_USERS_COUNT"
+printf " Appareils connectés: ${MAGENTA}%-4d${RESET} | Utilisateurs expirés: ${RED}%-4d${RESET}\n" "$total_connected" "$TOTAL_EXPIRED"
 
 echo -e "${CYAN}+==========================================================+${RESET}"
 
 echo -e "${BOLD}${YELLOW}|                     MENU PRINCIPAL:                      |${RESET}"
 echo -e "${CYAN}+==========================================================+${RESET}"
-echo -e "${GREEN}${BOLD}[01]${RESET} ${BOLD}${MAGENTA}≋➩≋${RESET} ${YELLOW}Créer un utilisateur SSH${RESET}"
-echo -e "${GREEN}${BOLD}[02]${RESET} ${BOLD}${MAGENTA}≋➩≋${RESET} ${YELLOW}Créer un test utilisateur${RESET}"
-echo -e "${GREEN}${BOLD}[03]${RESET} ${BOLD}${MAGENTA}≋➩≋${RESET} ${YELLOW}Voir les utilisateurs en ligne${RESET}"
-echo -e "${GREEN}${BOLD}[04]${RESET} ${BOLD}${MAGENTA}≋➩≋${RESET} ${YELLOW}Modifier durée / mot de passe utilisateur${RESET}"
-echo -e "${GREEN}${BOLD}[05]${RESET} ${BOLD}${MAGENTA}≋➩≋${RESET} ${YELLOW}Supprimer un utilisateur${RESET}"
-echo -e "${GREEN}${BOLD}[06]${RESET} ${BOLD}${MAGENTA}≋➩≋${RESET} ${YELLOW}Message du serveur${RESET}"
-echo -e "${GREEN}${BOLD}[07]${RESET} ${BOLD}${MAGENTA}≋➩≋${RESET} ${YELLOW}Installation de mode${RESET}"
-echo -e "${GREEN}${BOLD}[08]${RESET} ${BOLD}${MAGENTA}≋➩≋${RESET} ${YELLOW}V2ray slowdns mode${RESET}"
-echo -e "${GREEN}${BOLD}[09]${RESET} ${BOLD}${MAGENTA}≋➩≋${RESET} ${YELLOW}Xray All mode${RESET}"
-echo -e "${GREEN}${BOLD}[10]${RESET} ${BOLD}${MAGENTA}≋➩≋${RESET} ${YELLOW}Désinstaller le script${RESET}"
-echo -e "${GREEN}${BOLD}[11]${RESET} ${BOLD}${MAGENTA}≋➩≋${RESET} ${YELLOW}Blocage de torrents${RESET}"
+echo -e "${GREEN}${BOLD}[01]${RESET} ${BOLD}${MAGENTA}=➤${RESET} ${YELLOW}Créer un utilisateur SSH${RESET}"
+echo -e "${GREEN}${BOLD}[02]${RESET} ${BOLD}${MAGENTA}=➤${RESET} ${YELLOW}Créer un test utilisateur${RESET}"
+echo -e "${GREEN}${BOLD}[03]${RESET} ${BOLD}${MAGENTA}=➤${RESET} ${YELLOW}Voir les utilisateurs en ligne${RESET}"
+echo -e "${GREEN}${BOLD}[04]${RESET} ${BOLD}${MAGENTA}=➤${RESET} ${YELLOW}Modifier durée / mot de passe utilisateur${RESET}"
+echo -e "${GREEN}${BOLD}[05]${RESET} ${BOLD}${MAGENTA}=➤${RESET} ${YELLOW}Supprimer un utilisateur${RESET}"
+echo -e "${GREEN}${BOLD}[06]${RESET} ${BOLD}${MAGENTA}=➤${RESET} ${YELLOW}Message du serveur${RESET}"
+echo -e "${GREEN}${BOLD}[07]${RESET} ${BOLD}${MAGENTA}=➤${RESET} ${YELLOW}Installation de mode${RESET}"
+echo -e "${GREEN}${BOLD}[08]${RESET} ${BOLD}${MAGENTA}=➤${RESET} ${YELLOW}V2ray slowdns mode${RESET}"
+echo -e "${GREEN}${BOLD}[09]${RESET} ${BOLD}${MAGENTA}=➤${RESET} ${YELLOW}Xray All mode${RESET}"
+echo -e "${GREEN}${BOLD}[10]${RESET} ${BOLD}${MAGENTA}=➤${RESET} ${YELLOW}Désinstaller le script${RESET}"
+echo -e "${GREEN}${BOLD}[11]${RESET} ${BOLD}${MAGENTA}=➤${RESET} ${YELLOW}Blocage de torrents${RESET}"
 echo -e "${RED}[00] =➤ Quitter${RESET}"
 echo -e "${CYAN}+=========================================================+${RESET}"
 
@@ -180,7 +180,7 @@ case $choix in
 9) bash "$SCRIPT_DIR/menu_6.sh" ;;
 10)
 echo -e "${YELLOW}⚠️  Vous êtes sur le point de désinstaller le script.${RESET}"
-read -p "${WHITE_BOLD}Voulez-vous vraiment continuer ? (o/N): ${RESET}" confirm
+read -p "Voulez-vous vraiment continuer ? (o/N): " confirm
 if [[ "$confirm" =~ ^[Oo]$ ]]; then
 echo -e "${RED}Désinstallation en cours...${RESET}"
 rm -rf "$SCRIPT_DIR"
@@ -203,5 +203,5 @@ echo -e "${RED}Choix invalide !${RESET}" ;;
 esac
 
 echo ""
-read -p "${WHITE_BOLD}Appuyez sur Entrée pour revenir au menu...${RESET}"
+read -p "Appuyez sur Entrée pour revenir au menu..."
 done
