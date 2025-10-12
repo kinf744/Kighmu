@@ -24,6 +24,8 @@ MAGENTA="\e[35m"
 MAGENTA_VIF="\e[1;35m"
 CYAN="\e[36m"
 CYAN_VIF="\e[1;36m"
+WHITE="\e[37m"
+WHITE_BOLD="\e[1;37m"
 BOLD="\e[1m"
 RESET="\e[0m"
 
@@ -126,9 +128,9 @@ while true; do
       DATA_MONTH_GB=$(echo "$DATA_MONTH_GB + $month_gb" | bc)
     done
 
-  echo -e "${CYAN}╔☆=======================================================☆${RESET}"
-  echo -e "${BOLD}${MAGENTA}                   🚀 KIGHMU MANAGER 🇨🇲 🚀              | ${RESET}"
-  echo -e "${CYAN}╚☆=======================================================☆${RESET}"
+  echo -e "${CYAN}+==========================================================+${RESET}"
+  echo -e "${BOLD}${MAGENTA}|                   🚀 KIGHMU MANAGER 🇨🇲 🚀                | ${RESET}"
+  echo -e "${CYAN}+==========================================================+${RESET}"
 
   printf " OS: ${YELLOW}%-20s${RESET} | IP: ${RED}%-15s${RESET}\n" "$OS_INFO" "$IP"
   printf " Taille RAM totale: ${GREEN}%-6s${RESET} | Nombre de cœurs CPU: ${YELLOW}%-6s${RESET}\n" "$RAM_GB_ARR" "$CPU_CORES"
