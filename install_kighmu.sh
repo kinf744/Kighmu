@@ -177,6 +177,7 @@ FILES=(
   "xray_installe.sh"
   "ws_wss_server.py"
   "ws_wssr.sh"
+  "sockspy.sh"
 )
 
 BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
