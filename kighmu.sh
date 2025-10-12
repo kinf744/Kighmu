@@ -24,6 +24,8 @@ MAGENTA="\e[35m"
 MAGENTA_VIF="\e[1;35m"
 CYAN="\e[36m"
 CYAN_VIF="\e[1;36m"
+WHITE="\e[37m"
+WHITE_BOLD="\e[1;37m"
 BOLD="\e[1m"
 RESET="\e[0m"
 
