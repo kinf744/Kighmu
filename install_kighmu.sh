@@ -179,6 +179,7 @@ FILES=(
   "ws_wssr.sh"
   "sockspy.sh"
   "ws2_proxy.py"
+  "hysteria.sh"
 )
 
 BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
