@@ -52,7 +52,7 @@ afficher_modes_ports() {
         else
             PROXY_WS_PORT=$(sudo lsof -Pan -p $(pgrep -f ws2_proxy.py | head -n1) -iTCP -sTCP:LISTEN 2>/dev/null | awk 'NR==2 {print $9}' | cut -d: -f2)
         fi
-        PROXY_WS_PORT=${PROXY_WS_PORT:-80}
+        PROXY_WS_PORT=${PROXY_WS_PORT:-9090}
         echo -e "  - proxy ws: ${GREEN}port TCP $PROXY_WS_PORT${RESET}"
     fi
     if systemctl is-active --quiet stunnel4.service || pgrep -f stunnel >/dev/null 2>&1; then
@@ -194,7 +194,7 @@ uninstall_proxy_ws() {
     rm -f /etc/systemd/system/socks_python_ws.service
     systemctl daemon-reload
     rm -f /usr/local/bin/ws2_proxy.py
-    ufw delete allow 80/tcp 2>/dev/null || true
+    ufw delete allow 9090/tcp 2>/dev/null || true
     echo -e "${GREEN}[OK] proxy ws désinstallé.${RESET}"
 }
 
