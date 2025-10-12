@@ -131,9 +131,9 @@ for iface in "${NET_INTERFACES[@]}"; do
   DATA_MONTH_GB=$(echo "$DATA_MONTH_GB + $month_gb" | bc)  
 done
 
-echo -e "${CYAN}+======================================================+${RESET}"
+echo -e "${CYAN}+==========================================================+${RESET}"
 echo -e "${BOLD}${MAGENTA}|                  🚀 𝙆𝙄𝙂𝙃𝙈𝙐 𝙈𝘼𝙉𝘼𝙂𝙀𝙍 🇨🇲 🚀             |${RESET}"
-echo -e "${CYAN}+======================================================+${RESET}"
+echo -e "${CYAN}+==========================================================+${RESET}"
 
 printf " OS: ${YELLOW}%-20s${RESET} | IP: ${RED}%-15s${RESET}\n" "$OS_INFO" "$IP"
 printf " Taille RAM totale: ${GREEN}%-6s${RESET} | Nombre de cœurs CPU: ${YELLOW}%-6s${RESET}\n" "$RAM_GB_ARR" "$CPU_CORES"
