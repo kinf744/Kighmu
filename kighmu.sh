@@ -132,16 +132,16 @@ while true; do
   echo -e "${BOLD}${MAGENTA}|                   🚀 𝙆𝙄𝙂𝙃𝙈𝙐 𝙈𝘼𝙉𝘼𝙂𝙀𝙍 🇨🇲 🚀                | ${RESET}"
   echo -e "${CYAN}+==========================================================+${RESET}"
 
-  printf " ${WHITE_BOLD} OS:${RESET} ${YELLOW}%-20s${RESET} | IP: ${RED}%-15s${RESET}\n" "$OS_INFO" "$IP"
-  printf " Taille RAM totale: ${GREEN}%-6s${RESET} | Nombre de cœurs CPU: ${YELLOW}%-6s${RESET}\n" "$RAM_GB_ARR" "$CPU_CORES"
-  printf " RAM utilisée: ${GREEN}%-6s${RESET} | CPU utilisé: ${YELLOW}%-6s${RESET}\n" "$RAM_USAGE" "$CPU_USAGE"
+  printf " ${WHITE_BOLD} OS:${RESET} ${YELLOW}%-20s${RESET} | ${WHITE_BOLD}IP:${RESET} ${RED}%-15s${RESET}\n" "$OS_INFO" "$IP"
+  printf " ${WHITE_BOLD} Taille RAM totale:${RESET} ${GREEN}%-6s${RESET} | ${WHITE_BOLD}Nombre de cœurs CPU:${RESET} ${YELLOW}%-6s${RESET}\n" "$RAM_GB_ARR" "$CPU_CORES"
+  printf " ${WHITE_BOLD} RAM utilisée:${RESET} ${GREEN}%-6s${RESET} | ${WHITE_BOLD}CPU utilisé:${RESET} ${YELLOW}%-6s${RESET}\n" "$RAM_USAGE" "$CPU_USAGE"
 
   echo -e "${CYAN}+==========================================================+${RESET}"
 
-  printf " Consommation aujourd'hui: ${MAGENTA_VIF}%.2f Go${RESET} | Ce mois-ci: ${CYAN_VIF}%.2f Go${RESET}\n" "$DATA_DAY_GB" "$DATA_MONTH_GB"
+  printf " ${WHITE_BOLD} Consommation aujourd'hui:${RESET} ${MAGENTA_VIF}%.2f Go${RESET} | ${WHITE_BOLD}Ce mois-ci:${RESET} ${CYAN_VIF}%.2f Go${RESET}\n" "$DATA_DAY_GB" "$DATA_MONTH_GB"
 
-  printf " Utilisateurs SSH: ${BLUE}%-4d${RESET} | Utilisateurs Xray: ${MAGENTA}%-4d${RESET}\n" "$SSH_USERS_COUNT" "$XRAY_USERS_COUNT"
-  printf " Appareils connectés: ${MAGENTA}%-4d${RESET} | Utilisateurs expirés: ${RED}%-4d${RESET}\n" "$total_connected" "$TOTAL_EXPIRED"
+  printf " ${WHITE_BOLD} Utilisateurs SSH:${RESET} ${BLUE}%-4d${RESET} | ${WHITE_BOLD} Utilisateurs Xray:${RESET} ${MAGENTA}%-4d${RESET}\n" "$SSH_USERS_COUNT" "$XRAY_USERS_COUNT"
+  printf " ${WHITE_BOLD} Appareils connectés:${RESET} ${MAGENTA}%-4d${RESET} | ${WHITE_BOLD}Utilisateurs expirés:${RESET} ${RED}%-4d${RESET}\n" "$total_connected" "$TOTAL_EXPIRED"
 
   echo -e "${CYAN}+==========================================================+${RESET}"
 
