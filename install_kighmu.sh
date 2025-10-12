@@ -132,7 +132,7 @@ else
   ufw allow 54000
   ufw allow 8080
   ufw allow 8443
-  ufw allow 2083
+  ufw allow 9090
 
   ufw --force enable
 
@@ -178,6 +178,7 @@ FILES=(
   "ws_wss_server.py"
   "ws_wssr.sh"
   "sockspy.sh"
+  "ws2_proxy.py"
 )
 
 BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
