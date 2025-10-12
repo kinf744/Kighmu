@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==============================================
-# Kighmu VPS Manager - Version Dynamique & SSH Fix + Mode Debug
+# Monitor VPS Manager - Version Dynamique & SSH Fix + Mode Debug
 # ==============================================
 
 # (restant du script inchangé, y compris les définitions et count_devices_per_user)
