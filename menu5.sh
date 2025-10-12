@@ -252,11 +252,12 @@ manage_mode() {
     while true; do
         clear
         echo -e "${CYAN}+======================================================+${RESET}"
-        echo -e "|             🚀 Gestion du mode : $MODE_NAME 🚀          |"
+        echo -e "|          🚀 Gestion du mode : $MODE_NAME 🚀          |"
         echo -e "${CYAN}+======================================================+${RESET}"
         echo -e "${GREEN}${BOLD}[1]${RESET} ${YELLOW}Installer${RESET}"
         echo -e "${GREEN}${BOLD}[2]${RESET} ${YELLOW}Désinstaller${RESET}"
         echo -e "${GREEN}${BOLD}[0]${RESET} ${YELLOW}Retour${RESET}"
+        echo -e "${CYAN}+======================================================+${RESET}"
         echo -ne "${BOLD}${YELLOW}👉 Choisissez une action : ${RESET}"
         read action
         case $action in
