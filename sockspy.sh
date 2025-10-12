@@ -7,7 +7,7 @@ echo "|        CONFIG SOCKS/PYTHON WS              |"
 echo "+--------------------------------------------+"
 
 # Port par défaut
-DEFAULT_PORT=80
+DEFAULT_PORT=9090
 PORT=${2:-$DEFAULT_PORT}
 
 # Gestion paramètre auto bypass prompt
