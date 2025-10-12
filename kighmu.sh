@@ -129,7 +129,7 @@ while true; do
     done
 
   echo -e "${CYAN}+==========================================================+${RESET}"
-  echo -e "${BOLD}${MAGENTA}|            🚀 𝙆𝙄𝙂𝙃𝙈𝙐 𝙈𝘼𝙉𝘼𝙂𝙀𝙍 🇨🇲 🚀                 | ${RESET}"
+  echo -e "${BOLD}${MAGENTA}|            🚀 KIGHMU MANAGER  🇨🇲 🚀                  | ${RESET}"
   echo -e "${CYAN}+==========================================================+${RESET}"
 
   printf " ${WHITE_BOLD} OS:${RESET} ${YELLOW}%-20s${RESET} | ${WHITE_BOLD}IP:${RESET} ${RED}%-15s${RESET}\n" "$OS_INFO" "$IP"
