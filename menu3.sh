@@ -48,9 +48,9 @@ USER_FILE="/etc/kighmu/users.list"
 AUTH_LOG="/var/log/auth.log"
 
 clear
-echo -e "${CYAN}+=========================================================+${RESET}"
-echo -e "|            GESTION DES UTILISATEURS EN LIGNE              |${RESET}"
-echo -e "${CYAN}+=========================================================+${RESET}"
+echo -e "${CYAN}+============================================================+${RESET}"
+echo -e "|            GESTION DES UTILISATEURS EN LIGNE               |${RESET}"
+echo -e "${CYAN}+============================================================+${RESET}"
 
 if [ ! -f "$USER_FILE" ]; then
     echo -e "${RED}Fichier utilisateur introuvable.${RESET}"
@@ -59,7 +59,7 @@ fi
 
 printf "${BOLD}%-20s %-10s %-15s %-15s${RESET}
 " "UTILISATEUR" "LIMITÉ" " CONNECTÉS" " TRAFIC TOTAL"
-echo -e "${CYAN}-----------------------------------------------------------${RESET}"
+echo -e "${CYAN}--------------------------------------------------------------${RESET}"
 
 # Fonction pour compter appareils connectés par utilisateur
 count_devices_per_user() {
@@ -161,5 +161,5 @@ display_all_users_with_traffic_on_one_line() {
 # Exécution: ligne par ligne sur une seule commande imprimant tout
 display_all_users_with_traffic_on_one_line
 
-echo -e "${CYAN}+==============================================+${RESET}"
+echo -e "${CYAN}+=============================================================+${RESET}"
 read -p "Appuyez sur Entrée pour revenir au menu..."
