@@ -1,18 +1,32 @@
 #!/bin/bash
 
 # ==============================================
-# Monitor VPS Manager - Version Dynamique & SSH Fix + Mode Debug
+# Kighmu VPS Manager - Version Dynamique & SSH Fix + Mode Debug
 # ==============================================
 
-# (restant du script inchangé, y compris les définitions et count_devices_per_user)
+_DEBUG="off"
 
+DEBUG() {
+  if [ "$_DEBUG" = "on" ]; then
+    echo -e "${YELLOW}[DEBUG] $*${RESET}"
+  fi
+}
+
+# Prérequis et variables globales
 RED="e[31m"
 GREEN="e[32m"
 YELLOW="e[33m"
+BLUE="e[36m"
+MAGENTA="e[35m"
+MAGENTA_VIF="e[1;35m"
 CYAN="e[36m"
+CYAN_VIF="e[1;36m"
+WHITE="e[37m"
+WHITE_BOLD="e[1m"
 BOLD="e[1m"
 RESET="e[0m"
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 USER_FILE="/etc/kighmu/users.list"
 AUTH_LOG="/var/log/auth.log"
 
@@ -26,8 +40,8 @@ if [ ! -f "$USER_FILE" ]; then
     exit 1
 fi
 
-printf "${BOLD}%-20s %-10s %-15s %-15s
-${RESET}" "UTILISATEUR" "LIMITÉ" " CONNECTÉS" " TRAFIC TOTAL"
+printf "${BOLD}%-20s %-10s %-15s %-15s${RESET}
+" "UTILISATEUR" "LIMITÉ" " CONNECTÉS" " TRAFIC TOTAL"
 echo -e "${CYAN}--------------------------------------------------${RESET}"
 
 # Fonction pour compter appareils connectés par utilisateur
@@ -68,46 +82,35 @@ count_devices_per_user() {
 # Récupération des comptes d'appareils par utilisateur
 eval "$(count_devices_per_user | tail -n +2)"  # Cette ligne importe le tableau user_counts
 
-# Helpers pour trafic per-interface
-read_proc_net_dev() {
-  declare -A IF_RX
-  declare -A IF_TX
-  while read -r line; do
-    if [[ "$line" =~ ^[[:space:]]*([a-zA-Z0-9._-]+): ]]; then
-      iface="${BASH_REMATCH[1]}"
-      rx=$(echo "$line" | awk '{print $2}')
-      tx=$(echo "$line" | awk '{print $10}')
-      IF_RX["$iface"]="$rx"
-      IF_TX["$iface"]="$tx"
-    fi
-  done < <(grep -E "^[[:space:]]*[a-zA-Z0-9._-]+:" /proc/net/dev)
-  # Export as global assoc arrays by echoing declare statements
-  for k in "${!IF_RX[@]}"; do
-    echo "IF_RX[$k]"=${IF_RX[$k]}""
-  done
-}
-
-# Convertir octets en Go avec deux décimales
+# Helpers pour trafic per-interface et per-user
 octets_to_go() {
   local bytes=$1
   printf "%.2f" "$(awk -v b="$bytes" 'BEGIN { printf (b/1024/1024/1024) }')"
 }
 
-# Calcul et affichage du trafic total par utilisateur sur la même ligne
-display_traffic_total_on_same_line() {
-  declare -A IF_RX
-  declare -A IF_TX
+read_proc_net_dev() {
+  local -n rx_out=$1
+  local -n tx_out=$2
+  rx_out=()
+  tx_out=()
   while read -r line; do
     if [[ "$line" =~ ^[[:space:]]*([a-zA-Z0-9._-]+): ]]; then
       iface="${BASH_REMATCH[1]}"
       rx=$(echo "$line" | awk '{print $2}')
       tx=$(echo "$line" | awk '{print $10}')
-      IF_RX["$iface"]="$rx"
-      IF_TX["$iface"]="$tx"
+      rx_out["$iface"]="$rx"
+      tx_out["$iface"]="$tx"
     fi
   done < <(grep -E "^[[:space:]]*[a-zA-Z0-9._-]+:" /proc/net/dev)
+}
 
-  # Préparer liste des utilisateurs (ordre tel que dans USER_FILE)
+# Calcul et affichage sur une seule ligne par utilisateur
+display_all_users_with_traffic_on_one_line() {
+  # Lire trafic par interface
+  declare -A IF_RX IF_TX
+  read_proc_net_dev IF_RX IF_TX
+
+  # Préparer la liste des utilisateurs actifs (ordre tel que dans USER_FILE)
   local users_order=()
   for u in "${!user_counts[@]}"; do
     if [[ -n "${user_counts[$u]}" ]]; then
@@ -115,35 +118,31 @@ display_traffic_total_on_same_line() {
     fi
   done
 
-  # Imprimer trafic total pour chaque utilisateur sur la même ligne dans le tableau
+  # Déterminer le nombre d’utilisateurs actifs
+  local n_users=${#users_order[@]}
+
+  # Imprimer chaque utilisateur sur une ligne avec trafic total calculé
   while IFS="|" read -r username password limite expire_date hostip domain slowdns_ns; do
     app_connecte=${user_counts[$username]:-0}
+
+    # Calcul trafic total estimé pour cet utilisateur
     local total_bytes=0
     for iface in "${!IF_RX[@]}"; do
       local iface_total=$(( IF_RX[$iface] + IF_TX[$iface] ))
-      # Répartition équitable entre les utilisateurs actifs
-      local n=${#users_order[@]}
-      if (( n > 0 )); then
-        total_bytes=$(( total_bytes + (iface_total / n) ))
+      if (( n_users > 0 )); then
+        total_bytes=$(( total_bytes + (iface_total / n_users) ))
       fi
     done
     local total_go
     total_go=$(octets_to_go "$total_bytes")
+
     printf "%-20s %-10s %-15d %-15s
-" "$username" "$limite" "$app_connecte" "$total_go Go total"
+" "$username" "$limite" "$app_connecte" "${total_go} Go total"
   done < "$USER_FILE"
 }
 
-# Impression initiale des utilisateurs et de leurs connexions
-while IFS="|" read -r username password limite expire_date hostip domain slowdns_ns; do
-    # Nombre d'appareils connecté
-    app_connecte=${user_counts[$username]:-0}
-    printf "%-20s %-10s %-15d %-15s
-" "$username" "$limite" "$app_connecte" "-"
-done < "$USER_FILE"
-
-# Calcul et affichage du trafic total par utilisateur sur la même ligne
-display_traffic_total_on_same_line
+# Exécution: ligne par ligne sur une seule commande imprimant tout
+display_all_users_with_traffic_on_one_line
 
 echo -e "${CYAN}+==============================================+${RESET}"
 read -p "Appuyez sur Entrée pour revenir au menu..."
