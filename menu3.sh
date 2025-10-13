@@ -13,26 +13,43 @@ DEBUG() {
 }
 
 # Prérequis et variables globales
-RED="e[31m"
-GREEN="e[32m"
-YELLOW="e[33m"
-BLUE="e[36m"
-MAGENTA="e[35m"
-MAGENTA_VIF="e[1;35m"
-CYAN="e[36m"
-CYAN_VIF="e[1;36m"
-WHITE="e[37m"
-WHITE_BOLD="e[1m"
-BOLD="e[1m"
-RESET="e[0m"
+# Détection portable des couleurs
+setup_colors() {
+  RED=""
+  GREEN=""
+  YELLOW=""
+  BLUE=""
+  MAGENTA=""
+  MAGENTA_VIF=""
+  CYAN=""
+  CYAN_VIF=""
+  WHITE=""
+  WHITE_BOLD=""
+  BOLD=""
+  RESET=""
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  if [ -t 1 ]; then
+    if [ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]; then
+      RED="$(tput setaf 1)"; GREEN="$(tput setaf 2)"; YELLOW="$(tput setaf 3)"
+      BLUE="$(tput setaf 4)"; MAGENTA="$(tput setaf 5)"; MAGENTA_VIF="$(tput setaf 5; tput bold)"
+      CYAN="$(tput setaf 6)"; CYAN_VIF="$(tput setaf 6; tput bold)"
+      WHITE="$(tput setaf 7)"; WHITE_BOLD="$(tput setaf 7; tput bold)"
+      BOLD="$(tput bold)"; RESET="$(tput sgr0)"
+    fi
+  fi
+  # Si non-interactif ou pas de couleur, laisser vides et tout sera en texte neutre
+}
+
+# Appel de la config couleur
+setup_colors
+
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 USER_FILE="/etc/kighmu/users.list"
 AUTH_LOG="/var/log/auth.log"
 
 clear
 echo -e "${CYAN}+==============================================+${RESET}"
-echo -e "|      GESTION DES UTILISATEURS EN LIGNE        |"
+echo -e "|      GESTION DES UTILISATEURS EN LIGNE        |${RESET}"
 echo -e "${CYAN}+==============================================+${RESET}"
 
 if [ ! -f "$USER_FILE" ]; then
