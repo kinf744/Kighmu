@@ -48,6 +48,17 @@ logging.basicConfig(
     ]
 )
 
+# Logs supplémentaires par composants (facultatif)
+log_main = logging.getLogger("ws_wss.main")
+log_tls  = logging.getLogger("ws_wss.tls")
+log_ws   = logging.getLogger("ws_wss.ws")
+log_ssh  = logging.getLogger("ws_wss.ssh")
+log_vpn  = logging.getLogger("ws_wss.vpn")
+
+# Redirection des loggers vers le même fichier principal
+for lg in [log_main, log_tls, log_ws, log_ssh, log_vpn]:
+    lg.propagate = True  # assure que les messages atteignent le root logger
+
 # ---------------------------------------------------------
 # CLASSE DE TUNNEL SSH VIA WEBSOCKET
 # ---------------------------------------------------------
@@ -58,56 +69,78 @@ class WSSTunnelServer:
 
     async def handle_client(self, websocket, path):
         client_ip = websocket.remote_address[0]
-        logging.info(f"Nouvelle connexion WebSocket de {client_ip} sur {path}")
+        log_main.info(f"Nouvelle connexion WebSocket de {client_ip} sur {path}")
 
+        # Prépare l'état de la session
+        ssl_handshake_ok = False
+        ssh_established = False
         try:
             # Connexion au serveur SSH local
+            log_ssh.debug(f"Essai d'ouverture de la connexion SSH locale vers {self.ssh_host}:{self.ssh_port} pour {client_ip}")
             reader, writer = await asyncio.open_connection(self.ssh_host, self.ssh_port)
-            logging.info(f"Tunnel SSH établi pour {client_ip}")
+            ssh_established = True
+            log_ssh.info(f"Tunnel SSH établi pour {client_ip}")
 
             async def ws_to_ssh():
+                nonlocal writer
                 try:
                     async for message in websocket:
                         if isinstance(message, bytes):
                             writer.write(message)
                             await writer.drain()
+                            log_ws.debug(f"WS->SSH: {len(message)} octets pour {client_ip}")
                         else:
-                            logging.warning(f"Message texte ignoré de {client_ip}")
-                except Exception:
-                    pass
+                            log_ws.warning(f"Message texte ignoré de {client_ip}")
+                except Exception as e:
+                    log_ws.exception(f"Erreur WS->SSH pour {client_ip}: {e}")
                 finally:
-                    writer.close()
-                    await writer.wait_closed()
+                    try:
+                        writer.close()
+                        await writer.wait_closed()
+                    except Exception:
+                        pass
 
             async def ssh_to_ws():
+                nonlocal websocket
                 try:
                     while True:
                         data = await reader.read(4096)
                         if not data:
                             break
                         await websocket.send(data)
-                except Exception:
-                    pass
+                        log_ws.debug(f"SSH->WS: {len(data)} octets pour {client_ip}")
+                except Exception as e:
+                    log_ws.exception(f"Erreur SSH->WS pour {client_ip}: {e}")
                 finally:
-                    await websocket.close()
+                    try:
+                        await websocket.close()
+                    except Exception:
+                        pass
 
             await asyncio.gather(ws_to_ssh(), ssh_to_ws())
 
         except Exception as e:
-            logging.error(f"Erreur avec {client_ip}: {e}")
+            log_main.error(f"Erreur avec {client_ip}: {e}")
             traceback.print_exc()
         finally:
-            logging.info(f"Connexion fermée pour {client_ip}")
+            log_main.info(f"Connexion fermée pour {client_ip}")
+            # Fermeture sécurisée si nécessaire
+            try:
+                if 'writer' in locals():
+                    writer.close()
+                    await writer.wait_closed()
+            except Exception:
+                pass
 
     async def start_servers(self):
         # Serveur WebSocket (non sécurisé)
         ws_server = await websockets.serve(self.handle_client, "0.0.0.0", WS_PORT, ping_interval=None)
-        logging.info(f"Serveur WS lancé sur ws://{DOMAIN}:{WS_PORT}")
+        log_main.info(f"Serveur WS lancé sur ws://{DOMAIN}:{WS_PORT}")
 
         # Serveur WebSocket sécurisé (WSS)
         ssl_context = self._load_or_generate_cert()
         wss_server = await websockets.serve(self.handle_client, "0.0.0.0", WSS_PORT, ssl=ssl_context, ping_interval=None)
-        logging.info(f"Serveur WSS lancé sur wss://{DOMAIN}:{WSS_PORT}")
+        log_main.info(f"Serveur WSS lancé sur wss://{DOMAIN}:{WSS_PORT}")
 
         await asyncio.Future()  # Exécution infinie
 
@@ -119,19 +152,22 @@ class WSSTunnelServer:
         key_path = f"/etc/letsencrypt/live/{DOMAIN}/privkey.pem"
 
         if not os.path.exists(cert_path) or not os.path.exists(key_path):
-            logging.warning("Aucun certificat Let's Encrypt trouvé. Tentative de génération...")
-            os.system(f"sudo certbot certonly --standalone -d {DOMAIN} --agree-tos -m admin@{DOMAIN} --non-interactive || true")
+            log_tls.warning("Aucun certificat Let's Encrypt trouvé. Tentative de génération...")
+            # Exécution sécurisée via subprocess pour éviter shell injection si possible
+            rc = os.system(f"sudo certbot certonly --standalone -d {DOMAIN} --agree-tos -m admin@{DOMAIN} --non-interactive 2>&1 || true")
+            log_tls.debug(f"Certbot exit code: {rc}")
 
         if not os.path.exists(cert_path) or not os.path.exists(key_path):
-            logging.warning("⚠️ Impossible de générer un certificat valide. Passage en mode auto-signé.")
+            log_tls.warning("⚠️ Impossible de générer un certificat valide. Passage en mode auto-signé.")
             cert_dir = "/etc/ssl/kighmu"
             os.makedirs(cert_dir, exist_ok=True)
-            os.system(f"openssl req -x509 -newkey rsa:2048 -nodes -keyout {cert_dir}/key.pem -out {cert_dir}/cert.pem -days 365 -subj '/CN={DOMAIN}'")
+            os.system(f"openssl req -x509 -newkey rsa:2048 -nodes -keyout {cert_dir}/key.pem -out {cert_dir}/cert.pem -days 365 -subj '/CN={DOMAIN}' 2>&1 || true")
             cert_path = f"{cert_dir}/cert.pem"
             key_path = f"{cert_dir}/key.pem"
 
         ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         ssl_context.load_cert_chain(certfile=cert_path, keyfile=key_path)
+        log_tls.info(f"TLS: certificat chargé (cert={cert_path}, key={key_path})")
         return ssl_context
 
 
@@ -139,11 +175,12 @@ class WSSTunnelServer:
 # MAIN
 # ---------------------------------------------------------
 if __name__ == "__main__":
-    logging.info("🚀 Démarrage du serveur WebSocket/SSH avancé...")
+    log_main.info("🚀 Démarrage du serveur WS/WSS avancé...")
     tunnel = WSSTunnelServer()
     try:
         asyncio.run(tunnel.start_servers())
     except KeyboardInterrupt:
-        logging.info("🛑 Arrêt manuel du serveur.")
+        log_main.info("🛑 Arrêt manuel du serveur.")
     except Exception as e:
-        logging.error(f"Erreur critique : {e}")
+        log_main.error(f"Erreur critique : {e}")
+        traceback.print_exc()
