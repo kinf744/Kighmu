@@ -161,7 +161,7 @@ class WSSTunnelServer:
             log_tls.warning("⚠️ Impossible de générer un certificat valide. Passage en mode auto-signé.")
             cert_dir = "/etc/ssl/kighmu"
             os.makedirs(cert_dir, exist_ok=True)
-            os.system(f"openssl req -x509 -newkey rsa:2048 -nodes -keyout {cert_dir}/key.pem -out {cert_dir}/cert.pem -days 365 -subj '/CN={DOMAIN}' 2>&1 || true")
+            os.system(f"openssl req -x509 -newkey rsa:2048 -nodes -keyout {cert_dir}/key.pem -out {cert_dir}/key.pem -days 365 -subj '/CN={DOMAIN}' 2>&1 || true")
             cert_path = f"{cert_dir}/cert.pem"
             key_path = f"{cert_dir}/key.pem"
 
@@ -176,6 +176,7 @@ class WSSTunnelServer:
 # ---------------------------------------------------------
 if __name__ == "__main__":
     log_main.info("🚀 Démarrage du serveur WS/WSS avancé...")
+    print("START")  # Debug rapide si besoin
     tunnel = WSSTunnelServer()
     try:
         asyncio.run(tunnel.start_servers())
