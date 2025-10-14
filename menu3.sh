@@ -1,19 +1,19 @@
 #!/bin/bash
-
-# ==============================================
 # Monitoring VPS Manager - Version Dynamique & SSH Fix + Mode Debug
-# ==============================================
+# Compatibilité: Ubuntu/Debian
 
+set -euo pipefail
+
+# Options debug
 _DEBUG="off"
-
 DEBUG() {
   if [ "$_DEBUG" = "on" ]; then
-    echo -e "${YELLOW}[DEBUG] $*${RESET}"
+    echo -e "\u001B[1;33m[DEBUG] $*\u001B[0m"
   fi
 }
 
 # Prérequis et variables globales
-# Détection portable des couleurs
+# Couleurs (utilisées par DEBUG et affichage)
 setup_colors() {
   RED=""
   GREEN=""
@@ -27,7 +27,6 @@ setup_colors() {
   WHITE_BOLD=""
   BOLD=""
   RESET=""
-
   if [ -t 1 ]; then
     if [ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]; then
       RED="$(tput setaf 1)"; GREEN="$(tput setaf 2)"; YELLOW="$(tput setaf 3)"
@@ -37,11 +36,7 @@ setup_colors() {
       BOLD="$(tput bold)"; RESET="$(tput sgr0)"
     fi
   fi
-  # Si non-interactif ou pas de couleur, laisser vides et tout sera en texte neutre
 }
-
-set -euo pipefail
-# Appel de la config couleur
 setup_colors
 
 _SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -54,8 +49,8 @@ echo -e "${BOLD}${MAGENTA}|            GESTION DES UTILISATEURS EN LIGNE        
 echo -e "${CYAN}+============================================================+${RESET}"
 
 if [ ! -f "$USER_FILE" ]; then
-    echo -e "${RED}Fichier utilisateur introuvable.${RESET}"
-    exit 1
+  echo -e "${RED}Fichier utilisateur introuvable.${RESET}"
+  exit 1
 fi
 
 printf "${BOLD}%-20s %-10s %-15s %-15s${RESET}
@@ -65,7 +60,6 @@ echo -e "${CYAN}--------------------------------------------------------------${
 # Fonction pour compter appareils connectés par utilisateur
 count_devices_per_user() {
   declare -A user_counts
-
   # Comptage SSH sessions non-root (sshd)
   while read -r pid user cmd; do
     if [[ "$cmd" == *sshd* && "$user" != "root" ]]; then
@@ -88,7 +82,7 @@ count_devices_per_user() {
   if [[ -f /etc/openvpn/openvpn-status.log ]]; then
     while read -r line; do
       user=$(echo "$line" | cut -d',' -f2)
-      ((user_counts[$user]++))
+      [[ -n "$user" ]] && ((user_counts[$user]++))
     done < <(grep CLIENT_LIST /etc/openvpn/openvpn-status.log)
   fi
 
@@ -97,14 +91,25 @@ count_devices_per_user() {
 }
 
 # Récupération des comptes d'appareils par utilisateur
-eval "$(count_devices_per_user | tail -n +2)"  # Cette ligne importe le tableau user_counts
+# Import sécurisé du tableau si possible; sinon initialise vide
+tmp_result="$(count_devices_per_user 2>/dev/null || true)"
+declare -A user_counts=()
+if [[ -n "${tmp_result:-}" ]]; then
+  # Évaluer uniquement si le contenu semble correct
+  if echo "$tmp_result" | grep -q "declare -A"; then
+    eval "$tmp_result"
+  else
+    DEBUG "Résultat inattendu de count_devices_per_user"
+  fi
+fi
 
-# Helpers pour trafic per-interface et per-user
+# Helper: conversion octets -> Go
 octets_to_go() {
   local bytes=$1
   printf "%.2f" "$(awk -v b="$bytes" 'BEGIN { printf (b/1024/1024/1024) }')"
 }
 
+# Read /proc/net/dev en délimitant les valeurs par interface
 read_proc_net_dev() {
   local -n rx_out=$1
   local -n tx_out=$2
@@ -140,6 +145,9 @@ display_all_users_with_traffic_on_one_line() {
 
   # Imprimer chaque utilisateur sur une ligne avec trafic total calculé
   while IFS="|" read -r username password limite expire_date hostip domain slowdns_ns; do
+    # Protection: si l’entrée est vide, ignorer
+    [[ -z "$username" ]] && continue
+
     app_connecte=${user_counts[$username]:-0}
 
     # Calcul trafic total estimé pour cet utilisateur
@@ -158,7 +166,7 @@ display_all_users_with_traffic_on_one_line() {
   done < "$USER_FILE"
 }
 
-# Exécution: ligne par ligne sur une seule commande imprimant tout
+# Exécution
 display_all_users_with_traffic_on_one_line
 
 echo -e "${CYAN}+=============================================================+${RESET}"
