@@ -129,7 +129,7 @@ while true; do
     done
 
   echo -e "${CYAN}+===========================[░❖░]===========================+${RESET}"
-  echo -e "${BOLD}${MAGENTA}|              🚀 KIGHMU MANAGER  🇨🇲 🚀                    | ${RESET}"
+  echo -e "${BOLD}${MAGENTA}|                🚀 KIGHMU MANAGER  🇨🇲 🚀                    | ${RESET}"
   echo -e "${CYAN}+===========================[░❖░]===========================+${RESET}"
 
   printf " ${WHITE_BOLD} OS:${RESET} ${YELLOW}%-20s${RESET} | ${WHITE_BOLD}IP:${RESET} ${RED}%-15s${RESET}\n" "$OS_INFO" "$IP"
@@ -145,7 +145,7 @@ while true; do
 
   echo -e "${CYAN}+===========================================================+${RESET}"
 
-  echo -e "${BOLD}${YELLOW}|                     MENU PRINCIPAL:                      |${RESET}"
+  echo -e "${BOLD}${YELLOW}|                     MENU PRINCIPAL:                       |${RESET}"
   echo -e "${CYAN}+===========================================================+${RESET}"
   echo -e "${GREEN}${BOLD}[01]${RESET} ${BOLD}${MAGENTA}=➤${RESET} ${YELLOW}Créer un utilisateur SSH${RESET}"
   echo -e "${GREEN}${BOLD}[02]${RESET} ${BOLD}${MAGENTA}=➤${RESET} ${YELLOW}Créer un test utilisateur${RESET}"
