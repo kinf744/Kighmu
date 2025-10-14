@@ -40,6 +40,7 @@ setup_colors() {
   # Si non-interactif ou pas de couleur, laisser vides et tout sera en texte neutre
 }
 
+set -euo pipefail
 # Appel de la config couleur
 setup_colors
 
@@ -92,7 +93,6 @@ count_devices_per_user() {
   fi
 
   # Retourne tableau associatif avec compte par utilisateur
-  echo "${user_counts[@]}"
   declare -p user_counts
 }
 
