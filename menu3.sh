@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==============================================
-# Kighmu VPS Manager - Version Dynamique & SSH Fix + Mode Debug
+# Monitoring VPS Manager - Version Dynamique & SSH Fix + Mode Debug
 # ==============================================
 
 _DEBUG="off"
@@ -49,7 +49,7 @@ AUTH_LOG="/var/log/auth.log"
 
 clear
 echo -e "${CYAN}+============================================================+${RESET}"
-echo -e "|            GESTION DES UTILISATEURS EN LIGNE               |${RESET}"
+echo -e "${BOLD}${MAGENTA}|            GESTION DES UTILISATEURS EN LIGNE               |${RESET}"
 echo -e "${CYAN}+============================================================+${RESET}"
 
 if [ ! -f "$USER_FILE" ]; then
