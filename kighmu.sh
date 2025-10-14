@@ -128,25 +128,25 @@ while true; do
       DATA_MONTH_GB=$(echo "$DATA_MONTH_GB + $month_gb" | bc)
     done
 
-  echo -e "${CYAN}+==========================================================+${RESET}"
+  echo -e "${CYAN}+===========================[░❖░]===========================+${RESET}"
   echo -e "${BOLD}${MAGENTA}|              🚀 KIGHMU MANAGER  🇨🇲 🚀                    | ${RESET}"
-  echo -e "${CYAN}+==========================================================+${RESET}"
+  echo -e "${CYAN}+===========================[░❖░]===========================+${RESET}"
 
   printf " ${WHITE_BOLD} OS:${RESET} ${YELLOW}%-20s${RESET} | ${WHITE_BOLD}IP:${RESET} ${RED}%-15s${RESET}\n" "$OS_INFO" "$IP"
   printf " ${WHITE_BOLD} Taille RAM totale:${RESET} ${GREEN}%-6s${RESET} | ${WHITE_BOLD}Nombre de cœurs CPU:${RESET} ${YELLOW}%-6s${RESET}\n" "$RAM_GB_ARR" "$CPU_CORES"
   printf " ${WHITE_BOLD} RAM utilisée:${RESET} ${GREEN}%-6s${RESET} | ${WHITE_BOLD}CPU utilisé:${RESET} ${YELLOW}%-6s${RESET}\n" "$RAM_USAGE" "$CPU_USAGE"
 
-  echo -e "${CYAN}+==========================================================+${RESET}"
+  echo -e "${CYAN}+===========================================================+${RESET}"
 
   printf " ${WHITE_BOLD} Consommation aujourd'hui:${RESET} ${MAGENTA_VIF}%.2f Go${RESET} | ${WHITE_BOLD}Ce mois-ci:${RESET} ${CYAN_VIF}%.2f Go${RESET}\n" "$DATA_DAY_GB" "$DATA_MONTH_GB"
 
   printf " ${WHITE_BOLD} Utilisateurs SSH:${RESET} ${BLUE}%-4d${RESET} | ${WHITE_BOLD} Utilisateurs Xray:${RESET} ${MAGENTA}%-4d${RESET}\n" "$SSH_USERS_COUNT" "$XRAY_USERS_COUNT"
   printf " ${WHITE_BOLD} Appareils connectés:${RESET} ${MAGENTA}%-4d${RESET} | ${WHITE_BOLD}Utilisateurs expirés:${RESET} ${RED}%-4d${RESET}\n" "$total_connected" "$TOTAL_EXPIRED"
 
-  echo -e "${CYAN}+==========================================================+${RESET}"
+  echo -e "${CYAN}+===========================================================+${RESET}"
 
   echo -e "${BOLD}${YELLOW}|                     MENU PRINCIPAL:                      |${RESET}"
-  echo -e "${CYAN}+==========================================================+${RESET}"
+  echo -e "${CYAN}+===========================================================+${RESET}"
   echo -e "${GREEN}${BOLD}[01]${RESET} ${BOLD}${MAGENTA}=➤${RESET} ${YELLOW}Créer un utilisateur SSH${RESET}"
   echo -e "${GREEN}${BOLD}[02]${RESET} ${BOLD}${MAGENTA}=➤${RESET} ${YELLOW}Créer un test utilisateur${RESET}"
   echo -e "${GREEN}${BOLD}[03]${RESET} ${BOLD}${MAGENTA}=➤${RESET} ${YELLOW}Voir les utilisateurs en ligne${RESET}"
@@ -159,11 +159,11 @@ while true; do
   echo -e "${GREEN}${BOLD}[10]${RESET} ${BOLD}${MAGENTA}=➤${RESET} ${YELLOW}Désinstaller le script${RESET}"
   echo -e "${GREEN}${BOLD}[11]${RESET} ${BOLD}${MAGENTA}=➤${RESET} ${YELLOW}Blocage de torrents${RESET}"
   echo -e "${RED}[00] =➤ Quitter${RESET}"
-  echo -e "${CYAN}+=========================================================+${RESET}"
+  echo -e "${CYAN}+==========================================================+${RESET}"
 
   echo -ne "${BOLD}${YELLOW} Entrez votre choix [1-12]: ${RESET}"
   read -r choix
-  echo -e "${CYAN}+---------------------------------------------------------+${RESET}"
+  echo -e "${CYAN}+----------------------------------------------------------+${RESET}"
 
   case $choix in
     1) bash "$SCRIPT_DIR/menu1.sh" ;;
