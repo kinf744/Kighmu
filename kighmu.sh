@@ -128,9 +128,9 @@ while true; do
       DATA_MONTH_GB=$(echo "$DATA_MONTH_GB + $month_gb" | bc)
     done
 
-  echo -e "${CYAN}+===========================[░❖░]===========================+${RESET}"
+  echo -e "${CYAN}+===========================ஜ۩۞۩ஜ===========================+${RESET}"
   echo -e "${BOLD}${MAGENTA}|                🚀 KIGHMU MANAGER  🇨🇲 🚀                   | ${RESET}"
-  echo -e "${CYAN}+===========================[░❖░]===========================+${RESET}"
+  echo -e "${CYAN}+===========================ஜ۩۞۩ஜ===========================+${RESET}"
 
   printf " ${WHITE_BOLD} OS:${RESET} ${YELLOW}%-20s${RESET} | ${WHITE_BOLD}IP:${RESET} ${RED}%-15s${RESET}\n" "$OS_INFO" "$IP"
   printf " ${WHITE_BOLD} Taille RAM totale:${RESET} ${GREEN}%-6s${RESET} | ${WHITE_BOLD}Nombre de cœurs CPU:${RESET} ${YELLOW}%-6s${RESET}\n" "$RAM_GB_ARR" "$CPU_CORES"
@@ -147,18 +147,18 @@ while true; do
 
   echo -e "${BOLD}${YELLOW}|                     MENU PRINCIPAL:                       |${RESET}"
   echo -e "${CYAN}+===========================================================+${RESET}"
-  echo -e "${GREEN}${BOLD}[01]${RESET} ${BOLD}${MAGENTA}=➤ ${RESET} ${YELLOW}Créer un utilisateur SSH${RESET}"
-  echo -e "${GREEN}${BOLD}[02]${RESET} ${BOLD}${MAGENTA}=➤ ${RESET} ${YELLOW}Créer un test utilisateur${RESET}"
-  echo -e "${GREEN}${BOLD}[03]${RESET} ${BOLD}${MAGENTA}=➤ ${RESET} ${YELLOW}Voir les utilisateurs en ligne${RESET}"
-  echo -e "${GREEN}${BOLD}[04]${RESET} ${BOLD}${MAGENTA}=➤ ${RESET} ${YELLOW}Modifier durée / mot de passe utilisateur${RESET}"
-  echo -e "${GREEN}${BOLD}[05]${RESET} ${BOLD}${MAGENTA}=➤ ${RESET} ${YELLOW}Supprimer un utilisateur${RESET}"
-  echo -e "${GREEN}${BOLD}[06]${RESET} ${BOLD}${MAGENTA}=➤ ${RESET} ${YELLOW}Message du serveur${RESET}"
-  echo -e "${GREEN}${BOLD}[07]${RESET} ${BOLD}${MAGENTA}=➤ ${RESET} ${YELLOW}Installation de mode${RESET}"
-  echo -e "${GREEN}${BOLD}[08]${RESET} ${BOLD}${MAGENTA}=➤ ${RESET} ${YELLOW}V2ray slowdns mode${RESET}"
-  echo -e "${GREEN}${BOLD}[09]${RESET} ${BOLD}${MAGENTA}=➤ ${RESET} ${YELLOW}Xray All mode${RESET}"
-  echo -e "${GREEN}${BOLD}[10]${RESET} ${BOLD}${MAGENTA}=➤ ${RESET} ${YELLOW}Désinstaller le script${RESET}"
-  echo -e "${GREEN}${BOLD}[11]${RESET} ${BOLD}${MAGENTA}=➤ ${RESET} ${YELLOW}Blocage de torrents${RESET}"
-  echo -e "${RED}[00] =➤ Quitter${RESET}"
+  echo -e "${GREEN}${BOLD}[01]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Créer un utilisateur SSH${RESET}"
+  echo -e "${GREEN}${BOLD}[02]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Créer un test utilisateur${RESET}"
+  echo -e "${GREEN}${BOLD}[03]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Voir les utilisateurs en ligne${RESET}"
+  echo -e "${GREEN}${BOLD}[04]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Modifier durée / mot de passe utilisateur${RESET}"
+  echo -e "${GREEN}${BOLD}[05]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Supprimer un utilisateur${RESET}"
+  echo -e "${GREEN}${BOLD}[06]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Message du serveur${RESET}"
+  echo -e "${GREEN}${BOLD}[07]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Installation de mode${RESET}"
+  echo -e "${GREEN}${BOLD}[08]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}V2ray slowdns mode${RESET}"
+  echo -e "${GREEN}${BOLD}[09]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Xray All mode${RESET}"
+  echo -e "${GREEN}${BOLD}[10]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Désinstaller le script${RESET}"
+  echo -e "${GREEN}${BOLD}[11]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Blocage de torrents${RESET}"
+  echo -e "${RED}[00] ➜ Quitter${RESET}"
   echo -e "${CYAN}+==========================================================+${RESET}"
 
   echo -ne "${BOLD}${YELLOW} Entrez votre choix [1-12]: ${RESET}"
