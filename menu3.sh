@@ -58,7 +58,7 @@ if [ ! -f "$USER_FILE" ]; then
 fi
 
 printf "${BOLD}%-20s %-10s %-15s %-15s${RESET}
-" "UTILISATEUR" "LIMITÉ" " CONNECTÉS" " TRAFIC TOTAL"
+" " ${WHITE_BOLD}UTILISATEUR${RESET}" " ${WHITE_BOLD}LIMITÉ${RESET}" " ${WHITE_BOLD}CONNECTÉS${RESET}" " ${WHITE_BOLD}TRAFIC TOTAL${RESET}"
 echo -e "${CYAN}--------------------------------------------------------------${RESET}"
 
 # Fonction pour compter appareils connectés par utilisateur
