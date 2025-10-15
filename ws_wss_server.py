@@ -2,7 +2,7 @@
 # =========================================================
 # WS/WSS Tunnel Server - Kighmu VPS Manager (modifié)
 # Auteur : Kinf744 (adapté)
-# Version : 2.1 - log handshake personnalisé
+# Version : 2.2 - log handshake + bannière client
 # =========================================================
 
 import asyncio
@@ -24,7 +24,7 @@ WSS_PORT = 443   # WebSocket sécurisé
 
 LOG_FILE = "/var/log/ws_wss_server.log"
 
-# Texte personnalisé que tu veux voir dans la "réponse"
+# Texte personnalisé pour la bannière
 CUSTOM_HANDSHAKE_REASON = "Dinda Putri As Rerechan02"
 
 # Chargement du domaine depuis ~/.kighmu_info si disponible
@@ -66,21 +66,17 @@ class WSSTunnelServer:
         self.ssh_port = ssh_port
 
     async def handle_client(self, websocket, path):
-        # remote_address peut être None dans certaines conditions
         client_ip = None
         try:
             client_ip = websocket.remote_address[0]
         except Exception:
             client_ip = "unknown"
 
-        # --- Log: handshake personnalisé visible dans les logs ---
-        # On émet volontairement la même ligne que tu veux voir.
-        # Cela ne modifie pas la bibliothèque websockets, mais reproduit visuellement
-        # la ligne dans les logs/terminal comme sur ta capture.
+        # --- Log handshake personnalisé ---
         handshake_line = f"HTTP/1.1 101 {CUSTOM_HANDSHAKE_REASON} Switching Protocols"
         log_main.info(handshake_line)
 
-        # Optionnel : loguer quelques headers utiles si disponibles
+        # Log headers utiles
         try:
             headers = getattr(websocket, "request_headers", None)
             if headers:
@@ -92,11 +88,15 @@ class WSSTunnelServer:
 
         log_main.info(f"Nouvelle connexion WebSocket de {client_ip} sur {path}")
 
-        # Prépare l'état de la session
+        # --- ENVOI DE LA BANNIÈRE AU CLIENT ---
+        try:
+            await websocket.send(f"💡 Handshake reçu: {CUSTOM_HANDSHAKE_REASON}")
+        except Exception as e:
+            log_main.warning(f"Impossible d’envoyer la bannière au client {client_ip}: {e}")
+
+        # --- Tunnel SSH ---
         ssh_established = False
         try:
-            # Connexion au serveur SSH local
-            log_ssh.debug(f"Essai d'ouverture de la connexion SSH locale vers {self.ssh_host}:{self.ssh_port} pour {client_ip}")
             reader, writer = await asyncio.open_connection(self.ssh_host, self.ssh_port)
             ssh_established = True
             log_ssh.info(f"Tunnel SSH établi pour {client_ip}")
@@ -152,11 +152,11 @@ class WSSTunnelServer:
                 pass
 
     async def start_servers(self):
-        # Serveur WebSocket (non sécurisé)
+        # Serveur WebSocket non sécurisé
         ws_server = await websockets.serve(self.handle_client, "0.0.0.0", WS_PORT, ping_interval=None)
         log_main.info(f"Serveur WS lancé sur ws://{DOMAIN}:{WS_PORT}")
 
-        # Serveur WebSocket sécurisé (WSS)
+        # Serveur WebSocket sécurisé
         ssl_context = self._load_or_generate_cert()
         wss_server = await websockets.serve(self.handle_client, "0.0.0.0", WSS_PORT, ssl=ssl_context, ping_interval=None)
         log_main.info(f"Serveur WSS lancé sur wss://{DOMAIN}:{WSS_PORT}")
@@ -190,7 +190,7 @@ class WSSTunnelServer:
 # MAIN
 # ---------------------------------------------------------
 if __name__ == "__main__":
-    log_main.info("🚀 Démarrage du serveur WS/WSS avancé (modifié pour handshake log)...")
+    log_main.info("🚀 Démarrage du serveur WS/WSS avancé (modifié pour handshake log + bannière client)...")
     tunnel = WSSTunnelServer()
     try:
         asyncio.run(tunnel.start_servers())
