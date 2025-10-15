@@ -1,19 +1,17 @@
 #!/usr/bin/env python3
 # =========================================================
-# WS/WSS Tunnel Server - Lacasita-style Optimized
-# Version : 2.6 - Handshake HTTP/1.1 101 personnalisé visible
+# WS Tunnel Server - Version épurée (WS only)
+# Version : 2.7 - WS uniquement, handshake visible
 # =========================================================
 
 import asyncio
 import websockets
-import ssl
 import os
 import sys
 import logging
 import traceback
 
-WS_PORT = 8880
-WSS_PORT = 443
+WS_PORT = 8880   # WebSocket non sécurisé
 LOG_FILE = "/var/log/ws_wss_server.log"
 CUSTOM_BANNER = "@Dinda_Putri_As_Rerechan02"
 
@@ -32,7 +30,7 @@ logging.basicConfig(
 )
 log_main = logging.getLogger("ws_wss.main")
 
-class OptimizedServer:
+class WSTunnelServer:
 
     async def handle_client(self, websocket, path):
         client_ip = websocket.remote_address[0] if websocket.remote_address else "unknown"
@@ -44,7 +42,7 @@ class OptimizedServer:
         except Exception:
             pass
 
-        # --- Tunnel SSH (optionnel) ---
+        # --- Tentative tunnel SSH ---
         ssh_host = "127.0.0.1"
         ssh_port = 22
         try:
@@ -88,43 +86,20 @@ class OptimizedServer:
 
         log_main.info(f"Connexion fermée pour {client_ip}")
 
-    async def start_servers(self):
-        # WS
+    async def start_server(self):
+        # WS uniquement
         await websockets.serve(self.handle_client, "0.0.0.0", WS_PORT, ping_interval=None)
         log_main.info(f"Serveur WS lancé sur ws://{DOMAIN}:{WS_PORT}")
-
-        # WSS
-        ssl_ctx = self._load_or_generate_cert()
-        await websockets.serve(self.handle_client, "0.0.0.0", WSS_PORT, ssl=ssl_ctx, ping_interval=None)
-        log_main.info(f"Serveur WSS lancé sur wss://{DOMAIN}:{WSS_PORT}")
-
         await asyncio.Future()  # run forever
-
-    def _load_or_generate_cert(self):
-        cert_path = f"/etc/letsencrypt/live/{DOMAIN}/fullchain.pem"
-        key_path = f"/etc/letsencrypt/live/{DOMAIN}/privkey.pem"
-        if not os.path.exists(cert_path) or not os.path.exists(key_path):
-            cert_dir = "/etc/ssl/kighmu"
-            os.makedirs(cert_dir, exist_ok=True)
-            os.system(f"openssl req -x509 -newkey rsa:2048 -nodes "
-                      f"-keyout {cert_dir}/key.pem -out {cert_dir}/cert.pem -days 365 "
-                      f"-subj '/CN={DOMAIN}' || true")
-            cert_path = f"{cert_dir}/cert.pem"
-            key_path = f"{cert_dir}/key.pem"
-
-        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        ssl_context.load_cert_chain(certfile=cert_path, keyfile=key_path)
-        log_main.info(f"TLS: certificat chargé (cert={cert_path}, key={key_path})")
-        return ssl_context
 
 # ---------------------------------------------------------
 # MAIN
 # ---------------------------------------------------------
 if __name__ == "__main__":
-    log_main.info("🚀 Démarrage du serveur WS/WSS Optimized (Handshake 101 personnalisé)...")
-    server = OptimizedServer()
+    log_main.info("🚀 Démarrage du serveur WS uniquement, handshake visible...")
+    server = WSTunnelServer()
     try:
-        asyncio.run(server.start_servers())
+        asyncio.run(server.start_server())
     except KeyboardInterrupt:
         log_main.info("🛑 Arrêt manuel du serveur.")
     except Exception as e:
