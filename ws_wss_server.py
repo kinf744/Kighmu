@@ -1,24 +1,21 @@
 #!/usr/bin/env python3
 # =========================================================
-# WS/WSS Tunnel Server - Kighmu VPS Manager
-# Auteur : Kinf744
-# Version : 2.0
+# WS/WSS Tunnel Server - Kighmu VPS Manager (modifié)
+# Auteur : Kinf744 (adapté)
+# Version : 2.1 - log handshake personnalisé
 # =========================================================
 
 import asyncio
 import websockets
 import ssl
-import socket
 import os
 import sys
 import logging
 import traceback
-from datetime import datetime
 
 # ---------------------------------------------------------
 # CONFIGURATION
 # ---------------------------------------------------------
-
 DEFAULT_SSH_HOST = "127.0.0.1"
 DEFAULT_SSH_PORT = 22
 
@@ -26,6 +23,9 @@ WS_PORT = 8880   # WebSocket non sécurisé
 WSS_PORT = 443   # WebSocket sécurisé
 
 LOG_FILE = "/var/log/ws_wss_server.log"
+
+# Texte personnalisé que tu veux voir dans la "réponse"
+CUSTOM_HANDSHAKE_REASON = "Dinda Putri As Rerechan02"
 
 # Chargement du domaine depuis ~/.kighmu_info si disponible
 DOMAIN = "localhost"
@@ -48,16 +48,14 @@ logging.basicConfig(
     ]
 )
 
-# Logs supplémentaires par composants (facultatif)
 log_main = logging.getLogger("ws_wss.main")
 log_tls  = logging.getLogger("ws_wss.tls")
 log_ws   = logging.getLogger("ws_wss.ws")
 log_ssh  = logging.getLogger("ws_wss.ssh")
 log_vpn  = logging.getLogger("ws_wss.vpn")
 
-# Redirection des loggers vers le même fichier principal
 for lg in [log_main, log_tls, log_ws, log_ssh, log_vpn]:
-    lg.propagate = True  # assure que les messages atteignent le root logger
+    lg.propagate = True
 
 # ---------------------------------------------------------
 # CLASSE DE TUNNEL SSH VIA WEBSOCKET
@@ -68,11 +66,33 @@ class WSSTunnelServer:
         self.ssh_port = ssh_port
 
     async def handle_client(self, websocket, path):
-        client_ip = websocket.remote_address[0]
+        # remote_address peut être None dans certaines conditions
+        client_ip = None
+        try:
+            client_ip = websocket.remote_address[0]
+        except Exception:
+            client_ip = "unknown"
+
+        # --- Log: handshake personnalisé visible dans les logs ---
+        # On émet volontairement la même ligne que tu veux voir.
+        # Cela ne modifie pas la bibliothèque websockets, mais reproduit visuellement
+        # la ligne dans les logs/terminal comme sur ta capture.
+        handshake_line = f"HTTP/1.1 101 {CUSTOM_HANDSHAKE_REASON} Switching Protocols"
+        log_main.info(handshake_line)
+
+        # Optionnel : loguer quelques headers utiles si disponibles
+        try:
+            headers = getattr(websocket, "request_headers", None)
+            if headers:
+                host = headers.get("Host", "")
+                ua = headers.get("User-Agent", "")
+                log_main.info(f"WebSocket handshake headers: Host={host} Path={path} UA={ua}")
+        except Exception:
+            pass
+
         log_main.info(f"Nouvelle connexion WebSocket de {client_ip} sur {path}")
 
         # Prépare l'état de la session
-        ssl_handshake_ok = False
         ssh_established = False
         try:
             # Connexion au serveur SSH local
@@ -124,7 +144,6 @@ class WSSTunnelServer:
             traceback.print_exc()
         finally:
             log_main.info(f"Connexion fermée pour {client_ip}")
-            # Fermeture sécurisée si nécessaire
             try:
                 if 'writer' in locals():
                     writer.close()
@@ -145,15 +164,11 @@ class WSSTunnelServer:
         await asyncio.Future()  # Exécution infinie
 
     def _load_or_generate_cert(self):
-        """
-        Charge un certificat Let's Encrypt s'il existe, sinon le génère automatiquement via certbot.
-        """
         cert_path = f"/etc/letsencrypt/live/{DOMAIN}/fullchain.pem"
         key_path = f"/etc/letsencrypt/live/{DOMAIN}/privkey.pem"
 
         if not os.path.exists(cert_path) or not os.path.exists(key_path):
             log_tls.warning("Aucun certificat Let's Encrypt trouvé. Tentative de génération...")
-            # Exécution sécurisée via subprocess pour éviter shell injection si possible
             rc = os.system(f"sudo certbot certonly --standalone -d {DOMAIN} --agree-tos -m admin@{DOMAIN} --non-interactive 2>&1 || true")
             log_tls.debug(f"Certbot exit code: {rc}")
 
@@ -175,8 +190,7 @@ class WSSTunnelServer:
 # MAIN
 # ---------------------------------------------------------
 if __name__ == "__main__":
-    log_main.info("🚀 Démarrage du serveur WS/WSS avancé...")
-    print("START")  # Debug rapide si besoin
+    log_main.info("🚀 Démarrage du serveur WS/WSS avancé (modifié pour handshake log)...")
     tunnel = WSSTunnelServer()
     try:
         asyncio.run(tunnel.start_servers())
