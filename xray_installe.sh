@@ -1,67 +1,39 @@
 #!/bin/bash
 # Installation complète Xray + UFW, nettoyage avant installation, services systemd robustes
-# Version prête pour GitHub avec commentaires en français et sans changement des ports
-# A utiliser sur Ubuntu 20.04/24.04
-
-set -euo pipefail
 
 # Couleurs terminal
-RED='\u001B[0;31m'
-GREEN='\u001B[0;32m'
-NC='\u001B[0m'
-
-log() {
-  local level="$1"
-  shift
-  echo -e "${GREEN}[${level}]${NC} $*"
-}
-
-err() {
-  log "ERREUR" "$@"
-  exit 1
-}
-
-warn() {
-  log "WARN" "$@"
-}
-
-info() {
-  log "INFO" "$@"
-}
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m'
 
 # Nettoyage précédent avant installation
-info "Arrêt des services utilisant les ports 80 et 8443..."
+echo -e "${GREEN}Arrêt des services utilisant les ports 80 et 8443...${NC}"
+
+# Trouver et tuer tous processus écoutant sur les ports 80 et 8443 (TCP et UDP)
 for port in 80 8443; do
-  if command -v lsof >/dev/null 2>&1; then
-    lsof -i tcp:$port -t 2>/dev/null | xargs -r kill -9
-    lsof -i udp:$port -t 2>/dev/null | xargs -r kill -9
-  else
-    # fallback: tenter de tuer via netstat/ss si lsof absent
-    if command -v ss >/dev/null 2>&1; then
-      ss -ltnp | grep ":$port" | awk '{print $1}' >/dev/null 2>&1 || true
-    fi
-  fi
+    lsof -i tcp:$port -t | xargs -r kill -9
+    lsof -i udp:$port -t | xargs -r kill -9
 done
 
-# Arrêter et désactiver les services potentiellement en conflit
+# Arrêter et désactiver les services systemd potentiellement en conflit
 for srv in xray nginx apache2; do
-  if systemctl is-active --quiet "$srv"; then
-    systemctl stop "$srv" || true
-  fi
-  if systemctl is-enabled --quiet "$srv"; then
-    systemctl disable "$srv" || true
-  fi
+    systemctl stop $srv 2>/dev/null || true
+    systemctl disable $srv 2>/dev/null || true
 done
 
-info "Nettoyage des fichiers précédents..."
+echo -e "${GREEN}Nettoyage des fichiers précédents...${NC}"
+
+# Supprimer toutes les anciennes configurations et fichiers
 rm -rf /etc/xray /var/log/xray /usr/local/bin/xray /tmp/.xray_domain /etc/systemd/system/xray.service
 
+# Recharger systemd pour appliquer les suppressions
 systemctl daemon-reload
 
 # Demander domaine
 read -rp "Entrez votre nom de domaine (ex: monsite.com) : " DOMAIN
-if [[ -z "${DOMAIN:-}" ]]; then
-  err "Erreur : nom de domaine non valide."
+if [[ -z "$DOMAIN" ]]; then
+  echo -e "${RED}Erreur : nom de domaine non valide.${NC}"
+  exit 1
 fi
 
 # Écriture domaine pour menu
