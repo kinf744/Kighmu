@@ -1,10 +1,11 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Installation complète Xray + UFW, nettoyage avant installation, services systemd robustes
+# Version GitHub-ready
 
 # Couleurs terminal
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-NC='\033[0m'
+RED='\u001B[0;31m'
+GREEN='\u001B[0m'\u001B[0;32m
+NC='\u001B[0m'
 
 restart_xray_service() {
   echo -e "${GREEN}Redémarrage du service Xray...${NC}"
@@ -70,7 +71,7 @@ apt update
 apt install -y ufw iptables iptables-persistent curl socat xz-utils wget apt-transport-https \
   gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq
 
-# Configuration UFW
+# Configuration UFW (ouvrir temporairement 80 pour ACME, puis le refermer après)
 ufw allow ssh
 ufw allow 89/tcp
 ufw allow 89/udp
@@ -90,7 +91,11 @@ chronyc tracking -v
 date
 
 # Télécharger dernière version Xray
-latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases | grep tag_name | sed -E 's/.*"v(.*)".*/\1/' | head -n1)
+latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases | grep tag_name | sed -E 's/.*"v(.*)".*/\u0001/' | head -n1)
+if [[ -z "$latest_version" ]]; then
+  echo -e "${RED}Impossible de récupérer la dernière version de Xray.${NC}"
+  exit 1
+fi
 xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v${latest_version}/xray-linux-64.zip"
 
 systemctl stop nginx 2>/dev/null || true
@@ -98,7 +103,7 @@ systemctl stop apache2 2>/dev/null || true
 sudo lsof -t -i tcp:89 -s tcp:listen | sudo xargs kill -9 2>/dev/null || true
 
 mkdir -p /usr/local/bin
-cd $(mktemp -d)
+cd "$(mktemp -d)"
 curl -sL "$xraycore_link" -o xray.zip
 unzip -q xray.zip && rm -f xray.zip
 mv xray /usr/local/bin/xray
@@ -110,23 +115,53 @@ touch /var/log/xray/access.log /var/log/xray/error.log
 chown -R root:root /var/log/xray
 chmod 644 /var/log/xray/access.log /var/log/xray/error.log
 
-if ! command -v ~/.acme.sh/acme.sh &> /dev/null; then
+# Script ACME (assurez-vous que acme.sh est installé et accessible)
+ACME_BIN="${HOME}/.acme.sh/acme.sh"
+if [[ ! -f "$ACME_BIN" ]]; then
+  # Téléchargement + installation d'acme.sh
   curl https://get.acme.sh | sh
-  source ~/.bashrc
+  # Charge immédiate du shell pour récupérer les PATHs
+  . "$HOME"/.bashrc 2>/dev/null || true
 fi
 
-systemctl stop xray
+# Demander option ACME: HTTP (standalone) ou DNS-01
+use_dns_answer=false
+read -rp "Utiliser DNS-01 pour ACME ? (o/n) [par défaut n] : " dns_choice
+if [[ "${dns_choice,,}" == "o" || "${dns_choice,,}" == "yes" || "${dns_choice,,}" == "y" ]]; then
+  use_dns_answer=true
+fi
 
-# Certificats TLS
-~/.acme.sh/acme.sh --register-account -m "$EMAIL"
-~/.acme.sh/acme.sh --issue --standalone -d "$DOMAIN" --force
+# Si DNS-01, assurez-vous d'avoir le fournisseur configuré (ex: Cloudflare, Route53, etc.)
+if $use_dns_answer; then
+  echo "Configurer DNS-01 nécessite un fournisseur DNS pris en charge par acme.sh."
+  # Ex : ~/.acme.sh/acme.sh --issue --dns dns_cf -d "$DOMAIN" --log --debug
+fi
+
+# Arrêt éventuel du service Xray si présent
+systemctl stop xray 2>/dev/null || true
+
+# Certificate TLS
+$ACME_BIN --register-account -m "$EMAIL" --log 2>&1 | sed -n '1,200p'
+if $use_dns_answer; then
+  # Exemple (à adapter selon votre fournisseur DNS et variable d'environnement)
+  $ACME_BIN --issue --dns dns_cf -d "$DOMAIN" --force
+else
+  # Standalone HTTP-01 (ouvrir temporairement le port 80)
+  ufw allow 80/tcp
+  $ACME_BIN --issue --standalone -d "$DOMAIN" --force
+  ufw delete allow 80/tcp
+fi
 
 sleep 5  # pause pour éviter conflit certifs
 
-~/.acme.sh/acme.sh --installcert -d "$DOMAIN" --fullchainpath /etc/xray/xray.crt --keypath /etc/xray/xray.key
+# Installer certificats
+$ACME_BIN --installcert -d "$DOMAIN" --ecc \
+  --cert-file /etc/xray/xray.crt \
+  --key-file /etc/xray/xray.key \
+  --fullchain-file /etc/xray/fullchain.cer
 
 if [[ ! -f "/etc/xray/xray.crt" || ! -f "/etc/xray/xray.key" ]]; then
-  echo -e "${RED}Erreur : certificats TLS non trouvés.${NC}"
+  echo -e "${RED}Erreur : certificats TLS non trouvés après installation.${NC}"
   exit 1
 fi
 
