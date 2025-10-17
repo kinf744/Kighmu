@@ -1,39 +1,67 @@
 #!/bin/bash
 # Installation complète Xray + UFW, nettoyage avant installation, services systemd robustes
+# Version prête pour GitHub avec commentaires en français et sans changement des ports
+# A utiliser sur Ubuntu 20.04/24.04
+
+set -euo pipefail
 
 # Couleurs terminal
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-NC='\033[0m'
+RED='\u001B[0;31m'
+GREEN='\u001B[0;32m'
+NC='\u001B[0m'
+
+log() {
+  local level="$1"
+  shift
+  echo -e "${GREEN}[${level}]${NC} $*"
+}
+
+err() {
+  log "ERREUR" "$@"
+  exit 1
+}
+
+warn() {
+  log "WARN" "$@"
+}
+
+info() {
+  log "INFO" "$@"
+}
 
 # Nettoyage précédent avant installation
-echo -e "${GREEN}Arrêt des services utilisant les ports 80 et 8443...${NC}"
-
-# Trouver et tuer tous processus écoutant sur les ports 80 et 8443 (TCP et UDP)
+info "Arrêt des services utilisant les ports 80 et 8443..."
 for port in 80 8443; do
-    lsof -i tcp:$port -t | xargs -r kill -9
-    lsof -i udp:$port -t | xargs -r kill -9
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -i tcp:$port -t 2>/dev/null | xargs -r kill -9
+    lsof -i udp:$port -t 2>/dev/null | xargs -r kill -9
+  else
+    # fallback: tenter de tuer via netstat/ss si lsof absent
+    if command -v ss >/dev/null 2>&1; then
+      ss -ltnp | grep ":$port" >/dev/null 2>&1 && pkill -f ":$port" || true
+    fi
+  fi
 done
 
-# Arrêter et désactiver les services systemd potentiellement en conflit
+# Arrêter et désactiver les services potentiellement en conflit
 for srv in xray nginx apache2; do
-    systemctl stop $srv 2>/dev/null || true
-    systemctl disable $srv 2>/dev/null || true
+  if systemctl is-active --quiet "$srv"; then
+    systemctl stop "$srv" 2>/dev/null || true
+  fi
+  if systemctl is-enabled --quiet "$srv"; then
+    systemctl disable "$srv" 2>/dev/null || true
+  fi
 done
 
-echo -e "${GREEN}Nettoyage des fichiers précédents...${NC}"
-
-# Supprimer toutes les anciennes configurations et fichiers
+info "Nettoyage des fichiers précédents..."
 rm -rf /etc/xray /var/log/xray /usr/local/bin/xray /tmp/.xray_domain /etc/systemd/system/xray.service
 
-# Recharger systemd pour appliquer les suppressions
 systemctl daemon-reload
 
 # Demander domaine
 read -rp "Entrez votre nom de domaine (ex: monsite.com) : " DOMAIN
-if [[ -z "$DOMAIN" ]]; then
-  echo -e "${RED}Erreur : nom de domaine non valide.${NC}"
-  exit 1
+if [[ -z "${DOMAIN:-}" ]]; then
+  err "Erreur : nom de domaine non valide."
 fi
 
 # Écriture domaine pour menu
@@ -55,6 +83,8 @@ apt-get install -y "${APT_PKGS[@]}" || err "Échec lors de l'installation des d�
 info "Configuration du pare-feu (UFW)..."
 ufw --force disable 2>/dev/null || true
 ufw --force enable 2>/dev/null || true
+ufw default deny incoming
+ufw default allow outgoing
 ufw allow ssh
 ufw allow 80/tcp
 ufw allow 80/udp
