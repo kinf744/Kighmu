@@ -1,223 +1,234 @@
 #!/bin/bash
 
-# Couleurs ANSI
-RED="\033[31m"
-GREEN="\033[32m"
-YELLOW="\033[33m"
-CYAN="\033[36m"
-RESET="\033[0m"
+CONFIG_FILE="/etc/xray/config.json"
+USERS_FILE="/etc/xray/users.json"
+DOMAIN=""
 
-V2RAY_CONFIG="/usr/local/etc/v2ray/config.json"
-UUID_FILE="/usr/local/etc/v2ray/uuid.txt"
-DOMAIN_FILE="/etc/slowdns/ns.conf"
-SLOWDNS_KEY_PRIV="/etc/slowdns/server.key"
-SLOWDNS_KEY_PUB="/etc/slowdns/server.pub"
-SLOWDNS_BIN_CLIENT="/usr/local/bin/sldns-client"
+RED="\e[31m"
+GREEN="\e[32m"
+YELLOW="\e[33m"
+MAGENTA="\e[35m"
+CYAN="\e[36m"
+BOLD="\e[1m"
+RESET="\e[0m"
 
-V2RAY_PORT=10000
-WS_PATH="/kighmu"
-
-install_complete() {
-    echo -e "${CYAN}Installation complète de V2Ray SlowDNS (sans TUN)...${RESET}"
-
-    if [[ ! -f $SLOWDNS_KEY_PUB || ! -f $SLOWDNS_KEY_PRIV || ! -f $DOMAIN_FILE ]]; then
-        echo -e "${RED}Les fichiers SlowDNS (clé publique, privée ou NS) sont manquants.${RESET}"
-        echo "Veuillez d'abord installer/configurer SlowDNS SSH Tunnel qui fonctionne."
-        exit 1
-    fi
-
-    DOMAIN=$(cat "$DOMAIN_FILE")
-    PUBKEY=$(cat "$SLOWDNS_KEY_PUB")
-
-    echo "Utilisation des informations SlowDNS existantes :"
-    echo "Domaine NS    : $DOMAIN"
-    echo "Clé publique  :"
-    echo "$PUBKEY"
-
-    echo -e "${YELLOW}Mise à jour système et installation des dépendances...${RESET}"
-    apt update && apt upgrade -y
-    apt install -y curl unzip jq iproute2 ufw
-
-    if ! command -v v2ray &>/dev/null; then
-        echo -e "${YELLOW}Installation de V2Ray...${RESET}"
-        curl -O https://raw.githubusercontent.com/v2fly/fhs-install-v2ray/master/install-release.sh
-        bash install-release.sh
-    fi
-
-    mkdir -p "$(dirname $V2RAY_CONFIG)"
-
-    if [[ ! -f $UUID_FILE ]]; then
-        UUID=$(uuidgen)
-        echo "$UUID" > $UUID_FILE
-    else
-        UUID=$(cat $UUID_FILE)
-    fi
-
-    echo -e "${YELLOW}Création de la configuration V2Ray avec écoute publique et logs debug...${RESET}"
-
-    cat > $V2RAY_CONFIG <<EOF
-{
-  "log": {
-    "access": "/var/log/v2ray/access.log",
-    "error": "/var/log/v2ray/error.log",
-    "loglevel": "debug"
-  },
-  "inbounds": [
-    {
-      "port": $V2RAY_PORT,
-      "listen": "0.0.0.0",
-      "protocol": "vmess",
-      "settings": {
-        "clients": [
-          {
-            "id": "$UUID",
-            "alterId": 0,
-            "email": "slowdns-v2ray"
-          }
-        ]
-      },
-      "streamSettings": {
-        "network": "ws",
-        "wsSettings": {
-          "path": "$WS_PATH"
-        }
-      }
-    }
-  ],
-  "outbounds": [
-    {
-      "protocol": "freedom"
-    }
-  ]
-}
-EOF
-
-    # Recharger et démarrer V2Ray
-    systemctl daemon-reload
-    systemctl enable v2ray
-    systemctl restart v2ray
-
-    echo -e "${GREEN}V2Ray écoute maintenant sur toutes les interfaces au port $V2RAY_PORT${RESET}"
-
-    echo -e "${YELLOW}Ouverture du port $V2RAY_PORT dans le firewall UFW...${RESET}"
-    ufw allow $V2RAY_PORT/tcp
-    ufw reload
-
-    echo -e "${GREEN}Installation complète terminée.${RESET}"
+print_header() {
+  echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+  echo -e "${CYAN}       ${BOLD}${MAGENTA}Xray+slowdns – Gestion des Tunnels Actifs${RESET}${CYAN}${RESET}"
+  echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 }
 
-create_user() {
-    if [[ ! -f $V2RAY_CONFIG ]]; then
-        echo -e "${RED}Configuration V2Ray absente. Veuillez faire l'installation complète d'abord.${RESET}"
-        return
-    fi
-
-    DOMAIN=$(cat $DOMAIN_FILE)
-    if [[ ! -f $SLOWDNS_KEY_PUB ]]; then
-        echo -e "${RED}Clé publique SlowDNS non trouvée.${RESET}"
-        return
-    fi
-
-    read -p "Nom d'utilisateur : " USERNAME
-    read -p "Durée (jours) : " DURATION
-
-    EXPIRY_DATE=$(date -d "+$DURATION days" +"%Y-%m-%d")
-    USER_UUID=$(uuidgen)
-
-    jq ".inbounds[0].settings.clients += [{\"id\":\"$USER_UUID\",\"alterId\":0,\"email\":\"$USERNAME\"}]" "$V2RAY_CONFIG" > "${V2RAY_CONFIG}.tmp" && mv "${V2RAY_CONFIG}.tmp" "$V2RAY_CONFIG"
-    systemctl restart v2ray
-
-    VMESS_JSON=$(cat <<EOF
-{
-  "v":"2",
-  "ps":"$USERNAME",
-  "add":"$DOMAIN",
-  "port":"$V2RAY_PORT",
-  "id":"$USER_UUID",
-  "aid":"0",
-  "net":"ws",
-  "type":"none",
-  "host":"$DOMAIN",
-  "path":"$WS_PATH",
-  "tls":"none",
-  "mux":true
-}
-EOF
-)
-    VMESS_LINK="vmess://$(echo -n "$VMESS_JSON" | base64 -w 0)"
-    PUBKEY=$(cat "$SLOWDNS_KEY_PUB")
-
-    clear
-    echo -e "${CYAN}+=============================================+${RESET}"
-    echo -e "${CYAN}|           ${YELLOW}NOUVEAU UTILISATEUR V2RAYDNSTT CRÉÉ${CYAN}           |${RESET}"
-    echo -e "${CYAN}+=============================================+${RESET}"
-    echo -e "${GREEN}DOMAIN        :${RESET} $DOMAIN"
-    echo -e "${GREEN}PORT          :${RESET} $V2RAY_PORT"
-    echo -e "${GREEN}UUID          :${RESET} $USER_UUID"
-    echo -e "${GREEN}MÉTHODE       :${RESET} WS sans TLS"
-    echo -e "${GREEN}PATH          :${RESET} $WS_PATH"
-    echo -e "${GREEN}UTILISATEUR   :${RESET} $USERNAME"
-    echo -e "${GREEN}LIMITE        :${RESET} $DURATION jours"
-    echo -e "${GREEN}DATE EXPIRÉE  :${RESET} $EXPIRY_DATE"
-    echo
-    echo -e "${YELLOW}VMess Link:${RESET}"
-    echo "$VMESS_LINK"
-    echo
-    echo -e "${YELLOW}Nom de domaine NS slowdns :${RESET}"
-    echo -e "${GREEN}$DOMAIN${RESET}"
-    echo
-    echo -e "${YELLOW}Clé publique SlowDNS:${RESET}"
-    echo "$PUBKEY"
-    echo -e "${CYAN}+=============================================+${RESET}"
+afficher_xray_actifs() {
+  if ! systemctl is-active --quiet xray; then
+    echo -e "${RED}Service Xray non actif.${RESET}"
+    return
+  fi
+  local ports_tls ports_ntls protos
+  ports_tls=$(jq -r '.inbounds[] | select(.streamSettings.security=="tls") | .port' "$CONFIG_FILE" | sort -u | paste -sd ", ")
+  ports_ntls=$(jq -r '.inbounds[] | select(.streamSettings.security=="none") | .port' "$CONFIG_FILE" | sort -u | paste -sd ", ")
+  protos=$(jq -r '.inbounds[].protocol' "$CONFIG_FILE" | sort -u | paste -sd ", ")
+  echo -e "${BOLD}Tunnels actifs :${RESET}"
+  [[ -n "$ports_tls" ]] && echo -e " ${GREEN}•${RESET} Port(s) TLS : ${YELLOW}$ports_tls${RESET} – Protocoles [${MAGENTA}$protos${RESET}]"
+  [[ -n "$ports_ntls" ]] && echo -e " ${GREEN}•${RESET} Port(s) Non-TLS : ${YELLOW}$ports_ntls${RESET} – Protocoles [${MAGENTA}$protos${RESET}]"
 }
 
-delete_user() {
-    if [[ ! -f $V2RAY_CONFIG ]]; then
-        echo -e "${RED}Configuration V2Ray absente. Faites l'installation complète d'abord.${RESET}"
-        return
-    fi
-
-    echo -e "${YELLOW}UUIDs existants :${RESET}"
-    jq -r '.inbounds[0].settings.clients[].id' $V2RAY_CONFIG
-
-    read -p "UUID utilisateur à supprimer : " DEL_UUID
-
-    if jq -e ".inbounds[0].settings.clients[] | select(.id==\"$DEL_UUID\")" $V2RAY_CONFIG >/dev/null; then
-        jq "del(.inbounds[0].settings.clients[] | select(.id==\"$DEL_UUID\"))" $V2RAY_CONFIG > "${V2RAY_CONFIG}.tmp" && mv "${V2RAY_CONFIG}.tmp" $V2RAY_CONFIG
-        echo -e "${GREEN}Utilisateur $DEL_UUID supprimé.${RESET}"
-        systemctl restart v2ray
-    else
-        echo -e "${RED}UUID non trouvé.${RESET}"
-    fi
+show_menu() {
+  echo -e "${CYAN}──────────────────────────────────────────────────────────${RESET}"
+  echo -e "${BOLD}${YELLOW}[01]${RESET} Installer Xray"
+  echo -e "${BOLD}${YELLOW}[02]${RESET} Créer utilisateur VMess"
+  echo -e "${BOLD}${YELLOW}[03]${RESET} Créer utilisateur VLESS"
+  echo -e "${BOLD}${YELLOW}[04]${RESET} Créer utilisateur Trojan"
+  echo -e "${BOLD}${YELLOW}[05]${RESET} Supprimer utilisateur Xray"
+  echo -e "${BOLD}${YELLOW}[06]${RESET} Désinstallation complète Xray"
+  echo -e "${BOLD}${RED}[00]${RESET} Quitter"
+  echo -e "${CYAN}──────────────────────────────────────────────────────────${RESET}"
+  echo -ne "${BOLD}${YELLOW}Choix → ${RESET}"
+  read -r choice
 }
 
-show_logs() {
-    echo -e "${YELLOW}Affichage des logs V2Ray en temps réel (Ctrl+C pour quitter)...${RESET}"
-    tail -f /var/log/v2ray/access.log /var/log/v2ray/error.log
+load_user_data() {
+  if [[ -f "$USERS_FILE" ]]; then
+    VMESS_TLS=$(jq -r '.vmess_tls // empty' "$USERS_FILE")
+    VMESS_NTLS=$(jq -r '.vmess_ntls // empty' "$USERS_FILE")
+    VLESS_TLS=$(jq -r '.vless_tls // empty' "$USERS_FILE")
+    VLESS_NTLS=$(jq -r '.vless_ntls // empty' "$USERS_FILE")
+    TROJAN_PASS=$(jq -r '.trojan_pass // empty' "$USERS_FILE")
+    TROJAN_NTLS_PASS=$(jq -r '.trojan_ntls_pass // empty' "$USERS_FILE")
+  fi
 }
+
+create_config() {
+  local proto=$1 name=$2 days=$3
+  [[ -z "$DOMAIN" ]] && { echo -e "${RED}⚠️ Domaine non défini, installe Xray d'abord.${RESET}"; return; }
+
+  # Variables slowdns à récupérer, par exemple dans /etc/slowdns/ns.conf et /etc/slowdns/server.pub
+  local slowdns_ns slowdns_pub
+  if [[ -f /etc/slowdns/ns.conf ]]; then
+    slowdns_ns=$(cat /etc/slowdns/ns.conf)
+  else
+    slowdns_ns="N/A"
+  fi
+  if [[ -f /etc/slowdns/server.pub ]]; then
+    slowdns_pub=$(cat /etc/slowdns/server.pub)
+  else
+    slowdns_pub="N/A"
+  fi
+
+  local new_uuid link_tls link_ntls path_ws port_tls=8443 port_ntls=89
+
+  case "$proto" in
+    vmess)
+      path_ws="/vmess"
+      new_uuid=$(cat /proc/sys/kernel/random/uuid)
+      jq --arg id "$new_uuid" --arg proto "vmess" \
+        '(.inbounds[] | select(.protocol==$proto and .streamSettings.security=="tls") | .settings.clients)+=[{"id":$id,"alterId":0}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+      jq --arg id "$new_uuid" '.vmess_tls=$id' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+      link_tls="vmess://$(echo -n "{"v":"2","ps":"$name","add":"$DOMAIN","port":"$port_tls","id":"$new_uuid","aid":0,"net":"ws","type":"none","host":"","path":"$path_ws","tls":"tls"}" | base64 -w0)"
+      link_ntls="vmess://$(echo -n "{"v":"2","ps":"$name","add":"$DOMAIN","port":"$port_ntls","id":"$new_uuid","aid":0,"net":"ws","type":"none","host":"","path":"$path_ws","tls":""}" | base64 -w0)"
+      ;;
+    vless)
+      path_ws="/vless"
+      new_uuid=$(cat /proc/sys/kernel/random/uuid)
+      jq --arg id "$new_uuid" --arg proto "vless" \
+        '(.inbounds[] | select(.protocol==$proto and .streamSettings.security=="tls") | .settings.clients)+=[{"id":$id}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+      jq --arg id "$new_uuid" '.vless_tls=$id' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+      link_tls="vless://$new_uuid@$DOMAIN:$port_tls?path=$path_ws&security=tls&encryption=none&type=ws#$name"
+      link_ntls="vless://$new_uuid@$DOMAIN:$port_ntls?path=$path_ws&encryption=none&type=ws#$name"
+      ;;
+    trojan)
+      local uuid_tls=$(cat /proc/sys/kernel/random/uuid)
+      local uuid_ntls=$(cat /proc/sys/kernel/random/uuid)
+      jq --arg idtls "$uuid_tls" \
+        '(.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="tls") | .settings.clients)+=[{"password":$idtls}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+      jq --arg idntls "$uuid_ntls" \
+        '(.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="none") | .settings.clients)+=[{"password":$idntls}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+      jq --arg idtls "$uuid_tls" --arg idntls "$uuid_ntls" \
+        '.trojan_pass=$idtls | .trojan_ntls_pass=$idntls' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+      link_tls="trojan://$uuid_tls@$DOMAIN:8443?security=tls&type=ws&path=/trojanws#$name"
+      link_ntls="trojan://$uuid_ntls@$DOMAIN:89?type=ws&path=/trojanws#$name"
+      ;;
+    *) echo -e "${RED}Protocole inconnu.${RESET}"; return 1;;
+  esac
+
+  local exp_date_iso=$(date -d "+$days days" +"%Y-%m-%d")
+  local expiry_date=$(date -d "+$days days" +"%d/%m/%Y")
+  touch /etc/xray/users_expiry.list && chmod 600 /etc/xray/users_expiry.list
+  echo "$new_uuid|$exp_date_iso" >> /etc/xray/users_expiry.list
+
+  echo
+  echo "=============================="
+  echo -e "🧩 ${proto^^}"
+  echo "=============================="
+  echo -e "📄 Configuration générée pour : $name"
+  echo "--------------------------------------------------"
+  echo -e "➤ UUID/Mot de passe :"
+  [[ "$proto" == "trojan" ]] && { echo -e "    Mot de passe TLS : $uuid_tls"; echo -e "    Mot de passe Non-TLS : $uuid_ntls"; } || echo -e "    UUID : $new_uuid"
+  echo -e "➤ Validité : $days jours (expire le $expiry_date)"
+  echo
+  echo -e "➤ SlowDNS NameServer : $slowdns_ns"
+  echo -e "➤ SlowDNS PubKey    : $slowdns_pub"
+  echo
+  echo -e "●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
+  echo -e "┃ TLS  : $link_tls"
+  echo -e ""
+  echo -e "┃ Non-TLS : $link_ntls"
+  echo -e "●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
+  echo
+
+  systemctl restart xray
+}
+
+delete_user_by_number() {
+  if [[ ! -f "$USERS_FILE" ]]; then echo -e "${RED}Fichier $USERS_FILE introuvable.${RESET}"; return; fi
+  local -A protocol_map=(["vmess_tls"]="vmess" ["vmess_ntls"]="vmess" ["vless_tls"]="vless" ["vless_ntls"]="vless" ["trojan_pass"]="trojan" ["trojan_ntls_pass"]="trojan")
+  local -A key_to_stream=(["vmess_tls"]="tls" ["vmess_ntls"]="none" ["vless_tls"]="tls" ["vless_ntls"]="none" ["trojan_pass"]="tls" ["trojan_ntls_pass"]="none")
+  local users=() keys=() count=0
+  while IFS=":" read -r proto id; do [[ -n "$id" ]] && { users+=("$proto:$id"); keys+=("$proto"); ((count++)); }; done < <(jq -r 'to_entries[] | "\(.key):\(.value)"' "$USERS_FILE")
+  echo -e "${GREEN}Liste des utilisateurs Xray :${RESET}"
+  for (( i=0; i<count; i++ )); do
+    proto="${users[$i]%%:*}"; id="${users[$i]#*:}"
+    echo -e "[$((i+1))] Protocole : ${YELLOW}$proto${RESET} - ID/Pass : ${CYAN}$id${RESET}"
+  done
+  (( count == 0 )) && { echo -e "${RED}Aucun utilisateur à supprimer.${RESET}"; return; }
+  read -rp "Numéro à supprimer (0 pour annuler) : " num
+  [[ ! $num =~ ^[0-9]+$ || num -lt 0 || num -gt $count ]] && { echo -e "${RED}Numéro invalide.${RESET}"; return; }
+  (( num == 0 )) && { echo "Suppression annulée."; return; }
+  local selected_index=$((num-1)) sel_key="${keys[$selected_index]}" sel_id="${users[$selected_index]#*:}"
+  local sel_proto="${protocol_map[$sel_key]}" sel_stream="${key_to_stream[$sel_key]}"
+  if [[ "$sel_proto" == "vmess" || "$sel_proto" == "vless" ]]; then
+    jq --arg proto "$sel_proto" --arg stream "$sel_stream" --arg id "$sel_id" \
+      '(.inbounds[] | select(.protocol == $proto and .streamSettings.security == $stream) | .settings.clients) |= map(select(.id != $id))' \
+      "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+  elif [[ "$sel_proto" == "trojan" ]]; then
+    jq --arg stream "$sel_stream" --arg id "$sel_id" \
+      '(.inbounds[] | select(.protocol == "trojan" and .streamSettings.security == $stream) | .settings.clients) |= map(select(.password != $id))' \
+      "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+  fi
+  jq --arg k "$sel_key" '.[$k]=""' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+  [[ -f /etc/xray/users_expiry.list ]] && grep -v "^$sel_id|" /etc/xray/users_expiry.list > /tmp/expiry.tmp && mv /tmp/expiry.tmp /etc/xray/users_expiry.list
+  systemctl restart xray
+  echo -e "${GREEN}Utilisateur supprimé : $sel_key / $sel_proto ($sel_id)${RESET}"
+}
+
+choice=0
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[[ -f /tmp/.xray_domain ]] && DOMAIN=$(cat /tmp/.xray_domain)
+load_user_data
 
 while true; do
-    clear
-    echo -e "${CYAN}+=============================================+${RESET}"
-    echo -e "${CYAN}|           ${YELLOW}Gestion V2Ray SlowDNS${CYAN}           |${RESET}"
-    echo -e "${CYAN}+=============================================+${RESET}"
-    echo -e "${GREEN}1)${RESET} Installation complète V2Ray SlowDNS"
-    echo -e "${GREEN}2)${RESET} Créer un utilisateur V2Ray SlowDNS"
-    echo -e "${GREEN}3)${RESET} Supprimer un utilisateur V2Ray SlowDNS"
-    echo -e "${GREEN}4)${RESET} Afficher logs V2Ray en temps réel"
-    echo -e "${GREEN}5)${RESET} Quitter"
-    echo
-    read -rp "Choisissez une option [1-5] : " option
-
-    case $option in
-        1) install_complete ;;
-        2) create_user ;;
-        3) delete_user ;;
-        4) show_logs ;;
-        5) exit 0 ;;
-        *) echo -e "${RED}Option invalide.${RESET}" ;;
-    esac
-
-    echo
-    read -rp "Appuyez sur Entrée pour continuer..." pause
+  clear
+  print_header
+  afficher_xray_actifs
+  show_menu
+  case $choice in
+    1)
+      bash "$SCRIPT_DIR/xray_installe.sh"
+      [[ -f /tmp/.xray_domain ]] && DOMAIN=$(cat /tmp/.xray_domain)
+      load_user_data
+      read -p "Appuyez sur Entrée pour continuer..."
+      ;;
+    2)
+      read -rp "Nom de l'utilisateur VMESS : " conf_name
+      read -rp "Durée (jours) : " days
+      [[ -n "$conf_name" && -n "$days" ]] && create_config "vmess" "$conf_name" "$days"
+      read -p "Appuyez sur Entrée pour continuer..."
+      ;;
+    3)
+      read -rp "Nom de l'utilisateur VLESS : " conf_name
+      read -rp "Durée (jours) : " days
+      [[ -n "$conf_name" && -n "$days" ]] && create_config "vless" "$conf_name" "$days"
+      read -p "Appuyez sur Entrée pour continuer..."
+      ;;
+    4)
+      read -rp "Nom de l'utilisateur TROJAN : " conf_name
+      read -rp "Durée (jours) : " days
+      [[ -n "$conf_name" && -n "$days" ]] && create_config "trojan" "$conf_name" "$days"
+      read -p "Appuyez sur Entrée pour continuer..."
+      ;;
+    5)
+      delete_user_by_number
+      read -p "Appuyez sur Entrée pour continuer..."
+      ;;
+    6)
+      echo -e "${YELLOW}Désinstallation complète de Xray et Trojan-Go en cours...${RESET}"
+      systemctl stop xray trojan-go 2>/dev/null || true
+      systemctl disable xray trojan-go 2>/dev/null || true
+      for port in 89 8443; do lsof -i tcp:$port -t | xargs -r kill -9; lsof -i udp:$port -t | xargs -r kill -9; done
+      rm -rf /etc/xray /var/log/xray /usr/local/bin/xray /etc/systemd/system/xray.service
+      rm -rf /etc/trojan-go /var/log/trojan-go /usr/local/bin/trojan-go /etc/systemd/system/trojan-go.service
+      rm -f /tmp/.xray_domain /etc/xray/users_expiry.list /etc/xray/users.json /etc/xray/config.json
+      systemctl daemon-reload
+      echo -e "${GREEN}Désinstallation terminée.${RESET}"
+      read -p "Appuyez sur Entrée pour continuer..."
+      ;;
+    0)
+      echo -e "${RED}Quitter...${RESET}"
+      rm -f /tmp/.xray_domain
+      break
+      ;;
+    *)
+      echo -e "${RED}Choix invalide.${RESET}"
+      sleep 2
+      ;;
+  esac
 done
