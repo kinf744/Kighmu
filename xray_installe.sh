@@ -1,10 +1,33 @@
 #!/bin/bash
-# Installation complète Xray + Trojan Go + UFW, avec users.json pour menu
+# Installation complète Xray + UFW, nettoyage avant installation, services systemd robustes
 
 # Couleurs terminal
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m'
+
+# Nettoyage précédent avant installation
+echo -e "${GREEN}Arrêt des services utilisant les ports 80 et 8443...${NC}"
+
+# Trouver et tuer tous processus écoutant sur les ports 80 et 8443 (TCP et UDP)
+for port in 80 8443; do
+    lsof -i tcp:$port -t | xargs -r kill -9
+    lsof -i udp:$port -t | xargs -r kill -9
+done
+
+# Arrêter et désactiver les services systemd potentiellement en conflit
+for srv in xray nginx apache2; do
+    systemctl stop $srv 2>/dev/null || true
+    systemctl disable $srv 2>/dev/null || true
+done
+
+echo -e "${GREEN}Nettoyage des fichiers précédents...${NC}"
+
+# Supprimer toutes les anciennes configurations et fichiers
+rm -rf /etc/xray /var/log/xray /usr/local/bin/xray /tmp/.xray_domain /etc/systemd/system/xray.service
+
+# Recharger systemd pour appliquer les suppressions
+systemctl daemon-reload
 
 # Demander domaine
 read -rp "Entrez votre nom de domaine (ex: monsite.com) : " DOMAIN
@@ -34,13 +57,14 @@ ufw allow 8443/udp
 echo "y" | ufw enable
 ufw status verbose
 
+# Sauvegarder règles UFW pour persistance
+netfilter-persistent save
+
 # Synchronisation temps
 ntpdate pool.ntp.org
 timedatectl set-ntp true
 systemctl enable chronyd
 systemctl restart chronyd
-systemctl enable chrony
-systemctl restart chrony
 timedatectl set-timezone Asia/Kuala_Lumpur
 
 # Info chrony
@@ -52,7 +76,7 @@ date
 latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases | grep tag_name | sed -E 's/.*"v(.*)".*/\1/' | head -n1)
 xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v${latest_version}/xray-linux-64.zip"
 
-# Arrêt services sur port 80 si existants
+# Arrêt services sur port 80 si existants (redondant mais sécuritaire)
 systemctl stop nginx 2>/dev/null || true
 systemctl stop apache2 2>/dev/null || true
 sudo lsof -t -i tcp:80 -s tcp:listen | sudo xargs kill -9 2>/dev/null || true
@@ -86,7 +110,7 @@ systemctl stop xray
 ~/.acme.sh/acme.sh --issue --standalone -d "$DOMAIN" --force
 ~/.acme.sh/acme.sh --installcert -d "$DOMAIN" --fullchainpath /etc/xray/xray.crt --keypath /etc/xray/xray.key
 
-# Redémarrer Xray
+# Redémarrer Xray (sera stoppé plus tard par systemd service)
 systemctl start xray
 
 # Vérifier certificats TLS
@@ -164,27 +188,6 @@ cat > /etc/xray/config.json << EOF
         "wsSettings": {"path": "/vless", "headers": {"Host": "$DOMAIN"}}
       },
       "sniffing": {"enabled": true, "destOverride": ["http", "tls"]}
-    },
-    {
-      "port": 8443,
-      "protocol": "trojan",
-      "settings": {"clients": [{"password": "$uuid5"}]},
-      "streamSettings": {
-        "network": "ws",
-        "security": "tls",
-        "tlsSettings": {"certificates": [{"certificateFile": "/etc/xray/xray.crt","keyFile": "/etc/xray/xray.key"}]},
-        "wsSettings": {"path": "/trojanws", "headers": {"Host": "$DOMAIN"}}
-      }
-    },
-    {
-      "port": 80,
-      "protocol": "trojan",
-      "settings": {"clients": [{"password": "$uuid6"}]},
-      "streamSettings": {
-        "network": "ws",
-        "security": "none",
-        "wsSettings": {"path": "/trojanws", "headers": {"Host": "$DOMAIN"}}
-      }
     }
   ],
   "outbounds": [{"protocol": "freedom","settings": {}},{"protocol": "blackhole","settings": {}, "tag": "blocked"}],
@@ -214,7 +217,7 @@ RestartPreventExitStatus=23
 WantedBy=multi-user.target
 EOF
 
-# Reload and enable xray service
+# Reload systemd and enable/start service
 systemctl daemon-reload
 systemctl enable xray
 systemctl restart xray
@@ -227,74 +230,9 @@ else
   exit 1
 fi
 
-# Installation Trojan Go
-latest_version=$(curl -s https://api.github.com/NevermoreSSH/addons/releases | grep tag_name | sed -E 's/.*\"v(.*)\".*/\1/' | head -n 1)
-trojan_link="https://github.com/NevermoreSSH/addons/releases/download/0.10.6/trojan-go-linux-amd64.zip"
-
-mkdir -p /usr/bin/trojan-go /etc/trojan-go
-cd $(mktemp -d)
-curl -sL "$trojan_link" -o trojan-go.zip
-unzip -q trojan-go.zip && rm -f trojan-go.zip
-mv trojan-go /usr/local/bin/trojan-go
-chmod +x /usr/local/bin/trojan-go
-
-mkdir -p /var/log/trojan-go
-touch /etc/trojan-go/akun.conf
-touch /var/log/trojan-go/trojan-go.log
-
-cat > /etc/trojan-go/config.json << EOF
-{
-  "run_type": "server",
-  "local_addr": "0.0.0.0",
-  "local_port": 8443,
-  "remote_addr": "127.0.0.1",
-  "remote_port": 89,
-  "log_level": 1,
-  "log_file": "/var/log/trojan-go/trojan-go.log",
-  "password": ["$uuid5"],
-  "disable_http_check": true,
-  "udp_timeout": 60,
-  "ssl": {
-    "verify": false,
-    "verify_hostname": false,
-    "cert": "/etc/xray/xray.crt",
-    "key": "/etc/xray/xray.key",
-    "key_password": "",
-    "cipher": "",
-    "curves": "",
-    "prefer_server_cipher": false,
-    "sni": "$DOMAIN",
-    "alpn": ["http/1.1"],
-    "session_ticket": true,
-    "reuse_session": true,
-    "plain_http_response": "",
-    "fallback_addr": "127.0.0.1",
-    "fallback_port": 0,
-    "fingerprint": "firefox"
-  },
-  "tcp": {"no_delay": true,"keep_alive": true,"prefer_ipv4": true},
-  "mux": {"enabled": false,"concurrency": 8,"idle_timeout": 60},
-  "websocket": {"enabled": true,"path": "/trojanws","host": "$DOMAIN"},
-  "api": {"enabled": false,"api_addr": "","api_port": 0,"ssl": {"enabled": false,"key": "","cert": "","verify_client": false,"client_cert": []}}
-}
-EOF
-
-# Configuration UFW (garantir ouverture des ports)
-ufw allow ssh
-ufw allow 80/tcp
-ufw allow 80/udp
-ufw allow 8443/tcp
-ufw allow 8443/udp
-
-# Activer UFW avec validation automatique
-echo "y" | ufw enable
-ufw status verbose
-
 echo -e "${GREEN}Installation complète terminée.${NC}"
 echo "Domaine : $DOMAIN"
 echo "UUID VMess TLS : $uuid1"
 echo "UUID VMess Non-TLS : $uuid2"
 echo "UUID VLESS TLS : $uuid3"
 echo "UUID VLESS Non-TLS : $uuid4"
-echo "Mot de passe Trojan WS TLS : $uuid5"
-echo "Mot de passe Trojan WS Non-TLS : $uuid6"
