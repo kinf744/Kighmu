@@ -2,9 +2,11 @@
 # Installation complète Xray + UFW, nettoyage avant installation, services systemd robustes
 # Version GitHub-ready
 
+set -euo pipefail
+
 # Couleurs terminal
 RED='\u001B[0;31m'
-GREEN='\u001B[0m'\u001B[0;32m
+GREEN='\u001B[0m'\u001B[0;32m'
 NC='\u001B[0m'
 
 restart_xray_service() {
@@ -64,19 +66,21 @@ if [[ -z "$DOMAIN" ]]; then
 fi
 
 echo "$DOMAIN" > /tmp/.xray_domain
-EMAIL="adrienkiaje@gmail.com"
+EMAIL="votre-adresse@example.com"
 
 # Mise à jour + dépendances
 apt update
 apt install -y ufw iptables iptables-persistent curl socat xz-utils wget apt-transport-https \
-  gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq
+  gnupg dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq
 
-# Configuration UFW (ouvrir temporairement 80 pour ACME, puis le refermer après)
+# Configuration UFW (ports 80 et 8443 nécessaires pour ACME + TLS)
 ufw allow ssh
 ufw allow 89/tcp
 ufw allow 89/udp
 ufw allow 8443/tcp
 ufw allow 8443/udp
+# Ouverture temporaire du port 80 pour ACME si nécessaire
+ufw allow 80/tcp || true
 echo "y" | ufw enable
 ufw status verbose
 netfilter-persistent save
@@ -105,6 +109,10 @@ sudo lsof -t -i tcp:89 -s tcp:listen | sudo xargs kill -9 2>/dev/null || true
 mkdir -p /usr/local/bin
 cd "$(mktemp -d)"
 curl -sL "$xraycore_link" -o xray.zip
+if [[ ! -f "xray.zip" ]]; then
+  echo -e "${RED}Échec du téléchargement de Xray.${NC}"
+  exit 1
+fi
 unzip -q xray.zip && rm -f xray.zip
 mv xray /usr/local/bin/xray
 chmod +x /usr/local/bin/xray
@@ -120,48 +128,53 @@ ACME_BIN="${HOME}/.acme.sh/acme.sh"
 if [[ ! -f "$ACME_BIN" ]]; then
   # Téléchargement + installation d'acme.sh
   curl https://get.acme.sh | sh
-  # Charge immédiate du shell pour récupérer les PATHs
+  # Charger le shell pour récupérer PATHs
   . "$HOME"/.bashrc 2>/dev/null || true
 fi
 
-# Demander option ACME: HTTP (standalone) ou DNS-01
+# Option DNS ou HTTP pour ACME
 use_dns_answer=false
 read -rp "Utiliser DNS-01 pour ACME ? (o/n) [par défaut n] : " dns_choice
 if [[ "${dns_choice,,}" == "o" || "${dns_choice,,}" == "yes" || "${dns_choice,,}" == "y" ]]; then
   use_dns_answer=true
 fi
 
-# Si DNS-01, assurez-vous d'avoir le fournisseur configuré (ex: Cloudflare, Route53, etc.)
+# Si DNS-01, demandez les clés/fournisseur DNS et configurez
 if $use_dns_answer; then
-  echo "Configurer DNS-01 nécessite un fournisseur DNS pris en charge par acme.sh."
-  # Ex : ~/.acme.sh/acme.sh --issue --dns dns_cf -d "$DOMAIN" --log --debug
+  echo "Configurer DNS-01 nécessite un fournisseur pris en charge par acme.sh et les clés API configurées."
 fi
 
 # Arrêt éventuel du service Xray si présent
 systemctl stop xray 2>/dev/null || true
 
-# Certificate TLS
+# Certification TLS
 $ACME_BIN --register-account -m "$EMAIL" --log 2>&1 | sed -n '1,200p'
 if $use_dns_answer; then
   # Exemple (à adapter selon votre fournisseur DNS et variable d'environnement)
   $ACME_BIN --issue --dns dns_cf -d "$DOMAIN" --force
 else
-  # Standalone HTTP-01 (ouvrir temporairement le port 80)
+  # Standalone HTTP-01 (ouvert temporairement le port 80)
   ufw allow 80/tcp
   $ACME_BIN --issue --standalone -d "$DOMAIN" --force
   ufw delete allow 80/tcp
 fi
 
-sleep 5  # pause pour éviter conflit certifs
+# Vérification de l'écriture des règles ACME dans le log
+# Attendre un peu pour la propagation
+sleep 5
 
-# Installer certificats
+# Installation des certificats
 $ACME_BIN --installcert -d "$DOMAIN" --ecc \
   --cert-file /etc/xray/xray.crt \
   --key-file /etc/xray/xray.key \
   --fullchain-file /etc/xray/fullchain.cer
 
-if [[ ! -f "/etc/xray/xray.crt" || ! -f "/etc/xray/xray.key" ]]; then
-  echo -e "${RED}Erreur : certificats TLS non trouvés après installation.${NC}"
+# Vérification des fichiers
+if [[ ! -f "/etc/xray/xray.crt" || ! -f "/etc/xray/xray.key" || ! -f "/etc/xray/fullchain.cer" ]]; then
+  echo -e "${RED}Erreur : certificats TLS non trouvés après installation (chemins attendus : /etc/xray/).${NC}"
+  echo "Détails : "
+  ls -l /etc/xray/ 2>/dev/null || true
+  cat ~/.acme.sh/acme.sh.log 2>/dev/null || true
   exit 1
 fi
 
