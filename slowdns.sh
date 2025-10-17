@@ -3,7 +3,7 @@ set -euo pipefail
 
 # SlowDNS Installation Script
 # Author: Adapted for GitHub usage and Xray+SlowDNS integration
-# Usage: sudo bash install-slowdns.sh
+# Usage: sudo bash slowdns.sh
 
 SLOWDNS_DIR="/etc/slowdns"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
