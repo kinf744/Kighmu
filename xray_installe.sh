@@ -1,7 +1,10 @@
 #!/bin/bash
-RED='\u001B[0;31m'
-GREEN='\u001B[0;32m'
-NC='\u001B[0m'
+# Installation complète Xray + UFW, nettoyage avant installation, services systemd robustes
+
+# Couleurs terminal
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m'
 
 restart_xray_service() {
   echo -e "${GREEN}Redémarrage du service Xray...${NC}"
@@ -24,34 +27,50 @@ restart_xray_service() {
 
 clean_xray_environment() {
   echo -e "${GREEN}Nettoyage complet de l'environnement Xray...${NC}"
+
+  # Arrêter et désactiver le service Xray
   systemctl stop xray 2>/dev/null || true
   systemctl disable xray 2>/dev/null || true
   systemctl daemon-reload
+
+  # Tuer processus sur ports 89 et 8443 (TCP et UDP)
   for port in 89 8443; do
       lsof -i tcp:$port -t | xargs -r kill -9
       lsof -i udp:$port -t | xargs -r kill -9
   done
+
+  # Pause pour libérer les ports
   sleep 5
+
+  # Supprimer anciens fichiers et dossiers liés à Xray
   rm -rf /etc/xray /var/log/xray /usr/local/bin/xray /tmp/.xray_domain /etc/systemd/system/xray.service
   rm -rf /tmp/xray-temp /var/run/xray
+
   systemctl daemon-reload
+
   echo -e "${GREEN}Nettoyage effectué.${NC}"
 }
 
+# Début script principal
+
 clean_xray_environment
 
+# Demander domaine
 read -rp "Entrez votre nom de domaine (ex: monsite.com) : " DOMAIN
 if [[ -z "$DOMAIN" ]]; then
   echo -e "${RED}Erreur : nom de domaine non valide.${NC}"
   exit 1
 fi
+
 echo "$DOMAIN" > /tmp/.xray_domain
 EMAIL="adrienkiaje@gmail.com"
 
+# Mise à jour + dépendances
 apt update
 apt install -y ufw iptables iptables-persistent curl socat xz-utils wget apt-transport-https \
   gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq
 
+# Configuration UFW
 ufw allow ssh
 ufw allow 89/tcp
 ufw allow 89/udp
@@ -88,6 +107,7 @@ setcap 'cap_net_bind_service=+ep' /usr/local/bin/xray
 
 mkdir -p /var/log/xray /etc/xray
 touch /var/log/xray/access.log /var/log/xray/error.log
+chown -R root:root /var/log/xray
 chmod 644 /var/log/xray/access.log /var/log/xray/error.log
 
 if ! command -v ~/.acme.sh/acme.sh &> /dev/null; then
@@ -97,9 +117,12 @@ fi
 
 systemctl stop xray
 
+# Certificats TLS
 ~/.acme.sh/acme.sh --register-account -m "$EMAIL"
 ~/.acme.sh/acme.sh --issue --standalone -d "$DOMAIN" --force
-sleep 5
+
+sleep 5  # pause pour éviter conflit certifs
+
 ~/.acme.sh/acme.sh --installcert -d "$DOMAIN" --fullchainpath /etc/xray/xray.crt --keypath /etc/xray/xray.key
 
 if [[ ! -f "/etc/xray/xray.crt" || ! -f "/etc/xray/xray.key" ]]; then
@@ -107,6 +130,7 @@ if [[ ! -f "/etc/xray/xray.crt" || ! -f "/etc/xray/xray.key" ]]; then
   exit 1
 fi
 
+# Génération des UUID pour utilisateurs
 uuid1=$(cat /proc/sys/kernel/random/uuid)
 uuid2=$(cat /proc/sys/kernel/random/uuid)
 uuid3=$(cat /proc/sys/kernel/random/uuid)
@@ -127,138 +151,80 @@ EOF
 
 cat > /etc/xray/config.json << EOF
 {
-  "log": {
-    "access": "/var/log/xray/access.log",
-    "error": "/var/log/xray/error.log",
-    "loglevel": "info"
-  },
+  "log": {"access": "/var/log/xray/access.log", "error": "/var/log/xray/error.log", "loglevel": "info"},
   "inbounds": [
     {
       "port": 8443,
       "protocol": "vmess",
-      "settings": { "clients": [ { "id": "$uuid1", "alterId": 0 } ] },
+      "settings": {"clients": [{"id": "$uuid1", "alterId": 0}]},
       "streamSettings": {
         "network": "ws",
         "security": "tls",
-        "tlsSettings": {
-          "certificates": [
-            { "certificateFile": "/etc/xray/xray.crt", "keyFile": "/etc/xray/xray.key" }
-          ]
-        },
-        "wsSettings": { "path": "/vmess" }
+        "tlsSettings": {"certificates": [{"certificateFile": "/etc/xray/xray.crt", "keyFile": "/etc/xray/xray.key"}]},
+        "wsSettings": {"path": "/vmess", "headers": {"Host": "$DOMAIN"}}
       }
     },
     {
       "port": 89,
       "protocol": "vmess",
-      "settings": { "clients": [ { "id": "$uuid2", "alterId": 0 } ] },
+      "settings": {"clients": [{"id": "$uuid2", "alterId": 0}]},
       "streamSettings": {
         "network": "ws",
         "security": "none",
-        "wsSettings": { "path": "/vmess" }
+        "wsSettings": {"path": "/vmess", "headers": {"Host": "$DOMAIN"}}
       },
-      "sniffing": { "enabled": true, "destOverride": [ "http", "tls" ] }
+      "sniffing": {"enabled": true, "destOverride": ["http", "tls"]}
     },
     {
       "port": 8443,
       "protocol": "vless",
-      "settings": { "clients": [ { "id": "$uuid3" } ], "decryption": "none" },
+      "settings": {"clients": [{"id": "$uuid3"}], "decryption": "none"},
       "streamSettings": {
         "network": "ws",
         "security": "tls",
-        "tlsSettings": {
-          "certificates": [
-            { "certificateFile": "/etc/xray/xray.crt", "keyFile": "/etc/xray/xray.key" }
-          ]
-        },
-        "wsSettings": { "path": "/vless" }
+        "tlsSettings": {"certificates": [{"certificateFile": "/etc/xray/xray.crt", "keyFile": "/etc/xray/xray.key"}]},
+        "wsSettings": {"path": "/vless", "headers": {"Host": "$DOMAIN"}}
       },
-      "sniffing": { "enabled": true, "destOverride": [ "http", "tls" ] }
+      "sniffing": {"enabled": true, "destOverride": ["http", "tls"]}
     },
     {
       "port": 89,
       "protocol": "vless",
-      "settings": { "clients": [ { "id": "$uuid4" } ], "decryption": "none" },
+      "settings": {"clients": [{"id": "$uuid4"}], "decryption": "none"},
       "streamSettings": {
         "network": "ws",
         "security": "none",
-        "wsSettings": { "path": "/vless" }
+        "wsSettings": {"path": "/vless", "headers": {"Host": "$DOMAIN"}}
       },
-      "sniffing": { "enabled": true, "destOverride": [ "http", "tls" ] }
+      "sniffing": {"enabled": true, "destOverride": ["http", "tls"]}
     },
     {
       "port": 8443,
       "protocol": "trojan",
-      "settings": { "clients": [ { "password": "$uuid5" } ] },
+      "settings": {"clients": [{"password": "$uuid5"}]},
       "streamSettings": {
         "network": "ws",
         "security": "tls",
-        "tlsSettings": {
-          "certificates": [
-            { "certificateFile": "/etc/xray/xray.crt", "keyFile": "/etc/xray/xray.key" }
-          ]
-        },
-        "wsSettings": { "path": "/trojanws" }
+        "tlsSettings": {"certificates": [{"certificateFile": "/etc/xray/xray.crt", "keyFile": "/etc/xray/xray.key"}]},
+        "wsSettings": {"path": "/trojanws", "headers": {"Host": "$DOMAIN"}}
       }
     },
     {
       "port": 89,
       "protocol": "trojan",
-      "settings": { "clients": [ { "password": "$uuid6" } ] },
+      "settings": {"clients": [{"password": "$uuid6"}]},
       "streamSettings": {
         "network": "ws",
         "security": "none",
-        "wsSettings": { "path": "/trojanws" }
+        "wsSettings": {"path": "/trojanws", "headers": {"Host": "$DOMAIN"}}
       }
     }
   ],
-  "outbounds": [
-    { "protocol": "freedom", "settings": {} },
-    { "protocol": "blackhole", "settings": {}, "tag": "blocked" }
-  ],
-  "routing": {
-    "rules": [
-      {
-        "type": "field",
-        "ip": [
-          "0.0.0.0/8",
-          "10.0.0.0/8",
-          "100.64.0.0/10",
-          "169.254.0.0/16",
-          "172.16.0.0/12",
-          "192.0.0.0/24",
-          "192.0.2.0/24",
-          "192.168.0.0/16",
-          "198.18.0.0/15",
-          "198.51.100.0/24",
-          "203.0.113.0/24",
-          "::1/128",
-          "fc00::/7",
-          "fe80::/10"
-        ],
-        "outboundTag": "blocked"
-      }
-    ]
-  },
-  "policy": {
-    "levels": {
-      "0": {
-        "statsUserDownlink": true,
-        "statsUserUplink": true
-      }
-    },
-    "system": {
-      "statsInboundUplink": true,
-      "statsInboundDownlink": true
-    }
-  },
+  "outbounds": [{"protocol": "freedom","settings": {}},{"protocol": "blackhole","settings": {}, "tag": "blocked"}],
+  "routing": {"rules": [{"type": "field", "ip": ["0.0.0.0/8","10.0.0.0/8","100.64.0.0/10","169.254.0.0/16","172.16.0.0/12","192.0.0.0/24","192.0.2.0/24","192.168.0.0/16","198.18.0.0/15","198.51.100.0/24","203.0.113.0/24","::1/128","fc00::/7","fe80::/10"], "outboundTag": "blocked"}]},
+  "policy": {"levels": {"0": {"statsUserDownlink":true,"statsUserUplink":true}}, "system": {"statsInboundUplink":true,"statsInboundDownlink":true}},
   "stats": {},
-  "api": {
-    "services": [
-      "StatsService"
-    ],
-    "tag": "api"
-  }
+  "api": {"services": ["StatsService"], "tag": "api"}
 }
 EOF
 
