@@ -67,34 +67,50 @@ timedatectl status
 
 date
 
-# --- Télécharger et installer Xray ---
+# Télécharger dernière version Xray
 latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases | grep tag_name | sed -E 's/.*"v(.*)".*/\1/' | head -n1)
-curl -sL "https://github.com/XTLS/Xray-core/releases/download/v${latest_version}/xray-linux-64.zip" -o /tmp/xray.zip
-unzip -q /tmp/xray.zip -d /tmp && rm -f /tmp/xray.zip
-mv /tmp/xray /usr/local/bin/xray
+xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v${latest_version}/xray-linux-64.zip"
+
+systemctl stop nginx 2>/dev/null || true
+systemctl stop apache2 2>/dev/null || true
+sudo lsof -t -i tcp:89 -s tcp:listen | sudo xargs kill -9 2>/dev/null || true
+
+mkdir -p /usr/local/bin
+cd $(mktemp -d)
+curl -sL "$xraycore_link" -o xray.zip
+unzip -q xray.zip && rm -f xray.zip
+mv xray /usr/local/bin/xray
 chmod +x /usr/local/bin/xray
 setcap 'cap_net_bind_service=+ep' /usr/local/bin/xray
 
-mkdir -p /etc/xray /var/log/xray
-touch /var/log/xray/{access.log,error.log}
-chmod 644 /var/log/xray/*
+mkdir -p /var/log/xray /etc/xray
+touch /var/log/xray/access.log /var/log/xray/error.log
+chmod 644 /var/log/xray/access.log /var/log/xray/error.log
 
-# --- Certificats TLS via acme.sh ---
-if ! command -v ~/.acme.sh/acme.sh &>/dev/null; then
+# Installation acme.sh et certificats TLS
+if ! command -v ~/.acme.sh/acme.sh &> /dev/null; then
+  log "${GREEN}" "Installation d'acme.sh..."
   curl https://get.acme.sh | sh
   source ~/.bashrc
 fi
-~/.acme.sh/acme.sh --register-account -m "$EMAIL" || true
+
+~/.acme.sh/acme.sh --register-account -m "$EMAIL"
 ~/.acme.sh/acme.sh --issue --standalone -d "$DOMAIN" --force
+sleep 5
 ~/.acme.sh/acme.sh --installcert -d "$DOMAIN" --fullchainpath /etc/xray/xray.crt --keypath /etc/xray/xray.key
 
-# --- Génération UUID ---
-uuid_vmess_tls=$(uuidgen)
-uuid_vmess_ntls=$(uuidgen)
-uuid_vless_tls=$(uuidgen)
-uuid_vless_ntls=$(uuidgen)
-uuid_trojan_tls=$(uuidgen)
-uuid_trojan_ntls=$(uuidgen)
+if [[ ! -f "/etc/xray/xray.crt" || ! -f "/etc/xray/xray.key" ]]; then
+  log "${RED}" "Erreur : certificats TLS non trouvés."
+  exit 1
+fi
+
+# Génération UUID
+uuid1=$(cat /proc/sys/kernel/random/uuid)
+uuid2=$(cat /proc/sys/kernel/random/uuid)
+uuid3=$(cat /proc/sys/kernel/random/uuid)
+uuid4=$(cat /proc/sys/kernel/random/uuid)
+uuid5=$(cat /proc/sys/kernel/random/uuid)
+uuid6=$(cat /proc/sys/kernel/random/uuid)
 
 # --- Configuration Xray (2 ports + fallbacks) ---
 cat > /etc/xray/config.json << EOF
