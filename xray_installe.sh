@@ -37,7 +37,7 @@ ufw default allow outgoing
 ufw allow ssh
 ufw allow 89/tcp
 ufw allow 8443/tcp
-echo "y" | ufw enable
+ufw --force enable
 
 # --- Synchronisation horaire ---
 systemctl enable systemd-timesyncd --now
