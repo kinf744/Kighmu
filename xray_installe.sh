@@ -140,80 +140,114 @@ EOF
 
 cat > /etc/xray/config.json << EOF
 {
-  "log": {"access": "/var/log/xray/access.log", "error": "/var/log/xray/error.log", "loglevel": "info"},
+  "log": {
+    "access": "/var/log/xray/access.log",
+    "error": "/var/log/xray/error.log",
+    "loglevel": "info"
+  },
   "inbounds": [
     {
       "port": 8443,
       "protocol": "vmess",
-      "settings": {"clients": [{"id": "$uuid1", "alterId": 0}]},
+      "settings": { "clients": [{ "id": "$uuid1", "alterId": 0 }] },
       "streamSettings": {
         "network": "ws",
         "security": "tls",
-        "tlsSettings": {"certificates": [{"certificateFile": "/etc/xray/xray.crt", "keyFile": "/etc/xray/xray.key"}]},
-        "wsSettings": {"path": "/vmess", "headers": {"Host": "$DOMAIN"}}
+        "tlsSettings": {
+          "certificates": [
+            { "certificateFile": "/etc/xray/xray.crt", "keyFile": "/etc/xray/xray.key" }
+          ]
+        },
+        "wsSettings": { "path": "/vmess", "headers": { "Host": "$DOMAIN" } }
       }
     },
+    {
+      "port": 8443,
+      "protocol": "vless",
+      "settings": { "clients": [{ "id": "$uuid3" }], "decryption": "none" },
+      "streamSettings": {
+        "network": "ws",
+        "security": "tls",
+        "tlsSettings": {
+          "certificates": [
+            { "certificateFile": "/etc/xray/xray.crt", "keyFile": "/etc/xray/xray.key" }
+          ]
+        },
+        "wsSettings": { "path": "/vless", "headers": { "Host": "$DOMAIN" } }
+      }
+    },
+    {
+      "port": 8443,
+      "protocol": "trojan",
+      "settings": { "clients": [{ "password": "$uuid5" }] },
+      "streamSettings": {
+        "network": "ws",
+        "security": "tls",
+        "tlsSettings": {
+          "certificates": [
+            { "certificateFile": "/etc/xray/xray.crt", "keyFile": "/etc/xray/xray.key" }
+          ]
+        },
+        "wsSettings": { "path": "/trojanws", "headers": { "Host": "$DOMAIN" } }
+      }
+    },
+
     {
       "port": 89,
       "protocol": "vmess",
-      "settings": {"clients": [{"id": "$uuid2", "alterId": 0}]},
+      "settings": { "clients": [{ "id": "$uuid2", "alterId": 0 }] },
       "streamSettings": {
         "network": "ws",
         "security": "none",
-        "wsSettings": {"path": "/vmess", "headers": {"Host": "$DOMAIN"}}
-      },
-      "sniffing": {"enabled": true, "destOverride": ["http", "tls"]}
-    },
-    {
-      "port": 8443,
-      "protocol": "vless",
-      "settings": {"clients": [{"id": "$uuid3"}], "decryption": "none"},
-      "streamSettings": {
-        "network": "ws",
-        "security": "tls",
-        "tlsSettings": {"certificates": [{"certificateFile": "/etc/xray/xray.crt", "keyFile": "/etc/xray/xray.key"}]},
-        "wsSettings": {"path": "/vless", "headers": {"Host": "$DOMAIN"}}
-      },
-      "sniffing": {"enabled": true, "destOverride": ["http", "tls"]}
+        "wsSettings": { "path": "/vmess", "headers": { "Host": "$DOMAIN" } }
+      }
     },
     {
       "port": 89,
       "protocol": "vless",
-      "settings": {"clients": [{"id": "$uuid4"}], "decryption": "none"},
+      "settings": { "clients": [{ "id": "$uuid4" }], "decryption": "none" },
       "streamSettings": {
         "network": "ws",
         "security": "none",
-        "wsSettings": {"path": "/vless", "headers": {"Host": "$DOMAIN"}}
-      },
-      "sniffing": {"enabled": true, "destOverride": ["http", "tls"]}
-    },
-    {
-      "port": 8443,
-      "protocol": "trojan",
-      "settings": {"clients": [{"password": "$uuid5"}]},
-      "streamSettings": {
-        "network": "ws",
-        "security": "tls",
-        "tlsSettings": {"certificates": [{"certificateFile": "/etc/xray/xray.crt", "keyFile": "/etc/xray/xray.key"}]},
-        "wsSettings": {"path": "/trojanws", "headers": {"Host": "$DOMAIN"}}
+        "wsSettings": { "path": "/vless", "headers": { "Host": "$DOMAIN" } }
       }
     },
     {
       "port": 89,
       "protocol": "trojan",
-      "settings": {"clients": [{"password": "$uuid6"}]},
+      "settings": { "clients": [{ "password": "$uuid6" }] },
       "streamSettings": {
         "network": "ws",
         "security": "none",
-        "wsSettings": {"path": "/trojanws", "headers": {"Host": "$DOMAIN"}}
+        "wsSettings": { "path": "/trojanws", "headers": { "Host": "$DOMAIN" } }
       }
     }
   ],
-  "outbounds": [{"protocol": "freedom","settings": {}},{"protocol": "blackhole","settings": {}, "tag": "blocked"}],
-  "routing": {"rules": [{"type": "field", "ip": ["0.0.0.0/8","10.0.0.0/8","100.64.0.0/10","169.254.0.0/16","172.16.0.0/12","192.0.0.0/24","192.0.2.0/24","192.168.0.0/16","198.18.0.0/15","198.51.100.0/24","203.0.113.0/24","::1/128","fc00::/7","fe80::/10"], "outboundTag": "blocked"}]},
-  "policy": {"levels": {"0": {"statsUserDownlink":true,"statsUserUplink":true}}, "system": {"statsInboundUplink":true,"statsInboundDownlink":true}},
+  "outbounds": [
+    { "protocol": "freedom", "settings": {} },
+    { "protocol": "blackhole", "settings": {}, "tag": "blocked" }
+  ],
+  "routing": {
+    "rules": [
+      {
+        "type": "field",
+        "ip": [
+          "0.0.0.0/8","10.0.0.0/8","100.64.0.0/10","169.254.0.0/16","172.16.0.0/12",
+          "192.0.0.0/24","192.0.2.0/24","192.168.0.0/16","198.18.0.0/15",
+          "198.51.100.0/24","203.0.113.0/24","::1/128","fc00::/7","fe80::/10"
+        ],
+        "outboundTag": "blocked"
+      }
+    ]
+  },
+  "policy": {
+    "levels": {
+      "0": { "statsUserDownlink": true, "statsUserUplink": true }
+    },
+    "system": { "statsInboundUplink": true, "statsInboundDownlink": true }
+  },
   "stats": {},
-  "api": {"services": ["StatsService"], "tag": "api"}
+  "api": { "services": ["StatsService"], "tag": "api" }
 }
 EOF
 
