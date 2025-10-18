@@ -39,10 +39,18 @@ EMAIL="adrienkiaje@gmail.com"
 # Mise à jour + dépendances
 log "${GREEN}" "Mise à jour du système et installation des dépendances..."
 apt update
-apt install -y ufw iptables iptables-persistent curl socat xz-utils wget apt-transport-https \
+
+# Supprimer iptables-persistent et netfilter-persistent s'ils sont installés pour éviter conflit avec ufw
+if dpkg -l | grep -q iptables-persistent; then
+  log "${GREEN}" "Suppression de iptables-persistent et netfilter-persistent pour éviter conflit avec ufw..."
+  apt purge -y iptables-persistent netfilter-persistent
+  apt autoremove -y
+fi
+
+apt install -y ufw iptables curl socat xz-utils wget apt-transport-https \
   gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq systemd
 
-# Configuration UFW
+# Configuration UFW uniquement
 ufw default deny incoming
 ufw default allow outgoing
 ufw allow ssh
@@ -52,7 +60,6 @@ ufw allow 8443/tcp
 ufw allow 8443/udp
 echo "y" | ufw enable
 ufw status verbose
-netfilter-persistent save
 
 # Horaire réseau et NTP
 ntpdate pool.ntp.org
