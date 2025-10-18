@@ -3,7 +3,6 @@
 # Synchronisation horaire gérée avec systemd-timesyncd (Ubuntu 24.04)
 # Script prêt pour publication GitHub
 
-# Couleurs terminal
 RED='\u001B[0;31m'
 GREEN='\u001B[0;32m'
 NC='\u001B[0m'
@@ -38,7 +37,7 @@ EMAIL="adrienkiaje@gmail.com"
 log "${GREEN}" "Mise à jour du système et installation des dépendances..."
 apt update
 
-# Suppression d'iptables-persistent et netfilter-persistent pour éviter conflit avec ufw
+# Supprimer iptables-persistent et netfilter-persistent pour éviter conflit avec ufw
 if dpkg -l | grep -q iptables-persistent; then
   log "${GREEN}" "Suppression de iptables-persistent et netfilter-persistent pour éviter conflit avec ufw..."
   apt purge -y iptables-persistent netfilter-persistent
@@ -83,18 +82,19 @@ timedatectl status
 
 date
 
-# Télécharger dernière version Xray
+# Télécharger dernière version Xray corrigée
 log "${GREEN}" "Récupération de la dernière version Xray..."
 latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases | grep tag_name | sed -E 's/.*"v([^"]+)".*/\u0001/' | head -n1)
 xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v${latest_version}/Xray-linux-64.zip"
+log "${GREEN}" "Téléchargement depuis $xraycore_link"
 curl -sL "$xraycore_link" -o xray.zip
 
 if [ ! -s xray.zip ]; then
-  echo "Erreur : téléchargement du fichier Xray a échoué."
+  echo "${RED}Erreur : téléchargement du fichier Xray a échoué ou est vide.${NC}"
   exit 1
 fi
 
-unzip -q xray.zip || { echo "Erreur: extraction du ZIP Xray a échoué." ; exit 1 ; }
+unzip -q xray.zip || { echo "${RED}Erreur: extraction du ZIP Xray a échoué.${NC}" ; exit 1 ; }
 mv xray /usr/local/bin/xray
 chmod +x /usr/local/bin/xray
 setcap 'cap_net_bind_service=+ep' /usr/local/bin/xray
@@ -103,6 +103,7 @@ mkdir -p /var/log/xray /etc/xray
 touch /var/log/xray/access.log /var/log/xray/error.log
 chmod 644 /var/log/xray/access.log /var/log/xray/error.log
 
+# Installation acme.sh et certificats TLS
 if ! command -v ~/.acme.sh/acme.sh &> /dev/null; then
   log "${GREEN}" "Installation d'acme.sh..."
   curl https://get.acme.sh | sh
@@ -119,6 +120,7 @@ if [[ ! -f "/etc/xray/xray.crt" || ! -f "/etc/xray/xray.key" ]]; then
   exit 1
 fi
 
+# Génération UUID
 uuid1=$(cat /proc/sys/kernel/random/uuid)
 uuid2=$(cat /proc/sys/kernel/random/uuid)
 uuid3=$(cat /proc/sys/kernel/random/uuid)
