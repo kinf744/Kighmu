@@ -29,19 +29,43 @@ if [[ -z "$DOMAIN" ]]; then
 fi
 EMAIL="adrienkiaje@gmail.com"
 
-# --- Dépendances et pare-feu ---
-apt update
-apt install -y ufw curl socat xz-utils wget unzip jq bash-completion systemd-timesyncd ntpdate
+apt install -y ufw iptables curl socat xz-utils wget apt-transport-https \
+  gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate systemd-timesyncd unzip jq systemd
+
+# Configuration UFW uniquement
 ufw default deny incoming
 ufw default allow outgoing
 ufw allow ssh
 ufw allow 89/tcp
+ufw allow 89/udp
 ufw allow 8443/tcp
-ufw --force enable
+ufw allow 8443/udp
+echo "y" | ufw enable
+ufw status verbose
 
-# --- Synchronisation horaire ---
+# Synchronisation horaire avec systemd-timesyncd
+log "${GREEN}" "Activation et démarrage de systemd-timesyncd..."
 systemctl enable systemd-timesyncd --now
+
+log "${GREEN}" "Désactivation de chronyd si présent pour éviter conflit..."
+systemctl disable chronyd --now 2>/dev/null || true
+systemctl stop chronyd 2>/dev/null || true
+
+log "${GREEN}" "Vérification du statut de systemd-timesyncd..."
+timedatectl status
+
+log "${GREEN}" "Configuration des serveurs NTP dans /etc/systemd/timesyncd.conf..."
+cat << EOF >/etc/systemd/timesyncd.conf
+[Time]
+NTP=2.ubuntu.pool.ntp.org 3.ubuntu.pool.ntp.org 1.ubuntu.pool.ntp.org
+FallbackNTP=ntp.ubuntu.com
+EOF
+
 systemctl restart systemd-timesyncd
+
+timedatectl status
+
+date
 
 # --- Télécharger et installer Xray ---
 latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases | grep tag_name | sed -E 's/.*"v(.*)".*/\1/' | head -n1)
