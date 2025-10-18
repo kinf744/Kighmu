@@ -70,7 +70,8 @@ chronyc sourcestats -v
 chronyc tracking -v
 date
 
-latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases | grep tag_name | sed -E 's/.*"v(.*)".*/\u0001/' | head -n1)
+# Télécharger dernière version Xray
+latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases | grep tag_name | sed -E 's/.*"v(.*)".*/\1/' | head -n1)
 xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v${latest_version}/xray-linux-64.zip"
 
 systemctl stop nginx 2>/dev/null || true
@@ -79,25 +80,14 @@ sudo lsof -t -i tcp:89 -s tcp:listen | sudo xargs kill -9 2>/dev/null || true
 
 mkdir -p /usr/local/bin
 cd $(mktemp -d)
-
 curl -sL "$xraycore_link" -o xray.zip
-mkdir -p /tmp/xray-temp
-unzip -q xray.zip -d /tmp/xray-temp
-rm -f xray.zip
-
-if [[ ! -f /tmp/xray-temp/xray ]]; then
-  echo -e "${RED}Erreur : binaire Xray introuvable dans l’archive extraite${NC}"
-  exit 1
-fi
-
-mv /tmp/xray-temp/xray /usr/local/bin/xray
+unzip -q xray.zip && rm -f xray.zip
+mv xray /usr/local/bin/xray
 chmod +x /usr/local/bin/xray
-chown root:root /usr/local/bin/xray
-rm -rf /tmp/xray-temp
+setcap 'cap_net_bind_service=+ep' /usr/local/bin/xray
 
 mkdir -p /var/log/xray /etc/xray
 touch /var/log/xray/access.log /var/log/xray/error.log
-chown -R root:root /var/log/xray
 chmod 644 /var/log/xray/access.log /var/log/xray/error.log
 
 if ! command -v ~/.acme.sh/acme.sh &> /dev/null; then
