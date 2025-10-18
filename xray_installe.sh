@@ -1,6 +1,7 @@
 #!/bin/bash
 # Installation complète Xray + UFW, démarrage robuste via systemd
 # Script prêt pour publication GitHub
+# Langue du script: bash
 
 # Couleurs terminal
 RED='\u001B[0;31m'
