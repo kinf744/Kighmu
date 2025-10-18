@@ -1,59 +1,10 @@
 #!/bin/bash
-# Installation complète Xray + UFW, nettoyage avant installation, services systemd robustes
+# Installation complète Xray + Trojan Go + UFW, avec users.json pour menu
 
 # Couleurs terminal
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m'
-
-restart_xray_service() {
-  echo -e "${GREEN}Redémarrage du service Xray...${NC}"
-  systemctl restart xray
-  sleep 3
-  for i in {1..3}; do
-    if systemctl is-active --quiet xray; then
-      echo -e "${GREEN}Xray redémarré avec succès.${NC}"
-      return 0
-    else
-      echo -e "${RED}Échec du redémarrage, tentative $i...${NC}"
-      sleep 2
-      systemctl restart xray
-    fi
-  done
-  echo -e "${RED}Erreur persistante lors du redémarrage de Xray.${NC}"
-  journalctl -u xray -n 40 --no-pager
-  exit 1
-}
-
-clean_xray_environment() {
-  echo -e "${GREEN}Nettoyage complet de l'environnement Xray...${NC}"
-
-  # Arrêter et désactiver le service Xray
-  systemctl stop xray 2>/dev/null || true
-  systemctl disable xray 2>/dev/null || true
-  systemctl daemon-reload
-
-  # Tuer processus sur ports 89 et 8443 (TCP et UDP)
-  for port in 89 8443; do
-      lsof -i tcp:$port -t | xargs -r kill -9
-      lsof -i udp:$port -t | xargs -r kill -9
-  done
-
-  # Pause pour libérer les ports
-  sleep 5
-
-  # Supprimer anciens fichiers et dossiers liés à Xray
-  rm -rf /etc/xray /var/log/xray /usr/local/bin/xray /tmp/.xray_domain /etc/systemd/system/xray.service
-  rm -rf /tmp/xray-temp /var/run/xray
-
-  systemctl daemon-reload
-
-  echo -e "${GREEN}Nettoyage effectué.${NC}"
-}
-
-# Début script principal
-
-clean_xray_environment
 
 # Demander domaine
 read -rp "Entrez votre nom de domaine (ex: monsite.com) : " DOMAIN
@@ -62,41 +13,53 @@ if [[ -z "$DOMAIN" ]]; then
   exit 1
 fi
 
+# Écriture domaine pour menu
 echo "$DOMAIN" > /tmp/.xray_domain
+
 EMAIL="adrienkiaje@gmail.com"
 
-# Mise à jour + dépendances
+# Mise à jour et dépendances
 apt update
 apt install -y ufw iptables iptables-persistent curl socat xz-utils wget apt-transport-https \
   gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq
 
 # Configuration UFW
 ufw allow ssh
-ufw allow 89/tcp
-ufw allow 89/udp
+ufw allow 80/tcp
+ufw allow 80/udp
 ufw allow 8443/tcp
 ufw allow 8443/udp
+ufw allow 2083/tcp
+ufw allow 2083/udp
+
+# Activer UFW automatiquement (valider par 'y')
 echo "y" | ufw enable
 ufw status verbose
-netfilter-persistent save
 
+# Synchronisation temps
 ntpdate pool.ntp.org
 timedatectl set-ntp true
 systemctl enable chronyd
 systemctl restart chronyd
+systemctl enable chrony
+systemctl restart chrony
 timedatectl set-timezone Asia/Kuala_Lumpur
+
+# Info chrony
 chronyc sourcestats -v
 chronyc tracking -v
 date
 
-# Télécharger dernière version Xray
+# Dernière version Xray
 latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases | grep tag_name | sed -E 's/.*"v(.*)".*/\1/' | head -n1)
 xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v${latest_version}/xray-linux-64.zip"
 
+# Arrêt services sur port 80
 systemctl stop nginx 2>/dev/null || true
 systemctl stop apache2 2>/dev/null || true
-sudo lsof -t -i tcp:89 -s tcp:listen | sudo xargs kill -9 2>/dev/null || true
+sudo lsof -t -i tcp:80 -s tcp:listen | sudo xargs kill -9 2>/dev/null || true
 
+# Install Xray
 mkdir -p /usr/local/bin
 cd $(mktemp -d)
 curl -sL "$xraycore_link" -o xray.zip
@@ -105,50 +68,47 @@ mv xray /usr/local/bin/xray
 chmod +x /usr/local/bin/xray
 setcap 'cap_net_bind_service=+ep' /usr/local/bin/xray
 
+# Préparation dossier et logs avec bonnes permissions
 mkdir -p /var/log/xray /etc/xray
 touch /var/log/xray/access.log /var/log/xray/error.log
 chown -R root:root /var/log/xray
 chmod 644 /var/log/xray/access.log /var/log/xray/error.log
 
-if ! command -v ~/.acme.sh/acme.sh &> /dev/null; then
-  curl https://get.acme.sh | sh
-  source ~/.bashrc
-fi
+# Installation acme.sh et génération certificats
+cd /root/
+wget https://raw.githubusercontent.com/NevermoreSSH/hop/main/acme.sh
+bash acme.sh --install
+rm acme.sh
+cd ~/.acme.sh || exit
+bash acme.sh --register-account -m "$EMAIL"
+bash acme.sh --issue --standalone -d "$DOMAIN" --force
+bash acme.sh --installcert -d "$DOMAIN" --fullchainpath /etc/xray/xray.crt --keypath /etc/xray/xray.key
 
-systemctl stop xray
-
-# Certificats TLS
-~/.acme.sh/acme.sh --register-account -m "$EMAIL"
-~/.acme.sh/acme.sh --issue --standalone -d "$DOMAIN" --force
-
-sleep 5  # pause pour éviter conflit certifs
-
-~/.acme.sh/acme.sh --installcert -d "$DOMAIN" --fullchainpath /etc/xray/xray.crt --keypath /etc/xray/xray.key
-
+# Vérifier certificats TLS
 if [[ ! -f "/etc/xray/xray.crt" || ! -f "/etc/xray/xray.key" ]]; then
   echo -e "${RED}Erreur : certificats TLS non trouvés.${NC}"
   exit 1
 fi
 
-# Génération des UUID pour utilisateurs
+# Génération UUID
 uuid1=$(cat /proc/sys/kernel/random/uuid)
 uuid2=$(cat /proc/sys/kernel/random/uuid)
 uuid3=$(cat /proc/sys/kernel/random/uuid)
 uuid4=$(cat /proc/sys/kernel/random/uuid)
 uuid5=$(cat /proc/sys/kernel/random/uuid)
-uuid6=$(cat /proc/sys/kernel/random/uuid)
 
+# users.json pour menu
 cat > /etc/xray/users.json << EOF
 {
   "vmess_tls": "$uuid1",
   "vmess_ntls": "$uuid2",
   "vless_tls": "$uuid3",
   "vless_ntls": "$uuid4",
-  "trojan_tls": "$uuid5",
-  "trojan_ntls": "$uuid6"
+  "trojan_pass": "$uuid5"
 }
 EOF
 
+# Configuration Xray complète
 cat > /etc/xray/config.json << EOF
 {
   "log": {"access": "/var/log/xray/access.log", "error": "/var/log/xray/error.log", "loglevel": "info"},
@@ -165,7 +125,7 @@ cat > /etc/xray/config.json << EOF
       }
     },
     {
-      "port": 89,
+      "port": 80,
       "protocol": "vmess",
       "settings": {"clients": [{"id": "$uuid2", "alterId": 0}]},
       "streamSettings": {
@@ -188,7 +148,7 @@ cat > /etc/xray/config.json << EOF
       "sniffing": {"enabled": true, "destOverride": ["http", "tls"]}
     },
     {
-      "port": 89,
+      "port": 80,
       "protocol": "vless",
       "settings": {"clients": [{"id": "$uuid4"}], "decryption": "none"},
       "streamSettings": {
@@ -199,35 +159,25 @@ cat > /etc/xray/config.json << EOF
       "sniffing": {"enabled": true, "destOverride": ["http", "tls"]}
     },
     {
-      "port": 8443,
+      "port": 2083,
       "protocol": "trojan",
-      "settings": {"clients": [{"password": "$uuid5"}]},
-      "streamSettings": {
-        "network": "ws",
+      "settings": {"clients": [{"password": "$uuid5"}], "fallbacks": [{"dest": 80}]},
+      "streamSettings": {"network": "tcp",
         "security": "tls",
-        "tlsSettings": {"certificates": [{"certificateFile": "/etc/xray/xray.crt", "keyFile": "/etc/xray/xray.key"}]},
-        "wsSettings": {"path": "/trojanws", "headers": {"Host": "$DOMAIN"}}
-      }
-    },
-    {
-      "port": 89,
-      "protocol": "trojan",
-      "settings": {"clients": [{"password": "$uuid6"}]},
-      "streamSettings": {
-        "network": "ws",
-        "security": "none",
-        "wsSettings": {"path": "/trojanws", "headers": {"Host": "$DOMAIN"}}
+        "tlsSettings": {"certificates": [{"certificateFile": "/etc/xray/xray.crt","keyFile": "/etc/xray/xray.key"}],
+          "alpn": ["http/1.1"]}
       }
     }
   ],
   "outbounds": [{"protocol": "freedom","settings": {}},{"protocol": "blackhole","settings": {}, "tag": "blocked"}],
-  "routing": {"rules": [{"type": "field", "ip": ["0.0.0.0/8","10.0.0.0/8","100.64.0.0/10","169.254.0.0/16","172.16.0.0/12","192.0.0.0/24","192.0.2.0/24","192.168.0.0/16","198.18.0.0/15","198.51.100.0/24","203.0.113.0/24","::1/128","fc00::/7","fe80::/10"], "outboundTag": "blocked"}]},
+  "routing": {"rules": [{"type": "field", "ip": ["0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "169.254.0.0/16", "172.16.0.0/12", "192.0.0.0/24", "192.0.2.0/24","192.168.0.0/16", "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24", "::1/128","fc00::/7","fe80::/10"], "outboundTag": "blocked"}]},
   "policy": {"levels": {"0": {"statsUserDownlink":true,"statsUserUplink":true}}, "system": {"statsInboundUplink":true,"statsInboundDownlink":true}},
   "stats": {},
   "api": {"services": ["StatsService"], "tag": "api"}
 }
 EOF
 
+# Service systemd Xray
 cat > /etc/systemd/system/xray.service << EOF
 [Unit]
 Description=Xray Service Mod By NevermoreSSH
@@ -246,10 +196,83 @@ RestartPreventExitStatus=23
 WantedBy=multi-user.target
 EOF
 
+# Reload and enable xray service
 systemctl daemon-reload
 systemctl enable xray
+systemctl restart xray
 
-restart_xray_service
+if systemctl is-active --quiet xray; then
+  echo -e "${GREEN}Xray démarré avec succès.${NC}"
+else
+  echo -e "${RED}Erreur : Xray ne démarre pas.${NC}"
+  journalctl -u xray -n 20 --no-pager
+  exit 1
+fi
+
+# Installation Trojan Go
+latest_version=$(curl -s https://api.github.com/NevermoreSSH/addons/releases | grep tag_name | sed -E 's/.*\"v(.*)\".*/\1/' | head -n 1)
+trojan_link="https://github.com/NevermoreSSH/addons/releases/download/0.10.6/trojan-go-linux-amd64.zip"
+
+mkdir -p /usr/bin/trojan-go /etc/trojan-go
+cd $(mktemp -d)
+curl -sL "$trojan_link" -o trojan-go.zip
+unzip -q trojan-go.zip && rm -f trojan-go.zip
+mv trojan-go /usr/local/bin/trojan-go
+chmod +x /usr/local/bin/trojan-go
+
+mkdir -p /var/log/trojan-go
+touch /etc/trojan-go/akun.conf
+touch /var/log/trojan-go/trojan-go.log
+
+cat > /etc/trojan-go/config.json << EOF
+{
+  "run_type": "server",
+  "local_addr": "0.0.0.0",
+  "local_port": 2087,
+  "remote_addr": "127.0.0.1",
+  "remote_port": 89,
+  "log_level": 1,
+  "log_file": "/var/log/trojan-go/trojan-go.log",
+  "password": ["$uuid5"],
+  "disable_http_check": true,
+  "udp_timeout": 60,
+  "ssl": {
+    "verify": false,
+    "verify_hostname": false,
+    "cert": "/etc/xray/xray.crt",
+    "key": "/etc/xray/xray.key",
+    "key_password": "",
+    "cipher": "",
+    "curves": "",
+    "prefer_server_cipher": false,
+    "sni": "$DOMAIN",
+    "alpn": ["http/1.1"],
+    "session_ticket": true,
+    "reuse_session": true,
+    "plain_http_response": "",
+    "fallback_addr": "127.0.0.1",
+    "fallback_port": 0,
+    "fingerprint": "firefox"
+  },
+  "tcp": {"no_delay": true,"keep_alive": true,"prefer_ipv4": true},
+  "mux": {"enabled": false,"concurrency": 8,"idle_timeout": 60},
+  "websocket": {"enabled": true,"path": "/trojango","host": "$DOMAIN"},
+  "api": {"enabled": false,"api_addr": "","api_port": 0,"ssl": {"enabled": false,"key": "","cert": "","verify_client": false,"client_cert": []}}
+}
+EOF
+
+# Configuration UFW (garantir ouverture des ports)
+ufw allow ssh
+ufw allow 80/tcp
+ufw allow 80/udp
+ufw allow 8443/tcp
+ufw allow 8443/udp
+ufw allow 2083/tcp
+ufw allow 2083/udp
+
+# Activer UFW avec validation automatique
+echo "y" | ufw enable
+ufw status verbose
 
 echo -e "${GREEN}Installation complète terminée.${NC}"
 echo "Domaine : $DOMAIN"
@@ -257,5 +280,4 @@ echo "UUID VMess TLS : $uuid1"
 echo "UUID VMess Non-TLS : $uuid2"
 echo "UUID VLESS TLS : $uuid3"
 echo "UUID VLESS Non-TLS : $uuid4"
-echo "Mot de passe Trojan WS TLS : $uuid5"
-echo "Mot de passe Trojan WS Non-TLS : $uuid6"
+echo "Mot de passe Trojan (TLS 2083) : $uuid5"
