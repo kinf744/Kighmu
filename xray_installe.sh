@@ -1,7 +1,7 @@
 #!/bin/bash
 # Installation complète Xray + UFW, démarrage robuste via systemd
+# Synchronisation horaire gérée avec systemd-timesyncd (Ubuntu 24.04)
 # Script prêt pour publication GitHub
-# Langue du script: bash
 
 # Couleurs terminal
 RED='\u001B[0;31m'
@@ -14,7 +14,6 @@ log() { echo -e "${1}${2}${NC}"; }
 
 log "${GREEN}" "Début de l'installation Xray avec systemd robuste"
 
-# Nettoyage optionnel précédent
 clean_xray_environment() {
   log "${GREEN}" "Nettoyage préalable de l'environnement Xray..."
   systemctl stop xray 2>/dev/null || true
@@ -27,21 +26,19 @@ clean_xray_environment() {
 
 clean_xray_environment
 
-# Demander domaine
 read -rp "Entrez votre nom de domaine (ex: monsite.com) : " DOMAIN
 if [[ -z "$DOMAIN" ]]; then
-  log "${RED}" "Erreur : nom de domaine non valide." 
+  log "${RED}" "Erreur : nom de domaine non valide."
   exit 1
 fi
 
 echo "$DOMAIN" > /tmp/.xray_domain
 EMAIL="adrienkiaje@gmail.com"
 
-# Mise à jour + dépendances
 log "${GREEN}" "Mise à jour du système et installation des dépendances..."
 apt update
 
-# Supprimer iptables-persistent et netfilter-persistent s'ils sont installés pour éviter conflit avec ufw
+# Suppression d'iptables-persistent et netfilter-persistent pour éviter conflit avec ufw
 if dpkg -l | grep -q iptables-persistent; then
   log "${GREEN}" "Suppression de iptables-persistent et netfilter-persistent pour éviter conflit avec ufw..."
   apt purge -y iptables-persistent netfilter-persistent
@@ -49,7 +46,7 @@ if dpkg -l | grep -q iptables-persistent; then
 fi
 
 apt install -y ufw iptables curl socat xz-utils wget apt-transport-https \
-  gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq systemd
+  gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate systemd-timesyncd unzip jq systemd
 
 # Configuration UFW uniquement
 ufw default deny incoming
@@ -62,14 +59,28 @@ ufw allow 8443/udp
 echo "y" | ufw enable
 ufw status verbose
 
-# Horaire réseau et NTP
-ntpdate pool.ntp.org
-timedatectl set-ntp true
-systemctl enable chronyd
-systemctl restart chronyd
-timedatectl set-timezone UTC
-chronyc sourcestats -v
-chronyc tracking -v
+# Synchronisation horaire avec systemd-timesyncd
+log "${GREEN}" "Activation et démarrage de systemd-timesyncd..."
+systemctl enable systemd-timesyncd --now
+
+log "${GREEN}" "Désactivation de chronyd si présent pour éviter conflit..."
+systemctl disable chronyd --now 2>/dev/null || true
+systemctl stop chronyd 2>/dev/null || true
+
+log "${GREEN}" "Vérification du statut de systemd-timesyncd..."
+timedatectl status
+
+log "${GREEN}" "Configuration des serveurs NTP dans /etc/systemd/timesyncd.conf..."
+cat << EOF >/etc/systemd/timesyncd.conf
+[Time]
+NTP=2.ubuntu.pool.ntp.org 3.ubuntu.pool.ntp.org 1.ubuntu.pool.ntp.org
+FallbackNTP=ntp.ubuntu.com
+EOF
+
+systemctl restart systemd-timesyncd
+
+timedatectl status
+
 date
 
 # Télécharger dernière version Xray
@@ -93,7 +104,6 @@ mkdir -p /var/log/xray /etc/xray
 touch /var/log/xray/access.log /var/log/xray/error.log
 chmod 644 /var/log/xray/access.log /var/log/xray/error.log
 
-# Certificats TLS avec acme.sh
 if ! command -v ~/.acme.sh/acme.sh &> /dev/null; then
   log "${GREEN}" "Installation d'acme.sh..."
   curl https://get.acme.sh | sh
@@ -102,7 +112,7 @@ fi
 
 ~/.acme.sh/acme.sh --register-account -m "$EMAIL"
 ~/.acme.sh/acme.sh --issue --standalone -d "$DOMAIN" --force
-sleep 5  # pause pour éviter conflit certifs
+sleep 5
 ~/.acme.sh/acme.sh --installcert -d "$DOMAIN" --fullchainpath /etc/xray/xray.crt --keypath /etc/xray/xray.key
 
 if [[ ! -f "/etc/xray/xray.crt" || ! -f "/etc/xray/xray.key" ]]; then
@@ -110,7 +120,6 @@ if [[ ! -f "/etc/xray/xray.crt" || ! -f "/etc/xray/xray.key" ]]; then
   exit 1
 fi
 
-# Génération UUIDs
 uuid1=$(cat /proc/sys/kernel/random/uuid)
 uuid2=$(cat /proc/sys/kernel/random/uuid)
 uuid3=$(cat /proc/sys/kernel/random/uuid)
@@ -204,8 +213,7 @@ cat > /etc/xray/config.json << EOF
 }
 EOF
 
-# Déploiement du service systemd robuste
-log "${GREEN}" "Création du fichier de service systemd..."
+log "${GREEN}" "Création du fichier service systemd Xray..."
 cat > /etc/systemd/system/xray.service << 'EOF'
 [Unit]
 Description=Xray Core Service
@@ -238,15 +246,13 @@ EOF
 systemctl daemon-reload
 systemctl enable xray
 
-# Démarrage et vérification
 log "${GREEN}" "Démarrage du service Xray..."
 systemctl start xray
 
-# Vérification rapide
 if systemctl is-active --quiet xray; then
   log "${GREEN}" "Xray démarre correctement via systemd."
 else
-  log "${RED}" "Erreur: Xray ne démarre pas via systemd. Récupération des logs..."
+  log "${RED}" "Erreur: Xray ne démarre pas via systemd. Veuillez vérifier les logs."
   journalctl -u xray -n 100 --no-pager
   exit 1
 fi
