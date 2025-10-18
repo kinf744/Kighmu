@@ -213,47 +213,35 @@ cat > /etc/xray/config.json << EOF
 }
 EOF
 
-log "${GREEN}" "Création du fichier service systemd Xray..."
-cat > /etc/systemd/system/xray.service << 'EOF'
+# Service systemd Xray
+cat > /etc/systemd/system/xray.service << EOF
 [Unit]
-Description=Xray Core Service
-After=network-online.target
-Wants=network-online.target
+Description=Xray Service Mod By NevermoreSSH
+After=network.target nss-lookup.target
 
 [Service]
 User=root
-Group=root
-WorkingDirectory=/etc/xray
-ExecStart=/usr/local/bin/xray run -config /etc/xray/config.json
-ExecReload=/bin/kill -HUP $MAINPID
-Restart=on-failure
-RestartSec=5s
-RuntimeMaxSec=infinity
-LimitNOFILE=100000
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
 AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
 NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=full
-ProtectHome=true
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=xray
+ExecStart=/usr/local/bin/xray -config /etc/xray/config.json
+Restart=on-failure
+RestartPreventExitStatus=23
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
+# Reload and enable xray service
 systemctl daemon-reload
 systemctl enable xray
-
-log "${GREEN}" "Démarrage du service Xray..."
-systemctl start xray
+systemctl restart xray
 
 if systemctl is-active --quiet xray; then
-  log "${GREEN}" "Xray démarre correctement via systemd."
+  echo -e "${GREEN}Xray démarré avec succès.${NC}"
 else
-  log "${RED}" "Erreur: Xray ne démarre pas via systemd. Veuillez vérifier les logs."
-  journalctl -u xray -n 100 --no-pager
+  echo -e "${RED}Erreur : Xray ne démarre pas.${NC}"
+  journalctl -u xray -n 20 --no-pager
   exit 1
 fi
 
