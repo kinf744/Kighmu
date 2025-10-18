@@ -1,52 +1,32 @@
 #!/bin/bash
-# Installation complète Xray + UFW, nettoyage avant installation, services systemd robustes
+# Installation complète Xray + UFW, avec exécution via screen
+# Par NevermoreSSH modifié pour Screen Mode
 
 # Couleurs terminal
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-NC='\033[0m'
-
-restart_xray_service() {
-  echo -e "${GREEN}Redémarrage du service Xray...${NC}"
-  systemctl restart xray
-  sleep 3
-  for i in {1..3}; do
-    if systemctl is-active --quiet xray; then
-      echo -e "${GREEN}Xray redémarré avec succès.${NC}"
-      return 0
-    else
-      echo -e "${RED}Échec du redémarrage, tentative $i...${NC}"
-      sleep 2
-      systemctl restart xray
-    fi
-  done
-  echo -e "${RED}Erreur persistante lors du redémarrage de Xray.${NC}"
-  journalctl -u xray -n 40 --no-pager
-  exit 1
-}
+RED='\u001B[0;31m'
+GREEN='\u001B[0;32m'
+NC='\u001B[0m'
 
 clean_xray_environment() {
   echo -e "${GREEN}Nettoyage complet de l'environnement Xray...${NC}"
 
-  # Arrêter et désactiver le service Xray
+  # Arrêter service et tuer processus sur ports
+  pkill -f "/usr/local/bin/xray" 2>/dev/null || true
+  screen -S xray -X quit 2>/dev/null || true
+
   systemctl stop xray 2>/dev/null || true
   systemctl disable xray 2>/dev/null || true
   systemctl daemon-reload
 
-  # Tuer processus sur ports 89 et 8443 (TCP et UDP)
   for port in 89 8443; do
       lsof -i tcp:$port -t | xargs -r kill -9
       lsof -i udp:$port -t | xargs -r kill -9
   done
 
-  # Pause pour libérer les ports
-  sleep 5
+  sleep 3
 
-  # Supprimer anciens fichiers et dossiers liés à Xray
   rm -rf /etc/xray /var/log/xray /usr/local/bin/xray /tmp/.xray_domain /etc/systemd/system/xray.service
   rm -rf /tmp/xray-temp /var/run/xray
-
-  systemctl daemon-reload
 
   echo -e "${GREEN}Nettoyage effectué.${NC}"
 }
@@ -55,7 +35,6 @@ clean_xray_environment() {
 
 clean_xray_environment
 
-# Demander domaine
 read -rp "Entrez votre nom de domaine (ex: monsite.com) : " DOMAIN
 if [[ -z "$DOMAIN" ]]; then
   echo -e "${RED}Erreur : nom de domaine non valide.${NC}"
@@ -65,10 +44,10 @@ fi
 echo "$DOMAIN" > /tmp/.xray_domain
 EMAIL="adrienkiaje@gmail.com"
 
-# Mise à jour + dépendances
+# Installation dépendances
 apt update
 apt install -y ufw iptables iptables-persistent curl socat xz-utils wget apt-transport-https \
-  gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq
+  gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq screen
 
 # Configuration UFW
 ufw allow ssh
@@ -89,8 +68,8 @@ chronyc sourcestats -v
 chronyc tracking -v
 date
 
-# Télécharger dernière version Xray
-latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases | grep tag_name | sed -E 's/.*"v(.*)".*/\1/' | head -n1)
+# Télécharger dernière version de Xray
+latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases | grep tag_name | sed -E 's/.*"v(.*)".*/\u0001/' | head -n1)
 xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v${latest_version}/xray-linux-64.zip"
 
 systemctl stop nginx 2>/dev/null || true
@@ -107,22 +86,17 @@ setcap 'cap_net_bind_service=+ep' /usr/local/bin/xray
 
 mkdir -p /var/log/xray /etc/xray
 touch /var/log/xray/access.log /var/log/xray/error.log
-chown -R root:root /var/log/xray
 chmod 644 /var/log/xray/access.log /var/log/xray/error.log
 
+# Installation acme.sh et certificats
 if ! command -v ~/.acme.sh/acme.sh &> /dev/null; then
   curl https://get.acme.sh | sh
   source ~/.bashrc
 fi
 
-systemctl stop xray
-
-# Certificats TLS
 ~/.acme.sh/acme.sh --register-account -m "$EMAIL"
 ~/.acme.sh/acme.sh --issue --standalone -d "$DOMAIN" --force
-
-sleep 5  # pause pour éviter conflit certifs
-
+sleep 5
 ~/.acme.sh/acme.sh --installcert -d "$DOMAIN" --fullchainpath /etc/xray/xray.crt --keypath /etc/xray/xray.key
 
 if [[ ! -f "/etc/xray/xray.crt" || ! -f "/etc/xray/xray.key" ]]; then
@@ -130,24 +104,13 @@ if [[ ! -f "/etc/xray/xray.crt" || ! -f "/etc/xray/xray.key" ]]; then
   exit 1
 fi
 
-# Génération des UUID pour utilisateurs
+# Génération UUID
 uuid1=$(cat /proc/sys/kernel/random/uuid)
 uuid2=$(cat /proc/sys/kernel/random/uuid)
 uuid3=$(cat /proc/sys/kernel/random/uuid)
 uuid4=$(cat /proc/sys/kernel/random/uuid)
 uuid5=$(cat /proc/sys/kernel/random/uuid)
 uuid6=$(cat /proc/sys/kernel/random/uuid)
-
-cat > /etc/xray/users.json << EOF
-{
-  "vmess_tls": "$uuid1",
-  "vmess_ntls": "$uuid2",
-  "vless_tls": "$uuid3",
-  "vless_ntls": "$uuid4",
-  "trojan_tls": "$uuid5",
-  "trojan_ntls": "$uuid6"
-}
-EOF
 
 cat > /etc/xray/config.json << EOF
 {
@@ -161,7 +124,7 @@ cat > /etc/xray/config.json << EOF
         "network": "ws",
         "security": "tls",
         "tlsSettings": {"certificates": [{"certificateFile": "/etc/xray/xray.crt", "keyFile": "/etc/xray/xray.key"}]},
-        "wsSettings": {"path": "/vmess", "headers": {"Host": "$DOMAIN"}}
+        "wsSettings": {"path": "/vmess","headers": {"Host": "$DOMAIN"}}
       }
     },
     {
@@ -171,9 +134,8 @@ cat > /etc/xray/config.json << EOF
       "streamSettings": {
         "network": "ws",
         "security": "none",
-        "wsSettings": {"path": "/vmess", "headers": {"Host": "$DOMAIN"}}
-      },
-      "sniffing": {"enabled": true, "destOverride": ["http", "tls"]}
+        "wsSettings": {"path": "/vmess","headers": {"Host": "$DOMAIN"}}
+      }
     },
     {
       "port": 8443,
@@ -183,9 +145,8 @@ cat > /etc/xray/config.json << EOF
         "network": "ws",
         "security": "tls",
         "tlsSettings": {"certificates": [{"certificateFile": "/etc/xray/xray.crt", "keyFile": "/etc/xray/xray.key"}]},
-        "wsSettings": {"path": "/vless", "headers": {"Host": "$DOMAIN"}}
-      },
-      "sniffing": {"enabled": true, "destOverride": ["http", "tls"]}
+        "wsSettings": {"path": "/vless","headers": {"Host": "$DOMAIN"}}
+      }
     },
     {
       "port": 89,
@@ -194,9 +155,8 @@ cat > /etc/xray/config.json << EOF
       "streamSettings": {
         "network": "ws",
         "security": "none",
-        "wsSettings": {"path": "/vless", "headers": {"Host": "$DOMAIN"}}
-      },
-      "sniffing": {"enabled": true, "destOverride": ["http", "tls"]}
+        "wsSettings": {"path": "/vless","headers": {"Host": "$DOMAIN"}}
+      }
     },
     {
       "port": 8443,
@@ -205,8 +165,8 @@ cat > /etc/xray/config.json << EOF
       "streamSettings": {
         "network": "ws",
         "security": "tls",
-        "tlsSettings": {"certificates": [{"certificateFile": "/etc/xray/xray.crt", "keyFile": "/etc/xray/xray.key"}]},
-        "wsSettings": {"path": "/trojanws", "headers": {"Host": "$DOMAIN"}}
+        "tlsSettings": {"certificates": [{"certificateFile": "/etc/xray/xray.crt","keyFile": "/etc/xray/xray.key"}]},
+        "wsSettings": {"path": "/trojanws","headers": {"Host": "$DOMAIN"}}
       }
     },
     {
@@ -216,40 +176,30 @@ cat > /etc/xray/config.json << EOF
       "streamSettings": {
         "network": "ws",
         "security": "none",
-        "wsSettings": {"path": "/trojanws", "headers": {"Host": "$DOMAIN"}}
+        "wsSettings": {"path": "/trojanws","headers": {"Host": "$DOMAIN"}}
       }
     }
   ],
-  "outbounds": [{"protocol": "freedom","settings": {}},{"protocol": "blackhole","settings": {}, "tag": "blocked"}],
-  "routing": {"rules": [{"type": "field", "ip": ["0.0.0.0/8","10.0.0.0/8","100.64.0.0/10","169.254.0.0/16","172.16.0.0/12","192.0.0.0/24","192.0.2.0/24","192.168.0.0/16","198.18.0.0/15","198.51.100.0/24","203.0.113.0/24","::1/128","fc00::/7","fe80::/10"], "outboundTag": "blocked"}]},
-  "policy": {"levels": {"0": {"statsUserDownlink":true,"statsUserUplink":true}}, "system": {"statsInboundUplink":true,"statsInboundDownlink":true}},
-  "stats": {},
-  "api": {"services": ["StatsService"], "tag": "api"}
+  "outbounds": [{"protocol": "freedom","settings": {}}]
 }
 EOF
 
-cat > /etc/systemd/system/xray.service << EOF
-[Unit]
-Description=Xray Service Mod By NevermoreSSH
-After=network.target nss-lookup.target
+# Lancer Xray via screen
+echo -e "${GREEN}Démarrage de Xray via Screen...${NC}"
+pkill -f "/usr/local/bin/xray" 2>/dev/null || true
+screen -S xray -X quit 2>/dev/null || true
+sleep 2
+screen -dmS xray /usr/local/bin/xray -config /etc/xray/config.json
 
-[Service]
-User=root
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
-AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
-NoNewPrivileges=true
-ExecStart=/usr/local/bin/xray -config /etc/xray/config.json
-Restart=on-failure
-RestartPreventExitStatus=23
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-systemctl daemon-reload
-systemctl enable xray
-
-restart_xray_service
+sleep 3
+if pgrep -f "/usr/local/bin/xray" >/dev/null; then
+  echo -e "${GREEN}Xray est maintenant actif dans la session Screen 'xray'.${NC}"
+  echo "Pour voir les logs : screen -r xray"
+  echo "Pour détacher : Ctrl+A puis D"
+else
+  echo -e "${RED}Erreur : le processus Xray ne s'est pas lancé correctement.${NC}"
+  exit 1
+fi
 
 echo -e "${GREEN}Installation complète terminée.${NC}"
 echo "Domaine : $DOMAIN"
@@ -257,5 +207,5 @@ echo "UUID VMess TLS : $uuid1"
 echo "UUID VMess Non-TLS : $uuid2"
 echo "UUID VLESS TLS : $uuid3"
 echo "UUID VLESS Non-TLS : $uuid4"
-echo "Mot de passe Trojan WS TLS : $uuid5"
-echo "Mot de passe Trojan WS Non-TLS : $uuid6"
+echo "Mot de passe Trojan TLS : $uuid5"
+echo "Mot de passe Trojan Non-TLS : $uuid6"
