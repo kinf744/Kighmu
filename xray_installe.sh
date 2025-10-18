@@ -85,17 +85,22 @@ date
 
 # Télécharger dernière version Xray
 log "${GREEN}" "Récupération de la dernière version Xray..."
-latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases | grep tag_name | sed -E 's/.*"v(.*)".*/\u0001/' | head -n1)
-xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v${latest_version}/xray-linux-64.zip"
+latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases | grep tag_name | sed -E 's/.*"v([^"]+)".*/\u0001/' | head -n1)
+xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v${latest_version}/Xray-linux-64.zip"
 
-systemctl stop nginx 2>/dev/null || true
-systemctl stop apache2 2>/dev/null || true
-sudo lsof -t -i tcp:89 -s tcp:listen | sudo xargs kill -9 2>/dev/null || true
-
-mkdir -p /usr/local/bin
-cd "$(mktemp -d)"
+log "${GREEN}" "Téléchargement depuis $xraycore_link"
 curl -sL "$xraycore_link" -o xray.zip
-unzip -q xray.zip && rm -f xray.zip
+
+if [ ! -s xray.zip ]; then
+  log "${RED}" "Erreur : téléchargement du zip Xray raté ou fichier vide."
+  exit 1
+fi
+
+unzip -q xray.zip || {
+  log "${RED}" "Erreur : décompression du fichier zip Xray a échoué."
+  exit 1
+}
+
 mv xray /usr/local/bin/xray
 chmod +x /usr/local/bin/xray
 setcap 'cap_net_bind_service=+ep' /usr/local/bin/xray
