@@ -60,22 +60,7 @@ load_user_data() {
 create_config() {
   local proto=$1 name=$2 days=$3
   [[ -z "$DOMAIN" ]] && { echo -e "${RED}⚠️ Domaine non défini, installe Xray d'abord.${RESET}"; return; }
-
-  # Variables slowdns à récupérer, par exemple dans /etc/slowdns/ns.conf et /etc/slowdns/server.pub
-  local slowdns_ns slowdns_pub
-  if [[ -f /etc/slowdns/ns.conf ]]; then
-    slowdns_ns=$(cat /etc/slowdns/ns.conf)
-  else
-    slowdns_ns="N/A"
-  fi
-  if [[ -f /etc/slowdns/server.pub ]]; then
-    slowdns_pub=$(cat /etc/slowdns/server.pub)
-  else
-    slowdns_pub="N/A"
-  fi
-
   local new_uuid link_tls link_ntls path_ws port_tls=8443 port_ntls=89
-
   case "$proto" in
     vmess)
       path_ws="/vmess"
@@ -83,8 +68,8 @@ create_config() {
       jq --arg id "$new_uuid" --arg proto "vmess" \
         '(.inbounds[] | select(.protocol==$proto and .streamSettings.security=="tls") | .settings.clients)+=[{"id":$id,"alterId":0}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
       jq --arg id "$new_uuid" '.vmess_tls=$id' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
-      link_tls="vmess://$(echo -n "{"v":"2","ps":"$name","add":"$DOMAIN","port":"$port_tls","id":"$new_uuid","aid":0,"net":"ws","type":"none","host":"","path":"$path_ws","tls":"tls"}" | base64 -w0)"
-      link_ntls="vmess://$(echo -n "{"v":"2","ps":"$name","add":"$DOMAIN","port":"$port_ntls","id":"$new_uuid","aid":0,"net":"ws","type":"none","host":"","path":"$path_ws","tls":""}" | base64 -w0)"
+      link_tls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$new_uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"\",\"path\":\"$path_ws\",\"tls\":\"tls\"}" | base64 -w0)"
+      link_ntls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_ntls\",\"id\":\"$new_uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"\",\"path\":\"$path_ws\",\"tls\":\"\"}" | base64 -w0)"
       ;;
     vless)
       path_ws="/vless"
@@ -109,12 +94,10 @@ create_config() {
       ;;
     *) echo -e "${RED}Protocole inconnu.${RESET}"; return 1;;
   esac
-
   local exp_date_iso=$(date -d "+$days days" +"%Y-%m-%d")
   local expiry_date=$(date -d "+$days days" +"%d/%m/%Y")
   touch /etc/xray/users_expiry.list && chmod 600 /etc/xray/users_expiry.list
   echo "$new_uuid|$exp_date_iso" >> /etc/xray/users_expiry.list
-
   echo
   echo "=============================="
   echo -e "🧩 ${proto^^}"
@@ -125,16 +108,12 @@ create_config() {
   [[ "$proto" == "trojan" ]] && { echo -e "    Mot de passe TLS : $uuid_tls"; echo -e "    Mot de passe Non-TLS : $uuid_ntls"; } || echo -e "    UUID : $new_uuid"
   echo -e "➤ Validité : $days jours (expire le $expiry_date)"
   echo
-  echo -e "➤ SlowDNS NameServer : $slowdns_ns"
-  echo -e "➤ SlowDNS PubKey    : $slowdns_pub"
-  echo
   echo -e "●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
   echo -e "┃ TLS  : $link_tls"
   echo -e ""
   echo -e "┃ Non-TLS : $link_ntls"
   echo -e "●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
   echo
-
   systemctl restart xray
 }
 
