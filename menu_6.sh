@@ -4,6 +4,7 @@ CONFIG_FILE="/etc/xray/config.json"
 USERS_FILE="/etc/xray/users.json"
 DOMAIN=""
 
+# Couleurs
 RED="\e[31m"
 GREEN="\e[32m"
 YELLOW="\e[33m"
@@ -13,156 +14,236 @@ BOLD="\e[1m"
 RESET="\e[0m"
 
 print_header() {
-  echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-  echo -e "${CYAN}       ${BOLD}${MAGENTA}Xray – Gestion des Tunnels Actifs${RESET}${CYAN}${RESET}"
-  echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-}
+  local width=50
+  local text="🚀 Xray CONFIG INSTALLER 🚀"
+  local border="+--------------------------------------------------+"
 
-afficher_xray_actifs() {
-  if ! systemctl is-active --quiet xray; then
-    echo -e "${RED}Service Xray non actif.${RESET}"
-    return
-  fi
-  local ports_tls ports_ntls protos
-  ports_tls=$(jq -r '.inbounds[] | select(.streamSettings.security=="tls") | .port' "$CONFIG_FILE" | sort -u | paste -sd ", ")
-  ports_ntls=$(jq -r '.inbounds[] | select(.streamSettings.security=="none") | .port' "$CONFIG_FILE" | sort -u | paste -sd ", ")
-  protos=$(jq -r '.inbounds[].protocol' "$CONFIG_FILE" | sort -u | paste -sd ", ")
-  echo -e "${BOLD}Tunnels actifs :${RESET}"
-  [[ -n "$ports_tls" ]] && echo -e " ${GREEN}•${RESET} Port(s) TLS : ${YELLOW}$ports_tls${RESET} – Protocoles [${MAGENTA}$protos${RESET}]"
-  [[ -n "$ports_ntls" ]] && echo -e " ${GREEN}•${RESET} Port(s) Non-TLS : ${YELLOW}$ports_ntls${RESET} – Protocoles [${MAGENTA}$protos${RESET}]"
+  echo -e "${CYAN}$border${RESET}"
+  local padding=$(( (width - ${#text}) / 2 ))
+  printf "${CYAN}|%*s${BOLD}${MAGENTA}%s${RESET}${CYAN}%*s|\n${RESET}" $padding "" "$text" $padding ""
+  echo -e "${CYAN}$border${RESET}"
 }
 
 show_menu() {
-  echo -e "${CYAN}──────────────────────────────────────────────────────────${RESET}"
-  echo -e "${BOLD}${YELLOW}[01]${RESET} Installer Xray"
-  echo -e "${BOLD}${YELLOW}[02]${RESET} Créer utilisateur VMess"
-  echo -e "${BOLD}${YELLOW}[03]${RESET} Créer utilisateur VLESS"
-  echo -e "${BOLD}${YELLOW}[04]${RESET} Créer utilisateur Trojan"
-  echo -e "${BOLD}${YELLOW}[05]${RESET} Supprimer utilisateur Xray"
-  echo -e "${BOLD}${YELLOW}[06]${RESET} Désinstallation complète Xray"
-  echo -e "${BOLD}${RED}[00]${RESET} Quitter"
-  echo -e "${CYAN}──────────────────────────────────────────────────────────${RESET}"
-  echo -ne "${BOLD}${YELLOW}Choix → ${RESET}"
+  echo -e "${CYAN}+--------------------------------------------------+${RESET}"
+  echo -e "${BOLD}${YELLOW}|                  MENU Xray                        |${RESET}"
+  echo -e "${CYAN}+--------------------------------------------------+${RESET}"
+  echo -e "${GREEN}[01]${RESET} Installer le Xray"
+  echo -e "${GREEN}[02]${RESET} VMESS"
+  echo -e "${GREEN}[03]${RESET} VLESS"
+  echo -e "${GREEN}[04]${RESET} TROJAN"
+  echo -e "${GREEN}[05]${RESET} Supprimer un utilisateur Xray"
+  echo -e "${RED}[06]${RESET} Quitter"
+  echo -ne "${BOLD}${YELLOW}Votre choix [1-6] : ${RESET}"
   read -r choice
 }
 
 load_user_data() {
   if [[ -f "$USERS_FILE" ]]; then
-    VMESS_TLS=$(jq -r '.vmess_tls // empty' "$USERS_FILE")
-    VMESS_NTLS=$(jq -r '.vmess_ntls // empty' "$USERS_FILE")
-    VLESS_TLS=$(jq -r '.vless_tls // empty' "$USERS_FILE")
-    VLESS_NTLS=$(jq -r '.vless_ntls // empty' "$USERS_FILE")
-    TROJAN_PASS=$(jq -r '.trojan_pass // empty' "$USERS_FILE")
-    TROJAN_NTLS_PASS=$(jq -r '.trojan_ntls_pass // empty' "$USERS_FILE")
+    VMESS_TLS=$(jq -r '.vmess_tls' "$USERS_FILE")
+    VMESS_NTLS=$(jq -r '.vmess_ntls' "$USERS_FILE")
+    VLESS_TLS=$(jq -r '.vless_tls' "$USERS_FILE")
+    VLESS_NTLS=$(jq -r '.vless_ntls' "$USERS_FILE")
+    TROJAN_PASS=$(jq -r '.trojan_pass' "$USERS_FILE")
+  else
+    echo -e "${RED}Fichier $USERS_FILE introuvable.${RESET}"
   fi
 }
 
 create_config() {
-  local proto=$1 name=$2 days=$3
-  [[ -z "$DOMAIN" ]] && { echo -e "${RED}⚠️ Domaine non défini, installe Xray d'abord.${RESET}"; return; }
-  local new_uuid link_tls link_ntls path_ws port_tls=8443 port_ntls=89
+  local proto=$1
+  local name=$2
+  local days=$3
+
+  if [[ -z "$DOMAIN" ]]; then
+    echo -e "${RED}⚠️ Le nom de domaine n'est pas défini. Veuillez installer Xray d'abord.${RESET}"
+    return
+  fi
+
+  # Générer nouvel UUID/mot de passe
+  local new_uuid
+  new_uuid=$(cat /proc/sys/kernel/random/uuid)
+
+  local path_ws=""
+  local grpc_name=""
+  local encryption="none"
+  local port_tls=8443
+  local port_ntls=80
+  local port_trojan=2083
+
   case "$proto" in
     vmess)
       path_ws="/vmess"
-      new_uuid=$(cat /proc/sys/kernel/random/uuid)
-      jq --arg id "$new_uuid" --arg proto "vmess" \
-        '(.inbounds[] | select(.protocol==$proto and .streamSettings.security=="tls") | .settings.clients)+=[{"id":$id,"alterId":0}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
-      jq --arg id "$new_uuid" '.vmess_tls=$id' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
-      link_tls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$new_uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"\",\"path\":\"$path_ws\",\"tls\":\"tls\"}" | base64 -w0)"
-      link_ntls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_ntls\",\"id\":\"$new_uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"\",\"path\":\"$path_ws\",\"tls\":\"\"}" | base64 -w0)"
+      grpc_name="vmess-grpc"
+      # Mise à jour config.json: ajoute client au protocole vmess TLS/non-TLS
+      jq --arg id "$new_uuid" --argjson altid 0 --arg proto "vmess" '
+        (.inbounds[] | select(.protocol==$proto) | .settings.clients) += [{"id": $id, "alterId": $altid}]
+      ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+
+      # Mise à jour users.json pour garder cohérence (exemple simplifié ici, vous pouvez améliorer)
+      jq --arg id "$new_uuid" '.vmess_tls = $id' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
       ;;
     vless)
       path_ws="/vless"
-      new_uuid=$(cat /proc/sys/kernel/random/uuid)
-      jq --arg id "$new_uuid" --arg proto "vless" \
-        '(.inbounds[] | select(.protocol==$proto and .streamSettings.security=="tls") | .settings.clients)+=[{"id":$id}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
-      jq --arg id "$new_uuid" '.vless_tls=$id' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
-      link_tls="vless://$new_uuid@$DOMAIN:$port_tls?path=$path_ws&security=tls&encryption=none&type=ws#$name"
-      link_ntls="vless://$new_uuid@$DOMAIN:$port_ntls?path=$path_ws&encryption=none&type=ws#$name"
+      grpc_name="vless-grpc"
+      jq --arg id "$new_uuid" --arg proto "vless" '
+        (.inbounds[] | select(.protocol==$proto) | .settings.clients) += [{"id": $id}]
+      ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+
+      jq --arg id "$new_uuid" '.vless_tls = $id' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
       ;;
     trojan)
-      local uuid_tls=$(cat /proc/sys/kernel/random/uuid)
-      local uuid_ntls=$(cat /proc/sys/kernel/random/uuid)
-      jq --arg idtls "$uuid_tls" \
-        '(.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="tls") | .settings.clients)+=[{"password":$idtls}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
-      jq --arg idntls "$uuid_ntls" \
-        '(.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="none") | .settings.clients)+=[{"password":$idntls}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
-      jq --arg idtls "$uuid_tls" --arg idntls "$uuid_ntls" \
-        '.trojan_pass=$idtls | .trojan_ntls_pass=$idntls' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
-      link_tls="trojan://$uuid_tls@$DOMAIN:8443?security=tls&type=ws&path=/trojanws#$name"
-      link_ntls="trojan://$uuid_ntls@$DOMAIN:89?type=ws&path=/trojanws#$name"
+      path_ws="/trojan"
+      grpc_name="trojan-grpc"
+      jq --arg id "$new_uuid" '
+        (.inbounds[] | select(.protocol=="trojan") | .settings.clients) += [{"password": $id}]
+      ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+
+      jq --arg id "$new_uuid" '.trojan_pass = $id' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
       ;;
-    *) echo -e "${RED}Protocole inconnu.${RESET}"; return 1;;
+    *)
+      echo -e "${RED}Protocole inconnu.${RESET}"
+      return 1
+      ;;
   esac
-  local exp_date_iso=$(date -d "+$days days" +"%Y-%m-%d")
-  local expiry_date=$(date -d "+$days days" +"%d/%m/%Y")
-  touch /etc/xray/users_expiry.list && chmod 600 /etc/xray/users_expiry.list
-  echo "$new_uuid|$exp_date_iso" >> /etc/xray/users_expiry.list
+
+  # Calcul date expiration
+  local expiry_date
+  expiry_date=$(date -d "+$days days" +"%d/%m/%Y")
+
+  # Affichage config générée
   echo
-  echo "=============================="
-  echo -e "🧩 ${proto^^}"
-  echo "=============================="
-  echo -e "📄 Configuration générée pour : $name"
-  echo "--------------------------------------------------"
-  echo -e "➤ UUID/Mot de passe :"
-  [[ "$proto" == "trojan" ]] && { echo -e "    Mot de passe TLS : $uuid_tls"; echo -e "    Mot de passe Non-TLS : $uuid_ntls"; } || echo -e "    UUID : $new_uuid"
-  echo -e "➤ Validité : $days jours (expire le $expiry_date)"
+  echo -e "${CYAN}==================================================${RESET}"
+  echo -e "${BOLD}${MAGENTA}📄 Configuration $proto générée pour l'utilisateur : $name${RESET}"
+  echo -e "${CYAN}--------------------------------------------------${RESET}"
+  echo -e "${YELLOW}➤ UUID / Mot de passe :${RESET}"
+  if [[ "$proto" == "trojan" ]]; then
+    echo -e "    Mot de passe Trojan : $new_uuid"
+  else
+    echo -e "    UUID : $new_uuid"
+  fi
   echo
-  echo -e "●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
-  echo -e "┃ TLS  : $link_tls"
-  echo -e ""
-  echo -e "┃ Non-TLS : $link_ntls"
-  echo -e "●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
+  echo -e "${YELLOW}➤ Durée de validité :${RESET} $days jours (expire le $expiry_date)"
+  echo -e "➤ Ports utilisés : TLS=$port_tls, Non-TLS=$port_ntls, Trojan=$port_trojan"
   echo
+  echo -e "${YELLOW}➤ Liens de configuration :${RESET}"
+  
+  # Générer liens à afficher :
+  case "$proto" in
+    vmess)
+      local link_tls
+      local link_ntls
+      local link_grpc
+      link_tls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$new_uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"\",\"path\":\"$path_ws\",\"tls\":\"tls\"}" | base64 -w0)"
+      link_ntls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_ntls\",\"id\":\"$new_uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"\",\"path\":\"$path_ws\",\"tls\":\"\"}" | base64 -w0)"
+      link_grpc="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$new_uuid\",\"aid\":0,\"net\":\"grpc\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"\",\"tls\":\"tls\",\"serviceName\":\"$grpc_name\"}" | base64 -w0)"
+      echo -e "  • TLS : $link_tls"
+      echo -e "  • Non-TLS : $link_ntls"
+      echo -e "  • GRPC : $link_grpc"
+      ;;
+    vless)
+      local link_tls
+      local link_ntls
+      local link_grpc
+      link_tls="vless://$new_uuid@$DOMAIN:$port_tls?path=$path_ws&security=tls&encryption=none&type=ws#$name"
+      link_ntls="vless://$new_uuid@$DOMAIN:$port_ntls?path=$path_ws&encryption=none&type=ws#$name"
+      link_grpc="vless://$new_uuid@$DOMAIN:$port_tls?mode=gun&security=tls&encryption=none&type=grpc&serviceName=$grpc_name&sni=$DOMAIN#$name"
+      echo -e "  • TLS : $link_tls"
+      echo -e "  • Non-TLS : $link_ntls"
+      echo -e "  • GRPC : $link_grpc"
+      ;;
+    trojan)
+      local link_tls
+      local link_ntls
+      local link_grpc
+      link_tls="trojan://$new_uuid@$DOMAIN:$port_trojan?security=tls&type=ws&path=$path_ws#$name"
+      link_ntls="trojan://$new_uuid@$DOMAIN:$port_ntls?type=ws&path=$path_ws#$name"
+      link_grpc="trojan://$new_uuid@$DOMAIN:$port_trojan?mode=gun&security=tls&type=grpc&serviceName=$grpc_name&sni=$DOMAIN#$name"
+      echo -e "  • TLS : $link_tls"
+      echo -e "  • Non-TLS : $link_ntls"
+      echo -e "  • GRPC : $link_grpc"
+      ;;
+  esac
+
+  echo -e "${CYAN}==================================================${RESET}"
+
+  # Redémarrer Xray pour appliquer
   systemctl restart xray
 }
 
-delete_user_by_number() {
-  if [[ ! -f "$USERS_FILE" ]]; then echo -e "${RED}Fichier $USERS_FILE introuvable.${RESET}"; return; fi
-  local -A protocol_map=(["vmess_tls"]="vmess" ["vmess_ntls"]="vmess" ["vless_tls"]="vless" ["vless_ntls"]="vless" ["trojan_pass"]="trojan" ["trojan_ntls_pass"]="trojan")
-  local -A key_to_stream=(["vmess_tls"]="tls" ["vmess_ntls"]="none" ["vless_tls"]="tls" ["vless_ntls"]="none" ["trojan_pass"]="tls" ["trojan_ntls_pass"]="none")
-  local users=() keys=() count=0
-  while IFS=":" read -r proto id; do [[ -n "$id" ]] && { users+=("$proto:$id"); keys+=("$proto"); ((count++)); }; done < <(jq -r 'to_entries[] | "\(.key):\(.value)"' "$USERS_FILE")
-  echo -e "${GREEN}Liste des utilisateurs Xray :${RESET}"
-  for (( i=0; i<count; i++ )); do
-    proto="${users[$i]%%:*}"; id="${users[$i]#*:}"
-    echo -e "[$((i+1))] Protocole : ${YELLOW}$proto${RESET} - ID/Pass : ${CYAN}$id${RESET}"
-  done
-  (( count == 0 )) && { echo -e "${RED}Aucun utilisateur à supprimer.${RESET}"; return; }
-  read -rp "Numéro à supprimer (0 pour annuler) : " num
-  [[ ! $num =~ ^[0-9]+$ || num -lt 0 || num -gt $count ]] && { echo -e "${RED}Numéro invalide.${RESET}"; return; }
-  (( num == 0 )) && { echo "Suppression annulée."; return; }
-  local selected_index=$((num-1)) sel_key="${keys[$selected_index]}" sel_id="${users[$selected_index]#*:}"
-  local sel_proto="${protocol_map[$sel_key]}" sel_stream="${key_to_stream[$sel_key]}"
-  if [[ "$sel_proto" == "vmess" || "$sel_proto" == "vless" ]]; then
-    jq --arg proto "$sel_proto" --arg stream "$sel_stream" --arg id "$sel_id" \
-      '(.inbounds[] | select(.protocol == $proto and .streamSettings.security == $stream) | .settings.clients) |= map(select(.id != $id))' \
-      "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
-  elif [[ "$sel_proto" == "trojan" ]]; then
-    jq --arg stream "$sel_stream" --arg id "$sel_id" \
-      '(.inbounds[] | select(.protocol == "trojan" and .streamSettings.security == $stream) | .settings.clients) |= map(select(.password != $id))' \
-      "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+delete_user() {
+  # Fonction de suppression fournie précédemment, inchangée
+  local proto=$1
+  local id=$2
+  local tmp_config="/tmp/config.tmp.json"
+  local tmp_users="/tmp/users.tmp.json"
+
+  if [[ -z "$proto" || -z "$id" ]]; then
+    echo -e "${RED}Erreur : protocole et identifiant requis.${RESET}"
+    return 1
   fi
-  jq --arg k "$sel_key" '.[$k]=""' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
-  [[ -f /etc/xray/users_expiry.list ]] && grep -v "^$sel_id|" /etc/xray/users_expiry.list > /tmp/expiry.tmp && mv /tmp/expiry.tmp /etc/xray/users_expiry.list
+
+  case "$proto" in
+    vmess|vless)
+      jq --arg id "$id" --arg proto "$proto" '
+      (.inbounds[] | select(.protocol == $proto) | .settings.clients) |= map(select(.id != $id))
+      ' "$CONFIG_FILE" > "$tmp_config" && mv "$tmp_config" "$CONFIG_FILE"
+      ;;
+    trojan)
+      jq --arg id "$id" '
+      (.inbounds[] | select(.protocol == "trojan") | .settings.clients) |= map(select(.password != $id))
+      ' "$CONFIG_FILE" > "$tmp_config" && mv "$tmp_config" "$CONFIG_FILE"
+      ;;
+    *)
+      echo -e "${RED}Protocole inconnu.${RESET}"
+      return 1
+      ;;
+  esac
+
+  case "$proto" in
+    vmess)
+      jq --arg id "$id" '
+      if .vmess_tls == $id then .vmess_tls = "" else . end |
+      if .vmess_ntls == $id then .vmess_ntls = "" else . end
+      ' "$USERS_FILE" > "$tmp_users" && mv "$tmp_users" "$USERS_FILE"
+      ;;
+    vless)
+      jq --arg id "$id" '
+      if .vless_tls == $id then .vless_tls = "" else . end |
+      if .vless_ntls == $id then .vless_ntls = "" else . end
+      ' "$USERS_FILE" > "$tmp_users" && mv "$tmp_users" "$USERS_FILE"
+      ;;
+    trojan)
+      jq --arg id "$id" '
+      if .trojan_pass == $id then .trojan_pass = "" else . end
+      ' "$USERS_FILE" > "$tmp_users" && mv "$tmp_users" "$USERS_FILE"
+      ;;
+  esac
+
   systemctl restart xray
-  echo -e "${GREEN}Utilisateur supprimé : $sel_key / $sel_proto ($sel_id)${RESET}"
+  echo -e "${GREEN}Utilisateur supprimé : protocole=$proto, ID=$id${RESET}"
 }
 
 choice=0
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 [[ -f /tmp/.xray_domain ]] && DOMAIN=$(cat /tmp/.xray_domain)
 load_user_data
 
 while true; do
   clear
   print_header
-  afficher_xray_actifs
   show_menu
   case $choice in
     1)
       bash "$SCRIPT_DIR/xray_installe.sh"
-      [[ -f /tmp/.xray_domain ]] && DOMAIN=$(cat /tmp/.xray_domain)
+      if [[ -f /tmp/.xray_domain ]]; then
+        DOMAIN=$(cat /tmp/.xray_domain)
+        echo -e "${GREEN}Nom de domaine $DOMAIN chargé automatiquement.${RESET}"
+      else
+        DOMAIN=""
+        echo -e "${RED}Aucun domaine enregistré. Veuillez installer Xray d’abord.${RESET}"
+      fi
       load_user_data
       read -p "Appuyez sur Entrée pour continuer..."
       ;;
@@ -185,22 +266,16 @@ while true; do
       read -p "Appuyez sur Entrée pour continuer..."
       ;;
     5)
-      delete_user_by_number
+      read -rp "Protocole (vmess, vless, trojan) : " proto
+      read -rp "UUID ou mot de passe de l'utilisateur à supprimer : " id
+      if [[ -n "$proto" && -n "$id" ]]; then
+        delete_user "$proto" "$id"
+      else
+        echo -e "${RED}Paramètres invalides.${RESET}"
+      fi
       read -p "Appuyez sur Entrée pour continuer..."
       ;;
     6)
-      echo -e "${YELLOW}Désinstallation complète de Xray et Trojan-Go en cours...${RESET}"
-      systemctl stop xray trojan-go 2>/dev/null || true
-      systemctl disable xray trojan-go 2>/dev/null || true
-      for port in 89 8443; do lsof -i tcp:$port -t | xargs -r kill -9; lsof -i udp:$port -t | xargs -r kill -9; done
-      rm -rf /etc/xray /var/log/xray /usr/local/bin/xray /etc/systemd/system/xray.service
-      rm -rf /etc/trojan-go /var/log/trojan-go /usr/local/bin/trojan-go /etc/systemd/system/trojan-go.service
-      rm -f /tmp/.xray_domain /etc/xray/users_expiry.list /etc/xray/users.json /etc/xray/config.json
-      systemctl daemon-reload
-      echo -e "${GREEN}Désinstallation terminée.${RESET}"
-      read -p "Appuyez sur Entrée pour continuer..."
-      ;;
-    0)
       echo -e "${RED}Quitter...${RESET}"
       rm -f /tmp/.xray_domain
       break
