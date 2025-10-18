@@ -82,19 +82,18 @@ timedatectl status
 
 date
 
-# Télécharger dernière version Xray corrigée
-log "${GREEN}" "Récupération de la dernière version Xray..."
-latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases | grep tag_name | sed -E 's/.*"v([^"]+)".*/\u0001/' | head -n1)
-xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v${latest_version}/Xray-linux-64.zip"
-log "${GREEN}" "Téléchargement depuis $xraycore_link"
+# Télécharger dernière version Xray
+latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases | grep tag_name | sed -E 's/.*"v(.*)".*/\1/' | head -n1)
+xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v${latest_version}/xray-linux-64.zip"
+
+systemctl stop nginx 2>/dev/null || true
+systemctl stop apache2 2>/dev/null || true
+sudo lsof -t -i tcp:89 -s tcp:listen | sudo xargs kill -9 2>/dev/null || true
+
+mkdir -p /usr/local/bin
+cd $(mktemp -d)
 curl -sL "$xraycore_link" -o xray.zip
-
-if [ ! -s xray.zip ]; then
-  echo "${RED}Erreur : téléchargement du fichier Xray a échoué ou est vide.${NC}"
-  exit 1
-fi
-
-unzip -q xray.zip || { echo "${RED}Erreur: extraction du ZIP Xray a échoué.${NC}" ; exit 1 ; }
+unzip -q xray.zip && rm -f xray.zip
 mv xray /usr/local/bin/xray
 chmod +x /usr/local/bin/xray
 setcap 'cap_net_bind_service=+ep' /usr/local/bin/xray
