@@ -1,183 +1,136 @@
 #!/bin/bash
 # Installation complète Xray + UFW, nettoyage avant installation, services systemd robustes
-# Version prête pour GitHub avec commentaires en français et sans changement des ports
-# A utiliser sur Ubuntu 20.04/24.04
-
-set -euo pipefail
 
 # Couleurs terminal
-RED='\u001B[0;31m'
-GREEN='\u001B[0;32m'
-NC='\u001B[0m'
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m'
 
-log() {
-  local level="$1"
-  shift
-  echo -e "${GREEN}[${level}]${NC} $*"
-}
-
-err() {
-  log "ERREUR" "$@"
+restart_xray_service() {
+  echo -e "${GREEN}Redémarrage du service Xray...${NC}"
+  systemctl restart xray
+  sleep 3
+  for i in {1..3}; do
+    if systemctl is-active --quiet xray; then
+      echo -e "${GREEN}Xray redémarré avec succès.${NC}"
+      return 0
+    else
+      echo -e "${RED}Échec du redémarrage, tentative $i...${NC}"
+      sleep 2
+      systemctl restart xray
+    fi
+  done
+  echo -e "${RED}Erreur persistante lors du redémarrage de Xray.${NC}"
+  journalctl -u xray -n 40 --no-pager
   exit 1
 }
 
-warn() {
-  log "WARN" "$@"
+clean_xray_environment() {
+  echo -e "${GREEN}Nettoyage complet de l'environnement Xray...${NC}"
+
+  # Arrêter et désactiver le service Xray
+  systemctl stop xray 2>/dev/null || true
+  systemctl disable xray 2>/dev/null || true
+  systemctl daemon-reload
+
+  # Tuer processus sur ports 89 et 8443 (TCP et UDP)
+  for port in 89 8443; do
+      lsof -i tcp:$port -t | xargs -r kill -9
+      lsof -i udp:$port -t | xargs -r kill -9
+  done
+
+  # Pause pour libérer les ports
+  sleep 5
+
+  # Supprimer anciens fichiers et dossiers liés à Xray
+  rm -rf /etc/xray /var/log/xray /usr/local/bin/xray /tmp/.xray_domain /etc/systemd/system/xray.service
+  rm -rf /tmp/xray-temp /var/run/xray
+
+  systemctl daemon-reload
+
+  echo -e "${GREEN}Nettoyage effectué.${NC}"
 }
 
-info() {
-  log "INFO" "$@"
-}
+# Début script principal
 
-# Nettoyage précédent avant installation
-info "Arrêt des services utilisant les ports 80 et 8443..."
-for port in 80 8443; do
-  if command -v lsof >/dev/null 2>&1; then
-    lsof -i tcp:$port -t 2>/dev/null | xargs -r kill -9
-    lsof -i udp:$port -t 2>/dev/null | xargs -r kill -9
-  else
-    # fallback: tenter de tuer via netstat/ss si lsof absent
-    if command -v ss >/dev/null 2>&1; then
-      ss -ltnp | grep ":$port" >/dev/null 2>&1 && pkill -f ":$port" || true
-    fi
-  fi
-done
-
-# Arrêter et désactiver les services potentiellement en conflit
-for srv in xray nginx apache2; do
-  if systemctl is-active --quiet "$srv"; then
-    systemctl stop "$srv" 2>/dev/null || true
-  fi
-  if systemctl is-enabled --quiet "$srv"; then
-    systemctl disable "$srv" 2>/dev/null || true
-  fi
-done
-
-info "Nettoyage des fichiers précédents..."
-rm -rf /etc/xray /var/log/xray /usr/local/bin/xray /tmp/.xray_domain /etc/systemd/system/xray.service
-
-systemctl daemon-reload
+clean_xray_environment
 
 # Demander domaine
 read -rp "Entrez votre nom de domaine (ex: monsite.com) : " DOMAIN
-if [[ -z "${DOMAIN:-}" ]]; then
-  err "Erreur : nom de domaine non valide."
+if [[ -z "$DOMAIN" ]]; then
+  echo -e "${RED}Erreur : nom de domaine non valide.${NC}"
+  exit 1
 fi
 
-# Écriture domaine pour menu
 echo "$DOMAIN" > /tmp/.xray_domain
-
 EMAIL="adrienkiaje@gmail.com"
 
-# Mise à jour et dépendances
-info "Mise à jour du système et installation des dépendances..."
-apt-get update
-APT_PKGS=(
-  ufw iptables iptables-persistent curl socat xz-utils wget \
-  apt-transport-https gnupg dnsutils lsb-release cron bash-completion \
-  ntpdate chrony unzip jq
-)
-apt-get install -y "${APT_PKGS[@]}" || err "Échec lors de l'installation des dépendances"
+# Mise à jour + dépendances
+apt update
+apt install -y ufw iptables iptables-persistent curl socat xz-utils wget apt-transport-https \
+  gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq
 
-# Configuration UFW - ouvrir uniquement SSH, 80, 8443
-info "Configuration du pare-feu (UFW)..."
-ufw --force disable 2>/dev/null || true
-ufw --force enable 2>/dev/null || true
-ufw default deny incoming
-ufw default allow outgoing
+# Configuration UFW
 ufw allow ssh
-ufw allow 80/tcp
-ufw allow 80/udp
+ufw allow 89/tcp
+ufw allow 89/udp
 ufw allow 8443/tcp
 ufw allow 8443/udp
-ufw --force reload
+echo "y" | ufw enable
+ufw status verbose
+netfilter-persistent save
 
-# Vérifier que netfilter-persistent et ntpdate existent et installer fallback si nécessaire
-if ! command -v netfilter-persistent >/dev/null 2>&1; then
-  apt-get install -y netfilter-persistent || warn "netfilter-persistent non installable; persistance du pare-feu pourrait être limitée"
-fi
-if ! command -v ntpdate >/dev/null 2>&1; then
-  apt-get install -y ntpdate || warn "ntpdate non installable; synchronisation horaire manuelle possible"
-fi
+ntpdate pool.ntp.org
+timedatectl set-ntp true
+systemctl enable chronyd
+systemctl restart chronyd
+timedatectl set-timezone Asia/Kuala_Lumpur
+chronyc sourcestats -v
+chronyc tracking -v
+date
 
-# Sauvegarder règles UFW pour persistance
-if command -v netfilter-persistent >/dev/null 2>&1; then
-  netfilter-persistent save || warn "Échec de la sauvegarde netfilter-persistent"
-fi
-
-# Synchronisation temps
-if command -v ntpdate >/dev/null 2>&1; then
-  ntpdate pool.ntp.org
-fi
-timedatectl set-ntp true || true
-systemctl enable chronyd || true
-systemctl restart chronyd || true
-timedatectl set-timezone Asia/Kuala_Lumpur || true
-
-# Info chrony
-if command -v chronyc >/dev/null 2>&1; then
-  chronyc tracking -v || true
-  date
-fi
-
-# Dernière version Xray
-latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases | grep -Po '"tag_name": "K.*?(?=")' | head -n1)
-if [[ -z "$latest_version" ]]; then
-  err "Impossible de récupérer la version Xray."
-fi
+# Télécharger dernière version Xray
+latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases | grep tag_name | sed -E 's/.*"v(.*)".*/\1/' | head -n1)
 xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v${latest_version}/xray-linux-64.zip"
 
-# Arrêt services sur port 80 existants (sécuritaire)
 systemctl stop nginx 2>/dev/null || true
 systemctl stop apache2 2>/dev/null || true
-lsof -t -i tcp:80 -s tcp:listen 2>/dev/null | xargs -r kill -9 || true
+sudo lsof -t -i tcp:89 -s tcp:listen | sudo xargs kill -9 2>/dev/null || true
 
-# Installation Xray
-info "Installation Xray..."
 mkdir -p /usr/local/bin
-cd "$(mktemp -d)"
+cd $(mktemp -d)
 curl -sL "$xraycore_link" -o xray.zip
-unzip -q xray.zip -d xray_extracted
-if [[ ! -f "xray_extracted/xray" && ! -f "xray_extracted/*/xray" ]]; then
-  err "Échec during unzip; Xray binary missing"
-fi
-# Trouver le binaire dans le répertoire extrait
-XrayBin=$(find xray_extracted -name "xray" -type f | head -n1)
-if [[ -z "$XrayBin" ]]; then
-  err "Impossible de localiser le binaire Xray après extraction"
-fi
-mv "$XrayBin" /usr/local/bin/xray
+unzip -q xray.zip && rm -f xray.zip
+mv xray /usr/local/bin/xray
 chmod +x /usr/local/bin/xray
-setcap 'cap_net_bind_service=+ep' /usr/local/bin/xray || true
-# Déplacer le reste des fichiers sous /etc/xray
-mkdir -p /etc/xray /var/log/xray
-# Journaux et permissions
-touch /var/log/xray/access.log /var/log/xray/error.log
-chown -R root:root /var/log/xray /etc/xray || true
-chmod 644 /var/log/xray/access.log /var/log/xray/error.log || true
-rm -rf xray.zip xray_extracted
+setcap 'cap_net_bind_service=+ep' /usr/local/bin/xray
 
-# Installer acme.sh si pas présent
+mkdir -p /var/log/xray /etc/xray
+touch /var/log/xray/access.log /var/log/xray/error.log
+chown -R root:root /var/log/xray
+chmod 644 /var/log/xray/access.log /var/log/xray/error.log
+
 if ! command -v ~/.acme.sh/acme.sh &> /dev/null; then
-  info "Installation d'acme.sh..."
   curl https://get.acme.sh | sh
   source ~/.bashrc
 fi
 
-# Arrêter Xray avant génération certificat pour libérer port (safe)
-systemctl stop xray 2>/dev/null || true
+systemctl stop xray
 
-# Générer et installer certificat TLS
-~/.acme.sh/acme.sh --register-account -m "$EMAIL" || true
-~/.acme.sh/acme.sh --issue --standalone -d "$DOMAIN" --force || true
-~/.acme.sh/acme.sh --installcert -d "$DOMAIN" --fullchainpath /etc/xray/xray.crt --keypath /etc/xray/xray.key || true
+# Certificats TLS
+~/.acme.sh/acme.sh --register-account -m "$EMAIL"
+~/.acme.sh/acme.sh --issue --standalone -d "$DOMAIN" --force
 
-# Vérifier certificats TLS
+sleep 5  # pause pour éviter conflit certifs
+
+~/.acme.sh/acme.sh --installcert -d "$DOMAIN" --fullchainpath /etc/xray/xray.crt --keypath /etc/xray/xray.key
+
 if [[ ! -f "/etc/xray/xray.crt" || ! -f "/etc/xray/xray.key" ]]; then
-  warn "Certificats TLS non trouvés ou non installés; configuration TLS pourrait échouer."
+  echo -e "${RED}Erreur : certificats TLS non trouvés.${NC}"
+  exit 1
 fi
 
-# Génération UUID
+# Génération des UUID pour utilisateurs
 uuid1=$(cat /proc/sys/kernel/random/uuid)
 uuid2=$(cat /proc/sys/kernel/random/uuid)
 uuid3=$(cat /proc/sys/kernel/random/uuid)
@@ -185,19 +138,17 @@ uuid4=$(cat /proc/sys/kernel/random/uuid)
 uuid5=$(cat /proc/sys/kernel/random/uuid)
 uuid6=$(cat /proc/sys/kernel/random/uuid)
 
-# users.json pour menu
 cat > /etc/xray/users.json << EOF
 {
   "vmess_tls": "$uuid1",
   "vmess_ntls": "$uuid2",
   "vless_tls": "$uuid3",
   "vless_ntls": "$uuid4",
-  "trojan_pass": "$uuid5",
-  "trojan_ntls_pass": "$uuid6"
+  "trojan_tls": "$uuid5",
+  "trojan_ntls": "$uuid6"
 }
 EOF
 
-# Configuration Xray complète
 cat > /etc/xray/config.json << EOF
 {
   "log": {"access": "/var/log/xray/access.log", "error": "/var/log/xray/error.log", "loglevel": "info"},
@@ -214,7 +165,7 @@ cat > /etc/xray/config.json << EOF
       }
     },
     {
-      "port": 80,
+      "port": 89,
       "protocol": "vmess",
       "settings": {"clients": [{"id": "$uuid2", "alterId": 0}]},
       "streamSettings": {
@@ -237,7 +188,7 @@ cat > /etc/xray/config.json << EOF
       "sniffing": {"enabled": true, "destOverride": ["http", "tls"]}
     },
     {
-      "port": 80,
+      "port": 89,
       "protocol": "vless",
       "settings": {"clients": [{"id": "$uuid4"}], "decryption": "none"},
       "streamSettings": {
@@ -246,6 +197,27 @@ cat > /etc/xray/config.json << EOF
         "wsSettings": {"path": "/vless", "headers": {"Host": "$DOMAIN"}}
       },
       "sniffing": {"enabled": true, "destOverride": ["http", "tls"]}
+    },
+    {
+      "port": 8443,
+      "protocol": "trojan",
+      "settings": {"clients": [{"password": "$uuid5"}]},
+      "streamSettings": {
+        "network": "ws",
+        "security": "tls",
+        "tlsSettings": {"certificates": [{"certificateFile": "/etc/xray/xray.crt", "keyFile": "/etc/xray/xray.key"}]},
+        "wsSettings": {"path": "/trojanws", "headers": {"Host": "$DOMAIN"}}
+      }
+    },
+    {
+      "port": 89,
+      "protocol": "trojan",
+      "settings": {"clients": [{"password": "$uuid6"}]},
+      "streamSettings": {
+        "network": "ws",
+        "security": "none",
+        "wsSettings": {"path": "/trojanws", "headers": {"Host": "$DOMAIN"}}
+      }
     }
   ],
   "outbounds": [{"protocol": "freedom","settings": {}},{"protocol": "blackhole","settings": {}, "tag": "blocked"}],
@@ -256,7 +228,6 @@ cat > /etc/xray/config.json << EOF
 }
 EOF
 
-# Service systemd Xray
 cat > /etc/systemd/system/xray.service << EOF
 [Unit]
 Description=Xray Service Mod By NevermoreSSH
@@ -275,23 +246,16 @@ RestartPreventExitStatus=23
 WantedBy=multi-user.target
 EOF
 
-# Reload systemd et activer/démarrer le service
 systemctl daemon-reload
 systemctl enable xray
-systemctl restart xray || true
 
-# Vérification du démarrage
-if systemctl is-active --quiet xray; then
-  info "Xray démarré avec succès."
-else
-  err "Erreur : Xray ne démarre pas."
-  journalctl -u xray -n 50 --no-pager
-  exit 1
-fi
+restart_xray_service
 
-info "Installation complète terminée."
+echo -e "${GREEN}Installation complète terminée.${NC}"
 echo "Domaine : $DOMAIN"
 echo "UUID VMess TLS : $uuid1"
 echo "UUID VMess Non-TLS : $uuid2"
 echo "UUID VLESS TLS : $uuid3"
 echo "UUID VLESS Non-TLS : $uuid4"
+echo "Mot de passe Trojan WS TLS : $uuid5"
+echo "Mot de passe Trojan WS Non-TLS : $uuid6"
