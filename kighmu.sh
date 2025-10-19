@@ -133,7 +133,7 @@ while true; do
 cols=$(tput cols)
 title="🚀 KIGHMU MANAGER 🇨🇲 🚀"
 
-TEXT_COLOR="\e[97m"
+TEXT_COLOR="\e[34m"
 BG_BLUE="\e[44m"
 BG_YELLOW="\e[103m"
 RESET="\e[0m"
@@ -142,7 +142,7 @@ padding_blue=10
 padding_yellow=2
 
 blue_total=$(( ${#title} + padding_blue*2 + padding_yellow*2 ))
-left_space=$(( (cols - blue_total) / 2 - 9 ))
+left_space=$(( (cols - blue_total) / 2 - 8 ))
 
 printf "%*s" "$left_space" ""
 printf "${BG_BLUE}"
