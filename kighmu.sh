@@ -138,14 +138,27 @@ BG_BLUE="\e[44m"
 BG_YELLOW="\e[103m"
 RESET="\e[0m"
 
-blue_len=$(( (${#title} + 20) ))
-yellow_len=$(( (${#title} + 8) ))
+padding_blue=10
+padding_yellow=4
 
-printf "%*s" $(( (blue_len + cols) / 2 )) ""
-printf "${BG_BLUE}${TEXT_COLOR} %s ${RESET}\n" "$title"
+blue_total=$(( (${#title} + padding_blue * 2) ))
+yellow_total=$(( (${#title} + padding_yellow * 2) ))
 
-printf "%*s" $(( (yellow_len + cols) / 2 )) ""
-printf "${BG_YELLOW}${TEXT_COLOR} %s ${RESET}\n" "$title"
+left_space=$(( (cols - blue_total) / 2 ))
+
+printf "%*s" "$left_space" ""
+printf "${BG_BLUE}"
+
+for ((i=0; i<blue_total; i++)); do
+    if (( i >= padding_blue && i < blue_total - padding_blue )); then
+        printf "${BG_YELLOW}${TEXT_COLOR} %s ${BG_BLUE}" "${title:i-padding_blue:1}"
+        break
+    else
+        printf " "
+    fi
+done
+
+printf "${RESET}\n"
 
 echo -e "${CYAN}+===========================${WHITE_BOLD}[░❖░]${RESET}===========================+${RESET}"
 
