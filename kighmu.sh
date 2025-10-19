@@ -133,13 +133,13 @@ while true; do
 cols=$(tput cols)
 title="🚀 KIGHMU MANAGER 🇨🇲 🚀"
 
-TEXT_COLOR="\e[35m"
+TEXT_COLOR="\e[97m"
 BG_BLUE="\e[44m"
-BG_YELLOW="\e[43m"
+BG_YELLOW="\e[103m"
 RESET="\e[0m"
 
-blue_len=$(( (${#title} + 10) ))
-yellow_len=$(( (${#title} + 4) ))
+blue_len=$(( (${#title} + 20) ))
+yellow_len=$(( (${#title} + 8) ))
 
 printf "%*s" $(( (blue_len + cols) / 2 )) ""
 printf "${BG_BLUE}${TEXT_COLOR} %s ${RESET}\n" "$title"
