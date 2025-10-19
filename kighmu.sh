@@ -131,7 +131,7 @@ while true; do
   echo -e "${CYAN}+===========================${WHITE_BOLD}[░❖░]${RESET}===========================+${RESET}"
 
 cols=$(tput cols)
-title="🚀 𝗞𝗜𝗚𝗛𝗠𝗨 𝗠𝗔𝗡𝗔𝗚𝗘𝗥 🇨🇲 🚀"
+title="🚀 KIGHMU MANAGER 🇨🇲 🚀"
 
 TEXT_COLOR="\e[97m"
 BG_BLUE="\e[44m"
