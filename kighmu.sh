@@ -142,7 +142,7 @@ padding_blue=10
 padding_yellow=2
 
 blue_total=$(( ${#title} + padding_blue*2 + padding_yellow*2 ))
-left_space=$(( (cols - blue_total) / 2 - 6 ))
+left_space=$(( (cols - blue_total) / 2 - 9 ))
 
 printf "%*s" "$left_space" ""
 printf "${BG_BLUE}"
