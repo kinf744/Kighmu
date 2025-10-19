@@ -128,7 +128,7 @@ while true; do
       DATA_MONTH_GB=$(echo "$DATA_MONTH_GB + $month_gb" | bc)
     done
 
-  echo -e "${CYAN}+===========================${WHITE_BOLD}[░❖░]${RESET}===========================+${RESET}"
+  echo -e "${CYAN}+============================${WHITE_BOLD}[❖]${RESET}============================+${RESET}"
 
 cols=$(tput cols)
 title="🚀 KIGHMU MANAGER 🇨🇲 🚀"
@@ -157,7 +157,7 @@ done
 
 printf "${RESET}\n"
 
-echo -e "${CYAN}+===========================${WHITE_BOLD}[░❖░]${RESET}===========================+${RESET}"
+echo -e "${CYAN}+============================${WHITE_BOLD}[❖]${RESET}============================+${RESET}"
 
   printf " ${WHITE_BOLD}OS:${RESET} ${YELLOW}%-20s${RESET} | ${WHITE_BOLD}IP:${RESET} ${RED}%-15s${RESET}\n" "$OS_INFO" "$IP"
   printf " ${WHITE_BOLD}Taille RAM totale:${RESET} ${GREEN}%-6s${RESET} | ${WHITE_BOLD}Nombre de cœurs CPU:${RESET} ${YELLOW}%-6s${RESET}\n" "$RAM_GB_ARR" "$CPU_CORES"
