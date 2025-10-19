@@ -129,11 +129,24 @@ while true; do
     done
 
   echo -e "${CYAN}+===========================${WHITE_BOLD}[░❖░]${RESET}===========================+${RESET}"
-tput setaf 7; tput setab 4; tput bold
+
 cols=$(tput cols)
 title="🚀 KIGHMU MANAGER 🇨🇲 🚀"
-printf "%*s\n" $(((${#title} + cols) / 2)) "$title"
-tput sgr0
+
+TEXT_COLOR="\e[35m"
+BG_BLUE="\e[44m"
+BG_YELLOW="\e[43m"
+RESET="\e[0m"
+
+blue_len=$(( (${#title} + 10) ))
+yellow_len=$(( (${#title} + 4) ))
+
+printf "%*s" $(( (blue_len + cols) / 2 )) ""
+printf "${BG_BLUE}${TEXT_COLOR} %s ${RESET}\n" "$title"
+
+printf "%*s" $(( (yellow_len + cols) / 2 )) ""
+printf "${BG_YELLOW}${TEXT_COLOR} %s ${RESET}\n" "$title"
+
 echo -e "${CYAN}+===========================${WHITE_BOLD}[░❖░]${RESET}===========================+${RESET}"
 
   printf " ${WHITE_BOLD}OS:${RESET} ${YELLOW}%-20s${RESET} | ${WHITE_BOLD}IP:${RESET} ${RED}%-15s${RESET}\n" "$OS_INFO" "$IP"
