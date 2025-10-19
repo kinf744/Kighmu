@@ -155,8 +155,7 @@ class ConnectionHandler(threading.Thread):
             if start == -1:
                 return ''
             start += len(header) + 2
-            end = data_str.find('
-', start)
+            end = data_str.find('', start)
             if end == -1:
                 return ''
             return data_str[start:end].strip()
