@@ -18,7 +18,7 @@ PASS = ''  # Mot de passe optionnel
 BUFLEN = 8196 * 8
 TIMEOUT = 60
 MSG = 'KIGHMUPROXY'
-RESPONSE = "HTTP/1.1 200 OK\r\n\r\n"
+RESPONSE = "HTTP/1.1 200 OK"
 DEFAULT_HOST = '0.0.0.0:22'
 
 class Server(threading.Thread):
@@ -133,18 +133,14 @@ class ConnectionHandler(threading.Thread):
             passwd = self.find_header(client_buffer, 'X-Pass')
 
             if PASS and passwd != PASS:
-                self.client.send(b"HTTP/1.1 400 WrongPass!
-
-")
+                self.client.send(b"HTTP/1.1 400 WrongPass!")
                 self.close()
                 return
 
             if host_port.startswith(IP) or not PASS:
                 self.method_connect(host_port)
             else:
-                self.client.send(b"HTTP/1.1 403 Forbidden!
-
-")
+                self.client.send(b"HTTP/1.1 403 Forbidden!")
 
         except Exception as e:
             self.server.print_log(f"[{self.addr}] Erreur : {e}")
