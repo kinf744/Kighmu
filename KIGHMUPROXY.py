@@ -18,7 +18,9 @@ PASS = ''  # Mot de passe optionnel
 BUFLEN = 8196 * 8
 TIMEOUT = 60
 MSG = 'KIGHMUPROXY'
-RESPONSE = "HTTP/1.1 200 OK\r\n\r\n"
+RESPONSE = "HTTP/1.1 200 OK
+
+"
 DEFAULT_HOST = '0.0.0.0:22'
 
 class Server(threading.Thread):
@@ -33,7 +35,7 @@ class Server(threading.Thread):
 
     def run(self):
         self.soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # <-- Correction ajoutée ici
         self.soc.settimeout(2)
         self.soc.bind((self.host, self.port))
         self.soc.listen(0)
@@ -116,14 +118,18 @@ class ConnectionHandler(threading.Thread):
             passwd = self.find_header(client_buffer, 'X-Pass')
 
             if PASS and passwd != PASS:
-                self.client.send(b"HTTP/1.1 400 WrongPass!\r\n\r\n")
+                self.client.send(b"HTTP/1.1 400 WrongPass!
+
+")
                 self.close()
                 return
 
             if host_port.startswith(IP) or not PASS:
                 self.method_connect(host_port)
             else:
-                self.client.send(b"HTTP/1.1 403 Forbidden!\r\n\r\n")
+                self.client.send(b"HTTP/1.1 403 Forbidden!
+
+")
 
         except Exception as e:
             self.server.print_log(f"[{self.addr}] Erreur : {e}")
@@ -138,7 +144,8 @@ class ConnectionHandler(threading.Thread):
             if start == -1:
                 return ''
             start += len(header) + 2
-            end = data_str.find('\r\n', start)
+            end = data_str.find('
+', start)
             if end == -1:
                 return ''
             return data_str[start:end].strip()
@@ -203,16 +210,17 @@ class ConnectionHandler(threading.Thread):
                 break
 
 def main():
-    print("KIGHMUPROXY - tunnel SSH proxy SOCKS type DarkSSH\n")
+    print("KIGHMUPROXY - tunnel SSH proxy SOCKS type DarkSSH
+")
     server = Server(IP, PORT)
     server.start()
     try:
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        print("\nArrêt du proxy...")
+        print("
+Arrêt du proxy...")
         server.close()
 
 if __name__ == '__main__':
     main()
-                
