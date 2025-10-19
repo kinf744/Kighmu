@@ -227,8 +227,7 @@ def main():
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        print("
-Arrêt du proxy...")
+        print("Arrêt du proxy...")
         server.close()
 
 if __name__ == '__main__':
