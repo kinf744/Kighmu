@@ -34,11 +34,19 @@ class Server(threading.Thread):
         self.logLock = threading.Lock()
 
     def run(self):
+        # Initialise le socket serveur avec reprise d’adresse
         self.soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # <-- Correction ajoutée ici
+        self.soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # Autorise la réutilisation du port
         self.soc.settimeout(2)
-        self.soc.bind((self.host, self.port))
-        self.soc.listen(0)
+        try:
+            self.soc.bind((self.host, self.port))
+            self.soc.listen(0)
+        except OSError as e:
+            self.print_log(f"Échec du bind sur {self.host}:{self.port} - {e}")
+            self.running = False
+            self.soc.close()
+            return
+
         self.running = True
         self.print_log(f"KIGHMUPROXY démarré sur {self.host}:{self.port}")
 
@@ -49,6 +57,8 @@ class Server(threading.Thread):
                     c.setblocking(1)
                 except socket.timeout:
                     continue
+                except OSError:
+                    break  # socket fermé
 
                 conn = ConnectionHandler(c, self, addr)
                 conn.start()
@@ -78,6 +88,12 @@ class Server(threading.Thread):
             threads = list(self.threads)
             for c in threads:
                 c.close()
+        # Ferme aussi le socket d’écoute si nécessaire
+        try:
+            if hasattr(self, 'soc'):
+                self.soc.close()
+        except Exception:
+            pass
 
 class ConnectionHandler(threading.Thread):
     def __init__(self, client_socket, server, addr):
@@ -87,6 +103,7 @@ class ConnectionHandler(threading.Thread):
         self.addr = addr
         self.client_closed = False
         self.target_closed = True
+        self.target = None
 
     def close(self):
         try:
@@ -99,7 +116,7 @@ class ConnectionHandler(threading.Thread):
             self.client_closed = True
 
         try:
-            if not self.target_closed and hasattr(self, 'target'):
+            if not self.target_closed and self.target:
                 self.target.shutdown(socket.SHUT_RDWR)
                 self.target.close()
         except:
