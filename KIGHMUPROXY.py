@@ -220,8 +220,7 @@ class ConnectionHandler(threading.Thread):
                 break
 
 def main():
-    print("KIGHMUPROXY - tunnel SSH proxy SOCKS type DarkSSH
-")
+    print("KIGHMUPROXY - tunnel SSH proxy SOCKS type KIGHMU_SSH")
     server = Server(IP, PORT)
     server.start()
     try:
