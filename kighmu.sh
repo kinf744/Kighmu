@@ -139,11 +139,9 @@ BG_YELLOW="\e[103m"
 RESET="\e[0m"
 
 padding_blue=10
-padding_yellow=4
+padding_yellow=2
 
-blue_total=$(( (${#title} + padding_blue * 2) ))
-yellow_total=$(( (${#title} + padding_yellow * 2) ))
-
+blue_total=$(( ${#title} + padding_blue*2 + padding_yellow*2 ))
 left_space=$(( (cols - blue_total) / 2 ))
 
 printf "%*s" "$left_space" ""
@@ -151,8 +149,7 @@ printf "${BG_BLUE}"
 
 for ((i=0; i<blue_total; i++)); do
     if (( i >= padding_blue && i < blue_total - padding_blue )); then
-        printf "${BG_YELLOW}${TEXT_COLOR} %s ${BG_BLUE}" "${title:i-padding_blue:1}"
-        break
+        printf "${BG_YELLOW}${TEXT_COLOR}%s${BG_BLUE}" "${title:i-padding_blue-padding_yellow:1}"
     else
         printf " "
     fi
