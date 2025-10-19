@@ -18,9 +18,7 @@ PASS = ''  # Mot de passe optionnel
 BUFLEN = 8196 * 8
 TIMEOUT = 60
 MSG = 'KIGHMUPROXY'
-RESPONSE = "HTTP/1.1 200 OK
-
-"
+RESPONSE = "HTTP/1.1 200 OK\r\n\r\n"
 DEFAULT_HOST = '0.0.0.0:22'
 
 class Server(threading.Thread):
