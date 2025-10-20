@@ -1,55 +1,76 @@
 #!/bin/bash
-# Installation complète Xray + UFW, démarrage robuste via systemd
-# Synchronisation horaire gérée avec systemd-timesyncd (Ubuntu 24.04)
-# Script prêt pour publication GitHub
+# Installation complète Xray + UFW, nettoyage avant installation, services systemd robustes
 
-RED='\u001B[0;31m'
-GREEN='\u001B[0;32m'
-NC='\u001B[0m'
+# Couleurs terminal
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m'
 
-set -euo pipefail
-
-log() { echo -e "${1}${2}${NC}"; }
-
-log "${GREEN}" "Début de l'installation Xray avec systemd robuste"
+restart_xray_service() {
+  echo -e "${GREEN}Redémarrage du service Xray...${NC}"
+  systemctl restart xray
+  sleep 3
+  for i in {1..3}; do
+    if systemctl is-active --quiet xray; then
+      echo -e "${GREEN}Xray redémarré avec succès.${NC}"
+      return 0
+    else
+      echo -e "${RED}Échec du redémarrage, tentative $i...${NC}"
+      sleep 2
+      systemctl restart xray
+    fi
+  done
+  echo -e "${RED}Erreur persistante lors du redémarrage de Xray.${NC}"
+  journalctl -u xray -n 40 --no-pager
+  exit 1
+}
 
 clean_xray_environment() {
-  log "${GREEN}" "Nettoyage préalable de l'environnement Xray..."
+  echo -e "${GREEN}Nettoyage complet de l'environnement Xray...${NC}"
+
+  # Arrêter et désactiver le service Xray
   systemctl stop xray 2>/dev/null || true
   systemctl disable xray 2>/dev/null || true
-  pkill -f "/usr/local/bin/xray" 2>/dev/null || true
-  rm -rf /etc/xray /var/log/xray /usr/local/bin/xray /tmp/.xray_domain /etc/systemd/system/xray.service 2>/dev/null || true
-  systemctl daemon-reload 2>/dev/null || true
-  log "${GREEN}" "Nettoyage pré-installation terminé."
+  systemctl daemon-reload
+
+  # Tuer processus sur ports 89 et 8443 (TCP et UDP)
+  for port in 89 8443; do
+      lsof -i tcp:$port -t | xargs -r kill -9
+      lsof -i udp:$port -t | xargs -r kill -9
+  done
+
+  # Pause pour libérer les ports
+  sleep 5
+
+  # Supprimer anciens fichiers et dossiers liés à Xray
+  rm -rf /etc/xray /var/log/xray /usr/local/bin/xray /tmp/.xray_domain /etc/systemd/system/xray.service
+  rm -rf /tmp/xray-temp /var/run/xray
+
+  systemctl daemon-reload
+
+  echo -e "${GREEN}Nettoyage effectué.${NC}"
 }
+
+# Début script principal
 
 clean_xray_environment
 
+# Demander domaine
 read -rp "Entrez votre nom de domaine (ex: monsite.com) : " DOMAIN
 if [[ -z "$DOMAIN" ]]; then
-  log "${RED}" "Erreur : nom de domaine non valide."
+  echo -e "${RED}Erreur : nom de domaine non valide.${NC}"
   exit 1
 fi
 
 echo "$DOMAIN" > /tmp/.xray_domain
 EMAIL="adrienkiaje@gmail.com"
 
-log "${GREEN}" "Mise à jour du système et installation des dépendances..."
+# Mise à jour + dépendances
 apt update
+apt install -y ufw iptables iptables-persistent curl socat xz-utils wget apt-transport-https \
+  gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq
 
-# Supprimer iptables-persistent et netfilter-persistent pour éviter conflit avec ufw
-if dpkg -l | grep -q iptables-persistent; then
-  log "${GREEN}" "Suppression de iptables-persistent et netfilter-persistent pour éviter conflit avec ufw..."
-  apt purge -y iptables-persistent netfilter-persistent
-  apt autoremove -y
-fi
-
-apt install -y ufw iptables curl socat xz-utils wget apt-transport-https \
-  gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate systemd-timesyncd unzip jq systemd
-
-# Configuration UFW uniquement
-ufw default deny incoming
-ufw default allow outgoing
+# Configuration UFW
 ufw allow ssh
 ufw allow 89/tcp
 ufw allow 89/udp
@@ -57,29 +78,15 @@ ufw allow 8443/tcp
 ufw allow 8443/udp
 echo "y" | ufw enable
 ufw status verbose
+netfilter-persistent save
 
-# Synchronisation horaire avec systemd-timesyncd
-log "${GREEN}" "Activation et démarrage de systemd-timesyncd..."
-systemctl enable systemd-timesyncd --now
-
-log "${GREEN}" "Désactivation de chronyd si présent pour éviter conflit..."
-systemctl disable chronyd --now 2>/dev/null || true
-systemctl stop chronyd 2>/dev/null || true
-
-log "${GREEN}" "Vérification du statut de systemd-timesyncd..."
-timedatectl status
-
-log "${GREEN}" "Configuration des serveurs NTP dans /etc/systemd/timesyncd.conf..."
-cat << EOF >/etc/systemd/timesyncd.conf
-[Time]
-NTP=2.ubuntu.pool.ntp.org 3.ubuntu.pool.ntp.org 1.ubuntu.pool.ntp.org
-FallbackNTP=ntp.ubuntu.com
-EOF
-
-systemctl restart systemd-timesyncd
-
-timedatectl status
-
+ntpdate pool.ntp.org
+timedatectl set-ntp true
+systemctl enable chronyd
+systemctl restart chronyd
+timedatectl set-timezone Asia/Kuala_Lumpur
+chronyc sourcestats -v
+chronyc tracking -v
 date
 
 # Télécharger dernière version Xray
@@ -100,26 +107,30 @@ setcap 'cap_net_bind_service=+ep' /usr/local/bin/xray
 
 mkdir -p /var/log/xray /etc/xray
 touch /var/log/xray/access.log /var/log/xray/error.log
+chown -R root:root /var/log/xray
 chmod 644 /var/log/xray/access.log /var/log/xray/error.log
 
-# Installation acme.sh et certificats TLS
 if ! command -v ~/.acme.sh/acme.sh &> /dev/null; then
-  log "${GREEN}" "Installation d'acme.sh..."
   curl https://get.acme.sh | sh
   source ~/.bashrc
 fi
 
+systemctl stop xray
+
+# Certificats TLS
 ~/.acme.sh/acme.sh --register-account -m "$EMAIL"
 ~/.acme.sh/acme.sh --issue --standalone -d "$DOMAIN" --force
-sleep 5
+
+sleep 5  # pause pour éviter conflit certifs
+
 ~/.acme.sh/acme.sh --installcert -d "$DOMAIN" --fullchainpath /etc/xray/xray.crt --keypath /etc/xray/xray.key
 
 if [[ ! -f "/etc/xray/xray.crt" || ! -f "/etc/xray/xray.key" ]]; then
-  log "${RED}" "Erreur : certificats TLS non trouvés."
+  echo -e "${RED}Erreur : certificats TLS non trouvés.${NC}"
   exit 1
 fi
 
-# Génération UUID
+# Génération des UUID pour utilisateurs
 uuid1=$(cat /proc/sys/kernel/random/uuid)
 uuid2=$(cat /proc/sys/kernel/random/uuid)
 uuid3=$(cat /proc/sys/kernel/random/uuid)
@@ -217,7 +228,6 @@ cat > /etc/xray/config.json << EOF
 }
 EOF
 
-# Service systemd Xray
 cat > /etc/systemd/system/xray.service << EOF
 [Unit]
 Description=Xray Service Mod By NevermoreSSH
@@ -236,24 +246,16 @@ RestartPreventExitStatus=23
 WantedBy=multi-user.target
 EOF
 
-# Reload and enable xray service
 systemctl daemon-reload
 systemctl enable xray
-systemctl restart xray
 
-if systemctl is-active --quiet xray; then
-  echo -e "${GREEN}Xray démarré avec succès.${NC}"
-else
-  echo -e "${RED}Erreur : Xray ne démarre pas.${NC}"
-  journalctl -u xray -n 20 --no-pager
-  exit 1
-fi
+restart_xray_service
 
-log "${GREEN}" "Installation complète terminée."
-log "${GREEN}" "Domaine : $DOMAIN"
-log "${GREEN}" "UUID VMess TLS : $uuid1"
-log "${GREEN}" "UUID VMess Non-TLS : $uuid2"
-log "${GREEN}" "UUID VLESS TLS : $uuid3"
-log "${GREEN}" "UUID VLESS Non-TLS : $uuid4"
-log "${GREEN}" "Mot de passe Trojan TLS : $uuid5"
-log "${GREEN}" "Mot de passe Trojan Non-TLS : $uuid6"
+echo -e "${GREEN}Installation complète terminée.${NC}"
+echo "Domaine : $DOMAIN"
+echo "UUID VMess TLS : $uuid1"
+echo "UUID VMess Non-TLS : $uuid2"
+echo "UUID VLESS TLS : $uuid3"
+echo "UUID VLESS Non-TLS : $uuid4"
+echo "Mot de passe Trojan WS TLS : $uuid5"
+echo "Mot de passe Trojan WS Non-TLS : $uuid6"
