@@ -23,12 +23,14 @@ apt update
 apt install -y ufw iptables iptables-persistent curl socat xz-utils wget apt-transport-https \
   gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq
 
-# Configuration UFW - ouvrir uniquement SSH, 80, 8443
+# Configuration UFW
 ufw allow ssh
 ufw allow 80/tcp
 ufw allow 80/udp
 ufw allow 8443/tcp
 ufw allow 8443/udp
+ufw allow 2083/tcp
+ufw allow 2083/udp
 
 # Activer UFW automatiquement (valider par 'y')
 echo "y" | ufw enable
@@ -52,12 +54,12 @@ date
 latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases | grep tag_name | sed -E 's/.*"v(.*)".*/\1/' | head -n1)
 xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v${latest_version}/xray-linux-64.zip"
 
-# Arrêt services sur port 80 si existants
+# Arrêt services sur port 80
 systemctl stop nginx 2>/dev/null || true
 systemctl stop apache2 2>/dev/null || true
 sudo lsof -t -i tcp:80 -s tcp:listen | sudo xargs kill -9 2>/dev/null || true
 
-# Installation Xray
+# Install Xray
 mkdir -p /usr/local/bin
 cd $(mktemp -d)
 curl -sL "$xraycore_link" -o xray.zip
@@ -72,22 +74,15 @@ touch /var/log/xray/access.log /var/log/xray/error.log
 chown -R root:root /var/log/xray
 chmod 644 /var/log/xray/access.log /var/log/xray/error.log
 
-# Installer acme.sh si pas présent
-if ! command -v ~/.acme.sh/acme.sh &> /dev/null; then
-  curl https://get.acme.sh | sh
-  source ~/.bashrc
-fi
-
-# Arrêter Xray avant génération certificat pour libérer port 80
-systemctl stop xray
-
-# Générer et installer certificat TLS
-~/.acme.sh/acme.sh --register-account -m "$EMAIL"
-~/.acme.sh/acme.sh --issue --standalone -d "$DOMAIN" --force
-~/.acme.sh/acme.sh --installcert -d "$DOMAIN" --fullchainpath /etc/xray/xray.crt --keypath /etc/xray/xray.key
-
-# Redémarrer Xray
-systemctl start xray
+# Installation acme.sh et génération certificats
+cd /root/
+wget https://raw.githubusercontent.com/NevermoreSSH/hop/main/acme.sh
+bash acme.sh --install
+rm acme.sh
+cd ~/.acme.sh || exit
+bash acme.sh --register-account -m "$EMAIL"
+bash acme.sh --issue --standalone -d "$DOMAIN" --force
+bash acme.sh --installcert -d "$DOMAIN" --fullchainpath /etc/xray/xray.crt --keypath /etc/xray/xray.key
 
 # Vérifier certificats TLS
 if [[ ! -f "/etc/xray/xray.crt" || ! -f "/etc/xray/xray.key" ]]; then
@@ -101,7 +96,6 @@ uuid2=$(cat /proc/sys/kernel/random/uuid)
 uuid3=$(cat /proc/sys/kernel/random/uuid)
 uuid4=$(cat /proc/sys/kernel/random/uuid)
 uuid5=$(cat /proc/sys/kernel/random/uuid)
-uuid6=$(cat /proc/sys/kernel/random/uuid)
 
 # users.json pour menu
 cat > /etc/xray/users.json << EOF
@@ -110,8 +104,7 @@ cat > /etc/xray/users.json << EOF
   "vmess_ntls": "$uuid2",
   "vless_tls": "$uuid3",
   "vless_ntls": "$uuid4",
-  "trojan_pass": "$uuid5",
-  "trojan_ntls_pass": "$uuid6"
+  "trojan_pass": "$uuid5"
 }
 EOF
 
@@ -166,29 +159,18 @@ cat > /etc/xray/config.json << EOF
       "sniffing": {"enabled": true, "destOverride": ["http", "tls"]}
     },
     {
-      "port": 8443,
+      "port": 2083,
       "protocol": "trojan",
-      "settings": {"clients": [{"password": "$uuid5"}]},
-      "streamSettings": {
-        "network": "ws",
+      "settings": {"clients": [{"password": "$uuid5"}], "fallbacks": [{"dest": 80}]},
+      "streamSettings": {"network": "tcp",
         "security": "tls",
-        "tlsSettings": {"certificates": [{"certificateFile": "/etc/xray/xray.crt","keyFile": "/etc/xray/xray.key"}]},
-        "wsSettings": {"path": "/trojanws", "headers": {"Host": "$DOMAIN"}}
-      }
-    },
-    {
-      "port": 80,
-      "protocol": "trojan",
-      "settings": {"clients": [{"password": "$uuid6"}]},
-      "streamSettings": {
-        "network": "ws",
-        "security": "none",
-        "wsSettings": {"path": "/trojanws", "headers": {"Host": "$DOMAIN"}}
+        "tlsSettings": {"certificates": [{"certificateFile": "/etc/xray/xray.crt","keyFile": "/etc/xray/xray.key"}],
+          "alpn": ["http/1.1"]}
       }
     }
   ],
   "outbounds": [{"protocol": "freedom","settings": {}},{"protocol": "blackhole","settings": {}, "tag": "blocked"}],
-  "routing": {"rules": [{"type": "field", "ip": ["0.0.0.0/8","10.0.0.0/8","100.64.0.0/10","169.254.0.0/16","172.16.0.0/12","192.0.0.0/24","192.0.2.0/24","192.168.0.0/16","198.18.0.0/15","198.51.100.0/24","203.0.113.0/24","::1/128","fc00::/7","fe80::/10"], "outboundTag": "blocked"}]},
+  "routing": {"rules": [{"type": "field", "ip": ["0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "169.254.0.0/16", "172.16.0.0/12", "192.0.0.0/24", "192.0.2.0/24","192.168.0.0/16", "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24", "::1/128","fc00::/7","fe80::/10"], "outboundTag": "blocked"}]},
   "policy": {"levels": {"0": {"statsUserDownlink":true,"statsUserUplink":true}}, "system": {"statsInboundUplink":true,"statsInboundDownlink":true}},
   "stats": {},
   "api": {"services": ["StatsService"], "tag": "api"}
@@ -246,7 +228,7 @@ cat > /etc/trojan-go/config.json << EOF
 {
   "run_type": "server",
   "local_addr": "0.0.0.0",
-  "local_port": 8443,
+  "local_port": 2087,
   "remote_addr": "127.0.0.1",
   "remote_port": 89,
   "log_level": 1,
@@ -274,7 +256,7 @@ cat > /etc/trojan-go/config.json << EOF
   },
   "tcp": {"no_delay": true,"keep_alive": true,"prefer_ipv4": true},
   "mux": {"enabled": false,"concurrency": 8,"idle_timeout": 60},
-  "websocket": {"enabled": true,"path": "/trojanws","host": "$DOMAIN"},
+  "websocket": {"enabled": true,"path": "/trojango","host": "$DOMAIN"},
   "api": {"enabled": false,"api_addr": "","api_port": 0,"ssl": {"enabled": false,"key": "","cert": "","verify_client": false,"client_cert": []}}
 }
 EOF
@@ -285,6 +267,8 @@ ufw allow 80/tcp
 ufw allow 80/udp
 ufw allow 8443/tcp
 ufw allow 8443/udp
+ufw allow 2083/tcp
+ufw allow 2083/udp
 
 # Activer UFW avec validation automatique
 echo "y" | ufw enable
@@ -296,5 +280,4 @@ echo "UUID VMess TLS : $uuid1"
 echo "UUID VMess Non-TLS : $uuid2"
 echo "UUID VLESS TLS : $uuid3"
 echo "UUID VLESS Non-TLS : $uuid4"
-echo "Mot de passe Trojan WS TLS : $uuid5"
-echo "Mot de passe Trojan WS Non-TLS : $uuid6"
+echo "Mot de passe Trojan (TLS 2083) : $uuid5"
