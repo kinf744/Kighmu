@@ -2,9 +2,9 @@
 # Installation complète Xray + Trojan Go + UFW, avec users.json pour menu
 
 # Couleurs terminal
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-NC='\033[0m'
+RED='\u001B[0;31m'
+GREEN='\u001B[0;32m'
+NC='\u001B[0m'
 
 # Demander domaine
 read -rp "Entrez votre nom de domaine (ex: monsite.com) : " DOMAIN
@@ -51,7 +51,7 @@ chronyc tracking -v
 date
 
 # Dernière version Xray
-latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases | grep tag_name | sed -E 's/.*"v(.*)".*/\1/' | head -n1)
+latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases | grep tag_name | sed -E 's/.*"v(.*)".*/\u0001/' | head -n1)
 xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v${latest_version}/xray-linux-64.zip"
 
 # Arrêt services sur port 80
@@ -130,11 +130,18 @@ cat > /etc/xray/config.json << EOF
           "certificates": [{
             "certificateFile": "/etc/xray/xray.crt",
             "keyFile": "/etc/xray/xray.key"
-          }]
+          }],
+          "minVersion": "1.2",
+          "maxVersion": "1.3",
+          "cipherSuites": [
+            "TLS_AES_128_GCM_SHA256",
+            "TLS_AES_256_GCM_SHA384",
+            "TLS_CHACHA20_POLY1305_SHA256"
+          ]
         },
         "wsSettings": {
           "path": "/vmess-tls",
-          "headers": {"Host": "$DOMAIN"}
+          "host": "$DOMAIN"
         }
       }
     },
@@ -150,7 +157,7 @@ cat > /etc/xray/config.json << EOF
         "security": "none",
         "wsSettings": {
           "path": "/vless-ntls",
-          "headers": {"Host": "$DOMAIN"}
+          "host": "$DOMAIN"
         }
       },
       "sniffing": {
@@ -173,7 +180,14 @@ cat > /etc/xray/config.json << EOF
             "certificateFile": "/etc/xray/xray.crt",
             "keyFile": "/etc/xray/xray.key"
           }],
-          "alpn": ["http/1.1"]
+          "alpn": ["http/1.1"],
+          "minVersion": "1.2",
+          "maxVersion": "1.3",
+          "cipherSuites": [
+            "TLS_AES_128_GCM_SHA256",
+            "TLS_AES_256_GCM_SHA384",
+            "TLS_CHACHA20_POLY1305_SHA256"
+          ]
         }
       }
     }
@@ -259,7 +273,7 @@ else
 fi
 
 # Installation Trojan Go
-latest_version=$(curl -s https://api.github.com/NevermoreSSH/addons/releases | grep tag_name | sed -E 's/.*\"v(.*)\".*/\1/' | head -n 1)
+latest_version=$(curl -s https://api.github.com/NevermoreSSH/addons/releases | grep tag_name | sed -E 's/.*"v(.*)".*/\u0001/' | head -n 1)
 trojan_link="https://github.com/NevermoreSSH/addons/releases/download/0.10.6/trojan-go-linux-amd64.zip"
 
 mkdir -p /usr/bin/trojan-go /etc/trojan-go
