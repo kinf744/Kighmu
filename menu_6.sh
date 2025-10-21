@@ -1,13 +1,14 @@
 #!/bin/bash
 set -euo pipefail
 
-# Chemins constants
+# Chemins et variables
 CONFIG_FILE="/etc/xray/config.json"
 USERS_FILE="/etc/xray/users.json"
 DOMAIN="${DOMAIN:-}"
+DOMAIN_FILE="${DOMAIN_FILE:-/tmp/.xray_domain}"
 LOG_PANEL="/var/log/xray_panel.log"
 
-# Couleurs (CLI)
+# Couleurs
 RED='\u001B[0;31m'
 GREEN='\u001B[0;32m'
 YELLOW='\u001B[0;33m'
@@ -21,7 +22,7 @@ log() {
   echo "$(date '+%Y-%m-%d %H:%M:%S') | ${msg}" | tee -a "$LOG_PANEL"
 }
 
-# Vérifie que l’exécution est en root
+# Vérifications
 require_root() {
   if [[ $EUID -ne 0 ]]; then
     echo -e "${RED}Ce script doit être exécuté en root.${RESET}" >&2
@@ -30,18 +31,25 @@ require_root() {
 }
 require_root
 
+# Charge DOMAIN depuis fichier temporaire si disponible
+load_domain() {
+  if [[ -f "$DOMAIN_FILE" ]]; then
+    DOMAIN=$(cat "$DOMAIN_FILE")
+  fi
+  if [[ -z "$DOMAIN" ]]; then
+    log "Avertissement: Domaine non enregistré pour l’installation. Le panneau s’ouvre néanmoins."
+  fi
+}
+
 validate_env() {
   if [[ -z "$DOMAIN" ]]; then
-    log "ERREUR: Domaine non défini. Définir DOMAIN avant d'exécuter le script."
-    exit 1
+    log "ATTENTION: Domaine non fourni. L’installation doit fournir DOMAIN avant la configuration finale."
   fi
   if [[ ! -f "$CONFIG_FILE" ]]; then
     log "ERREUR: Fichier de config manquant: $CONFIG_FILE"
-    exit 1
   fi
   if [[ ! -f "/etc/xray/xray.crt" || ! -f "/etc/xray/xray.key" ]]; then
     log "ERREUR: Certificats TLS manquants."
-    exit 1
   fi
 }
 
@@ -60,118 +68,6 @@ load_users() {
     VLESS_NTLS=""
     TROJAN_PASS=""
     TROJAN_NTLS_PASS=""
-  fi
-}
-
-# Ecriture atomique d’un fichier
-write_atomic() {
-  local target="$1"
-  local content="$2"
-  local tmp="${target}.tmp"
-  printf "%s" "$content" > "$tmp"
-  mv -f "$tmp" "$target"
-}
-
-# Vérification rapide de cohérence entre config.json et users.json
-check_coherence() {
-  if [[ -f "$CONFIG_FILE" && -f "$USERS_FILE" ]]; then
-    local tls_id
-    tls_id=$(jq -r '.vmess_tls // empty' "$USERS_FILE")
-    if [[ -n "$tls_id" ]]; then
-      local found
-      found=$(jq -r '.inbounds[] | select(.protocol=="vmess" and .streamSettings.network=="ws" and .streamSettings.security=="tls") | .settings.clients[].id' "$CONFIG_FILE" 2>/dev/null | grep -w "$tls_id" | wc -l)
-      if [[ "$found" -eq 0 ]]; then
-        log "Avertissement: VMESS TLS ID ($tls_id) pas trouvé dans config.json"
-      fi
-    fi
-  fi
-}
-
-# Ajout/utilisateur
-add_user() {
-  local proto="$1"
-  local name="$2"
-  local days="$3"
-  if [[ -z "$DOMAIN" ]]; then
-    log "ERREUR: Domaine non défini."
-    return 1
-  fi
-
-  local new_uuid path_ws port_tls=8443 port_ntls=80 port_trojan=2083
-  case "$proto" in
-    vmess)
-      path_ws="/vmess-tls"
-      new_uuid=$(uuidgen)
-      if ! jq -e '.inbounds[] | select(.protocol=="vmess" and .streamSettings.network=="ws" and .streamSettings.security=="tls")' "$CONFIG_FILE" >/dev/null; then
-        log "ERREUR: inbound VMESS TLS manquant dans config.json"
-        return 1
-      fi
-      jq --arg id "$new_uuid" \
-        '.inbounds[] | select(.protocol=="vmess" and .streamSettings.network=="ws" and .streamSettings.security=="tls") .settings.clients += [{"id":$id,"alterId":0}]' \
-        "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
-      jq --arg id "$new_uuid" '.vmess_tls=$id' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
-      local link_tls
-      link_tls="vmess://$(echo -n "{"v":"2","ps":"$name","add":"$DOMAIN","port":"$port_tls","id":"$new_uuid","aid":0,"net":"ws","type":"none","host":"$DOMAIN","path":"$path_ws","tls":"tls"}" | base64 -w0)"
-      local link_ntls
-      link_ntls="vmess://$(echo -n "{"v":"2","ps":"$name","add":"$DOMAIN","port":"$port_ntls","id":"$new_uuid","aid":0,"net":"ws","type":"none","host":"$DOMAIN","path":"$path_ws","tls":""}" | base64 -w0)"
-      ;;
-    vless)
-      path_ws="/vless-tls"
-      new_uuid=$(uuidgen)
-      if ! jq -e '.inbounds[] | select(.protocol=="vless" and .streamSettings.network=="ws" and .streamSettings.security=="tls")' "$CONFIG_FILE" >/dev/null; then
-        log "ERREUR: inbound VLESS TLS manquant dans config.json"
-        return 1
-      fi
-      jq --arg id "$new_uuid" \
-        '.inbounds[] | select(.protocol=="vless" and .streamSettings.network=="ws" and .streamSettings.security=="tls") .settings.clients += [{"id":$id}]' \
-        "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
-      jq --arg id "$new_uuid" '.vless_tls=$id' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
-      local link_tls
-      link_tls="vless://$new_uuid@$DOMAIN:$port_tls?path=$path_ws&security=tls&encryption=none&type=ws#$name"
-      local link_ntls
-      link_ntls="vless://$new_uuid@$DOMAIN:$port_ntls?path=$path_ws&encryption=none&type=ws#$name"
-      ;;
-    trojan)
-      local tls_pass=$(uuidgen)
-      local ntls_pass=$(uuidgen)
-      if ! jq -e '.inbounds[] | select(.protocol=="trojan" and .streamSettings.network=="tcp" and .streamSettings.security=="tls")' "$CONFIG_FILE" >/dev/null; then
-        log "ERREUR: inbound Trojan TLS manquant dans config.json"
-        return 1
-      fi
-      jq --arg idtls "$tls_pass" --arg idntl "$ntls_pass" \
-        '.trojan_pass=$idtls | .trojan_ntls_pass=$idntl' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
-      local link_tls
-      link_tls="trojan://$tls_pass@$DOMAIN:$port_trojan?security=tls&type=ws&path=/trojanws#$name"
-      local link_ntls
-      link_ntls="trojan://$ntls_pass@$DOMAIN:89?type=ws&path=/trojanws#$name"
-      ;;
-    *)
-      log "ERREUR: protocole non pris en charge"
-      return 1
-      ;;
-  esac
-
-  log "Nouveau tunnel ajouté: $proto pour $name"
-  log "TLS  : $link_tls"
-  log "NTLS : $link_ntls"
-
-  systemctl restart xray
-  if systemctl is-active --quiet xray; then
-    log "Xray démarré avec succès après ajout."
-  else
-    log "ERREUR: échec du redémarrage Xray après ajout."
-  fi
-}
-
-# Suppression utilisateur (à adapter selon structure)
-remove_user() {
-  local name="$1"
-  log "Suppression utilisateur: $name (à adapter selon ta configuration)"
-  systemctl restart xray
-  if systemctl is-active --quiet xray; then
-    log "Xray redémarré après suppression."
-  else
-    log "ERREUR: échec du redémarrage après suppression."
   fi
 }
 
@@ -224,6 +120,7 @@ load_user_data() {
 choice=0
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [[ -f /tmp/.xray_domain ]] && DOMAIN=$(cat /tmp/.xray_domain)
+load_domain
 validate_env
 load_users
 
@@ -269,7 +166,7 @@ while true; do
       for port in 89 8443; do lsof -i tcp:$port -t | xargs -r kill -9; done
       rm -rf /etc/xray /var/log/xray /usr/local/bin/xray /etc/systemd/system/xray.service
       rm -rf /etc/trojan-go /var/log/trojan-go /usr/local/bin/trojan-go /etc/systemd/system/trojan-go.service
-      rm -f /tmp/.xray_domain /etc/xray/users_expiry.list /etc/xray/users.json /etc/xray/config.json
+      rm -f /tmp/.xray_domain /tmp/.xray_domain.lock /etc/xray/users_expiry.list /etc/xray/users.json /etc/xray/config.json
       systemctl daemon-reload
       echo -e "${GREEN}Désinstallation terminée.${RESET}"
       read -p "Appuyez sur Entrée pour continuer..."
