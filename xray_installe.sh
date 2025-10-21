@@ -1,29 +1,24 @@
 #!/bin/bash
 # Installation complète Xray + Trojan Go + UFW, avec users.json pour menu
 
-# Couleurs terminal
 RED='\u001B[0;31m'
 GREEN='\u001B[0;32m'
 NC='\u001B[0m'
 
-# Demander domaine
 read -rp "Entrez votre nom de domaine (ex: monsite.com) : " DOMAIN
 if [[ -z "$DOMAIN" ]]; then
   echo -e "${RED}Erreur : nom de domaine non valide.${NC}"
   exit 1
 fi
 
-# Écriture domaine pour menu
 echo "$DOMAIN" > /tmp/.xray_domain
 
 EMAIL="adrienkiaje@gmail.com"
 
-# Mise à jour et dépendances
 apt update
 apt install -y ufw iptables iptables-persistent curl socat xz-utils wget apt-transport-https \
-  gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq
+  gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq ca-certificates libcap2-bin
 
-# Configuration UFW
 ufw allow ssh
 ufw allow 80/tcp
 ufw allow 80/udp
@@ -32,11 +27,9 @@ ufw allow 8443/udp
 ufw allow 2083/tcp
 ufw allow 2083/udp
 
-# Activer UFW automatiquement (valider par 'y')
 echo "y" | ufw enable
 ufw status verbose
 
-# Synchronisation temps
 ntpdate pool.ntp.org
 timedatectl set-ntp true
 systemctl enable chronyd
@@ -45,38 +38,32 @@ systemctl enable chrony
 systemctl restart chrony
 timedatectl set-timezone Asia/Kuala_Lumpur
 
-# Info chrony
 chronyc sourcestats -v
 chronyc tracking -v
 date
 
-# Dernière version Xray
-latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases | grep tag_name | sed -E 's/.*"v(.*)".*/\u0001/' | head -n1)
+# Téléchargement et extraction de la dernière version stable Xray
+latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest | grep tag_name | cut -d '"' -f4 | sed 's/v//')
 xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v${latest_version}/xray-linux-64.zip"
 
-# Arrêt services sur port 80
-systemctl stop nginx 2>/dev/null || true
-systemctl stop apache2 2>/dev/null || true
-sudo lsof -t -i tcp:80 -s tcp:listen | sudo xargs kill -9 2>/dev/null || true
-
-# Install Xray
-mkdir -p /usr/local/bin
-cd $(mktemp -d)
-curl -sL "$xraycore_link" -o xray.zip
-unzip -q xray.zip && rm -f xray.zip
-mv xray /usr/local/bin/xray
+mkdir -p /tmp/xray_install && cd /tmp/xray_install
+curl -L -o xray.zip "$xraycore_link"
+unzip -o xray.zip
+if [[ ! -f ./xray ]]; then
+  echo -e "${RED}Erreur: le binaire Xray est introuvable après extraction.${NC}" >&2
+  exit 1
+fi
+mv -f xray /usr/local/bin/xray
 chmod +x /usr/local/bin/xray
-setcap 'cap_net_bind_service=+ep' /usr/local/bin/xray
+setcap 'cap_net_bind_service=+ep' /usr/local/bin/xray || true
 
-# Préparation dossier et logs avec bonnes permissions
 mkdir -p /var/log/xray /etc/xray
 touch /var/log/xray/access.log /var/log/xray/error.log
 chown -R root:root /var/log/xray
 chmod 644 /var/log/xray/access.log /var/log/xray/error.log
 
-# Installation acme.sh et génération certificats
 cd /root/
-wget https://raw.githubusercontent.com/NevermoreSSH/hop/main/acme.sh
+wget -q https://raw.githubusercontent.com/NevermoreSSH/hop/main/acme.sh
 bash acme.sh --install
 rm acme.sh
 cd ~/.acme.sh || exit
@@ -84,20 +71,17 @@ bash acme.sh --register-account -m "$EMAIL"
 bash acme.sh --issue --standalone -d "$DOMAIN" --force
 bash acme.sh --installcert -d "$DOMAIN" --fullchainpath /etc/xray/xray.crt --keypath /etc/xray/xray.key
 
-# Vérifier certificats TLS
 if [[ ! -f "/etc/xray/xray.crt" || ! -f "/etc/xray/xray.key" ]]; then
   echo -e "${RED}Erreur : certificats TLS non trouvés.${NC}"
   exit 1
 fi
 
-# Génération UUID
 uuid1=$(cat /proc/sys/kernel/random/uuid)
 uuid2=$(cat /proc/sys/kernel/random/uuid)
 uuid3=$(cat /proc/sys/kernel/random/uuid)
 uuid4=$(cat /proc/sys/kernel/random/uuid)
 uuid5=$(cat /proc/sys/kernel/random/uuid)
 
-# users.json pour menu
 cat > /etc/xray/users.json << EOF
 {
   "vmess_tls": "$uuid1",
@@ -108,7 +92,6 @@ cat > /etc/xray/users.json << EOF
 }
 EOF
 
-# Configuration Xray complète
 cat > /etc/xray/config.json << EOF
 {
   "log": {
@@ -240,7 +223,6 @@ cat > /etc/xray/config.json << EOF
 }
 EOF
 
-# Service systemd Xray
 cat > /etc/systemd/system/xray.service << EOF
 [Unit]
 Description=Xray Service Mod By NevermoreSSH
@@ -259,7 +241,6 @@ RestartPreventExitStatus=23
 WantedBy=multi-user.target
 EOF
 
-# Reload and enable xray service
 systemctl daemon-reload
 systemctl enable xray
 systemctl restart xray
@@ -272,14 +253,13 @@ else
   exit 1
 fi
 
-# Installation Trojan Go
-latest_version=$(curl -s https://api.github.com/NevermoreSSH/addons/releases | grep tag_name | sed -E 's/.*"v(.*)".*/\u0001/' | head -n 1)
-trojan_link="https://github.com/NevermoreSSH/addons/releases/download/0.10.6/trojan-go-linux-amd64.zip"
+latest_version_trj=$(curl -s https://api.github.com/repos/NevermoreSSH/addons/releases/latest | grep tag_name | cut -d '"' -f4 | sed 's/v//')
+trojan_link="https://github.com/NevermoreSSH/addons/releases/download/v${latest_version_trj}/trojan-go-linux-amd64.zip"
 
 mkdir -p /usr/bin/trojan-go /etc/trojan-go
 cd $(mktemp -d)
-curl -sL "$trojan_link" -o trojan-go.zip
-unzip -q trojan-go.zip && rm -f trojan-go.zip
+curl -L -o trojan-go.zip "$trojan_link"
+unzip -o trojan-go.zip
 mv trojan-go /usr/local/bin/trojan-go
 chmod +x /usr/local/bin/trojan-go
 
@@ -324,7 +304,6 @@ cat > /etc/trojan-go/config.json << EOF
 }
 EOF
 
-# Configuration UFW (garantir ouverture des ports)
 ufw allow ssh
 ufw allow 80/tcp
 ufw allow 80/udp
@@ -333,7 +312,6 @@ ufw allow 8443/udp
 ufw allow 2083/tcp
 ufw allow 2083/udp
 
-# Activer UFW avec validation automatique
 echo "y" | ufw enable
 ufw status verbose
 
