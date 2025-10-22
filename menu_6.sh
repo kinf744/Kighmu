@@ -57,19 +57,18 @@ load_user_data() {
   fi
 }
 
-# Fonction pour compter le nombre total d’utilisateurs dans users.json
+# Compte total des utilisateurs multi-protocole
 count_users() {
   local total=0
   local keys=("vmess_tls" "vmess_ntls" "vless_tls" "vless_ntls" "trojan_tls" "trojan_ntls")
   for key in "${keys[@]}"; do
     local count
     count=$(jq --arg k "$key" '.[$k] | length // 0' "$USERS_FILE")
-    total=$((total + count))
+    total=$(( total + count ))
   done
   echo "$total"
 }
 
-# Modification de create_config pour gérer une liste dans users.json
 create_config() {
   local proto=$1 name=$2 days=$3
   [[ -z "$DOMAIN" ]] && { echo -e "${RED}⚠️ Domaine non défini, installe Xray d'abord.${RESET}"; return; }
@@ -83,28 +82,28 @@ create_config() {
     vmess)
       path_ws_tls="/vmess-tls"
       path_ws_ntls="/vmess-ntls"
-      # Ajouter à la liste vmess_tls dans users.json
-      if jq -e '.vmess_tls' "$USERS_FILE" > /dev/null; then
+      if jq -e '.vmess_tls // empty' "$USERS_FILE" > /dev/null; then
         jq --arg id "$new_uuid" '.vmess_tls += [$id]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
       else
         jq --arg id "$new_uuid" '. + {vmess_tls: [$id]}' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
       fi
-      # Ajouter dans config.json les clients VMESS TLS
       jq --arg id "$new_uuid" --arg proto "vmess" \
-        '(.inbounds[] | select(.protocol == $proto and .streamSettings.security == "tls") | .settings.clients) += [{"id": $id, "alterId": 0}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+        '(.inbounds[] | select(.protocol == $proto and .streamSettings.security == "tls") | .settings.clients) += [{"id": $id,"alterId":0}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+
       link_tls="vmess://$(echo -n "{"v":"2","ps":"$name","add":"$DOMAIN","port":"$port_tls","id":"$new_uuid","aid":0,"net":"ws","type":"none","host":"","path":"$path_ws_tls","tls":"tls"}" | base64 -w0)"
       link_ntls="vmess://$(echo -n "{"v":"2","ps":"$name","add":"$DOMAIN","port":"$port_ntls","id":"$new_uuid","aid":0,"net":"ws","type":"none","host":"","path":"$path_ws_ntls","tls":""}" | base64 -w0)"
       ;;
     vless)
       path_ws_tls="/vless-tls"
       path_ws_ntls="/vless-ntls"
-      if jq -e '.vless_tls' "$USERS_FILE" > /dev/null; then
+      if jq -e '.vless_tls // empty' "$USERS_FILE" > /dev/null; then
         jq --arg id "$new_uuid" '.vless_tls += [$id]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
       else
         jq --arg id "$new_uuid" '. + {vless_tls: [$id]}' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
       fi
       jq --arg id "$new_uuid" --arg proto "vless" \
         '(.inbounds[] | select(.protocol == $proto and .streamSettings.security == "tls") | .settings.clients) += [{"id": $id}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+
       link_tls="vless://$new_uuid@$DOMAIN:$port_tls?path=$path_ws_tls&security=tls&encryption=none&type=ws#$name"
       link_ntls="vless://$new_uuid@$DOMAIN:$port_ntls?path=$path_ws_ntls&encryption=none&type=ws#$name"
       ;;
@@ -113,19 +112,22 @@ create_config() {
       path_ws_ntls="/trojan-ntls"
       local uuid_tls=$(cat /proc/sys/kernel/random/uuid)
       local uuid_ntls=$(cat /proc/sys/kernel/random/uuid)
-      if jq -e '.trojan_tls' "$USERS_FILE" > /dev/null; then
+
+      if jq -e '.trojan_tls // empty' "$USERS_FILE" > /dev/null; then
         jq --arg id "$uuid_tls" '.trojan_tls += [$id]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
       else
         jq --arg id "$uuid_tls" '. + {trojan_tls: [$id]}' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
       fi
-      if jq -e '.trojan_ntls' "$USERS_FILE" > /dev/null; then
+      if jq -e '.trojan_ntls // empty' "$USERS_FILE" > /dev/null; then
         jq --arg id "$uuid_ntls" '.trojan_ntls += [$id]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
       else
         jq --arg id "$uuid_ntls" '. + {trojan_ntls: [$id]}' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
       fi
+
       jq --arg idtls "$uuid_tls" --arg idntls "$uuid_ntls" \
-        '(.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="tls") | .settings.clients)+=[{"password":$idtls}] |
-         (.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="none") | .settings.clients)+=[{"password":$idntls}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+         '(.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="tls") | .settings.clients)+=[{"password": $idtls}] |
+          (.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="none") | .settings.clients)+=[{"password": $idntls}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+
       link_tls="trojan://$uuid_tls@$DOMAIN:$port_tls?security=tls&type=ws&path=$path_ws_tls#$name"
       link_ntls="trojan://$uuid_ntls@$DOMAIN:$port_ntls?type=ws&path=$path_ws_ntls#$name"
       ;;
@@ -163,6 +165,7 @@ create_config() {
   echo -e "┃ Non-TLS : $link_ntls"
   echo -e "●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
   echo
+
   systemctl restart xray
 }
 
