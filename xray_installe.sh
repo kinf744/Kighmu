@@ -126,6 +126,46 @@ cat > /etc/xray/config.json << EOF
     },
     {
       "port": 80,
+      "protocol": "vmess",
+      "settings": {
+        "clients": [{"id": "$uuid2", "alterId": 0}]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "none",
+        "wsSettings": {
+          "path": "/vmess-ntls",
+          "host": "$DOMAIN"
+        }
+      }
+    },
+    {
+      "port": 8443,
+      "protocol": "vless",
+      "settings": {
+        "clients": [{"id": "$uuid3"}],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "tls",
+        "tlsSettings": {
+          "certificates": [{
+            "certificateFile": "/etc/xray/xray.crt",
+            "keyFile": "/etc/xray/xray.key"
+          }],
+          "minVersion": "1.2",
+          "maxVersion": "1.3",
+          "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
+        },
+        "wsSettings": {
+          "path": "/vless-tls",
+          "host": "$DOMAIN"
+        }
+      }
+    },
+    {
+      "port": 80,
       "protocol": "vless",
       "settings": {
         "clients": [{"id": "$uuid4"}],
@@ -145,14 +185,14 @@ cat > /etc/xray/config.json << EOF
       }
     },
     {
-      "port": 2083,
+      "port": 8443,
       "protocol": "trojan",
       "settings": {
         "clients": [{"password": "$uuid5"}],
         "fallbacks": [{"dest": 80}]
       },
       "streamSettings": {
-        "network": "tcp",
+        "network": "ws",
         "security": "tls",
         "tlsSettings": {
           "certificates": [{
@@ -163,6 +203,25 @@ cat > /etc/xray/config.json << EOF
           "minVersion": "1.2",
           "maxVersion": "1.3",
           "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
+        },
+        "wsSettings": {
+          "path": "/trojan-tls",
+          "host": "$DOMAIN"
+        }
+      }
+    },
+    {
+      "port": 80,
+      "protocol": "trojan",
+      "settings": {
+        "clients": [{"password": "$uuid6"}]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "none",
+        "wsSettings": {
+          "path": "/trojan-ntls",
+          "host": "$DOMAIN"
         }
       }
     }
