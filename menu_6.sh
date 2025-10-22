@@ -60,27 +60,33 @@ load_user_data() {
 create_config() {
   local proto=$1 name=$2 days=$3
   [[ -z "$DOMAIN" ]] && { echo -e "${RED}⚠️ Domaine non défini, installe Xray d'abord.${RESET}"; return; }
-  local new_uuid link_tls link_ntls path_ws port_tls=8443 port_ntls=89
+  local new_uuid link_tls link_ntls path_ws port_tls port_ntls
+  port_tls=8443
+  port_ntls=80
   case "$proto" in
     vmess)
-      path_ws="/vmess"
+      path_ws_tls="/vmess-tls"
+      path_ws_ntls="/vmess-ntls"
       new_uuid=$(cat /proc/sys/kernel/random/uuid)
       jq --arg id "$new_uuid" --arg proto "vmess" \
         '(.inbounds[] | select(.protocol==$proto and .streamSettings.security=="tls") | .settings.clients)+=[{"id":$id,"alterId":0}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
       jq --arg id "$new_uuid" '.vmess_tls=$id' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
-      link_tls="vmess://$(echo -n "{"v":"2","ps":"$name","add":"$DOMAIN","port":"$port_tls","id":"$new_uuid","aid":0,"net":"ws","type":"none","host":"","path":"$path_ws","tls":"tls"}" | base64 -w0)"
-      link_ntls="vmess://$(echo -n "{"v":"2","ps":"$name","add":"$DOMAIN","port":"$port_ntls","id":"$new_uuid","aid":0,"net":"ws","type":"none","host":"","path":"$path_ws","tls":""}" | base64 -w0)"
+      link_tls="vmess://$(echo -n "{"v":"2","ps":"$name","add":"$DOMAIN","port":"$port_tls","id":"$new_uuid","aid":0,"net":"ws","type":"none","host":"","path":"$path_ws_tls","tls":"tls"}" | base64 -w0)"
+      link_ntls="vmess://$(echo -n "{"v":"2","ps":"$name","add":"$DOMAIN","port":"$port_ntls","id":"$new_uuid","aid":0,"net":"ws","type":"none","host":"","path":"$path_ws_ntls","tls":""}" | base64 -w0)"
       ;;
     vless)
-      path_ws="/vless"
+      path_ws_tls="/vless-tls"
+      path_ws_ntls="/vless-ntls"
       new_uuid=$(cat /proc/sys/kernel/random/uuid)
       jq --arg id "$new_uuid" --arg proto "vless" \
         '(.inbounds[] | select(.protocol==$proto and .streamSettings.security=="tls") | .settings.clients)+=[{"id":$id}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
       jq --arg id "$new_uuid" '.vless_tls=$id' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
-      link_tls="vless://$new_uuid@$DOMAIN:$port_tls?path=$path_ws&security=tls&encryption=none&type=ws#$name"
-      link_ntls="vless://$new_uuid@$DOMAIN:$port_ntls?path=$path_ws&encryption=none&type=ws#$name"
+      link_tls="vless://$new_uuid@$DOMAIN:$port_tls?path=$path_ws_tls&security=tls&encryption=none&type=ws#$name"
+      link_ntls="vless://$new_uuid@$DOMAIN:$port_ntls?path=$path_ws_ntls&encryption=none&type=ws#$name"
       ;;
     trojan)
+      path_ws_tls="/trojan-tls"
+      path_ws_ntls="/trojan-ntls"
       local uuid_tls=$(cat /proc/sys/kernel/random/uuid)
       local uuid_ntls=$(cat /proc/sys/kernel/random/uuid)
       jq --arg idtls "$uuid_tls" \
@@ -89,8 +95,8 @@ create_config() {
         '(.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="none") | .settings.clients)+=[{"password":$idntls}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
       jq --arg idtls "$uuid_tls" --arg idntls "$uuid_ntls" \
         '.trojan_pass=$idtls | .trojan_ntls_pass=$idntls' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
-      link_tls="trojan://$uuid_tls@$DOMAIN:8443?security=tls&type=ws&path=/trojanws#$name"
-      link_ntls="trojan://$uuid_ntls@$DOMAIN:89?type=ws&path=/trojanws#$name"
+      link_tls="trojan://$uuid_tls@$DOMAIN:$port_tls?security=tls&type=ws&path=$path_ws_tls#$name"
+      link_ntls="trojan://$uuid_ntls@$DOMAIN:$port_ntls?type=ws&path=$path_ws_ntls#$name"
       ;;
     *) echo -e "${RED}Protocole inconnu.${RESET}"; return 1;;
   esac
