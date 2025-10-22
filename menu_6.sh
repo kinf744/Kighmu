@@ -4,13 +4,13 @@ CONFIG_FILE="/etc/xray/config.json"
 USERS_FILE="/etc/xray/users.json"
 DOMAIN=""
 
-RED="\e[31m"
-GREEN="\e[32m"
-YELLOW="\e[33m"
-MAGENTA="\e[35m"
-CYAN="\e[36m"
-BOLD="\e[1m"
-RESET="\e[0m"
+RED="e[31m"
+GREEN="e[32m"
+YELLOW="e[33m"
+MAGENTA="e[35m"
+CYAN="e[36m"
+BOLD="e[1m"
+RESET="e[0m"
 
 print_header() {
   echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
@@ -71,8 +71,8 @@ create_config() {
       jq --arg id "$new_uuid" --arg proto "vmess" \
         '(.inbounds[] | select(.protocol==$proto and .streamSettings.security=="tls") | .settings.clients)+=[{"id":$id,"alterId":0}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
       jq --arg id "$new_uuid" '.vmess_tls=$id' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
-      link_tls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$new_uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"\",\"path\":\"$path_ws_tls\",\"tls\":\"tls\"}" | base64 -w0)"
-      link_ntls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_ntls\",\"id\":\"$new_uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"\",\"path\":\"$path_ws_ntls\",\"tls\":\"\"}" | base64 -w0)"
+      link_tls="vmess://$(echo -n "{"v":"2","ps":"$name","add":"$DOMAIN","port":"$port_tls","id":"$new_uuid","aid":0,"net":"ws","type":"none","host":"","path":"$path_ws_tls","tls":"tls"}" | base64 -w0)"
+      link_ntls="vmess://$(echo -n "{"v":"2","ps":"$name","add":"$DOMAIN","port":"$port_ntls","id":"$new_uuid","aid":0,"net":"ws","type":"none","host":"","path":"$path_ws_ntls","tls":""}" | base64 -w0)"
       ;;
     vless)
       path_ws_tls="/vless-tls"
