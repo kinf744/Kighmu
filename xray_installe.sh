@@ -81,6 +81,7 @@ uuid2=$(cat /proc/sys/kernel/random/uuid)
 uuid3=$(cat /proc/sys/kernel/random/uuid)
 uuid4=$(cat /proc/sys/kernel/random/uuid)
 uuid5=$(cat /proc/sys/kernel/random/uuid)
+uuid6=$(cat /proc/sys/kernel/random/uuid)
 
 cat > /etc/xray/users.json << EOF
 {
@@ -88,7 +89,8 @@ cat > /etc/xray/users.json << EOF
   "vmess_ntls": "$uuid2",
   "vless_tls": "$uuid3",
   "vless_ntls": "$uuid4",
-  "trojan_pass": "$uuid5"
+  "trojan_tls": "$uuid5",
+  "trojan_ntls": "$uuid6",
 }
 EOF
 
