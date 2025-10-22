@@ -90,7 +90,7 @@ cat > /etc/xray/users.json << EOF
   "vless_tls": "$uuid3",
   "vless_ntls": "$uuid4",
   "trojan_tls": "$uuid5",
-  "trojan_ntls": "$uuid6",
+  "trojan_ntls": "$uuid6"
 }
 EOF
 
