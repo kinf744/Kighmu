@@ -170,22 +170,50 @@ create_config() {
 }
 
 delete_user_by_number() {
-  if [[ ! -f "$USERS_FILE" ]]; then echo -e "${RED}Fichier $USERS_FILE introuvable.${RESET}"; return; fi
-  local -A protocol_map=(["vmess_tls"]="vmess" ["vmess_ntls"]="vmess" ["vless_tls"]="vless" ["vless_ntls"]="vless" ["trojan_pass"]="trojan" ["trojan_ntls_pass"]="trojan")
-  local -A key_to_stream=(["vmess_tls"]="tls" ["vmess_ntls"]="none" ["vless_tls"]="tls" ["vless_ntls"]="none" ["trojan_pass"]="tls" ["trojan_ntls_pass"]="none")
+  if [[ ! -f "$USERS_FILE" ]]; then
+    echo -e "${RED}Fichier $USERS_FILE introuvable.${RESET}"
+    return
+  fi
+
+  local -A protocol_map=(["vmess_tls"]="vmess" ["vmess_ntls"]="vmess" ["vless_tls"]="vless" ["vless_ntls"]="vless" ["trojan_tls"]="trojan" ["trojan_ntls"]="trojan")
+  local -A key_to_stream=(["vmess_tls"]="tls" ["vmess_ntls"]="none" ["vless_tls"]="tls" ["vless_ntls"]="none" ["trojan_tls"]="tls" ["trojan_ntls"]="none")
+
+  # Lecture des utilisateurs dans formattage clé:uuid par index
   local users=() keys=() count=0
-  while IFS=":" read -r proto id; do [[ -n "$id" ]] && { users+=("$proto:$id"); keys+=("$proto"); ((count++)); }; done < <(jq -r 'to_entries[] | "(.key):(.value)"' "$USERS_FILE")
+  # Lecture des listes utilisateurs depuis users.json
+  for key in "${!protocol_map[@]}"; do
+    local proto="${protocol_map[$key]}"
+    local stream="${key_to_stream[$key]}"
+    local uuids
+    uuids=$(jq -r --arg k "$key" '.[$k][]?' "$USERS_FILE")
+    while IFS= read -r id; do
+      [[ -n "$id" ]] && { users+=("$key:$id"); keys+=("$key"); ((count++)); }
+    done <<< "$uuids"
+  done
+
   echo -e "${GREEN}Liste des utilisateurs Xray :${RESET}"
-  for (( i=0; i<count; i++ )); do
-    proto="${users[$i]%%:*}"; id="${users[$i]#*:}"
+  for ((i=0; i<count; i++)); do
+    local proto="${users[$i]%%:*}"
+    local id="${users[$i]#*:}"
     echo -e "[$((i+1))] Protocole : ${YELLOW}$proto${RESET} - ID/Pass : ${CYAN}$id${RESET}"
   done
-  (( count == 0 )) && { echo -e "${RED}Aucun utilisateur à supprimer.${RESET}"; return; }
+  ((count == 0)) && { echo -e "${RED}Aucun utilisateur à supprimer.${RESET}"; return; }
+
   read -rp "Numéro à supprimer (0 pour annuler) : " num
   [[ ! $num =~ ^[0-9]+$ || num -lt 0 || num -gt $count ]] && { echo -e "${RED}Numéro invalide.${RESET}"; return; }
-  (( num == 0 )) && { echo "Suppression annulée."; return; }
-  local selected_index=$((num-1)) sel_key="${keys[$selected_index]}" sel_id="${users[$selected_index]#*:}"
-  local sel_proto="${protocol_map[$sel_key]}" sel_stream="${key_to_stream[$sel_key]}"
+  ((num == 0)) && { echo "Suppression annulée."; return; }
+
+  local selected_index=$((num - 1))
+  local sel_key="${keys[$selected_index]}"
+  local sel_id="${users[$selected_index]#*:}"
+  local sel_proto="${protocol_map[$sel_key]}"
+  local sel_stream="${key_to_stream[$sel_key]}"
+
+  # Suppression du UUID de la liste dans users.json
+  jq --arg k "$sel_key" --arg id "$sel_id" \
+    '(.[$k]) |= map(select(. != $id))' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+
+  # Suppression dans config.json du client ciblé
   if [[ "$sel_proto" == "vmess" || "$sel_proto" == "vless" ]]; then
     jq --arg proto "$sel_proto" --arg stream "$sel_stream" --arg id "$sel_id" \
       '(.inbounds[] | select(.protocol == $proto and .streamSettings.security == $stream) | .settings.clients) |= map(select(.id != $id))' \
@@ -195,8 +223,10 @@ delete_user_by_number() {
       '(.inbounds[] | select(.protocol == "trojan" and .streamSettings.security == $stream) | .settings.clients) |= map(select(.password != $id))' \
       "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
   fi
-  jq --arg k "$sel_key" '.[$k]=""' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+
+  # Suppression de l’entrée d’expiration
   [[ -f /etc/xray/users_expiry.list ]] && grep -v "^$sel_id|" /etc/xray/users_expiry.list > /tmp/expiry.tmp && mv /tmp/expiry.tmp /etc/xray/users_expiry.list
+
   systemctl restart xray
   echo -e "${GREEN}Utilisateur supprimé : $sel_key / $sel_proto ($sel_id)${RESET}"
 }
