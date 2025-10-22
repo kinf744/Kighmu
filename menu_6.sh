@@ -202,7 +202,7 @@ while true; do
       ;;
     0)
       echo -e "${RED}Quitter...${RESET}"
-      rm -f /tmp/.xray_domain
+      # rm -f /tmp/.xray_domain
       break
       ;;
     *)
