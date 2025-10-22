@@ -175,12 +175,12 @@ delete_user_by_number() {
     return
   fi
 
+  # Map protocole -> protocole Xray et TLS/NTLS
   local -A protocol_map=(["vmess_tls"]="vmess" ["vmess_ntls"]="vmess" ["vless_tls"]="vless" ["vless_ntls"]="vless" ["trojan_tls"]="trojan" ["trojan_ntls"]="trojan")
   local -A key_to_stream=(["vmess_tls"]="tls" ["vmess_ntls"]="none" ["vless_tls"]="tls" ["vless_ntls"]="none" ["trojan_tls"]="tls" ["trojan_ntls"]="none")
 
-  # Lecture des utilisateurs dans formattage clé:uuid par index
+  # Construire la liste d'utilisateurs au format key:id
   local users=() keys=() count=0
-  # Lecture des listes utilisateurs depuis users.json
   for key in "${!protocol_map[@]}"; do
     local proto="${protocol_map[$key]}"
     local stream="${key_to_stream[$key]}"
