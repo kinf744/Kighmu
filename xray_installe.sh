@@ -16,7 +16,7 @@ echo "$DOMAIN" > /tmp/.xray_domain
 EMAIL="adrienkiaje@gmail.com"
 
 apt update
-apt install -y ufw iptables iptables-persistent curl socat xz-utils wget apt-transport-https \
+apt install -y ntpdate ufw iptables iptables-persistent curl socat xz-utils wget apt-transport-https \
   gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq ca-certificates libcap2-bin
 
 ufw allow ssh
