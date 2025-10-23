@@ -85,11 +85,22 @@ uuid6=$(cat /proc/sys/kernel/random/uuid)
 
 cat > /etc/xray/users.json << EOF
 {
-  "vmess_tls": ["uuid1", "uuid3", "uuid5"],
-  "vmess_ntls": ["uuid2"],
-  "vless_tls": ["uuid4"],
+  "vmess_tls": [
+    {"uuid": "uuid1", "limit": 5},
+    {"uuid": "uuid3", "limit": 5},
+    {"uuid": "uuid5", "limit": 5}
+  ],
+  "vmess_ntls": [
+    {"uuid": "uuid2", "limit": 5}
+  ],
+  "vless_tls": [
+    {"uuid": "uuid4", "limit": 5}
+  ],
   "vless_ntls": [],
-  "trojan_tls": ["uuid6", "uuid7"],
+  "trojan_tls": [
+    {"uuid": "uuid6", "limit": 5},
+    {"uuid": "uuid7", "limit": 5}
+  ],
   "trojan_ntls": []
 }
 EOF
