@@ -26,6 +26,7 @@ ufw allow 8443/tcp
 ufw allow 8443/udp
 ufw allow 2083/tcp
 ufw allow 2083/udp
+ufw allow 5301/udp
 
 echo "y" | ufw enable
 ufw status verbose
