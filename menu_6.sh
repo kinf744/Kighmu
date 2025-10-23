@@ -151,11 +151,59 @@ create_config() {
   echo "=============================="
   echo -e "📄 Configuration générée pour : $name"
   echo "--------------------------------------------------"
-  echo -e "➤ UUID/Mot de passe :"
-  [[ "$proto" == "trojan" ]] && {
-    echo -e "    Mot de passe TLS : $uuid_tls"
-    echo -e "    Mot de passe Non-TLS : $uuid_ntls"
-  } || echo -e "    UUID : $new_uuid"
+  echo -e "➤ UUID/Mot de passe TLS :"
+
+  # Affichage TLS par protocole
+  echo "  TLS:"
+  if [[ -n "$vmess_tls_list" ]]; then
+    echo "    VMess TLS :"
+    while IFS= read -r id; do [[ -n "$id" ]] && echo "      - $id"; done <<< "$vmess_tls_list"
+  else
+    echo "      VMess TLS : (aucun)"
+  fi
+
+  if [[ -n "$vless_tls_list" ]]; then
+    echo "    VLess TLS :"
+    while IFS= read -r id; do [[ -n "$id" ]] && echo "      - $id"; done <<< "$vless_tls_list"
+  else
+    echo "      VLess TLS : (aucun)"
+  fi
+
+  if [[ -n "$trojan_tls_list" ]]; then
+    echo "    Trojan TLS :"
+    while IFS= read -r id; do [[ -n "$id" ]] && echo "      - $id"; done <<< "$trojan_tls_list"
+  else
+    echo "      Trojan TLS : (aucun)"
+  fi
+
+  # NTLS
+  echo -e "  NTLS:"
+  if [[ -n "$vmess_ntls_list" ]]; then
+    echo "    VMess NTLS :"
+    while IFS= read -r id; do [[ -n "$id" ]] && echo "      - $id"; done <<< "$vmess_ntls_list"
+  else
+    echo "    VMess NTLS : (vide)"
+  fi
+
+  if [[ -n "$vless_ntls_list" ]]; then
+    echo "    VLess NTLS :"
+    while IFS= read -r id; do [[ -n "$id" ]] && echo "      - $id"; done <<< "$vless_ntls_list"
+  else
+    echo "    VLess NTLS : (vide)"
+  fi
+
+  if [[ -n "$trojan_ntls_list" ]]; then
+    echo "    Trojan NTLS :"
+    while IFS= read -r id; do [[ -n "$id" ]] && echo "      - $id"; done <<< "$trojan_ntls_list"
+  else
+    echo "    Trojan NTLS : (vide)"
+  fi
+
+  # Affichage des chemins TLS/NTLS
+  echo -e "  Paths TLS/NTLS :"
+  echo "    TLS path VMess/VLess/Trojan : $path_ws_tls"
+  echo "    NTLS path VMess/VLess/Trojan : $path_ws_ntls"
+
   echo -e "➤ Validité : $days jours (expire le $expiry_date)"
   echo -e "➤ Nombre total d'utilisateurs : $total_users"
   echo
