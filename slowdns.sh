@@ -1,30 +1,20 @@
 #!/bin/bash
 set -euo pipefail
 
-# SlowDNS Installation Script - format GitHub README style
-# Auteur: Adapté pour l'intégration avec Xray et SlowDNS
+# SlowDNS Installation Script - Format GitHub README Style
+# Auteur: Adapté pour l'intégration Xray SlowDNS
 # Usage: sudo bash slowdns.sh
 
+# Configuration par défaut
 SLOWDNS_DIR="/etc/slowdns"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 SERVER_PUB="$SLOWDNS_DIR/server.pub"
 SLOWDNS_BIN="/usr/local/bin/sldns-server"
 PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
-INTERFACE=""
 
 log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
-}
-
-read_input() {
-  # Détection automatique de l'interface active
-  iface=$(ip -o link show up | awk -F': ' '{print $2}' | grep -v '^lo$' | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' | head -n1)
-  if [ -n "$iface" ]; then
-    echo "$iface"
-  else
-    echo ""
-  fi
 }
 
 check_root() {
@@ -40,7 +30,14 @@ install_dependencies() {
   apt-get install -y iptables ufw tcpdump wget curl jq net-tools
 }
 
-install_keys_and_dirs() {
+get_active_interface() {
+  ip -o link show up | awk -F': ' '{print $2}' \
+    | grep -v '^lo$' \
+    | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' \
+    | head -n1
+}
+
+install_fixed_keys() {
   mkdir -p "$SLOWDNS_DIR"
   echo "4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa" > "$SERVER_KEY"
   echo "2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c" > "$SERVER_PUB"
@@ -170,10 +167,10 @@ main() {
     fi
   fi
 
-  install_keys_and_dirs
+  install_fixed_keys
   PUB_KEY=$(cat "$SERVER_PUB")
 
-  INTERFACE=$(read_input)
+  INTERFACE=$(get_active_interface)
   if [ -z "$INTERFACE" ]; then
     echo "Failed to detect active network interface. Please specify manually." >&2
     exit 1
