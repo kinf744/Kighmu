@@ -167,7 +167,7 @@ create_config() {
   echo "   TLS   : $path_ws_tls"
   echo "   NTLS  : $path_ws_ntls"
   echo -e "➤ Validité : $days jours (expire le $(date -d "+$days days" +"%d/%m/%Y"))"
-  echo -e "➤ Nombre total d'utilisateurs : $total_users"
+  echo -e "➤ Nombre total d'utilisateurs : $limit"
   echo
   echo -e "●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
   echo -e "┃ TLS     : $link_tls"
