@@ -101,22 +101,21 @@ EOF
 
 create_systemd_service() {
   SERVICE_PATH="/etc/systemd/system/slowdns.service"
-  ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
-  [ -z "$ssh_port" ] && ssh_port=22
 
+  # Lecture du nom de serveur (entrée utilisateur)
   NS=$(cat "$CONFIG_FILE")
 
   log "Creating systemd service file for slowdns..."
   cat > "$SERVICE_PATH" <<EOF
 [Unit]
-Description=SlowDNS Server Tunnel
-After=network.target
-Wants=network.target
+Description=SlowDNS Server Tunnel (Integrated with Xray)
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=root
-ExecStart=$SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY $NS 0.0.0.0:$ssh_port 127.0.0.1:5301
+ExecStart=$SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY $NS 127.0.0.1:5301
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -135,7 +134,12 @@ EOF
   systemctl daemon-reload
   systemctl enable slowdns.service
   systemctl restart slowdns.service
-  log "SlowDNS service enabled and started."
+
+  if ! systemctl is-active --quiet slowdns; then
+    log "SlowDNS failed to start. Inspect logs via: journalctl -u slowdns -xe"
+    exit 1
+  fi
+  log "SlowDNS service enabled and running successfully."
 }
 
 prompt_ns() {
