@@ -237,6 +237,19 @@ cat > /etc/xray/config.json << EOF
           "host": "$DOMAIN"
         }
       }
+    },
+    {
+      "port": 5300,
+      "protocol": "dokodemo-door",
+      "settings": {
+        "network": "udp",
+        "followRedirect": true,
+        "address": "127.0.0.1"
+      },
+      "tag": "slowdns-inbound",
+      "sniffing": {
+        "enabled": false
+      }
     }
   ],
   "outbounds": [
