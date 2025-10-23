@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-# SlowDNS Installation Script
-# Author: Adapted for GitHub usage and Xray+SlowDNS integration
+# SlowDNS Installation Script - format GitHub README style
+# Auteur: Adapté pour l'intégration avec Xray et SlowDNS
 # Usage: sudo bash slowdns.sh
 
 SLOWDNS_DIR="/etc/slowdns"
@@ -11,9 +11,20 @@ SERVER_PUB="$SLOWDNS_DIR/server.pub"
 SLOWDNS_BIN="/usr/local/bin/sldns-server"
 PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
+INTERFACE=""
 
 log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+}
+
+read_input() {
+  # Détection automatique de l'interface active
+  iface=$(ip -o link show up | awk -F': ' '{print $2}' | grep -v '^lo$' | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' | head -n1)
+  if [ -n "$iface" ]; then
+    echo "$iface"
+  else
+    echo ""
+  fi
 }
 
 check_root() {
@@ -29,14 +40,7 @@ install_dependencies() {
   apt-get install -y iptables ufw tcpdump wget curl jq net-tools
 }
 
-get_active_interface() {
-  ip -o link show up | awk -F': ' '{print $2}' \
-    | grep -v '^lo$' \
-    | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' \
-    | head -n1
-}
-
-install_fixed_keys() {
+install_keys_and_dirs() {
   mkdir -p "$SLOWDNS_DIR"
   echo "4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa" > "$SERVER_KEY"
   echo "2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c" > "$SERVER_PUB"
@@ -55,14 +59,15 @@ stop_old_instance() {
 }
 
 setup_iptables() {
+  local iface="$1"
   mkdir -p /etc/iptables
   iptables-save > /etc/iptables/rules.v4.bak || true
 
   log "Adding iptables rule to allow UDP port $PORT"
   iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
 
-  log "Redirecting DNS UDP port 53 to $PORT on interface $1"
-  iptables -t nat -I PREROUTING -i "$1" -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
+  log "Redirecting DNS UDP port 53 to $PORT on interface $iface"
+  iptables -t nat -I PREROUTING -i "$iface" -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
 
   iptables-save > /etc/iptables/rules.v4
 }
@@ -78,7 +83,7 @@ optimize_sysctl() {
   log "Applying sysctl optimizations..."
   sed -i '/# SlowDNS optimizations/,+10d' /etc/sysctl.conf || true
 
-  cat <<EOF >> /etc/sysctl.conf
+  cat >> /etc/sysctl.conf <<EOF
 
 # SlowDNS optimizations
 net.core.rmem_max=26214400
@@ -114,7 +119,7 @@ Wants=network.target
 [Service]
 Type=simple
 User=root
-ExecStart=$SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY $NS 0.0.0.0:$ssh_port
+ExecStart=$SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY $NS 0.0.0.0:$ssh_port 127.0.0.1:5301
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -136,12 +141,7 @@ EOF
   log "SlowDNS service enabled and started."
 }
 
-main() {
-  check_root
-  install_dependencies
-  mkdir -p "$SLOWDNS_DIR"
-  stop_old_instance
-
+prompt_ns() {
   read -rp "Enter your NameServer (NS) (e.g. ns.example.com): " NAMESERVER
   if [[ -z "$NAMESERVER" ]]; then
     echo "Invalid NameServer input." >&2
@@ -149,6 +149,15 @@ main() {
   fi
   echo "$NAMESERVER" > "$CONFIG_FILE"
   log "Nameserver saved to $CONFIG_FILE"
+}
+
+main() {
+  check_root
+  install_dependencies
+  mkdir -p "$SLOWDNS_DIR"
+  stop_old_instance
+
+  prompt_ns
 
   if [ ! -x "$SLOWDNS_BIN" ]; then
     mkdir -p /usr/local/bin
@@ -161,22 +170,22 @@ main() {
     fi
   fi
 
-  install_fixed_keys
+  install_keys_and_dirs
   PUB_KEY=$(cat "$SERVER_PUB")
 
-  interface=$(get_active_interface)
-  if [ -z "$interface" ]; then
+  INTERFACE=$(read_input)
+  if [ -z "$INTERFACE" ]; then
     echo "Failed to detect active network interface. Please specify manually." >&2
     exit 1
   fi
-  log "Detected network interface: $interface"
+  log "Detected network interface: $INTERFACE"
 
   MTU_VALUE=132
-  log "Setting MTU on $interface to $MTU_VALUE..."
-  ip link set dev "$interface" mtu "$MTU_VALUE"
+  log "Setting MTU on $INTERFACE to $MTU_VALUE..."
+  ip link set dev "$INTERFACE" mtu "$MTU_VALUE"
 
   optimize_sysctl
-  setup_iptables "$interface"
+  setup_iptables "$INTERFACE"
   enable_ip_forwarding
   create_systemd_service
 
@@ -194,7 +203,7 @@ main() {
   echo "Public key:"
   echo "$PUB_KEY"
   echo ""
-  echo "NameServer : $NAMESERVER"
+  echo "NameServer : $(cat "$CONFIG_FILE")"
   echo ""
   log "SlowDNS installation and configuration completed successfully."
 }
