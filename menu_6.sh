@@ -70,7 +70,7 @@ count_users() {
 }
 
 create_config() {
-  local proto=$1 name=$2 days=$3
+  local proto=$1 name=$2 days=$3 limit=$4
   [[ -z "$DOMAIN" ]] && { echo -e "${RED}⚠️ Domaine non défini.${RESET}"; return; }
 
   local port_tls=8443
