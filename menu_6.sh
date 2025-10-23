@@ -71,146 +71,108 @@ count_users() {
 
 create_config() {
   local proto=$1 name=$2 days=$3
-  [[ -z "$DOMAIN" ]] && { echo -e "${RED}⚠️ Domaine non défini, installe Xray d'abord.${RESET}"; return; }
-  local new_uuid link_tls link_ntls path_ws port_tls port_ntls
-  port_tls=8443
-  port_ntls=80
+  [[ -z "$DOMAIN" ]] && { echo -e "${RED}⚠️ Domaine non défini.${RESET}"; return; }
 
-  new_uuid=$(cat /proc/sys/kernel/random/uuid)
+  local port_tls=8443
+  local port_ntls=80
+  local path_ws_tls path_ws_ntls
+  local link_tls link_ntls
+  local uuid_tls uuid_ntls
 
+  # Définition selon protocole
   case "$proto" in
     vmess)
       path_ws_tls="/vmess-tls"
       path_ws_ntls="/vmess-ntls"
-      if jq -e '.vmess_tls // empty' "$USERS_FILE" > /dev/null; then
-        jq --arg id "$new_uuid" '.vmess_tls += [$id]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
-      else
-        jq --arg id "$new_uuid" '. + {vmess_tls: [$id]}' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
-      fi
-      jq --arg id "$new_uuid" --arg proto "vmess" \
-        '(.inbounds[] | select(.protocol == $proto and .streamSettings.security == "tls") | .settings.clients) += [{"id": $id,"alterId":0}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+      uuid_tls=$(cat /proc/sys/kernel/random/uuid)
+      uuid_ntls=$(cat /proc/sys/kernel/random/uuid)
 
-      link_tls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$new_uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"\",\"path\":\"$path_ws_tls\",\"tls\":\"tls\"}" | base64 -w0)"
-      link_ntls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_ntls\",\"id\":\"$new_uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"\",\"path\":\"$path_ws_ntls\",\"tls\":\"\"}" | base64 -w0)"
-      ;;
+      # Enregistrer les UUIDs TLS/NTLS
+      jq --arg id "$uuid_tls" '.vmess_tls += [$id]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+      jq --arg id "$uuid_ntls" '.vmess_ntls += [$id]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+
+      # Config Xray
+      jq --arg id "$uuid_tls" --arg proto "vmess" \
+        '(.inbounds[] | select(.protocol==$proto and .streamSettings.security=="tls") | .settings.clients)+=[{"id":$id,"alterId":0}]' \
+        "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+
+      jq --arg id "$uuid_ntls" --arg proto "vmess" \
+        '(.inbounds[] | select(.protocol==$proto and .streamSettings.security=="none") | .settings.clients)+=[{"id":$id,"alterId":0}]' \
+        "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+
+      link_tls="vmess://$(echo -n "{"v":"2","ps":"$name","add":"$DOMAIN","port":"$port_tls","id":"$uuid_tls","aid":0,"net":"ws","type":"none","path":"$path_ws_tls","tls":"tls"}" | base64 -w0)"
+      link_ntls="vmess://$(echo -n "{"v":"2","ps":"$name","add":"$DOMAIN","port":"$port_ntls","id":"$uuid_ntls","aid":0,"net":"ws","type":"none","path":"$path_ws_ntls","tls":""}" | base64 -w0)"
+    ;;
     vless)
       path_ws_tls="/vless-tls"
       path_ws_ntls="/vless-ntls"
-      if jq -e '.vless_tls // empty' "$USERS_FILE" > /dev/null; then
-        jq --arg id "$new_uuid" '.vless_tls += [$id]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
-      else
-        jq --arg id "$new_uuid" '. + {vless_tls: [$id]}' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
-      fi
-      jq --arg id "$new_uuid" --arg proto "vless" \
-        '(.inbounds[] | select(.protocol == $proto and .streamSettings.security == "tls") | .settings.clients) += [{"id": $id}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+      uuid_tls=$(cat /proc/sys/kernel/random/uuid)
+      uuid_ntls=$(cat /proc/sys/kernel/random/uuid)
 
-      link_tls="vless://$new_uuid@$DOMAIN:$port_tls?path=$path_ws_tls&security=tls&encryption=none&type=ws#$name"
-      link_ntls="vless://$new_uuid@$DOMAIN:$port_ntls?path=$path_ws_ntls&encryption=none&type=ws#$name"
-      ;;
+      jq --arg id "$uuid_tls" '.vless_tls += [$id]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+      jq --arg id "$uuid_ntls" '.vless_ntls += [$id]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+
+      jq --arg id "$uuid_tls" --arg proto "vless" \
+        '(.inbounds[] | select(.protocol==$proto and .streamSettings.security=="tls") | .settings.clients)+=[{"id":$id}]' \
+        "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+
+      jq --arg id "$uuid_ntls" --arg proto "vless" \
+        '(.inbounds[] | select(.protocol==$proto and .streamSettings.security=="none") | .settings.clients)+=[{"id":$id}]' \
+        "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+
+      link_tls="vless://$uuid_tls@$DOMAIN:$port_tls?security=tls&type=ws&path=$path_ws_tls&encryption=none#$name"
+      link_ntls="vless://$uuid_ntls@$DOMAIN:$port_ntls?type=ws&path=$path_ws_ntls&encryption=none#$name"
+    ;;
     trojan)
       path_ws_tls="/trojan-tls"
       path_ws_ntls="/trojan-ntls"
-      local uuid_tls=$(cat /proc/sys/kernel/random/uuid)
-      local uuid_ntls=$(cat /proc/sys/kernel/random/uuid)
+      uuid_tls=$(cat /proc/sys/kernel/random/uuid)
+      uuid_ntls=$(cat /proc/sys/kernel/random/uuid)
 
-      if jq -e '.trojan_tls // empty' "$USERS_FILE" > /dev/null; then
-        jq --arg id "$uuid_tls" '.trojan_tls += [$id]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
-      else
-        jq --arg id "$uuid_tls" '. + {trojan_tls: [$id]}' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
-      fi
-      if jq -e '.trojan_ntls // empty' "$USERS_FILE" > /dev/null; then
-        jq --arg id "$uuid_ntls" '.trojan_ntls += [$id]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
-      else
-        jq --arg id "$uuid_ntls" '. + {trojan_ntls: [$id]}' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
-      fi
+      jq --arg id "$uuid_tls" '.trojan_tls += [$id]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+      jq --arg id "$uuid_ntls" '.trojan_ntls += [$id]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
 
       jq --arg idtls "$uuid_tls" --arg idntls "$uuid_ntls" \
-         '(.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="tls") | .settings.clients)+=[{"password": $idtls}] |
-          (.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="none") | .settings.clients)+=[{"password": $idntls}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+         '(.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="tls") | .settings.clients)+=[{"password":$idtls}] |
+          (.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="none") | .settings.clients)+=[{"password":$idntls}]' \
+          "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
 
       link_tls="trojan://$uuid_tls@$DOMAIN:$port_tls?security=tls&type=ws&path=$path_ws_tls#$name"
       link_ntls="trojan://$uuid_ntls@$DOMAIN:$port_ntls?type=ws&path=$path_ws_ntls#$name"
-      ;;
+    ;;
     *)
       echo -e "${RED}Protocole inconnu.${RESET}"
       return 1
-      ;;
+    ;;
   esac
 
+  # Expiration
   local exp_date_iso=$(date -d "+$days days" +"%Y-%m-%d")
-  local expiry_date=$(date -d "+$days days" +"%d/%m/%Y")
-  touch /etc/xray/users_expiry.list && chmod 600 /etc/xray/users_expiry.list
-  echo "$new_uuid|$exp_date_iso" >> /etc/xray/users_expiry.list
+  echo "$uuid_tls|$exp_date_iso" >> /etc/xray/users_expiry.list
+  echo "$uuid_ntls|$exp_date_iso" >> /etc/xray/users_expiry.list
 
-  local total_users
-  total_users=$(count_users)
+  local total_users=$(count_users)
 
+  # === AFFICHAGE ===
   echo
   echo "=============================="
   echo -e "🧩 ${proto^^}"
   echo "=============================="
   echo -e "📄 Configuration générée pour : $name"
   echo "--------------------------------------------------"
-  echo -e "➤ UUID/Mot de passe TLS :"
-
-  # Affichage TLS par protocole
-  echo "  TLS:"
-  if [[ -n "$vmess_tls_list" ]]; then
-    echo "    VMess TLS :"
-    while IFS= read -r id; do [[ -n "$id" ]] && echo "      - $id"; done <<< "$vmess_tls_list"
-  else
-    echo "      VMess TLS : (aucun)"
-  fi
-
-  if [[ -n "$vless_tls_list" ]]; then
-    echo "    VLess TLS :"
-    while IFS= read -r id; do [[ -n "$id" ]] && echo "      - $id"; done <<< "$vless_tls_list"
-  else
-    echo "      VLess TLS : (aucun)"
-  fi
-
-  if [[ -n "$trojan_tls_list" ]]; then
-    echo "    Trojan TLS :"
-    while IFS= read -r id; do [[ -n "$id" ]] && echo "      - $id"; done <<< "$trojan_tls_list"
-  else
-    echo "      Trojan TLS : (aucun)"
-  fi
-
-  # NTLS
-  echo -e "  NTLS:"
-  if [[ -n "$vmess_ntls_list" ]]; then
-    echo "    VMess NTLS :"
-    while IFS= read -r id; do [[ -n "$id" ]] && echo "      - $id"; done <<< "$vmess_ntls_list"
-  else
-    echo "    VMess NTLS : (vide)"
-  fi
-
-  if [[ -n "$vless_ntls_list" ]]; then
-    echo "    VLess NTLS :"
-    while IFS= read -r id; do [[ -n "$id" ]] && echo "      - $id"; done <<< "$vless_ntls_list"
-  else
-    echo "    VLess NTLS : (vide)"
-  fi
-
-  if [[ -n "$trojan_ntls_list" ]]; then
-    echo "    Trojan NTLS :"
-    while IFS= read -r id; do [[ -n "$id" ]] && echo "      - $id"; done <<< "$trojan_ntls_list"
-  else
-    echo "    Trojan NTLS : (vide)"
-  fi
-
-  # Affichage des chemins TLS/NTLS
-  echo -e "  Paths TLS/NTLS :"
-  echo "    TLS path VMess/VLess/Trojan : $path_ws_tls"
-  echo "    NTLS path VMess/VLess/Trojan : $path_ws_ntls"
-
-  echo -e "➤ Validité : $days jours (expire le $expiry_date)"
+  echo -e "➤ UUIDs générés :"
+  echo "   TLS   : $uuid_tls"
+  echo "   NTLS  : $uuid_ntls"
+  echo -e "➤ Paths :"
+  echo "   TLS   : $path_ws_tls"
+  echo "   NTLS  : $path_ws_ntls"
+  echo -e "➤ Validité : $days jours (expire le $(date -d "+$days days" +"%d/%m/%Y"))"
   echo -e "➤ Nombre total d'utilisateurs : $total_users"
   echo
   echo -e "●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
-  echo -e "┃ TLS  : $link_tls"
-  echo -e ""
-  echo -e "┃ Non-TLS : $link_ntls"
+  echo -e "┃ TLS     : $link_tls"
+  echo
+  echo -e "┃ Non‑TLS : $link_ntls"
   echo -e "●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
   echo
 
