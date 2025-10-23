@@ -261,19 +261,22 @@ while true; do
     2)
       read -rp "Nom de l'utilisateur VMESS : " conf_name
       read -rp "Durée (jours) : " days
-      [[ -n "$conf_name" && -n "$days" ]] && create_config "vmess" "$conf_name" "$days"
+      read -rp "Limite totale d'utilisateurs (devices) : " limit
+      [[ -n "$conf_name" && -n "$days" && -n "$limit" ]] && create_config "vmess" "$conf_name" "$days" "$limit"
       read -p "Appuyez sur Entrée pour continuer..."
       ;;
     3)
       read -rp "Nom de l'utilisateur VLESS : " conf_name
       read -rp "Durée (jours) : " days
-      [[ -n "$conf_name" && -n "$days" ]] && create_config "vless" "$conf_name" "$days"
+      read -rp "Limite totale d'utilisateurs (devices) : " limit
+      [[ -n "$conf_name" && -n "$days" && -n "$limit" ]] && create_config "vless" "$conf_name" "$days" "$limit"
       read -p "Appuyez sur Entrée pour continuer..."
       ;;
     4)
       read -rp "Nom de l'utilisateur TROJAN : " conf_name
       read -rp "Durée (jours) : " days
-      [[ -n "$conf_name" && -n "$days" ]] && create_config "trojan" "$conf_name" "$days"
+      read -rp "Limite totale d'utilisateurs (devices) : " limit
+      [[ -n "$conf_name" && -n "$days" && -n "$limit" ]] && create_config "trojan" "$conf_name" "$days" "$limit"
       read -p "Appuyez sur Entrée pour continuer..."
       ;;
     5)
