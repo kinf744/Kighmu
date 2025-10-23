@@ -114,8 +114,8 @@ create_config() {
       jq --arg id "$uuid_ntls" --arg proto "vless" \
         '(.inbounds[] | select(.protocol == $proto and .streamSettings.security == "none") | .settings.clients) += [{"id": $id}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
 
-      link_tls="vless://$uuid_tls@$DOMAIN:$port_tls?security=tls&type=ws&path=$path_ws_tls&encryption=none#$name"
-      link_ntls="vless://$uuid_ntls@$DOMAIN:$port_ntls?type=ws&path=$path_ws_ntls&encryption=none#$name"
+      link_tls="vless://$uuid_tls@$DOMAIN:$port_tls?security=tls&type=ws&host=$DOMAIN&path=$path_ws_tls&encryption=none&sni=$DOMAIN#$name"
+      link_ntls="vless://$uuid_ntls@$DOMAIN:$port_ntls?security=none&type=ws&host=$DOMAIN&path=$path_ws_ntls&encryption=none#$name"
       ;;
     trojan)
       path_ws_tls="/trojan-tls"
