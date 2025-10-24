@@ -22,8 +22,8 @@ RESPONSE = "HTTP/1.1 200 OK\r\n\r\n"
 DEFAULT_HOST = '0.0.0.0:22'
 
 class Server(threading.Thread):
-    def __init__(self, host, port):
-        super().__init__()
+    def init(self, host, port):
+        super().init()
         self.running = False
         self.host = host
         self.port = port
@@ -78,8 +78,8 @@ class Server(threading.Thread):
                 c.close()
 
 class ConnectionHandler(threading.Thread):
-    def __init__(self, client_socket, server, addr):
-        super().__init__()
+    def init(self, client_socket, server, addr):
+        super().init()
         self.client = client_socket
         self.server = server
         self.addr = addr
@@ -213,6 +213,5 @@ def main():
         print("\nArrêt du proxy...")
         server.close()
 
-if __name__ == '__main__':
+if name == 'main':
     main()
-                
