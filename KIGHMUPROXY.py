@@ -18,7 +18,7 @@ PASS = ''  # Mot de passe optionnel
 BUFLEN = 8196 * 8
 TIMEOUT = 60
 MSG = 'KIGHMUPROXY'
-RESPONSE = "HTTP/1.1 200 OK"
+RESPONSE = "HTTP/1.1 200 OK\r\n\r\n"
 DEFAULT_HOST = '0.0.0.0:22'
 
 class Server(threading.Thread):
@@ -32,19 +32,11 @@ class Server(threading.Thread):
         self.logLock = threading.Lock()
 
     def run(self):
-        # Initialise le socket serveur avec reprise d’adresse
         self.soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # Autorise la réutilisation du port
+        self.soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.soc.settimeout(2)
-        try:
-            self.soc.bind((self.host, self.port))
-            self.soc.listen(0)
-        except OSError as e:
-            self.print_log(f"Échec du bind sur {self.host}:{self.port} - {e}")
-            self.running = False
-            self.soc.close()
-            return
-
+        self.soc.bind((self.host, self.port))
+        self.soc.listen(0)
         self.running = True
         self.print_log(f"KIGHMUPROXY démarré sur {self.host}:{self.port}")
 
@@ -55,8 +47,6 @@ class Server(threading.Thread):
                     c.setblocking(1)
                 except socket.timeout:
                     continue
-                except OSError:
-                    break  # socket fermé
 
                 conn = ConnectionHandler(c, self, addr)
                 conn.start()
@@ -86,12 +76,6 @@ class Server(threading.Thread):
             threads = list(self.threads)
             for c in threads:
                 c.close()
-        # Ferme aussi le socket d’écoute si nécessaire
-        try:
-            if hasattr(self, 'soc'):
-                self.soc.close()
-        except Exception:
-            pass
 
 class ConnectionHandler(threading.Thread):
     def __init__(self, client_socket, server, addr):
@@ -101,7 +85,6 @@ class ConnectionHandler(threading.Thread):
         self.addr = addr
         self.client_closed = False
         self.target_closed = True
-        self.target = None
 
     def close(self):
         try:
@@ -114,7 +97,7 @@ class ConnectionHandler(threading.Thread):
             self.client_closed = True
 
         try:
-            if not self.target_closed and self.target:
+            if not self.target_closed and hasattr(self, 'target'):
                 self.target.shutdown(socket.SHUT_RDWR)
                 self.target.close()
         except:
@@ -133,14 +116,14 @@ class ConnectionHandler(threading.Thread):
             passwd = self.find_header(client_buffer, 'X-Pass')
 
             if PASS and passwd != PASS:
-                self.client.send(b"HTTP/1.1 400 WrongPass!")
+                self.client.send(b"HTTP/1.1 400 WrongPass!\r\n\r\n")
                 self.close()
                 return
 
             if host_port.startswith(IP) or not PASS:
                 self.method_connect(host_port)
             else:
-                self.client.send(b"HTTP/1.1 403 Forbidden!")
+                self.client.send(b"HTTP/1.1 403 Forbidden!\r\n\r\n")
 
         except Exception as e:
             self.server.print_log(f"[{self.addr}] Erreur : {e}")
@@ -155,7 +138,7 @@ class ConnectionHandler(threading.Thread):
             if start == -1:
                 return ''
             start += len(header) + 2
-            end = data_str.find('', start)
+            end = data_str.find('\r\n', start)
             if end == -1:
                 return ''
             return data_str[start:end].strip()
@@ -220,15 +203,16 @@ class ConnectionHandler(threading.Thread):
                 break
 
 def main():
-    print("KIGHMUPROXY - tunnel SSH proxy SOCKS type KIGHMU_SSH")
+    print("KIGHMUPROXY - tunnel SSH proxy SOCKS type DarkSSH\n")
     server = Server(IP, PORT)
     server.start()
     try:
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        print("Arrêt du proxy...")
+        print("\nArrêt du proxy...")
         server.close()
 
 if __name__ == '__main__':
     main()
+                
