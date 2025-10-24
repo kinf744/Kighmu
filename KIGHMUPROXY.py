@@ -19,17 +19,17 @@ def lire_port_config(fichier_config='socks_port.conf'):
     return None
 
 def obtenir_port(fichier_config='socks_port.conf'):
-    # Priorité au paramètre CLI (systemd ou script Bash)
+    # Priorité : argument en ligne de commande (ex: python3 KIGHMUPROXY.py 443)
     if len(sys.argv) > 1 and sys.argv[1].isdigit():
         port = int(sys.argv[1])
         if 1 <= port <= 65535:
             return port
-    # Puis fichier de config (écrit par le script Bash)
+    # Sinon, charger via le fichier de configuration
     port = lire_port_config(fichier_config)
     if port:
         return port
-    # Si non défini, afficher une erreur et quitter
-    print("Erreur : Port SOCKS non fourni (ni argument ni socks_port.conf présent). Veuillez utiliser le script d'installation pour initialiser le port.")
+    # Si rien n’est dispo, afficher une erreur et quitter
+    print("[ERREUR] Aucun port SOCKS valide : ni argument ni socks_port.conf. Veuillez utiliser le script d’installation pour définir le port avant le démarrage.")
     sys.exit(1)
 
 IP = '0.0.0.0'
@@ -68,7 +68,6 @@ class Server(threading.Thread):
                     c.setblocking(1)
                 except socket.timeout:
                     continue
-
                 conn = ConnectionHandler(c, self, addr)
                 conn.start()
                 self.add_conn(conn)
