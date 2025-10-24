@@ -8,9 +8,7 @@ import select
 import sys
 import os
 
-# Fonction pour demander ou charger le port
-def obtenir_port_defaut(fichier_config='socks_port.conf', port_auto=8080):
-    # Charger si fichier existe
+def lire_port_config(fichier_config='socks_port.conf'):
     if os.path.exists(fichier_config):
         with open(fichier_config, 'r') as f:
             port_str = f.read().strip()
@@ -18,26 +16,24 @@ def obtenir_port_defaut(fichier_config='socks_port.conf', port_auto=8080):
                 port = int(port_str)
                 if 1 <= port <= 65535:
                     return port
-    # Sinon, demander à l'utilisateur
-    while True:
-        try:
-            port_saisi = input(f"Veuillez saisir le port SOCKS souhaité (ou entrer pour utilisant {port_auto}): ").strip()
-            if port_saisi == '':
-                port = port_auto
-            else:
-                port = int(port_saisi)
-            if 1 <= port <= 65535:
-                # Sauvegarder pour prochain usage
-                with open(fichier_config, 'w') as f:
-                    f.write(str(port))
-                return port
-            else:
-                print("Port invalide. Entre un nombre entre 1 et 65535.")
-        except ValueError:
-            print("Entrée invalide, veuillez tenter à nouveau.")
+    return None
+
+def obtenir_port(fichier_config='socks_port.conf'):
+    # Priorité au paramètre CLI (systemd ou script Bash)
+    if len(sys.argv) > 1 and sys.argv[1].isdigit():
+        port = int(sys.argv[1])
+        if 1 <= port <= 65535:
+            return port
+    # Puis fichier de config (écrit par le script Bash)
+    port = lire_port_config(fichier_config)
+    if port:
+        return port
+    # Si non défini, afficher une erreur et quitter
+    print("Erreur : Port SOCKS non fourni (ni argument ni socks_port.conf présent). Veuillez utiliser le script d'installation pour initialiser le port.")
+    sys.exit(1)
 
 IP = '0.0.0.0'
-PORT = obtenir_port_defaut()
+PORT = obtenir_port()
 
 PASS = ''  # Mot de passe optionnel
 BUFLEN = 8196 * 8
@@ -233,6 +229,7 @@ def main():
     server.start()
     try:
         while True:
+            import time
             time.sleep(1)
     except KeyboardInterrupt:
         print("Arrêt du proxy...")
