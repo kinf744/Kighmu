@@ -1,10 +1,45 @@
 #!/bin/bash
 # socks_python.sh
-# Activation du SOCKS Python avec nettoyage des anciennes instances, installation du module pysocks, configuration UFW et service systemd
+# Activation du SOCKS Python avec nettoyage complet des anciennes instances et services sur le port 8080, installation pysocks, UFW et systemd
 
 echo "+--------------------------------------------+"
 echo "|             CONFIG SOCKS/PYTHON            |"
 echo "+--------------------------------------------+"
+
+cleanup_port_8080() {
+  echo "Nettoyage complet du port 8080..."
+
+  # Tuer tous processus écoutant sur le port 8080
+  PIDS=$(sudo lsof -ti :8080)
+  if [ -n "$PIDS" ]; then
+    echo "Arrêt des processus occupés sur le port 8080 (PID: $PIDS)..."
+    sudo kill -9 $PIDS
+  else
+    echo "Aucun processus sur le port 8080 détecté."
+  fi
+
+  # Désactiver et arrêter le service systemd socks_python s'il existe
+  if systemctl list-units --full -all | grep -q "socks_python.service"; then
+    echo "Arrêt et désactivation du service systemd socks_python.service..."
+    sudo systemctl stop socks_python.service
+    sudo systemctl disable socks_python.service
+    sudo systemctl daemon-reload
+  else
+    echo "Aucun service systemd socks_python.service actif trouvé."
+  fi
+
+  # Attente pour s'assurer que le port est libéré
+  sleep 3
+
+  # Vérification finale port libre
+  if sudo lsof -ti :8080 >/dev/null; then
+    echo "Attention : le port 8080 est encore occupé après tentative de nettoyage."
+    return 1
+  else
+    echo "Le port 8080 est désormais libre."
+    return 0
+  fi
+}
 
 install_pysocks() {
   echo "Installation du module Python pysocks..."
@@ -87,6 +122,12 @@ read -p "Voulez-vous démarrer le proxy SOCKS/Python ? [oui/non] : " confirm
 
 case "$confirm" in
     [oO][uU][iI]|[yY][eE][sS])
+        # Nettoyage avancé avant installation/démarrage
+        if ! cleanup_port_8080; then
+          echo "Erreur : échec de nettoyage du port 8080. Abandon."
+          exit 1
+        fi
+
         echo "Vérification du module pysocks..."
         if ! python3 -c "import socks" &> /dev/null; then
             echo "Module pysocks non trouvé, installation en cours..."
