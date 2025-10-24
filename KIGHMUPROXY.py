@@ -213,5 +213,5 @@ def main():
         print("\nArrêt du proxy...")
         server.close()
 
-if name == 'main':
+if __name__ == '__main__':
     main()
