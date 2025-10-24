@@ -6,13 +6,38 @@ import socket
 import threading
 import select
 import sys
-import time
+import os
+
+# Fonction pour demander ou charger le port
+def obtenir_port_defaut(fichier_config='socks_port.conf', port_auto=8080):
+    # Charger si fichier existe
+    if os.path.exists(fichier_config):
+        with open(fichier_config, 'r') as f:
+            port_str = f.read().strip()
+            if port_str.isdigit():
+                port = int(port_str)
+                if 1 <= port <= 65535:
+                    return port
+    # Sinon, demander à l'utilisateur
+    while True:
+        try:
+            port_saisi = input(f"Veuillez saisir le port SOCKS souhaité (ou entrer pour utilisant {port_auto}): ").strip()
+            if port_saisi == '':
+                port = port_auto
+            else:
+                port = int(port_saisi)
+            if 1 <= port <= 65535:
+                # Sauvegarder pour prochain usage
+                with open(fichier_config, 'w') as f:
+                    f.write(str(port))
+                return port
+            else:
+                print("Port invalide. Entre un nombre entre 1 et 65535.")
+        except ValueError:
+            print("Entrée invalide, veuillez tenter à nouveau.")
 
 IP = '0.0.0.0'
-try:
-    PORT = int(sys.argv[1])
-except:
-    PORT = 8080
+PORT = obtenir_port_defaut()
 
 PASS = ''  # Mot de passe optionnel
 BUFLEN = 8196 * 8
