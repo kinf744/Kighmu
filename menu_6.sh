@@ -178,27 +178,27 @@ create_config() {
 
   local total_users=$(count_users)
 
-  echo
-  echo "=============================="
-  echo -e "🧩 ${proto^^}"
-  echo "=============================="
-  echo -e "📄 Configuration générée pour : $name"
-  echo "--------------------------------------------------"
-  echo -e "➤ UUIDs générés :"
-  echo "   TLS   : $uuid_tls"
-  echo "   NTLS  : $uuid_ntls"
-  echo -e "➤ Paths :"
-  echo "   TLS   : $path_ws_tls"
-  echo "   NTLS  : $path_ws_ntls"
-  echo -e "➤ Validité : $days jours (expire le $(date -d "+$days days" +"%d/%m/%Y"))"
-  echo -e "➤ Nombre total d'utilisateurs : $limit"
-  echo
-  echo -e "●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
-  echo -e "┃ TLS     : $link_tls"
-  echo
-  echo -e "┃ Non‑TLS : $link_ntls"
-  echo -e "●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
-  echo
+echo
+echo -e "${CYAN}==============================${RESET}"
+echo -e "${BOLD}🧩 ${proto^^}${RESET}"
+echo -e "${CYAN}==============================${RESET}"
+echo -e "${YELLOW}📄 Configuration générée pour :${RESET} $name"
+echo "--------------------------------------------------"
+echo -e "${GREEN}➤ UUIDs générés :${RESET}"
+echo -e "   TLS   : ${MAGENTA}$uuid_tls${RESET}"
+echo -e "   NTLS  : ${MAGENTA}$uuid_ntls${RESET}"
+echo -e "➤ Paths :"
+echo -e "   TLS   : ${MAGENTA}$path_ws_tls${RESET}"
+echo -e "   NTLS  : ${MAGENTA}$path_ws_ntls${RESET}"
+echo -e "➤ Validité : ${YELLOW}$days jours${RESET} (expire le $(date -d "+$days days" +"%d/%m/%Y"))"
+echo -e "➤ Nombre total d'utilisateurs : ${BOLD}$limit${RESET}"
+echo
+echo -e "${CYAN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●${RESET}"
+echo -e "${CYAN}┃ TLS     : ${GREEN}$link_tls${RESET}"
+echo
+echo -e "${CYAN}┃ Non‑TLS : ${GREEN}$link_ntls${RESET}"
+echo -e "${CYAN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●${RESET}"
+echo
 
   systemctl restart xray
 }
