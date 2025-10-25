@@ -4,13 +4,13 @@ CONFIG_FILE="/etc/xray/config.json"
 USERS_FILE="/etc/xray/users.json"
 DOMAIN=""
 
-RED="e[31m"
-GREEN="e[32m"
-YELLOW="e[33m"
-MAGENTA="e[35m"
-CYAN="e[36m"
-BOLD="e[1m"
-RESET="e[0m"
+RED="\u001B[31m"
+GREEN="\u001B[32m"
+YELLOW="\u001B[33m"
+MAGENTA="\u001B[35m"
+CYAN="\u001B[36m"
+BOLD="\u001B[1m"
+RESET="\u001B[0m"
 
 print_header() {
   echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
@@ -37,7 +37,7 @@ afficher_utilisateurs_xray() {
 }
 
 print_consommation_xray() {
-  VN_INTERFACE="eth0" # Change si besoin (eth0/ens3/etc)
+  VN_INTERFACE="eth0" # adapte cette valeur si nécessaire
   today=$(vnstat -i "$VN_INTERFACE" | awk '/today/ {print $(NF-1)" "$NF}')
   month=$(vnstat -i "$VN_INTERFACE" | awk '/month/ {print $(NF-1)" "$NF}')
   echo -e "${BOLD}Consommation Xray :${RESET}"
@@ -55,8 +55,8 @@ afficher_xray_actifs() {
   ports_ntls=$(jq -r '.inbounds[] | select(.streamSettings.security=="none") | .port' "$CONFIG_FILE" | sort -u | paste -sd ", ")
   protos=$(jq -r '.inbounds[].protocol' "$CONFIG_FILE" | sort -u | paste -sd ", ")
   echo -e "${BOLD}Tunnels actifs :${RESET}"
-  [[ -n "$ports_tls" ]] && echo -e " ${GREEN}•${RESET} Port(s) TLS : [${YELLOW}$ports_tls${RESET}] – Protocoles [${MAGENTA}$protos${RESET}]"
-  [[ -n "$ports_ntls" ]] && echo -e " ${GREEN}•${RESET} Port(s) Non-TLS : [${YELLOW}$ports_ntls${RESET}] – Protocoles [${MAGENTA}$protos${RESET}]"
+  [[ -n "$ports_tls" ]] && echo -e " ${GREEN}•${RESET} Port(s) TLS : [${YELLOW}${ports_tls}${RESET}] – Protocoles [${MAGENTA}${protos}${RESET}]"
+  [[ -n "$ports_ntls" ]] && echo -e " ${GREEN}•${RESET} Port(s) Non-TLS : [${YELLOW}${ports_ntls}${RESET}] – Protocoles [${MAGENTA}${protos}${RESET}]"
 }
 
 show_menu() {
