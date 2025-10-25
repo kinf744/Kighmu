@@ -37,12 +37,17 @@ afficher_utilisateurs_xray() {
 }
 
 print_consommation_xray() {
-  VN_INTERFACE="eth0" # adapte cette valeur si nécessaire
-  today=$(vnstat -i "$VN_INTERFACE" | awk '/today/ {print $(NF-1)" "$NF}')
-  month=$(vnstat -i "$VN_INTERFACE" | awk '/month/ {print $(NF-1)" "$NF}')
+  VN_INTERFACE="eth0"
+
+  today_bytes=$(vnstat -i "$VN_INTERFACE" --json | jq '.interfaces[0].traffic.day[0].rx + .interfaces[0].traffic.day[0].tx')
+  month_bytes=$(vnstat -i "$VN_INTERFACE" --json | jq '.interfaces[0].traffic.month[0].rx + .interfaces[0].traffic.month[0].tx')
+
+  today_gb=$(awk -v b="$today_bytes" 'BEGIN {printf "%.2f", b / 1073741824}')
+  month_gb=$(awk -v b="$month_bytes" 'BEGIN {printf "%.2f", b / 1073741824}')
+
   echo -e "${BOLD}Consommation Xray :${RESET}"
-  echo -e "  • Aujourd’hui : [${GREEN}${today}${RESET}]"
-  echo -e "  • Ce mois : [${GREEN}${month}${RESET}]"
+  echo -e "  • Aujourd’hui : [${GREEN}${today_gb} Go${RESET}]"
+  echo -e "  • Ce mois : [${GREEN}${month_gb} Go${RESET}]"
 }
 
 afficher_xray_actifs() {
