@@ -37,7 +37,7 @@ afficher_utilisateurs_xray() {
 }
 
 afficher_appareils_connectes() {
-  # Ports à adapter selon ta config
+  # Ports Xray TLS et Non-TLS (adapter aux besoins)
   ports_tls=(8443)
   ports_ntls=(80)
 
@@ -45,7 +45,6 @@ afficher_appareils_connectes() {
 
   for port in "${ports_tls[@]}"; do
     total_conns=$(ss -tn state established "( sport = :$port )" 2>/dev/null | tail -n +2 | wc -l)
-    # distribution approximative par protocole
     per_proto=$((total_conns / 3))
     for proto in "${!connexions[@]}"; do
       connexions[$proto]=$((connexions[$proto] + per_proto))
@@ -61,9 +60,8 @@ afficher_appareils_connectes() {
   done
 
   echo -e "${BOLD}Appareils connectés :${RESET}"
-  echo -e "  • Vless: [${YELLOW}${connexions["vless"]}${RESET}]"
-  echo -e "  • Trojan: [${YELLOW}${connexions["trojan"]}${RESET}]"
-  echo -e "  • Vmess: [${YELLOW}${connexions["vmess"]}${RESET}]"
+  # Affichage précisément dans l’ordre et format que tu souhaites
+  echo -e "  • Vmess: [${YELLOW}${connexions["vmess"]}${RESET}]  • Vless: [${YELLOW}${connexions["vless"]}${RESET}]  • Trojan: [${YELLOW}${connexions["trojan"]}${RESET}]"
 }
 
 print_consommation_xray() {
