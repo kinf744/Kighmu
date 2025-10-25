@@ -30,13 +30,12 @@ else
     SLOWDNS_KEY="${RED}Clé publique SlowDNS non trouvée!${RESET}"
 fi
 
-# Charger le NameServer SlowDNS exact depuis le fichier de config
+# Charger le NameServer SlowDNS exact depuis le fichier de config, sinon valeur vide
 if [ -f /etc/slowdns/ns.conf ]; then
     SLOWDNS_NS=$(cat /etc/slowdns/ns.conf)
 else
-    echo -e "${RED}Erreur : fichier /etc/slowdns/ns.conf introuvable.${RESET}"
-    read -p "Appuyez sur Entrée pour revenir au menu..." 
-    exit 1
+    SLOWDNS_NS=""
+    echo -e "${YELLOW}Attention : fichier /etc/slowdns/ns.conf introuvable. Poursuite sans NS.${RESET}"
 fi
 
 echo -e "${CYAN}+==================================================+${RESET}"
