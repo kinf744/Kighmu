@@ -44,11 +44,15 @@ afficher_appareils_connectes() {
     vless_ntls_count=$(jq '.vless_ntls | length' "$USERS_FILE" 2>/dev/null || echo 0)
     trojan_tls_count=$(jq '.trojan_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
     trojan_ntls_count=$(jq '.trojan_ntls | length' "$USERS_FILE" 2>/dev/null || echo 0)
-    vmess_count=$((vmess_tls_count + vmess_ntls_count))
-    vless_count=$((vless_tls_count + vless_ntls_count))
-    trojan_count=$((trojan_tls_count + trojan_ntls_count))
+
+    vmess_total=$((vmess_tls_count + vmess_ntls_count))
+    vless_total=$((vless_tls_count + vless_ntls_count))
+    trojan_total=$((trojan_tls_count + trojan_ntls_count))
+
     echo -e "${BOLD}Appareils connectés :${RESET}"
-    echo -e "  • VMess: [${YELLOW}${vmess_count}${RESET}] • VLESS: [${YELLOW}${vless_count}${RESET}] • Trojan: [${YELLOW}${trojan_count}${RESET}]"
+    echo -e "  • VMess: [${YELLOW}${vmess_total}${RESET}]"
+    echo -e "  • VLess: [${YELLOW}${vless_total}${RESET}]"
+    echo -e "  • Trojan: [${YELLOW}${trojan_total}${RESET}]"
   else
     echo -e "${RED}Fichier des utilisateurs introuvable.${RESET}"
   fi
