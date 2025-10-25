@@ -209,60 +209,89 @@ delete_user_by_number() {
     return
   fi
 
-  # Map protocole -> protocole Xray et TLS/NTLS
-  local -A protocol_map=(["vmess_tls"]="vmess" ["vmess_ntls"]="vmess" ["vless_tls"]="vless" ["vless_ntls"]="vless" ["trojan_tls"]="trojan" ["trojan_ntls"]="trojan")
-  local -A key_to_stream=(["vmess_tls"]="tls" ["vmess_ntls"]="none" ["vless_tls"]="tls" ["vless_ntls"]="none" ["trojan_tls"]="tls" ["trojan_ntls"]="none")
+  # Mapper les clés JSON vers protocoles et TLS/NTLS
+  declare -A protocol_map=([vmess_tls]="vmess" [vmess_ntls]="vmess" [vless_tls]="vless" [vless_ntls]="vless" [trojan_tls]="trojan" [trojan_ntls]="trojan")
+  declare -A key_to_stream=([vmess_tls]="tls" [vmess_ntls]="none" [vless_tls]="tls" [vless_ntls]="none" [trojan_tls]="tls" [trojan_ntls]="none")
 
-  # Construire la liste d'utilisateurs au format key:id
-  local users=() keys=() count=0
+  # Construire la liste des utilisateurs sous forme "clé_uuid"
+  users=()
+  keys=()
+  count=0
+
   for key in "${!protocol_map[@]}"; do
     local proto="${protocol_map[$key]}"
     local stream="${key_to_stream[$key]}"
     local uuids
-    uuids=$(jq -r --arg k "$key" '.[$k][]?' "$USERS_FILE")
-    while IFS= read -r id; do
-      [[ -n "$id" ]] && { users+=("$key:$id"); keys+=("$key"); ((count++)); }
+    uuids=$(jq -r --arg k "$key" '.[$k] // [] | .[]?.uuid' "$USERS_FILE" 2>/dev/null)
+    while IFS= read -r uu; do
+      [[ -n "$uu" ]] && { users+=("$key:$uu"); keys+=("$key"); ((count++)); }
     done <<< "$uuids"
   done
 
+  if (( count == 0 )); then
+    echo -e "${RED}Aucun utilisateur à supprimer.${RESET}"
+    return
+  fi
+
   echo -e "${GREEN}Liste des utilisateurs Xray :${RESET}"
   for ((i=0; i<count; i++)); do
-    local proto="${users[$i]%%:*}"
-    local id="${users[$i]#*:}"
-    echo -e "[$((i+1))] Protocole : ${YELLOW}$proto${RESET} - ID/Pass : ${CYAN}$id${RESET}"
+    local entry="${users[$i]}"
+    local proto="${entry%%:*}"
+    local uuid="${entry#*:}"
+    echo -e "[$((i+1))] Protocole : ${YELLOW}$proto${RESET} - UUID : ${CYAN}$uuid${RESET}"
   done
-  ((count == 0)) && { echo -e "${RED}Aucun utilisateur à supprimer.${RESET}"; return; }
 
   read -rp "Numéro à supprimer (0 pour annuler) : " num
-  [[ ! $num =~ ^[0-9]+$ || num -lt 0 || num -gt $count ]] && { echo -e "${RED}Numéro invalide.${RESET}"; return; }
-  ((num == 0)) && { echo "Suppression annulée."; return; }
+  if [[ ! "$num" =~ ^[0-9]+$ || "$num" -lt 0 || "$num" -gt $count ]]; then
+    echo -e "${RED}Numéro invalide.${RESET}"
+    return
+  fi
+  if (( num == 0 )); then
+    echo "Suppression annulée."
+    return
+  fi
 
-  local selected_index=$((num - 1))
-  local sel_key="${keys[$selected_index]}"
-  local sel_id="${users[$selected_index]#*:}"
+  local idx=$((num - 1))
+  local sel_entry="${users[$idx]}"
+  local sel_key="${sel_entry%%:*}"
+  local sel_uuid="${sel_entry#*:}"
   local sel_proto="${protocol_map[$sel_key]}"
   local sel_stream="${key_to_stream[$sel_key]}"
 
-  # Suppression du UUID de la liste dans users.json
-  jq --arg k "$sel_key" --arg id "$sel_id" \
-    '(.[$k]) |= map(select(. != $id))' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+  # Sauvegarde avant modification
+  cp "$USERS_FILE" "${USERS_FILE}.bak"
 
-  # Suppression dans config.json du client ciblé
+  # Suppression dans les listes TLS et NTLS du fichier users.json
+  jq --arg k "$sel_key" --arg u "$sel_uuid" '
+    .[$k]_tls |= map(select(.uuid != $u)) |
+    .[$k]_ntls |= map(select(.uuid != $u))
+  ' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+
+  if [[ $? -ne 0 ]]; then
+    echo -e "${RED}Erreur lors de la modification du fichier users.json.${RESET}"
+    mv "${USERS_FILE}.bak" "$USERS_FILE"
+    return
+  fi
+
+  # Mise à jour de config.json (suppression du client correspondant)
   if [[ "$sel_proto" == "vmess" || "$sel_proto" == "vless" ]]; then
-    jq --arg proto "$sel_proto" --arg stream "$sel_stream" --arg id "$sel_id" \
-      '(.inbounds[] | select(.protocol == $proto and .streamSettings.security == $stream) | .settings.clients) |= map(select(.id != $id))' \
-      "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
-  elif [[ "$sel_proto" == "trojan" ]]; then
-    jq --arg stream "$sel_stream" --arg id "$sel_id" \
+    jq --arg proto "$sel_proto" --arg stream "$sel_stream" --arg id "$sel_uuid" '
+      (.inbounds[] | select(.protocol == $proto and .streamSettings.security == $stream) | .settings.clients) |= map(select(.id != $id))
+    ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+  else
+    # Trojan
+    jq --arg stream "$sel_stream" --arg id "$sel_uuid" \
       '(.inbounds[] | select(.protocol == "trojan" and .streamSettings.security == $stream) | .settings.clients) |= map(select(.password != $id))' \
       "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
   fi
 
-  # Suppression de l’entrée d’expiration
-  [[ -f /etc/xray/users_expiry.list ]] && grep -v "^$sel_id|" /etc/xray/users_expiry.list > /tmp/expiry.tmp && mv /tmp/expiry.tmp /etc/xray/users_expiry.list
+  # Optionnel: suppression dans fichier d’expiration si présent
+  [[ -f /etc/xray/users_expiry.list ]] && grep -v "^$sel_uuid|" /etc/xray/users_expiry.list > /tmp/expiry.tmp && mv /tmp/expiry.tmp /etc/xray/users_expiry.list
 
+  # Redémarrage du service Xray
   systemctl restart xray
-  echo -e "${GREEN}Utilisateur supprimé : $sel_key / $sel_proto ($sel_id)${RESET}"
+
+  echo -e "${GREEN}Utilisateur supprimé : ${sel_key} / ${sel_proto} (${sel_uuid})${RESET}"
 }
 
 choice=0
