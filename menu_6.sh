@@ -4,20 +4,45 @@ CONFIG_FILE="/etc/xray/config.json"
 USERS_FILE="/etc/xray/users.json"
 DOMAIN=""
 
-# --- Couleurs ANSI ---
-RED="\e[31m"
-GREEN="\e[32m"
-YELLOW="\e[33m"
-MAGENTA="\e[35m"
-CYAN="\e[36m"
-BOLD="\e[1m"
-RESET="\e[0m"
+RED="e[31m"
+GREEN="e[32m"
+YELLOW="e[33m"
+MAGENTA="e[35m"
+CYAN="e[36m"
+BOLD="e[1m"
+RESET="e[0m"
 
-# --- Fonctions d’affichage ---
 print_header() {
   echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-  echo -e "${CYAN}       ${BOLD}${MAGENTA}Xray – Gestion des Tunnels Actifs${RESET}${CYAN}"
-  echo -e "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+  echo -e "${CYAN}       ${BOLD}${MAGENTA}Xray – Gestion des Tunnels Actifs${RESET}${CYAN}${RESET}"
+  echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+}
+
+afficher_utilisateurs_xray() {
+  if [[ -f "$USERS_FILE" ]]; then
+    vmess_tls_count=$(jq '.vmess_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    vmess_ntls_count=$(jq '.vmess_ntls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    vless_tls_count=$(jq '.vless_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    vless_ntls_count=$(jq '.vless_ntls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    trojan_tls_count=$(jq '.trojan_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    trojan_ntls_count=$(jq '.trojan_ntls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    vmess_count=$((vmess_tls_count + vmess_ntls_count))
+    vless_count=$((vless_tls_count + vless_ntls_count))
+    trojan_count=$((trojan_tls_count + trojan_ntls_count))
+    echo -e "${BOLD}Utilisateur Xray :${RESET}"
+    echo -e "  • VMess: [${YELLOW}${vmess_count}${RESET}] • VLESS: [${YELLOW}${vless_count}${RESET}] • Trojan: [${YELLOW}${trojan_count}${RESET}]"
+  else
+    echo -e "${RED}Fichier des utilisateurs introuvable.${RESET}"
+  fi
+}
+
+print_consommation_xray() {
+  VN_INTERFACE="eth0" # Change si besoin (eth0/ens3/etc)
+  today=$(vnstat -i "$VN_INTERFACE" | awk '/today/ {print $(NF-1)" "$NF}')
+  month=$(vnstat -i "$VN_INTERFACE" | awk '/month/ {print $(NF-1)" "$NF}')
+  echo -e "${BOLD}Consommation Xray :${RESET}"
+  echo -e "  • Aujourd’hui : [${GREEN}${today}${RESET}]"
+  echo -e "  • Ce mois : [${GREEN}${month}${RESET}]"
 }
 
 afficher_xray_actifs() {
@@ -25,15 +50,13 @@ afficher_xray_actifs() {
     echo -e "${RED}Service Xray non actif.${RESET}"
     return
   fi
-
   local ports_tls ports_ntls protos
   ports_tls=$(jq -r '.inbounds[] | select(.streamSettings.security=="tls") | .port' "$CONFIG_FILE" | sort -u | paste -sd ", ")
   ports_ntls=$(jq -r '.inbounds[] | select(.streamSettings.security=="none") | .port' "$CONFIG_FILE" | sort -u | paste -sd ", ")
   protos=$(jq -r '.inbounds[].protocol' "$CONFIG_FILE" | sort -u | paste -sd ", ")
-
   echo -e "${BOLD}Tunnels actifs :${RESET}"
-  [[ -n "$ports_tls" ]] && echo -e " ${GREEN}•${RESET} Port(s) TLS : ${YELLOW}$ports_tls${RESET} – Protocoles [${MAGENTA}$protos${RESET}]"
-  [[ -n "$ports_ntls" ]] && echo -e " ${GREEN}•${RESET} Port(s) Non-TLS : ${YELLOW}$ports_ntls${RESET} – Protocoles [${MAGENTA}$protos${RESET}]"
+  [[ -n "$ports_tls" ]] && echo -e " ${GREEN}•${RESET} Port(s) TLS : [${YELLOW}$ports_tls${RESET}] – Protocoles [${MAGENTA}$protos${RESET}]"
+  [[ -n "$ports_ntls" ]] && echo -e " ${GREEN}•${RESET} Port(s) Non-TLS : [${YELLOW}$ports_ntls${RESET}] – Protocoles [${MAGENTA}$protos${RESET}]"
 }
 
 show_menu() {
