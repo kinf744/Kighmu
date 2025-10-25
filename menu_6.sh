@@ -369,18 +369,19 @@ case "$confirm" in
     rm -f /tmp/.xray_domain /etc/xray/users_expiry.list /etc/xray/users.json /etc/xray/config.json
     systemctl daemon-reload
     echo -e "${GREEN}Désinstallation terminée.${RESET}"
-    ;;
-  *)
+     ;;
+   *)
     echo "Désinstallation annulée."
-    ;;
+     ;;
 esac
 
 read -p "Appuyez sur Entrée pour continuer..."
+      ;; 
     0)
       echo -e "${RED}Quitter...${RESET}"
       # rm -f /tmp/.xray_domain
       break
-      ;;
+     ;;
     *)
       echo -e "${RED}Choix invalide.${RESET}"
       sleep 2
