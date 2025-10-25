@@ -37,36 +37,33 @@ afficher_utilisateurs_xray() {
 }
 
 afficher_appareils_connectes() {
-  # Liste des ports TLS et Non-TLS selon ta config
+  # Ports à adapter selon ta config
   ports_tls=(8443)
   ports_ntls=(80)
 
-  # Initialiser compteurs par protocole (approximatifs)
   declare -A connexions=( ["vmess"]=0 ["vless"]=0 ["trojan"]=0 )
 
-  # Compter connexions TCP sur ports TLS
   for port in "${ports_tls[@]}"; do
-    conns=$(ss -tn state established "( sport = :$port )" 2>/dev/null | tail -n +2 | wc -l)
-    # Répartir équitablement entre protocoles (adaptable si ports distincts)
-    count_per_proto=$((conns / 3))
+    total_conns=$(ss -tn state established "( sport = :$port )" 2>/dev/null | tail -n +2 | wc -l)
+    # distribution approximative par protocole
+    per_proto=$((total_conns / 3))
     for proto in "${!connexions[@]}"; do
-      connexions[$proto]=$((connexions[$proto] + count_per_proto))
+      connexions[$proto]=$((connexions[$proto] + per_proto))
     done
   done
 
-  # Compter connexions TCP sur ports Non-TLS
   for port in "${ports_ntls[@]}"; do
-    conns=$(ss -tn state established "( sport = :$port )" 2>/dev/null | tail -n +2 | wc -l)
-    count_per_proto=$((conns / 3))
+    total_conns=$(ss -tn state established "( sport = :$port )" 2>/dev/null | tail -n +2 | wc -l)
+    per_proto=$((total_conns / 3))
     for proto in "${!connexions[@]}"; do
-      connexions[$proto]=$((connexions[$proto] + count_per_proto))
+      connexions[$proto]=$((connexions[$proto] + per_proto))
     done
   done
 
   echo -e "${BOLD}Appareils connectés :${RESET}"
-  for proto in "${!connexions[@]}"; do
-    echo -e "  • ${proto^}: [${YELLOW}${connexions[$proto]}${RESET}]"
-  done
+  echo -e "  • Vless: [${YELLOW}${connexions["vless"]}${RESET}]"
+  echo -e "  • Trojan: [${YELLOW}${connexions["trojan"]}${RESET}]"
+  echo -e "  • Vmess: [${YELLOW}${connexions["vmess"]}${RESET}]"
 }
 
 print_consommation_xray() {
