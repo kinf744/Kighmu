@@ -204,93 +204,107 @@ create_config() {
 }
 
 delete_user_by_number() {
-  if [[ ! -f "/etc/xray/users.json" ]]; then
-    echo -e "e[31mFichier /etc/xray/users.json introuvable.e[0m"
+  if [[ ! -f "$USERS_FILE" ]]; then
+    echo -e "${RED}Fichier $USERS_FILE introuvable.${RESET}"
     return 1
   fi
 
-  # Construire la liste des utilisateurs avec protocole et UUID
-  mapfile -t user_items < <(jq -r '
-    to_entries[] as $p |
-    ($p.value | keys_unsorted[]) as $k |
-    ($p.key + ":" + $p.value[$k].uuid)
-  ' "/etc/xray/users.json")
+  declare -A protocol_map=(
+    ["vmess_tls"]="vmess"
+    ["vmess_ntls"]="vmess"
+    ["vless_tls"]="vless"
+    ["vless_ntls"]="vless"
+    ["trojan_tls"]="trojan"
+    ["trojan_ntls"]="trojan"
+  )
 
-  local count=${#user_items[@]}
+  declare -A key_to_stream=(
+    ["vmess_tls"]="tls"
+    ["vmess_ntls"]="none"
+    ["vless_tls"]="tls"
+    ["vless_ntls"]="none"
+    ["trojan_tls"]="tls"
+    ["trojan_ntls"]="none"
+  )
+
+  users=()
+  keys=()
+  count=0
+
+  for key in "${!protocol_map[@]}"; do
+    uuids=$(jq -r --arg k "$key" '.[$k] // [] | .[]?.uuid' "$USERS_FILE" 2>/dev/null)
+    while IFS= read -r uuid; do
+      [[ -n "$uuid" ]] && { users+=("$key:$uuid"); keys+=("$key"); ((count++)); }
+    done <<< "$uuids"
+  done
+
   if (( count == 0 )); then
-    echo -e "e[31mAucun utilisateur à supprimer.e[0m"
+    echo -e "${RED}Aucun utilisateur à supprimer.${RESET}"
     return 0
   fi
 
-  echo -e "e[32mListe des utilisateurs Xray :e[0m"
-  for i in "${!user_items[@]}"; do
-    IFS=':' read -r proto uuid <<< "${user_items[$i]}"
-    echo -e "[$((i+1))] Protocole : ${YELLOW}${proto%%_*}${RESET} - UUID : ${CYAN}${uuid}${RESET}"
+  echo -e "${GREEN}Liste des utilisateurs Xray :${RESET}"
+  for ((i=0; i<count; i++)); do
+    proto="${users[$i]%%:*}"
+    uuid="${users[$i]#*:}"
+    echo -e "[$((i+1))] Protocole : ${YELLOW}$proto${RESET} - UUID : ${CYAN}$uuid${RESET}"
   done
 
   read -rp "Numéro à supprimer (0 pour annuler) : " num
-  if ! [[ "$num" =~ ^[0-9]+$ ]] || (( num < 0 )) || (( num > count )); then
-    echo -e "e[31mNuméro invalide.e[0m"
+  if [[ ! "$num" =~ ^[0-9]+$ ]] || (( num < 0 )) || (( num > count )); then
+    echo -e "${RED}Numéro invalide.${RESET}"
     return 1
   fi
-  if (( num == 0 )); then
-    echo "Suppression annulée."
-    return 0
-  fi
 
-  local idx=$((num - 1))
-  local chosen="${user_items[$idx]}"
-  local chosen_proto="${chosen%%:*}"
-  local chosen_uuid="${chosen#*:}"
-  local tls_key="${chosen_proto}_tls"
-  local ntls_key="${chosen_proto}_ntls"
+  (( num == 0 )) && { echo "Suppression annulée."; return 0; }
 
-  # Sauvegarde pré-modification
-  cp "/etc/xray/users.json" "/etc/xray/users.json.bak"
+  idx=$((num - 1))
+  sel_key="${keys[$idx]}"
+  sel_uuid="${users[$idx]#*:}"
+  sel_proto="${protocol_map[$sel_key]}"
+  sel_stream="${key_to_stream[$sel_key]}"
+  tls_key="${sel_proto}_tls"
+  ntls_key="${sel_proto}_ntls"
 
-  # Suppression dans les deux listes TLS et NTLS
-  jq --arg u "$chosen_uuid" --arg tls "$tls_key" --arg ntls "$ntls_key" '
-    .[$tls] |= (if type == "array" then map(select(.uuid != $u)) else . end) |
-    .[$ntls] |= (if type == "array" then map(select(.uuid != $u)) else . end)
-  ' "/etc/xray/users.json" > /tmp/users.tmp && mv /tmp/users.tmp "/etc/xray/users.json"
+  cp "$USERS_FILE" "${USERS_FILE}.bak"
+  cp "$CONFIG_FILE" "${CONFIG_FILE}.bak"
+
+  # Supprimer uuid dans TLS et NTLS dans users.json
+  jq --arg tls "$tls_key" --arg ntls "$ntls_key" --arg u "$sel_uuid" '
+    .[$tls] |= map(select(.uuid != $u)) |
+    .[$ntls] |= map(select(.uuid != $u))
+  ' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
 
   if [[ $? -ne 0 ]]; then
-    echo -e "e[31mErreur lors de la modification de /etc/xray/users.json. Restauration de l’original.e[0m"
-    mv "/etc/xray/users.json.bak" "/etc/xray/users.json"
+    echo -e "${RED}Erreur lors de la modification de $USERS_FILE. Restauration du fichier.${RESET}"
+    mv "${USERS_FILE}.bak" "$USERS_FILE"
     return 1
   fi
 
-  # Mise à jour de config.json (suppression du client correspondant)
-  if [[ "$chosen_proto" == "vmess" || "$chosen_proto" == "vless" ]]; then
-    # Protocole VMess/VLESS, on retire l’entrée id du client dans les inbound TLS/NTLS
-    local proto="$chosen_proto"
-    local stream="${tls_key##*_}"  # extrait 'tls' ou 'ntls'
-    if [[ "$stream" == "tls" ]]; then
-      jq --arg proto "$proto" --arg id "$chosen_uuid" '
-        (.inbounds[] | select(.protocol == $proto and .streamSettings.security == "tls") | .settings.clients) |= map(select(.id != $id))
-      ' "/etc/xray/config.json" > /tmp/config.tmp && mv /tmp/config.tmp "/etc/xray/config.json"
-    else
-      jq --arg proto "$proto" --arg id "$chosen_uuid" '
-        (.inbounds[] | select(.protocol == $proto and .streamSettings.security == "none") | .settings.clients) |= map(select(.id != $id))
-      ' "/etc/xray/config.json" > /tmp/config.tmp && mv /tmp/config.tmp "/etc/xray/config.json"
-    fi
+  # Mise à jour config.json - suppression client
+  if [[ "$sel_proto" == "vmess" || "$sel_proto" == "vless" ]]; then
+    jq --arg proto "$sel_proto" --arg id "$sel_uuid" --arg stream "$sel_stream" '
+      (.inbounds[] | select(.protocol == $proto and .streamSettings.security == $stream) | .settings.clients) |= map(select(.id != $id))
+    ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
   else
-    # Trojan
-    local stream="${ntls_key##*_}"
-    jq --arg id "$chosen_uuid" --arg stream "$stream" '
+    jq --arg stream "$sel_stream" --arg id "$sel_uuid" '
       (.inbounds[] | select(.protocol == "trojan" and .streamSettings.security == $stream) | .settings.clients) |= map(select(.password != $id))
-    ' "/etc/xray/config.json" > /tmp/config.tmp && mv /tmp/config.tmp "/etc/xray/config.json"
+    ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
   fi
 
-  # Nettoyage éventuel des expirations
-  [[ -f /etc/xray/users_expiry.list ]] && grep -v "^${chosen_uuid}|" /etc/xray/users_expiry.list > /tmp/expiry.tmp && mv /tmp/expiry.tmp /etc/xray/users_expiry.list
+  if [[ $? -ne 0 ]]; then
+    echo -e "${RED}Erreur lors de la modification de $CONFIG_FILE. Restauration du fichier.${RESET}"
+    mv "${CONFIG_FILE}.bak" "$CONFIG_FILE"
+    return 1
+  fi
 
-  # Redémarrage du service
+  # Nettoyer users_expiry.list si présent
+  [[ -f /etc/xray/users_expiry.list ]] && grep -v "^${sel_uuid}|" /etc/xray/users_expiry.list > /tmp/expiry.tmp && mv /tmp/expiry.tmp /etc/xray/users_expiry.list
+
   systemctl restart xray
 
-  echo -e "e[32mUtilisateur supprimé : ${chosen_proto} / UUID: ${chosen_uuid}e[0m"
+  echo -e "${GREEN}Utilisateur supprimé : $sel_key / $sel_proto (UUID: $sel_uuid)${RESET}"
 }
-
 
 choice=0
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
