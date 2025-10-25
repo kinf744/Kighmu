@@ -353,17 +353,29 @@ while true; do
       read -p "Appuyez sur Entrée pour continuer..."
       ;;
     6)
-      echo -e "${YELLOW}Désinstallation complète de Xray et Trojan-Go en cours...${RESET}"
-      systemctl stop xray trojan-go 2>/dev/null || true
-      systemctl disable xray trojan-go 2>/dev/null || true
-      for port in 80 8443; do lsof -i tcp:$port -t | xargs -r kill -9; lsof -i udp:$port -t | xargs -r kill -9; done
-      rm -rf /etc/xray /var/log/xray /usr/local/bin/xray /etc/systemd/system/xray.service
-      rm -rf /etc/trojan-go /var/log/trojan-go /usr/local/bin/trojan-go /etc/systemd/system/trojan-go.service
-      rm -f /tmp/.xray_domain /etc/xray/users_expiry.list /etc/xray/users.json /etc/xray/config.json
-      systemctl daemon-reload
-      echo -e "${GREEN}Désinstallation terminée.${RESET}"
-      read -p "Appuyez sur Entrée pour continuer..."
-      ;;
+      echo -e "${YELLOW}Désinstallation complète de Xray et Trojan en cours...${RESET}"
+
+read -rp "Es-tu sûr de vouloir désinstaller Xray et Trojan-Go ? (o/n) : " confirm
+case "$confirm" in
+  [oO]|[yY]|[yY][eE][sS])
+    systemctl stop xray trojan-go 2>/dev/null || true
+    systemctl disable xray trojan-go 2>/dev/null || true
+    for port in 80 8443; do
+      lsof -i tcp:$port -t | xargs -r kill -9
+      lsof -i udp:$port -t | xargs -r kill -9
+    done
+    rm -rf /etc/xray /var/log/xray /usr/local/bin/xray /etc/systemd/system/xray.service
+    rm -rf /etc/trojan-go /var/log/trojan-go /usr/local/bin/trojan-go /etc/systemd/system/trojan-go.service
+    rm -f /tmp/.xray_domain /etc/xray/users_expiry.list /etc/xray/users.json /etc/xray/config.json
+    systemctl daemon-reload
+    echo -e "${GREEN}Désinstallation terminée.${RESET}"
+    ;;
+  *)
+    echo "Désinstallation annulée."
+    ;;
+esac
+
+read -p "Appuyez sur Entrée pour continuer..."
     0)
       echo -e "${RED}Quitter...${RESET}"
       # rm -f /tmp/.xray_domain
