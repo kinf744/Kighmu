@@ -30,19 +30,19 @@ afficher_utilisateurs_xray() {
     vless_count=$((vless_tls_count + vless_ntls_count))
     trojan_count=$((trojan_tls_count + trojan_ntls_count))
     echo -e "${BOLD}Utilisateur Xray :${RESET}"
-    echo -e "  • VMess: [${YELLOW}${vmess_count}${RESET}] • VLESS: [${YELLOW}${vless_count}${RESET}] • Trojan: [${YELLOW}${trojan_count}${RESET}]"
+    echo -e "  • VMess: ${YELLOW}[${vmess_count}]${RESET} • VLESS: ${YELLOW}[${vless_count}]${RESET} • Trojan: ${YELLOW}[${trojan_count}]${RESET}"
   else
     echo -e "${RED}Fichier des utilisateurs introuvable.${RESET}"
   fi
 }
 
 print_consommation_xray() {
-  VN_INTERFACE="eth0" # Change à ta vraie interface si besoin
+  VN_INTERFACE="eth0"
   today=$(vnstat -i "$VN_INTERFACE" | awk '/today/ {print $(NF-1)" "$NF}')
   month=$(vnstat -i "$VN_INTERFACE" | awk '/month/ {print $(NF-1)" "$NF}')
   echo -e "${BOLD}Consommation Xray :${RESET}"
-  echo -e "  • Aujourd’hui : [${GREEN}${today}${RESET}]"
-  echo -e "  • Ce mois : [${GREEN}${month}${RESET}]"
+  echo -e "  • Aujourd’hui : ${GREEN}[${today}]${RESET}"
+  echo -e "  • Ce mois : ${GREEN}[${month}]${RESET}"
 }
 
 afficher_xray_actifs() {
