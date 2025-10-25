@@ -209,28 +209,21 @@ delete_user_by_number() {
     return 1
   fi
 
+  # Map des clés vers les protocoles
   declare -A protocol_map=(
-    ["vmess_tls"]="vmess"
-    ["vmess_ntls"]="vmess"
-    ["vless_tls"]="vless"
-    ["vless_ntls"]="vless"
-    ["trojan_tls"]="trojan"
-    ["trojan_ntls"]="trojan"
-  )
-
-  declare -A key_to_stream=(
-    ["vmess_tls"]="tls"
-    ["vmess_ntls"]="none"
-    ["vless_tls"]="tls"
-    ["vless_ntls"]="none"
-    ["trojan_tls"]="tls"
-    ["trojan_ntls"]="none"
+    [vmess_tls]="vmess"
+    [vmess_ntls]="vmess"
+    [vless_tls]="vless"
+    [vless_ntls]="vless"
+    [trojan_tls]="trojan"
+    [trojan_ntls]="trojan"
   )
 
   users=()
   keys=()
   count=0
 
+  # Construire liste des utilisateurs avec leur clé et uuid
   for key in "${!protocol_map[@]}"; do
     uuids=$(jq -r --arg k "$key" '.[$k] // [] | .[]?.uuid' "$USERS_FILE" 2>/dev/null)
     while IFS= read -r uuid; do
@@ -247,11 +240,11 @@ delete_user_by_number() {
   for ((i=0; i<count; i++)); do
     proto="${users[$i]%%:*}"
     uuid="${users[$i]#*:}"
-    echo -e "[$((i+1))] Protocole : ${YELLOW}$proto${RESET} - UUID : ${CYAN}$uuid${RESET}"
+    echo -e "[$((i+1))] Protocole : ${YELLOW}${proto%%_*}${RESET} - UUID : ${CYAN}$uuid${RESET}"
   done
 
   read -rp "Numéro à supprimer (0 pour annuler) : " num
-  if [[ ! "$num" =~ ^[0-9]+$ ]] || (( num < 0 )) || (( num > count )); then
+  if ! [[ "$num" =~ ^[0-9]+$ ]] || (( num < 0 )) || (( num > count )); then
     echo -e "${RED}Numéro invalide.${RESET}"
     return 1
   fi
@@ -262,14 +255,14 @@ delete_user_by_number() {
   sel_key="${keys[$idx]}"
   sel_uuid="${users[$idx]#*:}"
   sel_proto="${protocol_map[$sel_key]}"
-  sel_stream="${key_to_stream[$sel_key]}"
   tls_key="${sel_proto}_tls"
   ntls_key="${sel_proto}_ntls"
 
+  # Sauvegarde avant modification
   cp "$USERS_FILE" "${USERS_FILE}.bak"
   cp "$CONFIG_FILE" "${CONFIG_FILE}.bak"
 
-  # Supprimer uuid dans TLS et NTLS dans users.json
+  # Suppression dans les deux tableaux TLS et NTLS pour le même protocole
   jq --arg tls "$tls_key" --arg ntls "$ntls_key" --arg u "$sel_uuid" '
     .[$tls] |= map(select(.uuid != $u)) |
     .[$ntls] |= map(select(.uuid != $u))
@@ -281,14 +274,18 @@ delete_user_by_number() {
     return 1
   fi
 
-  # Mise à jour config.json - suppression client
   if [[ "$sel_proto" == "vmess" || "$sel_proto" == "vless" ]]; then
-    jq --arg proto "$sel_proto" --arg id "$sel_uuid" --arg stream "$sel_stream" '
-      (.inbounds[] | select(.protocol == $proto and .streamSettings.security == $stream) | .settings.clients) |= map(select(.id != $id))
+    jq --arg proto "$sel_proto" --arg id "$sel_uuid" --arg stream "tls" '
+      (.inbounds[] | select(.protocol == $proto and .streamSettings.security == "tls") | .settings.clients) |= map(select(.id != $id))
+    ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+
+    jq --arg proto "$sel_proto" --arg id "$sel_uuid" --arg stream "none" '
+      (.inbounds[] | select(.protocol == $proto and .streamSettings.security == "none") | .settings.clients) |= map(select(.id != $id))
     ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
   else
-    jq --arg stream "$sel_stream" --arg id "$sel_uuid" '
-      (.inbounds[] | select(.protocol == "trojan" and .streamSettings.security == $stream) | .settings.clients) |= map(select(.password != $id))
+    # Trojan
+    jq --arg id "$sel_uuid" '
+      (.inbounds[] | select(.protocol == "trojan") | .settings.clients) |= map(select(.password != $id))
     ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
   fi
 
@@ -298,12 +295,13 @@ delete_user_by_number() {
     return 1
   fi
 
-  # Nettoyer users_expiry.list si présent
+  # Nettoyer le fichier d’expiration si besoin
   [[ -f /etc/xray/users_expiry.list ]] && grep -v "^${sel_uuid}|" /etc/xray/users_expiry.list > /tmp/expiry.tmp && mv /tmp/expiry.tmp /etc/xray/users_expiry.list
 
+  # Redémarrage du service
   systemctl restart xray
 
-  echo -e "${GREEN}Utilisateur supprimé : $sel_key / $sel_proto (UUID: $sel_uuid)${RESET}"
+  echo -e "${GREEN}Utilisateur supprimé : $sel_proto / UUID: $sel_uuid${RESET}"
 }
 
 choice=0
