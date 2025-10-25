@@ -339,6 +339,7 @@ while true; do
   clear
   print_header
   afficher_utilisateurs_xray
+  afficher_appareils_connectes
   print_consommation_xray
   afficher_xray_actifs
   show_menu
