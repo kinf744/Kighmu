@@ -37,7 +37,7 @@ afficher_utilisateurs_xray() {
 }
 
 print_consommation_xray() {
-  VN_INTERFACE="eth0"
+  VN_INTERFACE="eth0" # change si besoin
   today=$(vnstat -i "$VN_INTERFACE" | awk '/today/ {print $(NF-1)" "$NF}')
   month=$(vnstat -i "$VN_INTERFACE" | awk '/month/ {print $(NF-1)" "$NF}')
   echo -e "${BOLD}Consommation Xray :${RESET}"
