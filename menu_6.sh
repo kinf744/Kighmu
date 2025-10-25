@@ -36,6 +36,24 @@ afficher_utilisateurs_xray() {
   fi
 }
 
+afficher_appareils_connectes() {
+  if [[ -f "$USERS_FILE" ]]; then
+    vmess_tls_count=$(jq '.vmess_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    vmess_ntls_count=$(jq '.vmess_ntls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    vless_tls_count=$(jq '.vless_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    vless_ntls_count=$(jq '.vless_ntls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    trojan_tls_count=$(jq '.trojan_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    trojan_ntls_count=$(jq '.trojan_ntls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    vmess_count=$((vmess_tls_count + vmess_ntls_count))
+    vless_count=$((vless_tls_count + vless_ntls_count))
+    trojan_count=$((trojan_tls_count + trojan_ntls_count))
+    echo -e "${BOLD}Appareils connectés :${RESET}"
+    echo -e "  • VMess: [${YELLOW}${vmess_count}${RESET}] • VLESS: [${YELLOW}${vless_count}${RESET}] • Trojan: [${YELLOW}${trojan_count}${RESET}]"
+  else
+    echo -e "${RED}Fichier des utilisateurs introuvable.${RESET}"
+  fi
+}
+
 print_consommation_xray() {
   VN_INTERFACE="eth0"
 
