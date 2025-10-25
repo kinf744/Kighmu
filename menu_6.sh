@@ -37,25 +37,36 @@ afficher_utilisateurs_xray() {
 }
 
 afficher_appareils_connectes() {
-  if [[ -f "$USERS_FILE" ]]; then
-    vmess_tls_count=$(jq '.vmess_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
-    vmess_ntls_count=$(jq '.vmess_ntls | length' "$USERS_FILE" 2>/dev/null || echo 0)
-    vless_tls_count=$(jq '.vless_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
-    vless_ntls_count=$(jq '.vless_ntls | length' "$USERS_FILE" 2>/dev/null || echo 0)
-    trojan_tls_count=$(jq '.trojan_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
-    trojan_ntls_count=$(jq '.trojan_ntls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+  # Liste des ports TLS et Non-TLS selon ta config
+  ports_tls=(8443)
+  ports_ntls=(80)
 
-    vmess_total=$((vmess_tls_count + vmess_ntls_count))
-    vless_total=$((vless_tls_count + vless_ntls_count))
-    trojan_total=$((trojan_tls_count + trojan_ntls_count))
+  # Initialiser compteurs par protocole (approximatifs)
+  declare -A connexions=( ["vmess"]=0 ["vless"]=0 ["trojan"]=0 )
 
-    echo -e "${BOLD}Appareils connectés :${RESET}"
-    echo -e "  • VMess: [${YELLOW}${vmess_total}${RESET}]"
-    echo -e "  • VLess: [${YELLOW}${vless_total}${RESET}]"
-    echo -e "  • Trojan: [${YELLOW}${trojan_total}${RESET}]"
-  else
-    echo -e "${RED}Fichier des utilisateurs introuvable.${RESET}"
-  fi
+  # Compter connexions TCP sur ports TLS
+  for port in "${ports_tls[@]}"; do
+    conns=$(ss -tn state established "( sport = :$port )" 2>/dev/null | tail -n +2 | wc -l)
+    # Répartir équitablement entre protocoles (adaptable si ports distincts)
+    count_per_proto=$((conns / 3))
+    for proto in "${!connexions[@]}"; do
+      connexions[$proto]=$((connexions[$proto] + count_per_proto))
+    done
+  done
+
+  # Compter connexions TCP sur ports Non-TLS
+  for port in "${ports_ntls[@]}"; do
+    conns=$(ss -tn state established "( sport = :$port )" 2>/dev/null | tail -n +2 | wc -l)
+    count_per_proto=$((conns / 3))
+    for proto in "${!connexions[@]}"; do
+      connexions[$proto]=$((connexions[$proto] + count_per_proto))
+    done
+  done
+
+  echo -e "${BOLD}Appareils connectés :${RESET}"
+  for proto in "${!connexions[@]}"; do
+    echo -e "  • ${proto^}: [${YELLOW}${connexions[$proto]}${RESET}]"
+  done
 }
 
 print_consommation_xray() {
