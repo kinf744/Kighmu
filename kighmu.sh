@@ -104,10 +104,20 @@ while true; do
 
     XRAY_USERS_FILE="/etc/xray/users.json"
     if [[ -f "$XRAY_USERS_FILE" ]]; then
-      XRAY_USERS_COUNT=$(jq 'length' "$XRAY_USERS_FILE")
-    else
-      XRAY_USERS_COUNT=0
-    fi
+  vmess_tls_count=$(jq '.vmess_tls // [] | length' "$XRAY_USERS_FILE" 2>/dev/null || echo 0)
+  vmess_ntls_count=$(jq '.vmess_ntls // [] | length' "$XRAY_USERS_FILE" 2>/dev/null || echo 0)
+  vless_tls_count=$(jq '.vless_tls // [] | length' "$XRAY_USERS_FILE" 2>/dev/null || echo 0)
+  vless_ntls_count=$(jq '.vless_ntls // [] | length' "$XRAY_USERS_FILE" 2>/dev/null || echo 0)
+  trojan_tls_count=$(jq '.trojan_tls // [] | length' "$XRAY_USERS_FILE" 2>/dev/null || echo 0)
+  trojan_ntls_count=$(jq '.trojan_ntls // [] | length' "$XRAY_USERS_FILE" 2>/dev/null || echo 0)
+
+  vmess_count=$((vmess_tls_count + vmess_ntls_count))
+  vless_count=$((vless_tls_count + vless_ntls_count))
+  trojan_count=$((trojan_tls_count + trojan_ntls_count))
+  XRAY_USERS_COUNT=$((vmess_count + vless_count + trojan_count))
+else
+  XRAY_USERS_COUNT=0
+fi
 
     SSH_EXPIRED=$(count_ssh_expired)
     XRAY_EXPIRED=$(count_xray_expired)
