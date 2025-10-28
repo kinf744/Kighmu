@@ -1,15 +1,15 @@
 #!/bin/bash
-# badvpn.sh - Installation et gestion du service BadVPN-UDPGW (adapté Kighmu)
+# badvpn.sh - Installation et gestion du service BadVPN-UDPGW (robuste)
 # Auteur: kinf744 (2025) - Licence MIT
 
 set -euo pipefail
 
 # Couleurs
-RED="\u001B[1;31m"
-GREEN="\u001B[1;32m"
-YELLOW="\u001B[1;33m"
-CYAN="\u001B[1;36m"
-RESET="\u001B[0m"
+RED="e[1;31m"
+GREEN="e[1;32m"
+YELLOW="e[1;33m"
+CYAN="e[1;36m"
+RESET="e[0m"
 
 # Variables configurables
 BINARY_URL="https://raw.githubusercontent.com/kinf744/binaries/main/badvpn-udpgw"
@@ -17,31 +17,21 @@ BIN_PATH="/usr/local/bin/badvpn-udpgw"
 PORT="7300"
 SYSTEMD_UNIT="/etc/systemd/system/badvpn.service"
 
-# Fonctions utilitaires
-log() {
-  echo -e "${CYAN}[$(date '+%Y-%m-%d %H:%M:%S')]${RESET} $*"
-}
-die() {
-  echo -e "${RED}$*${RESET}" >&2
-  exit 1
-}
-
 install_badvpn() {
-  log "Installation de BadVPN-UDPGW..."
-  if [[ -x "$BIN_PATH" ]]; then
-    echo -e "${YELLOW}BadVPN déjà présent.${RESET}"
+  echo -e "${CYAN}>>> Installation BadVPN-UDPGW...${RESET}"
+
+  if [ -x "$BIN_PATH" ]; then
+    echo -e "${GREEN}BadVPN déjà installé.${RESET}"
     return 0
   fi
 
   mkdir -p "$(dirname "$BIN_PATH")"
-  log "Téléchargement du binaire BadVPN..."
   if ! wget -q --show-progress -O "$BIN_PATH" "$BINARY_URL"; then
-    die "Échec du téléchargement du binaire BadVPN."
+    echo -e "${RED}Échec du téléchargement du binaire BadVPN. Vérifiez l’accès réseau et l’URL.${RESET}" >&2
+    return 1
   fi
   chmod +x "$BIN_PATH"
-  log "Binaire placé : $BIN_PATH"
 
-  # Fichier systemd
   cat > "$SYSTEMD_UNIT" <<EOF
 [Unit]
 Description=BadVPN UDP Gateway
@@ -53,48 +43,52 @@ Type=simple
 ExecStart=$BIN_PATH --listen-addr 127.0.0.1:$PORT --max-clients 1000 --max-connections-for-client 10
 Restart=on-failure
 RestartSec=5
-Environment=MSGLEVEL=1
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=badvpn
 LimitNOFILE=1048576
-Nice=-5
-CPUSchedulingPolicy=fifo
-CPUSchedulingPriority=99
-
-[Install]
-WantedBy=multi-user.target
 EOF
 
+  # Applique le fichier systemd et démarre le service
   systemctl daemon-reload
   systemctl enable badvpn.service
-  systemctl restart badvpn.service
-
-  if command -v ufw >/dev/null 2>&1; then
-    ufw allow "$PORT/udp" || true
+  if ! systemctl restart badvpn.service; then
+    echo -e "${RED}Erreur lors du démarrage du service BadVPN. Vérifiez le statut.${RESET}"
+    return 1
   fi
-  iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT || true
-  iptables -I OUTPUT -p udp --sport "$PORT" -j ACCEPT || true
 
-  log "BadVPN installé et démarré sur port UDP $PORT."
+  # Pare-feu
+  if command -v ufw >/dev/null 2>&1; then
+    ufw allow "$PORT/udp" >/dev/null 2>&1 || true
+  fi
+  iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
+  iptables -C OUTPUT -p udp --sport "$PORT" -j ACCEPT 2>/dev/null || iptables -I OUTPUT -p udp --sport "$PORT" -j ACCEPT
+
+  # Vérification rapide
+  if systemctl is-active --quiet badvpn.service; then
+    echo -e "${GREEN}BadVPN installé et actif sur le port UDP $PORT.${RESET}"
+  else
+    echo -e "${RED}Le service BadVPN n’est pas actif après démarrage.${RESET}"
+    return 1
+  fi
 }
 
 uninstall_badvpn() {
-  log "Arrêt et suppression de BadVPN-UDPGW..."
-  systemctl stop badvpn.service || true
-  systemctl disable badvpn.service || true
+  echo -e "${YELLOW}>>> Désinstallation BadVPN...${RESET}"
+  systemctl stop badvpn.service 2>/dev/null || true
+  systemctl disable badvpn.service 2>/dev/null || true
   rm -f "$SYSTEMD_UNIT"
   systemctl daemon-reload
 
   rm -f "$BIN_PATH"
 
   if command -v ufw >/dev/null 2>&1; then
-    ufw delete allow "$PORT/udp" || true
+    ufw delete allow "$PORT/udp" >/dev/null 2>&1 || true
   fi
-  iptables -D INPUT -p udp --dport "$PORT" -j ACCEPT || true
-  iptables -D OUTPUT -p udp --sport "$PORT" -j ACCEPT || true
+  iptables -D INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || true
+  iptables -D OUTPUT -p udp --sport "$PORT" -j ACCEPT 2>/dev/null || true
 
-  log "BadVPN supprimé proprement."
+  echo -e "${GREEN}[OK] BadVPN désinstallé.${RESET}"
 }
 
 status_badvpn() {
@@ -105,7 +99,6 @@ status_badvpn() {
   fi
 }
 
-# Exécution non interactive via arguments (préférence d’orchestrateur)
 case "${1:-}" in
   install|install_badvpn)
     install_badvpn
