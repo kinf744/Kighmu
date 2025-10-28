@@ -213,7 +213,7 @@ uninstall_ssl_tls() {
     echo -e "${GREEN}[OK] Stunnel SSL/TLS désinstallé proprement.${RESET}"
 }
 
-install_udp_custom() {
+install_badvpn() {
     echo ">>> Installation badvpn via script..."
     bash "$HOME/Kighmu/badvpn.sh" || echo "Script introuvable."
 }
