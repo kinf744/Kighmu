@@ -164,6 +164,7 @@ FILES=(
   "udp_custom.sh"
   "dropbear.sh"
   "ssl.sh"
+  "badvpn-udpgw"
   "badvpn.sh"
   "system_dns.sh"
   "install_modes.sh"
