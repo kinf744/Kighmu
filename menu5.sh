@@ -214,7 +214,26 @@ uninstall_ssl_tls() {
 }
 
 install_badvpn() { echo ">>> Installation BadVPN (à compléter)"; }
-uninstall_badvpn() { echo ">>> Désinstallation BadVPN (à compléter)"; }
+uninstall_badvpn() {
+  echo ">>> Désinstallation BadVPN..."
+  # Arrêt et désactivation
+  systemctl stop badvpn.service || true
+  systemctl disable badvpn.service || true
+  rm -f "$SYSTEMD_UNIT"
+  systemctl daemon-reload
+
+  # Suppression du binaire
+  rm -f "$BIN_PATH"
+
+  # Nettoyage des règles réseau
+  if command -v ufw >/dev/null 2>&1; then
+    ufw delete allow "$PORT/udp" || true
+  fi
+  iptables -D INPUT -p udp --dport "$PORT" -j ACCEPT || true
+  iptables -D OUTPUT -p udp --sport "$PORT" -j ACCEPT || true
+
+  echo -e "${GREEN}[OK] BadVPN désinstallé.${RESET}"
+}
 
 HYST_PORT=22000
 install_hysteria() { bash "$HOME/Kighmu/hysteria.sh" || echo "Script hysteria introuvable."; }
