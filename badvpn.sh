@@ -22,7 +22,7 @@ mkdir -p "$LOG_DIR"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 echo "+--------------------------------------------+"
-echo "|             INSTALLATION RÉUSSI             |"
+echo "|             DÉBUT D'INSTALLATION             |"
 echo "+--------------------------------------------+"
 
 echo "Démarrage de l'installation BadVPN-UDPGW..."
