@@ -59,6 +59,9 @@ afficher_modes_ports() {
     if systemctl is-active --quiet stunnel4.service || pgrep -f stunnel >/dev/null 2>&1; then
         echo -e "  - Stunnel SSL/TLS: ${GREEN}port TCP 444${RESET}"
     fi
+    if systemctl is-active --quiet badvpn.service || pgrep -f stunnel >/dev/null 2>&1; then
+        echo -e "  - badvpn: ${GREEN}port UDP 7300${RESET}"
+    fi
     if systemctl is-active --quiet hysteria.service || pgrep -f hysteria >/dev/null 2>&1; then
         echo -e "  - Hysteria UDP : ${GREEN}port UDP 22000${RESET}"
     fi
