@@ -1,10 +1,12 @@
 #!/bin/bash
-# xray_installe.sh  Installation complète Xray + Trojan Go + UFW, avec users.json pour menu
+set -euo pipefail
 
+# Couleurs pour les messages
 RED='\u001B[0;31m'
 GREEN='\u001B[0;32m'
 NC='\u001B[0m'
 
+# Demande du domaine
 read -rp "Entrez votre nom de domaine (ex: monsite.com) : " DOMAIN
 if [[ -z "$DOMAIN" ]]; then
   echo -e "${RED}Erreur : nom de domaine non valide.${NC}"
@@ -15,10 +17,12 @@ echo "$DOMAIN" > /tmp/.xray_domain
 
 EMAIL="adrienkiaje@gmail.com"
 
+# Pré-requis et dépendances réseau
 apt update
 apt install -y ufw iptables iptables-persistent curl socat xz-utils wget apt-transport-https \
   gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq ca-certificates libcap2-bin
 
+# Firewall
 ufw allow ssh
 ufw allow 80/tcp
 ufw allow 80/udp
@@ -26,10 +30,10 @@ ufw allow 8443/tcp
 ufw allow 8443/udp
 ufw allow 2083/tcp
 ufw allow 2083/udp
-
 echo "y" | ufw enable
 ufw status verbose
 
+# Temps et horloge
 ntpdate pool.ntp.org
 timedatectl set-ntp true
 systemctl enable chronyd
@@ -37,11 +41,11 @@ systemctl restart chronyd
 systemctl enable chrony
 systemctl restart chrony
 timedatectl set-timezone Asia/Kuala_Lumpur
-
 chronyc sourcestats -v
 chronyc tracking -v
 date
 
+# Télécharger et préparer Xray
 latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest | grep tag_name | cut -d '"' -f4 | sed 's/v//')
 xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v${latest_version}/xray-linux-64.zip"
 
@@ -56,11 +60,13 @@ mv -f xray /usr/local/bin/xray
 chmod +x /usr/local/bin/xray
 setcap 'cap_net_bind_service=+ep' /usr/local/bin/xray || true
 
+# Logs et répertoires Xray
 mkdir -p /var/log/xray /etc/xray
 touch /var/log/xray/access.log /var/log/xray/error.log
 chown -R root:root /var/log/xray
 chmod 644 /var/log/xray/access.log /var/log/xray/error.log
 
+# TLS ACME via acme.sh
 cd /root/
 wget -q https://raw.githubusercontent.com/NevermoreSSH/hop/main/acme.sh
 bash acme.sh --install
@@ -75,6 +81,7 @@ if [[ ! -f "/etc/xray/xray.crt" || ! -f "/etc/xray/xray.key" ]]; then
   exit 1
 fi
 
+# Génération des UUIDs
 uuid1=$(cat /proc/sys/kernel/random/uuid)
 uuid2=$(cat /proc/sys/kernel/random/uuid)
 uuid3=$(cat /proc/sys/kernel/random/uuid)
@@ -82,6 +89,7 @@ uuid4=$(cat /proc/sys/kernel/random/uuid)
 uuid5=$(cat /proc/sys/kernel/random/uuid)
 uuid6=$(cat /proc/sys/kernel/random/uuid)
 
+# Utilisateurs Xray
 cat > /etc/xray/users.json << EOF
 {
   "vmess_tls": [
@@ -104,6 +112,7 @@ cat > /etc/xray/users.json << EOF
 }
 EOF
 
+# Configuration principal Xray
 cat > /etc/xray/config.json << EOF
 {
   "log": {
@@ -206,7 +215,7 @@ cat > /etc/xray/config.json << EOF
       "streamSettings": {
         "network": "ws",
         "security": "tls",
-        "tlsSettings": {
+        " tlsSettings": {
           "certificates": [{
             "certificateFile": "/etc/xray/xray.crt",
             "keyFile": "/etc/xray/xray.key"
@@ -217,7 +226,7 @@ cat > /etc/xray/config.json << EOF
           "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
         },
         "wsSettings": {
-          "path": "/trojan-tls",
+          "path": "/tro Trojan-tls",
           "host": "$DOMAIN"
         }
       }
@@ -232,7 +241,7 @@ cat > /etc/xray/config.json << EOF
         "network": "ws",
         "security": "none",
         "wsSettings": {
-          "path": "/trojan-ntls",
+          "path": "/tro Trojan-ntls",
           "host": "$DOMAIN"
         }
       }
@@ -286,10 +295,11 @@ cat > /etc/xray/config.json << EOF
 }
 EOF
 
+# Correction du service Xray SystemD
 cat > /etc/systemd/system/xray.service << EOF
 [Unit]
 Description=Xray Service Mod By NevermoreSSH
-After=network.target nss-lookup.target
+After=network.target slowdns.service
 
 [Service]
 User=root
@@ -328,7 +338,7 @@ chmod +x /usr/local/bin/trojan-go
 
 mkdir -p /var/log/trojan-go
 touch /etc/trojan-go/akun.conf
-touch /var/log/trojan-go/trojan-go.log
+touch /var/log/trojan-go/tro Trojan-go.log
 
 cat > /etc/trojan-go/config.json << EOF
 {
