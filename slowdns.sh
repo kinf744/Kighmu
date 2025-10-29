@@ -179,6 +179,15 @@ main() {
     create_wrapper_script
     create_systemd_service
 
+    # Génération du fichier slowdns.env pour Xray
+    cat <<EOF > /etc/slowdns/slowdns.env
+NS=$NAMESERVER
+PUB_KEY=$(cat "$SERVER_PUB")
+PRIV_KEY=$(cat "$SERVER_KEY")
+EOF
+    chmod 600 /etc/slowdns/slowdns.env
+    log "Fichier slowdns.env généré avec succès."
+
     PUB_KEY=$(cat "$SERVER_PUB")
     echo ""
     echo "+--------------------------------------------+"
