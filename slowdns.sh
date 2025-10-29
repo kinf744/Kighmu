@@ -2,80 +2,51 @@
 set -euo pipefail
 
 SLOWDNS_DIR="/etc/slowdns"
-SERVER_KEY="$SLOWDNS_DIR/server.key"
-SERVER_PUB="$SLOWDNS_DIR/server.pub"
 SLOWDNS_BIN="/usr/local/bin/sldns-server"
 PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
+SERVER_KEY="$SLOWDNS_DIR/server.key"
+SERVER_PUB="$SLOWDNS_DIR/server.pub"
 
-log() {
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
-}
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
 check_root() {
-  if [ "$EUID" -ne 0 ]; then
-    echo "Ce script doit être executé en root ou via sudo." >&2
-    exit 1
-  fi
+    if [ "$EUID" -ne 0 ]; then
+        echo "Ce script doit être executé en root ou via sudo." >&2
+        exit 1
+    fi
 }
 
 install_dependencies() {
-  log "Mise à jour des paquets et installation des dépendances..."
-  apt-get update -q
-  apt-get install -y iptables ufw tcpdump wget
+    log "Installation des dépendances..."
+    apt-get update -q
+    apt-get install -y iptables ufw wget tcpdump
 }
 
-get_active_interface() {
-  ip -o link show up | awk -F': ' '{print $2}' \
-    | grep -v '^lo$' \
-    | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' \
-    | head -n1
+install_slowdns_bin() {
+    if [ ! -x "$SLOWDNS_BIN" ]; then
+        log "Téléchargement du binaire SlowDNS..."
+        wget -q -O "$SLOWDNS_BIN" https://raw.githubusercontent.com/fisabiliyusri/SLDNS/main/slowdns/sldns-server
+        chmod +x "$SLOWDNS_BIN"
+        if [ ! -x "$SLOWDNS_BIN" ]; then
+            echo "ERREUR : Échec du téléchargement du binaire SlowDNS." >&2
+            exit 1
+        fi
+    fi
 }
 
 install_fixed_keys() {
-  mkdir -p "$SLOWDNS_DIR"
-  echo "4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa" > "$SERVER_KEY"
-  echo "2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c" > "$SERVER_PUB"
-  chmod 600 "$SERVER_KEY"
-  chmod 644 "$SERVER_PUB"
+    mkdir -p "$SLOWDNS_DIR"
+    echo "4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa" > "$SERVER_KEY"
+    echo "2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c" > "$SERVER_PUB"
+    chmod 600 "$SERVER_KEY"
+    chmod 644 "$SERVER_PUB"
 }
 
-stop_old_instance() {
-  if pgrep -f "sldns-server" >/dev/null; then
-    log "Arrêt de l'ancienne instance SlowDNS..."
-    fuser -k "${PORT}/udp" || true
-    pkill -f "sldns-server" || true
-    sleep 2
-  fi
-  iptables -D INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || true
-  iptables -t nat -D PREROUTING -p udp --dport 53 -j REDIRECT --to-ports "$PORT" 2>/dev/null || true
-}
-
-setup_iptables() {
-  mkdir -p /etc/iptables
-  iptables-save > /etc/iptables/rules.v4.bak || true
-
-  log "Ajout règle iptables pour autoriser UDP port $PORT"
-  iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
-
-  log "Redirection DNS UDP port 53 vers $PORT sur interface $1"
-  iptables -t nat -I PREROUTING -i "$1" -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
-
-  iptables-save > /etc/iptables/rules.v4
-}
-
-enable_ip_forwarding() {
-  sysctl -w net.ipv4.ip_forward=1
-  if ! grep -q "^net.ipv4.ip_forward=1" /etc/sysctl.conf; then
-    echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
-  fi
-}
-
-optimize_sysctl() {
-  log "Application des optimisations sysctl..."
-  sed -i '/# Optimisations SlowDNS/,+10d' /etc/sysctl.conf || true
-
-  cat <<EOF >> /etc/sysctl.conf
+configure_sysctl() {
+    log "Optimisation sysctl..."
+    sed -i '/# Optimisations SlowDNS/,+10d' /etc/sysctl.conf || true
+    cat <<EOF >> /etc/sysctl.conf
 
 # Optimisations SlowDNS
 net.core.rmem_max=26214400
@@ -89,29 +60,86 @@ net.ipv4.tcp_fastopen=3
 net.ipv4.tcp_fin_timeout=10
 net.ipv4.tcp_tw_reuse=1
 net.ipv4.tcp_mtu_probing=1
+net.ipv4.ip_forward=1
 EOF
+    sysctl -p
+}
 
-  sysctl -p
+stop_systemd_resolved() {
+    log "Arrêt de systemd-resolved pour libérer le port 53..."
+    systemctl stop systemd-resolved
+    systemctl disable systemd-resolved
+    rm -f /etc/resolv.conf
+    echo "nameserver 8.8.8.8" > /etc/resolv.conf
+}
+
+configure_ufw() {
+    if command -v ufw >/dev/null 2>&1; then
+        log "Ouverture du port UDP $PORT avec UFW..."
+        ufw allow "$PORT"/udp
+        ufw reload
+    fi
+}
+
+create_wrapper_script() {
+    cat <<'EOF' > /usr/local/bin/slowdns-start.sh
+#!/bin/bash
+set -euo pipefail
+
+SLOWDNS_DIR="/etc/slowdns"
+SLOWDNS_BIN="/usr/local/bin/sldns-server"
+PORT=5300
+CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
+SERVER_KEY="$SLOWDNS_DIR/server.key"
+
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
+
+wait_for_interface() {
+    interface=""
+    while [ -z "$interface" ]; do
+        interface=$(ip -o link show up | awk -F': ' '{print $2}' \
+                    | grep -v '^lo$' \
+                    | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' \
+                    | head -n1)
+        [ -z "$interface" ] && sleep 2
+    done
+    echo "$interface"
+}
+
+setup_iptables() {
+    interface="$1"
+    iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
+    iptables -t nat -I PREROUTING -i "$interface" -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
+}
+
+log "Attente de l'interface réseau..."
+interface=$(wait_for_interface)
+log "Interface détectée : $interface"
+
+log "Application des règles iptables..."
+setup_iptables "$interface"
+
+log "Démarrage SlowDNS..."
+NS=$(cat "$CONFIG_FILE")
+ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
+[ -z "$ssh_port" ] && ssh_port=22
+
+exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
+EOF
+    chmod +x /usr/local/bin/slowdns-start.sh
 }
 
 create_systemd_service() {
-  SERVICE_PATH="/etc/systemd/system/slowdns.service"
-  ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
-  [ -z "$ssh_port" ] && ssh_port=22
-
-  NS=$(cat "$CONFIG_FILE")
-
-  log "Création du fichier systemd slowdns.service..."
-  cat <<EOF > "$SERVICE_PATH"
+    cat <<EOF > /etc/systemd/system/slowdns.service
 [Unit]
 Description=SlowDNS Server Tunnel
-After=network.target
-Wants=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=root
-ExecStart=$SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY $NS 0.0.0.0:$ssh_port
+ExecStart=/usr/local/bin/slowdns-start.sh
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -126,74 +154,41 @@ CPUSchedulingPriority=99
 WantedBy=multi-user.target
 EOF
 
-  log "Recharge systemd et activation du service slowdns..."
-  systemctl daemon-reload
-  systemctl enable slowdns.service
-  systemctl restart slowdns.service
-  log "Service slowdns activé et démarré via systemd."
+    systemctl daemon-reload
+    systemctl enable slowdns.service
+    systemctl restart slowdns.service
 }
 
 main() {
-  check_root
-  install_dependencies
-  mkdir -p "$SLOWDNS_DIR"
-  stop_old_instance
+    check_root
+    install_dependencies
+    install_slowdns_bin
+    install_fixed_keys
+    stop_systemd_resolved
 
-  read -rp "Entrez le NameServer (NS) (ex: ns.example.com) : " NAMESERVER
-  if [[ -z "$NAMESERVER" ]]; then
-    echo "NameServer invalide." >&2
-    exit 1
-  fi
-  echo "$NAMESERVER" > "$CONFIG_FILE"
-  log "NameServer enregistré dans $CONFIG_FILE"
-
-  if [ ! -x "$SLOWDNS_BIN" ]; then
-    mkdir -p /usr/local/bin
-    log "Téléchargement du binaire SlowDNS..."
-    wget -q -O "$SLOWDNS_BIN" https://raw.githubusercontent.com/fisabiliyusri/SLDNS/main/slowdns/sldns-server
-    chmod +x "$SLOWDNS_BIN"
-    if [ ! -x "$SLOWDNS_BIN" ]; then
-      echo "ERREUR : Échec du téléchargement du binaire SlowDNS." >&2
-      exit 1
+    read -rp "Entrez le NameServer (NS) (ex: ns.example.com) : " NAMESERVER
+    if [[ -z "$NAMESERVER" ]]; then
+        echo "NameServer invalide." >&2
+        exit 1
     fi
-  fi
+    echo "$NAMESERVER" > "$CONFIG_FILE"
+    log "NameServer enregistré dans $CONFIG_FILE"
 
-  install_fixed_keys
-  PUB_KEY=$(cat "$SERVER_PUB")
+    configure_sysctl
+    configure_ufw
+    create_wrapper_script
+    create_systemd_service
 
-  interface=$(get_active_interface)
-  if [ -z "$interface" ]; then
-    echo "Échec détection interface réseau. Veuillez spécifier manuellement." >&2
-    exit 1
-  fi
-  log "Interface réseau détectée : $interface"
-
-  MTU_VALUE=264
-  log "Réglage MTU sur interface $interface à $MTU_VALUE..."
-  ip link set dev "$interface" mtu "$MTU_VALUE"
-
-  optimize_sysctl
-  setup_iptables "$interface"
-  enable_ip_forwarding
-  create_systemd_service
-
-  if command -v ufw >/dev/null 2>&1; then
-    log "Ouverture du port UDP $PORT avec UFW."
-    ufw allow "$PORT"/udp
-    ufw reload
-  fi
-
-  echo ""
-  echo "+--------------------------------------------+"
-  echo "|          CONFIGURATION SLOWDNS             |"
-  echo "+--------------------------------------------+"
-  echo ""
-  echo "Clé publique :"
-  echo "$PUB_KEY"
-  echo ""
-  echo "NameServer  : $NAMESERVER"
-  echo ""
-  log "Installation et configuration SlowDNS terminées avec succès."
+    PUB_KEY=$(cat "$SERVER_PUB")
+    echo ""
+    echo "+--------------------------------------------+"
+    echo "|          CONFIGURATION SLOWDNS             |"
+    echo "+--------------------------------------------+"
+    echo ""
+    echo "Clé publique : $PUB_KEY"
+    echo "NameServer  : $NAMESERVER"
+    echo ""
+    log "Installation et configuration SlowDNS terminées."
 }
 
 main "$@"
