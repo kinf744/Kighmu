@@ -42,7 +42,6 @@ chronyc sourcestats -v
 chronyc tracking -v
 date
 
-# Téléchargement et extraction de la dernière version stable Xray
 latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest | grep tag_name | cut -d '"' -f4 | sed 's/v//')
 xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v${latest_version}/xray-linux-64.zip"
 
@@ -86,19 +85,19 @@ uuid6=$(cat /proc/sys/kernel/random/uuid)
 cat > /etc/xray/users.json << EOF
 {
   "vmess_tls": [
-    {"uuid": "uuid1", "limit": 5},
-    {"uuid": "uuid3", "limit": 5},
-    {"uuid": "uuid5", "limit": 5}
+    {"uuid": "$uuid1", "limit": 5},
+    {"uuid": "$uuid3", "limit": 5},
+    {"uuid": "$uuid5", "limit": 5}
   ],
   "vmess_ntls": [
-    {"uuid": "uuid2", "limit": 5}
+    {"uuid": "$uuid2", "limit": 5}
   ],
   "vless_tls": [
-    {"uuid": "uuid4", "limit": 5}
+    {"uuid": "$uuid4", "limit": 5}
   ],
   "vless_ntls": [],
   "trojan_tls": [
-    {"uuid": "uuid6", "limit": 5},
+    {"uuid": "$uuid6", "limit": 5},
     {"uuid": "uuid7", "limit": 5}
   ],
   "trojan_ntls": []
@@ -385,4 +384,40 @@ echo "UUID VMess TLS : $uuid1"
 echo "UUID VMess Non-TLS : $uuid2"
 echo "UUID VLESS TLS : $uuid3"
 echo "UUID VLESS Non-TLS : $uuid4"
-echo "Mot de passe Trojan (TLS 2083) : $uuid5"
+echo "Mot de passe Trojan (WS TLS 8443) : $uuid5"
+
+# -- COMBINAISON XRAY + SLOWDNS --
+if [ -f /etc/slowdns/slowdns.env ]; then
+    echo "[INFO] SlowDNS détecté, intégration en cours..."
+    source /etc/slowdns/slowdns.env
+else
+    echo "[AVERTISSEMENT] SlowDNS non détecté, saut de la configuration combinée."
+    exit 0
+fi
+
+cp /etc/xray/config.json /etc/xray/config.json.bak
+
+jq '.outbounds += [{
+  "tag": "out_slowdns",
+  "protocol": "dns",
+  "settings": {
+    "address": "'"$NS"'",
+    "port": 5300,
+    "key": "'"$PUB_KEY"'"
+  }
+}]' /etc/xray/config.json > /etc/xray/config.json.tmp && mv /etc/xray/config.json.tmp /etc/xray/config.json
+
+if ! grep -q 'After=slowdns.service' /etc/systemd/system/xray.service; then
+    sed -i '/[Unit]/a After=slowdns.service
+Requires=slowdns.service' /etc/systemd/system/xray.service
+fi
+
+systemctl daemon-reload
+systemctl restart slowdns
+systemctl restart xray
+
+echo ""
+echo -e "${GREEN}✅ Tunnel Xray + SlowDNS activé${NC}"
+echo "Domaine NS utilisé : $NS"
+echo "Clé publique : ${PUB_KEY:0:32}..."
+echo ""
