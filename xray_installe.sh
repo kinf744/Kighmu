@@ -1,5 +1,5 @@
 #!/bin/bash
-# Installation complète Xray + Trojan Go + UFW, avec users.json pour menu
+# xray_installe.sh  Installation complète Xray + Trojan Go + UFW, avec users.json pour menu
 
 RED='\u001B[0;31m'
 GREEN='\u001B[0;32m'
