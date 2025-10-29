@@ -1,12 +1,10 @@
 #!/bin/bash
-set -euo pipefail
+# xray_installe.sh  Installation complète Xray + Trojan Go + UFW, avec users.json pour menu
 
-# Couleurs pour les messages
 RED='\u001B[0;31m'
 GREEN='\u001B[0;32m'
 NC='\u001B[0m'
 
-# Demande du domaine
 read -rp "Entrez votre nom de domaine (ex: monsite.com) : " DOMAIN
 if [[ -z "$DOMAIN" ]]; then
   echo -e "${RED}Erreur : nom de domaine non valide.${NC}"
@@ -17,22 +15,10 @@ echo "$DOMAIN" > /tmp/.xray_domain
 
 EMAIL="adrienkiaje@gmail.com"
 
-# Pré-requis et dépendances réseau
 apt update
-apt-get -f install
-apt-get clean
-apt-get autoclean
-apt-get autoremove --purge
-
-# Installer iptables-persistent puis ufw (ordre recommandé)
-apt install -y iptables-persistent
-apt install -y ufw
-
-# Installer les autres dépendances
 apt install -y ufw iptables iptables-persistent curl socat xz-utils wget apt-transport-https \
   gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq ca-certificates libcap2-bin
 
-# Firewall
 ufw allow ssh
 ufw allow 80/tcp
 ufw allow 80/udp
@@ -40,10 +26,10 @@ ufw allow 8443/tcp
 ufw allow 8443/udp
 ufw allow 2083/tcp
 ufw allow 2083/udp
+
 echo "y" | ufw enable
 ufw status verbose
 
-# Temps et horloge
 ntpdate pool.ntp.org
 timedatectl set-ntp true
 systemctl enable chronyd
@@ -56,7 +42,7 @@ chronyc sourcestats -v
 chronyc tracking -v
 date
 
-# Télécharger et préparer Xray
+# Téléchargement et extraction de la dernière version stable Xray
 latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest | grep tag_name | cut -d '"' -f4 | sed 's/v//')
 xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v${latest_version}/xray-linux-64.zip"
 
@@ -71,13 +57,11 @@ mv -f xray /usr/local/bin/xray
 chmod +x /usr/local/bin/xray
 setcap 'cap_net_bind_service=+ep' /usr/local/bin/xray || true
 
-# Logs et répertoires Xray
 mkdir -p /var/log/xray /etc/xray
 touch /var/log/xray/access.log /var/log/xray/error.log
 chown -R root:root /var/log/xray
 chmod 644 /var/log/xray/access.log /var/log/xray/error.log
 
-# TLS ACME via acme.sh
 cd /root/
 wget -q https://raw.githubusercontent.com/NevermoreSSH/hop/main/acme.sh
 bash acme.sh --install
@@ -92,7 +76,6 @@ if [[ ! -f "/etc/xray/xray.crt" || ! -f "/etc/xray/xray.key" ]]; then
   exit 1
 fi
 
-# Génération des UUIDs
 uuid1=$(cat /proc/sys/kernel/random/uuid)
 uuid2=$(cat /proc/sys/kernel/random/uuid)
 uuid3=$(cat /proc/sys/kernel/random/uuid)
@@ -100,30 +83,28 @@ uuid4=$(cat /proc/sys/kernel/random/uuid)
 uuid5=$(cat /proc/sys/kernel/random/uuid)
 uuid6=$(cat /proc/sys/kernel/random/uuid)
 
-# Utilisateurs Xray
 cat > /etc/xray/users.json << EOF
 {
   "vmess_tls": [
-    {"uuid": "$uuid1", "limit": 5},
-    {"uuid": "$uuid3", "limit": 5},
-    {"uuid": "$uuid5", "limit": 5}
+    {"uuid": "uuid1", "limit": 5},
+    {"uuid": "uuid3", "limit": 5},
+    {"uuid": "uuid5", "limit": 5}
   ],
   "vmess_ntls": [
-    {"uuid": "$uuid2", "limit": 5}
+    {"uuid": "uuid2", "limit": 5}
   ],
   "vless_tls": [
-    {"uuid": "$uuid4", "limit": 5}
+    {"uuid": "uuid4", "limit": 5}
   ],
   "vless_ntls": [],
   "trojan_tls": [
-    {"uuid": "$uuid6", "limit": 5},
+    {"uuid": "uuid6", "limit": 5},
     {"uuid": "uuid7", "limit": 5}
   ],
   "trojan_ntls": []
 }
 EOF
 
-# Configuration principale Xray
 cat > /etc/xray/config.json << EOF
 {
   "log": {
@@ -306,11 +287,10 @@ cat > /etc/xray/config.json << EOF
 }
 EOF
 
-# Correction du service Xray SystemD
 cat > /etc/systemd/system/xray.service << EOF
 [Unit]
 Description=Xray Service Mod By NevermoreSSH
-After=network.target slowdns.service
+After=network.target nss-lookup.target
 
 [Service]
 User=root
@@ -349,7 +329,7 @@ chmod +x /usr/local/bin/trojan-go
 
 mkdir -p /var/log/trojan-go
 touch /etc/trojan-go/akun.conf
-touch /var/log/trojan-go/tro Trojan-go.log
+touch /var/log/trojan-go/trojan-go.log
 
 cat > /etc/trojan-go/config.json << EOF
 {
@@ -406,39 +386,3 @@ echo "UUID VMess Non-TLS : $uuid2"
 echo "UUID VLESS TLS : $uuid3"
 echo "UUID VLESS Non-TLS : $uuid4"
 echo "Mot de passe Trojan (WS TLS 8443) : $uuid5"
-
-# -- COMBINAISON XRAY + SLOWDNS --
-if [ -f /etc/slowdns/slowdns.env ]; then
-    echo "[INFO] SlowDNS détecté, intégration en cours..."
-    source /etc/slowdns/slowdns.env
-else
-    echo "[AVERTISSEMENT] SlowDNS non détecté, saut de la configuration combinée."
-    exit 0
-fi
-
-cp /etc/xray/config.json /etc/xray/config.json.bak
-
-jq '.outbounds += [{
-  "tag": "out_slowdns",
-  "protocol": "dns",
-  "settings": {
-    "address": "'"$NS"'",
-    "port": 5300,
-    "key": "'"$PUB_KEY"'"
-  }
-}]' /etc/xray/config.json > /etc/xray/config.json.tmp && mv /etc/xray/config.json.tmp /etc/xray/config.json
-
-if ! grep -q 'After=slowdns.service' /etc/systemd/system/xray.service; then
-    sed -i '/[Unit]/a After=slowdns.service
-Requires=slowdns.service' /etc/systemd/system/xray.service
-fi
-
-systemctl daemon-reload
-systemctl restart slowdns
-systemctl restart xray
-
-echo ""
-echo -e "${GREEN}✅ Tunnel Xray + SlowDNS activé${NC}"
-echo "Domaine NS utilisé : $NS"
-echo "Clé publique : ${PUB_KEY:0:32}..."
-echo ""
