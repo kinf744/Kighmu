@@ -19,6 +19,16 @@ EMAIL="adrienkiaje@gmail.com"
 
 # Pré-requis et dépendances réseau
 apt update
+apt-get -f install
+apt-get clean
+apt-get autoclean
+apt-get autoremove --purge
+
+# Installer iptables-persistent puis ufw (ordre recommandé)
+apt install -y iptables-persistent
+apt install -y ufw
+
+# Installer les autres dépendances
 apt install -y ufw iptables iptables-persistent curl socat xz-utils wget apt-transport-https \
   gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq ca-certificates libcap2-bin
 
@@ -41,6 +51,7 @@ systemctl restart chronyd
 systemctl enable chrony
 systemctl restart chrony
 timedatectl set-timezone Asia/Kuala_Lumpur
+
 chronyc sourcestats -v
 chronyc tracking -v
 date
@@ -112,7 +123,7 @@ cat > /etc/xray/users.json << EOF
 }
 EOF
 
-# Configuration principal Xray
+# Configuration principale Xray
 cat > /etc/xray/config.json << EOF
 {
   "log": {
@@ -215,7 +226,7 @@ cat > /etc/xray/config.json << EOF
       "streamSettings": {
         "network": "ws",
         "security": "tls",
-        " tlsSettings": {
+        "tlsSettings": {
           "certificates": [{
             "certificateFile": "/etc/xray/xray.crt",
             "keyFile": "/etc/xray/xray.key"
@@ -226,7 +237,7 @@ cat > /etc/xray/config.json << EOF
           "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
         },
         "wsSettings": {
-          "path": "/tro Trojan-tls",
+          "path": "/trojan-tls",
           "host": "$DOMAIN"
         }
       }
@@ -241,7 +252,7 @@ cat > /etc/xray/config.json << EOF
         "network": "ws",
         "security": "none",
         "wsSettings": {
-          "path": "/tro Trojan-ntls",
+          "path": "/trojan-ntls",
           "host": "$DOMAIN"
         }
       }
