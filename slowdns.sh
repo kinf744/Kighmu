@@ -4,6 +4,8 @@ set -euo pipefail
 SLOWDNS_DIR="/etc/slowdns"
 SLOWDNS_BIN="/usr/local/bin/sldns-server"
 PORT=5300
+XRAY_PORT=5400
+XRAY_LOCAL_PORT=8443
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 SERVER_PUB="$SLOWDNS_DIR/server.pub"
@@ -75,8 +77,9 @@ stop_systemd_resolved() {
 
 configure_ufw() {
     if command -v ufw >/dev/null 2>&1; then
-        log "Ouverture du port UDP $PORT avec UFW..."
+        log "Ouverture des ports UDP $PORT et $XRAY_PORT avec UFW..."
         ufw allow "$PORT"/udp
+        ufw allow "$XRAY_PORT"/udp
         ufw reload
     fi
 }
@@ -119,7 +122,7 @@ log "Interface détectée : $interface"
 log "Application des règles iptables..."
 setup_iptables "$interface"
 
-log "Démarrage SlowDNS..."
+log "Démarrage SlowDNS (SSH)..."
 NS=$(cat "$CONFIG_FILE")
 ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
 [ -z "$ssh_port" ] && ssh_port=22
@@ -129,10 +132,32 @@ EOF
     chmod +x /usr/local/bin/slowdns-start.sh
 }
 
+# ✅ NOUVEAU : ajout d'un wrapper pour Xray + SlowDNS
+create_wrapper_script_xray() {
+    cat <<'EOF' > /usr/local/bin/slowdns-xray.sh
+#!/bin/bash
+set -euo pipefail
+
+SLOWDNS_DIR="/etc/slowdns"
+SLOWDNS_BIN="/usr/local/bin/sldns-server"
+XRAY_PORT=5400
+XRAY_LOCAL_PORT=8443
+CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
+SERVER_KEY="$SLOWDNS_DIR/server.key"
+
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
+
+log "Démarrage SlowDNS (Xray)..."
+NS=$(cat "$CONFIG_FILE")
+exec "$SLOWDNS_BIN" -udp :$XRAY_PORT -privkey-file "$SERVER_KEY" "$NS" 127.0.0.1:$XRAY_LOCAL_PORT
+EOF
+    chmod +x /usr/local/bin/slowdns-xray.sh
+}
+
 create_systemd_service() {
     cat <<EOF > /etc/systemd/system/slowdns.service
 [Unit]
-Description=SlowDNS Server Tunnel
+Description=SlowDNS Server (SSH)
 After=network-online.target
 Wants=network-online.target
 
@@ -159,6 +184,34 @@ EOF
     systemctl restart slowdns.service
 }
 
+# ✅ NOUVEAU : service systemd pour SlowDNS + Xray
+create_systemd_service_xray() {
+    cat <<EOF > /etc/systemd/system/slowdns-xray.service
+[Unit]
+Description=SlowDNS Server (Xray)
+After=network-online.target xray.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/slowdns-xray.sh
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=slowdns-xray
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable slowdns-xray.service
+    systemctl restart slowdns-xray.service
+}
+
 main() {
     check_root
     install_dependencies
@@ -171,13 +224,16 @@ main() {
         echo "NameServer invalide." >&2
         exit 1
     fi
+    mkdir -p "$SLOWDNS_DIR"
     echo "$NAMESERVER" > "$CONFIG_FILE"
     log "NameServer enregistré dans $CONFIG_FILE"
 
     configure_sysctl
     configure_ufw
     create_wrapper_script
+    create_wrapper_script_xray
     create_systemd_service
+    create_systemd_service_xray
 
     # Génération du fichier slowdns.env pour Xray
     cat <<EOF > /etc/slowdns/slowdns.env
@@ -191,11 +247,13 @@ EOF
     PUB_KEY=$(cat "$SERVER_PUB")
     echo ""
     echo "+--------------------------------------------+"
-    echo "|          CONFIGURATION SLOWDNS             |"
+    echo "|         CONFIGURATION SLOWDNS              |"
     echo "+--------------------------------------------+"
     echo ""
     echo "Clé publique : $PUB_KEY"
     echo "NameServer  : $NAMESERVER"
+    echo "SSH+SlowDNS : UDP $PORT → 127.0.0.1:22"
+    echo "Xray+SlowDNS: UDP $XRAY_PORT → 127.0.0.1:$XRAY_LOCAL_PORT"
     echo ""
     log "Installation et configuration SlowDNS terminées."
 }
