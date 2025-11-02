@@ -70,7 +70,7 @@ stop_systemd_resolved() {
     systemctl stop systemd-resolved
     systemctl disable systemd-resolved
     rm -f /etc/resolv.conf
-    echo "nameserver 8.8.8.8" > /etc/resolv.conf
+    echo "nameserver 1.1.1.1" > /etc/resolv.conf
 }
 
 configure_ufw() {
