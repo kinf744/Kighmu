@@ -303,8 +303,29 @@ uninstall_badvpn() {
 }
 
 HYST_PORT=22000
-install_hysteria() { bash "$HOME/Kighmu/hysteria.sh" || echo "Script hysteria introuvable."; }
-uninstall_hysteria() { systemctl stop hysteria.service 2>/dev/null || true; systemctl disable hysteria.service 2>/dev/null || true; rm -f /etc/systemd/system/hysteria.service; systemctl daemon-reload; pkill -f hysteria || true; }
+
+install_hysteria() {
+    echo ">>> Installation Hysteria..."
+    if [ -f "$HOME/Kighmu/hysteria.sh" ]; then
+        bash "$HOME/Kighmu/hysteria.sh" || echo "Script hysteria introuvable."
+    else
+        echo "❌ Script hysteria.sh introuvable."
+        return 1
+    fi
+    echo -e "${GREEN}[OK] Hysteria installé et lancé.${RESET}"
+}
+
+uninstall_hysteria() {
+    echo ">>> Désinstallation Hysteria..."
+    systemctl stop hysteria.service 2>/dev/null || true
+    systemctl disable hysteria.service 2>/dev/null || true
+    rm -f /etc/systemd/system/hysteria.service
+    systemctl daemon-reload
+    pkill -f hysteria || true
+    iptables -D INPUT -p udp --dport "$HYST_PORT" -j ACCEPT 2>/dev/null || true
+    iptables -D OUTPUT -p udp --sport "$HYST_PORT" -j ACCEPT 2>/dev/null || true
+    echo -e "${GREEN}[OK] Hysteria désinstallé.${RESET}"
+}
 
 # --- AJOUT WS/WSS SSH ---
 install_ws_wss() {
@@ -327,8 +348,11 @@ uninstall_ws_wss() {
     rm -f /etc/systemd/system/ws_wss_server.service
     rm -f /usr/local/bin/ws_wss_server.py /usr/local/bin/ws_wssr.sh
     systemctl daemon-reload
-    ufw delete allow 8880/tcp 2>/dev/null || true
-    ufw delete allow 443/tcp 2>/dev/null || true
+    # Suppression ports sans UFW
+    iptables -D INPUT -p tcp --dport 8880 -j ACCEPT 2>/dev/null || true
+    iptables -D INPUT -p tcp --dport 443 -j ACCEPT 2>/dev/null || true
+    iptables -D OUTPUT -p tcp --sport 8880 -j ACCEPT 2>/dev/null || true
+    iptables -D OUTPUT -p tcp --sport 443 -j ACCEPT 2>/dev/null || true
     echo -e "${GREEN}[OK] Tunnel WS/WSS SSH désinstallé.${RESET}"
 }
 
