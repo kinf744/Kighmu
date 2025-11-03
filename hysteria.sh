@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # hysteria.sh - Hysteria Server (Kighmu)
-# Gestion complète : installation, config, systemd, nettoyage de port UDP sans UFW
+# Installation et configuration complète avec certificat auto-signé et systemd
+# Version corrigée
 
 set -euo pipefail
 
@@ -54,6 +55,9 @@ generate_self_signed_cert() {
             -subj "/C=FR/ST=State/L=City/O=Org/OU=IT/CN=$(hostname -f)"
         chmod 600 "$CERT_FILE" "$KEY_FILE"
     fi
+    chown -R root:root "$HYST_CONFIG_DIR"
+    chmod 700 "$HYST_CONFIG_DIR"
+    chmod 600 "$HYST_CONFIG_DIR"/*.key "$HYST_CONFIG_DIR"/*.crt
 }
 
 write_server_config() {
@@ -72,11 +76,7 @@ auth:
   password: "${first_password}"
 
 masquerade:
-  type: proxy
-  proxy:
-    url: "https://${DOMAIN:-example.com}"
-    rewriteHost: true
-    insecure: false
+  type: direct
 
 socks5:
   listen: 127.0.0.1:1080
@@ -86,10 +86,11 @@ udpIdleTimeout: 60s
 disableUDP: false
 EOF
     chmod 600 "$HYST_CONFIG_DIR/config.yaml"
+    chown root:root "$HYST_CONFIG_DIR/config.yaml"
 }
 
 cleanup_port() {
-    log "Nettoyage du port UDP $HYST_PORT..."
+    log "Nettoyage du port UDP $HYST_PORT et processus Hysteria existants..."
     local PIDS
     PIDS=$(pgrep -f hysteria || true)
     if [ -n "$PIDS" ]; then
@@ -123,11 +124,10 @@ After=network.target
 
 [Service]
 Type=simple
+WorkingDirectory=${HYST_CONFIG_DIR}
 ExecStart=${HYST_BIN} server -c ${HYST_CONFIG_DIR}/config.yaml
 Restart=always
 RestartSec=5s
-StartLimitBurst=0
-StartLimitIntervalSec=0
 LimitNOFILE=1048576
 
 [Install]
