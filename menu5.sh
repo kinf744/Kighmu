@@ -265,7 +265,11 @@ uninstall_ssl_tls() {
     systemctl disable stunnel4 2>/dev/null || true
     rm -f /etc/stunnel/stunnel.conf
     systemctl daemon-reload
-    ufw delete allow 444/tcp 2>/dev/null || true
+
+    # Fermeture du port TCP 444 via iptables
+    iptables -D INPUT -p tcp --dport 444 -j ACCEPT 2>/dev/null || true
+    iptables -D OUTPUT -p tcp --sport 444 -j ACCEPT 2>/dev/null || true
+
     echo -e "${GREEN}[OK] Stunnel SSL/TLS désinstallé proprement.${RESET}"
 }
 
