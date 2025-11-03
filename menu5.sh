@@ -173,25 +173,36 @@ install_socks_python() {
 }
 
 uninstall_socks_python() {
-    echo ">>> Désinstallation SOCKS Python..."
+    echo ">>> Désinstallation complète SOCKS Python..."
+    
+    # Arrêt des processus proxy
     pids=$(pgrep -f KIGHMUPROXY.py)
-    if [ ! -z "$pids" ]; then
+    if [ -n "$pids" ]; then
+        echo "Arrêt des processus proxy (PID: $pids)..."
         kill -15 $pids
         sleep 2
         pids=$(pgrep -f KIGHMUPROXY.py)
-        if [ ! -z "$pids" ]; then
-            kill -9 $pids
-        fi
+        [ -n "$pids" ] && kill -9 $pids
     fi
+
+    # Arrêt et suppression du service systemd
     if systemctl list-units --full -all | grep -Fq 'socks_python.service'; then
         systemctl stop socks_python.service
         systemctl disable socks_python.service
         rm -f /etc/systemd/system/socks_python.service
         systemctl daemon-reload
     fi
+
+    # Suppression du script
     rm -f /usr/local/bin/KIGHMUPROXY.py
-    ufw delete allow 8080/tcp 2>/dev/null || true
-    ufw delete allow 9090/tcp 2>/dev/null || true
+
+    # Suppression des règles iptables persistantes pour les ports 8080 et 9090
+    for port in 8080 9090; do
+        iptables -D INPUT -p tcp --dport $port -j ACCEPT 2>/dev/null || true
+    done
+    iptables-save | tee /etc/iptables/rules.v4
+    systemctl restart netfilter-persistent
+
     echo -e "${GREEN}[OK] SOCKS Python désinstallé.${RESET}"
 }
 
