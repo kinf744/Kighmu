@@ -217,19 +217,41 @@ uninstall_socks_python() {
 }
 
 install_proxy_ws() {
-    echo ">>> Installation proxy ws via script sockspy.sh..."
+    echo ">>> Installation proxy WS via script sockspy.sh..."
     bash "$HOME/Kighmu/sockspy.sh" || echo "Script sockspy introuvable."
 }
 
 uninstall_proxy_ws() {
-    echo ">>> Désinstallation proxy ws..."
-    systemctl stop socks_python_ws.service 2>/dev/null || true
-    systemctl disable socks_python_ws.service 2>/dev/null || true
-    rm -f /etc/systemd/system/socks_python_ws.service
-    systemctl daemon-reload
+    echo ">>> Désinstallation proxy WS..."
+
+    # Arrêt et suppression des processus existants
+    PIDS=$(pgrep -f ws2_proxy.py || true)
+    if [ -n "$PIDS" ]; then
+        echo "Arrêt des processus proxy WS existants (PID: $PIDS)..."
+        kill -15 $PIDS
+        sleep 2
+        PIDS=$(pgrep -f ws2_proxy.py || true)
+        if [ -n "$PIDS" ]; then
+            kill -9 $PIDS
+        fi
+    fi
+
+    # Arrêt et suppression du service systemd
+    if systemctl list-units --full -all | grep -Fq 'socks_python_ws.service'; then
+        systemctl stop socks_python_ws.service || true
+        systemctl disable socks_python_ws.service || true
+        rm -f /etc/systemd/system/socks_python_ws.service
+        systemctl daemon-reload
+    fi
+
+    # Suppression du script
     rm -f /usr/local/bin/ws2_proxy.py
-    ufw delete allow 9090/tcp 2>/dev/null || true
-    echo -e "${GREEN}[OK] proxy ws désinstallé.${RESET}"
+
+    # Nettoyage des règles iptables seulement
+    iptables -D INPUT -p tcp --dport 9090 -j ACCEPT 2>/dev/null || true
+    iptables -D OUTPUT -p tcp --sport 9090 -j ACCEPT 2>/dev/null || true
+
+    echo -e "${GREEN}[OK] Proxy WS désinstallé.${RESET}"
 }
 
 install_ssl_tls() {
