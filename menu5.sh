@@ -83,7 +83,6 @@ install_slowdns() {
     ufw delete allow 5300/udp 2>/dev/null || true
     echo ">>> Installation/configuration SlowDNS..."
     bash "$HOME/Kighmu/slowdns.sh" || echo "SlowDNS : script introuvable."
-    ufw allow 5300/udp
 }
 
 uninstall_slowdns() {
