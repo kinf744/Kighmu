@@ -238,28 +238,36 @@ uninstall_ssl_tls() {
 }
 
 install_badvpn() {
-    echo ">>> Installation badvpn via script..."
+    echo ">>> Installation BadVPN via script..."
     bash "$HOME/Kighmu/badvpn.sh" || echo "Script introuvable."
 }
+
 uninstall_badvpn() {
-  echo ">>> Désinstallation BadVPN..."
-  # Arrêt et désactivation
-  systemctl stop badvpn.service || true
-  systemctl disable badvpn.service || true
-  rm -f "$SYSTEMD_UNIT"
-  systemctl daemon-reload
+    echo ">>> Désinstallation complète BadVPN..."
 
-  # Suppression du binaire
-  rm -f "$BIN_PATH"
+    # Arrêt et suppression du service systemd
+    if systemctl list-units --full -all | grep -Fq 'badvpn.service'; then
+        echo "Arrêt et désactivation du service badvpn.service..."
+        systemctl stop badvpn.service || true
+        systemctl disable badvpn.service || true
+        rm -f "$SYSTEMD_UNIT"
+        systemctl daemon-reload
+    fi
 
-  # Nettoyage des règles réseau
-  if command -v ufw >/dev/null 2>&1; then
-    ufw delete allow "$PORT/udp" || true
-  fi
-  iptables -D INPUT -p udp --dport "$PORT" -j ACCEPT || true
-  iptables -D OUTPUT -p udp --sport "$PORT" -j ACCEPT || true
+    # Suppression du binaire
+    if [ -f "$BIN_PATH" ]; then
+        echo "Suppression du binaire BadVPN..."
+        rm -f "$BIN_PATH"
+    fi
 
-  echo -e "${GREEN}[OK] BadVPN désinstallé.${RESET}"
+    # Nettoyage des règles iptables persistantes pour le port
+    echo "Suppression des règles iptables pour le port UDP $PORT..."
+    iptables -D INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || true
+    iptables -D OUTPUT -p udp --sport "$PORT" -j ACCEPT 2>/dev/null || true
+    iptables-save | tee /etc/iptables/rules.v4
+    systemctl restart netfilter-persistent || true
+
+    echo -e "${GREEN}[OK] BadVPN désinstallé.${RESET}"
 }
 
 HYST_PORT=22000
