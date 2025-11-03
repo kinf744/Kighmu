@@ -74,13 +74,18 @@ afficher_modes_ports() {
 install_slowdns() {
     echo ">>> Nettoyage avant installation SlowDNS..."
     pkill -f slowdns || true
-    rm -rf $HOME/.slowdns
+    rm -rf "$HOME/.slowdns"
     rm -f /usr/local/bin/slowdns
     systemctl stop slowdns.service 2>/dev/null || true
     systemctl disable slowdns.service 2>/dev/null || true
     rm -f /etc/systemd/system/slowdns.service
     systemctl daemon-reload
-    ufw delete allow 5300/udp 2>/dev/null || true
+
+    # Suppression éventuelle des règles iptables existantes
+    iptables -D INPUT -p udp --dport 5300 -j ACCEPT 2>/dev/null || true
+    iptables-save > /etc/iptables/rules.v4
+    systemctl restart netfilter-persistent
+
     echo ">>> Installation/configuration SlowDNS..."
     bash "$HOME/Kighmu/slowdns.sh" || echo "SlowDNS : script introuvable."
 }
@@ -88,13 +93,18 @@ install_slowdns() {
 uninstall_slowdns() {
     echo ">>> Désinstallation complète SlowDNS..."
     pkill -f slowdns || true
-    rm -rf $HOME/.slowdns
+    rm -rf "$HOME/.slowdns"
     rm -f /usr/local/bin/slowdns
     systemctl stop slowdns.service 2>/dev/null || true
     systemctl disable slowdns.service 2>/dev/null || true
     rm -f /etc/systemd/system/slowdns.service
     systemctl daemon-reload
-    ufw delete allow 5300/udp 2>/dev/null || true
+
+    # Suppression des règles iptables
+    iptables -D INPUT -p udp --dport 5300 -j ACCEPT 2>/dev/null || true
+    iptables-save > /etc/iptables/rules.v4
+    systemctl restart netfilter-persistent
+
     echo -e "${GREEN}[OK] SlowDNS désinstallé.${RESET}"
 }
 
