@@ -145,25 +145,35 @@ install_udp_custom() {
 
 uninstall_udp_custom() {
     echo ">>> Désinstallation UDP Custom..."
-    pids=$(pgrep -f udp-custom-linux-amd64)
-    if [ ! -z "$pids" ]; then
+
+    # Arrêt des processus
+    pids=$(pgrep -f udp-custom-linux-amd64 || true)
+    if [ -n "$pids" ]; then
         kill -15 $pids
         sleep 2
-        pids=$(pgrep -f udp-custom-linux-amd64)
-        if [ ! -z "$pids" ]; then
+        pids=$(pgrep -f udp-custom-linux-amd64 || true)
+        if [ -n "$pids" ]; then
             kill -9 $pids
         fi
     fi
+
+    # Arrêt et suppression du service systemd
     if systemctl list-units --full -all | grep -Fq 'udp_custom.service'; then
-        systemctl stop udp_custom.service
-        systemctl disable udp_custom.service
+        systemctl stop udp_custom.service || true
+        systemctl disable udp_custom.service || true
         rm -f /etc/systemd/system/udp_custom.service
         systemctl daemon-reload
     fi
+
+    # Suppression des fichiers d’installation
     rm -rf /root/udp-custom
-    ufw delete allow 54000/udp 2>/dev/null || true
+
+    # Suppression des règles iptables persistantes
     iptables -D INPUT -p udp --dport 54000 -j ACCEPT 2>/dev/null || true
     iptables -D OUTPUT -p udp --sport 54000 -j ACCEPT 2>/dev/null || true
+    iptables-save > /etc/iptables/rules.v4
+    systemctl restart netfilter-persistent || true
+
     echo -e "${GREEN}[OK] UDP Custom désinstallé.${RESET}"
 }
 
