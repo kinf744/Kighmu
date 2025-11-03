@@ -3,7 +3,7 @@
 # Script : ws_wssr.sh
 # Description : Installation et supervision du tunnel WS SSH
 # Auteur : Kinf744 (adapté)
-# Version : 3.0 - WS uniquement, simple et fiable
+# Version : 3.1 - WS uniquement, style SlowDNS
 # ============================================================
 
 set -euo pipefail
@@ -14,6 +14,7 @@ LOG_FILE="/var/log/ws_wss_server.log"
 WATCHDOG_LOG="/var/log/ws_wss_watchdog.log"
 DOMAIN_FILE="$HOME/.kighmu_info"
 VENV_DIR="$HOME/.ws_wss_venv"
+WS_PORT=8880
 
 # -------------------- Logging --------------------
 log() { local lvl="$1"; shift; printf "%s [%s] %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$lvl" "$*" | tee -a "$LOG_FILE"; }
@@ -30,6 +31,22 @@ if [[ ! -f "$DOMAIN_FILE" ]]; then
 fi
 DOMAIN=$(grep -m1 "DOMAIN=" "$DOMAIN_FILE" | cut -d'=' -f2)
 log_info "Domaine chargé : $DOMAIN"
+
+# -------------------- Arrêt des anciennes instances --------------------
+OLD_PIDS=$(pgrep -f "$SCRIPT_PATH" || true)
+if [[ -n "$OLD_PIDS" ]]; then
+    log_info "Arrêt des anciennes instances WS (PID: $OLD_PIDS)..."
+    kill -9 $OLD_PIDS || true
+    sleep 2
+fi
+
+if systemctl list-units --full -all | grep -Fq "$SERVICE_NAME"; then
+    log_info "Arrêt et suppression du service systemd existant..."
+    systemctl stop "$SERVICE_NAME" || true
+    systemctl disable "$SERVICE_NAME" || true
+    rm -f /etc/systemd/system/"$SERVICE_NAME".service
+    systemctl daemon-reload
+fi
 
 # -------------------- Python & venv --------------------
 log_info "Vérification/installation des dépendances Python..."
@@ -56,7 +73,7 @@ Description=WS-only Tunnel SSH
 After=network.target
 
 [Service]
-ExecStart=${VENV_DIR}/bin/python ${SCRIPT_PATH}
+ExecStart=${VENV_DIR}/bin/python ${SCRIPT_PATH} --port ${WS_PORT}
 Restart=always
 RestartSec=5
 User=root
@@ -68,9 +85,9 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable "${SERVICE_NAME}"
-systemctl restart "${SERVICE_NAME}"
-log_info "Service ${SERVICE_NAME} démarré"
+systemctl enable "$SERVICE_NAME"
+systemctl restart "$SERVICE_NAME"
+log_info "Service $SERVICE_NAME démarré"
 
 # -------------------- Watchdog --------------------
 WATCHDOG_SCRIPT="/usr/local/bin/ws_wss_watchdog.sh"
@@ -78,7 +95,6 @@ cat > "$WATCHDOG_SCRIPT" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 SERVICE="ws_wss_server"
-LOG="/var/log/ws_wss_watchdog.log"
 while true; do
   if ! systemctl is-active --quiet "$SERVICE"; then
     logger -t ws_wss_watchdog "Service $SERVICE indisponible, redémarrage..."
@@ -108,16 +124,19 @@ systemctl enable ws_wss_watchdog
 systemctl start ws_wss_watchdog
 log_info "Watchdog installé et démarré"
 
-# -------------------- UFW --------------------
-if command -v ufw >/dev/null 2>&1; then
-    log_info "Configuration UFW pour autoriser le port 8880..."
-    ufw --force enable
-    ufw allow 8880/tcp || log_warn "Port 8880 déjà autorisé ou problème UFW"
+# -------------------- Ouverture port TCP via iptables --------------------
+if ! iptables -C INPUT -p tcp --dport $WS_PORT -j ACCEPT 2>/dev/null; then
+    iptables -I INPUT -p tcp --dport $WS_PORT -j ACCEPT
 fi
+if ! iptables -C OUTPUT -p tcp --sport $WS_PORT -j ACCEPT 2>/dev/null; then
+    iptables -I OUTPUT -p tcp --sport $WS_PORT -j ACCEPT
+fi
+log_info "Port TCP $WS_PORT ouvert via iptables"
 
+# -------------------- Final --------------------
 log_info "=============================================================="
 log_info " 🎉 Serveur WS-only opérationnel"
-log_info " WS : ws://${DOMAIN}:8880"
+log_info " WS : ws://${DOMAIN}:$WS_PORT"
 log_info " Logs : ${LOG_FILE}"
 log_info " Service systemd : ${SERVICE_NAME}"
 log_info " Pour suivre les logs : journalctl -u ${SERVICE_NAME} -f"
