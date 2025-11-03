@@ -88,7 +88,7 @@ delete_banner() {
     fi
 
     # Redémarrer le service SSH
-    sudo systemctl restart sshd
+    sudo systemctl restart ssh
     echo -e "${GREEN}Service SSH redémarré.${RESET}"
 
     read -p "Appuyez sur Entrée pour continuer..."
