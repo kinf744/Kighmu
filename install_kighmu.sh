@@ -64,7 +64,6 @@ install_package_if_missing "sudo"
 install_package_if_missing "bsdmainutils"
 install_package_if_missing "zip"
 install_package_if_missing "unzip"
-install_package_if_missing "ufw"
 install_package_if_missing "curl"
 install_package_if_missing "python3"
 install_package_if_missing "python3-pip"
@@ -111,33 +110,6 @@ install_package_if_missing "software-properties-common"
 
 apt autoremove -y
 apt clean
-
-echo "Configuration du pare-feu ufw..."
-
-export PATH=$PATH:/usr/sbin
-
-if ! command -v ufw &> /dev/null; then
-  echo "⚠️ ufw n'est pas installé ou non disponible, impossible de configurer le pare-feu."
-else
-  echo "Activation et configuration des règles ufw..."
-
-  ufw default deny incoming
-  ufw default allow outgoing
-
-  ufw allow OpenSSH
-  ufw allow 22
-  ufw allow 80
-  ufw allow 443
-  ufw allow 5300
-  ufw allow 54000
-  ufw allow 8080
-  ufw allow 8443
-  ufw allow 9090
-
-  ufw --force enable
-
-  echo "Pare-feu ufw configuré avec succès."
-fi
 
 echo "=============================================="
 echo " 🚀 Installation de Kighmu VPS Manager..."
