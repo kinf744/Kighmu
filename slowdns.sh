@@ -20,7 +20,7 @@ check_root() {
 install_dependencies() {
     log "Installation des dépendances..."
     apt-get update -q
-    apt-get install -y iptables ufw wget tcpdump
+    apt-get install -y iptables iptables-persistent wget tcpdump
 }
 
 install_slowdns_bin() {
@@ -73,12 +73,17 @@ stop_systemd_resolved() {
     echo "nameserver 8.8.8.8" > /etc/resolv.conf
 }
 
-configure_ufw() {
-    if command -v ufw >/dev/null 2>&1; then
-        log "Ouverture du port UDP $PORT avec UFW..."
-        ufw allow "$PORT"/udp
-        ufw reload
-    fi
+configure_iptables() {
+    log "Configuration du pare-feu via iptables..."
+    iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
+    iptables -I INPUT -p tcp --dport 22 -j ACCEPT
+    iptables-save > /etc/iptables/rules.v4
+    log "Règles iptables appliquées et sauvegardées dans /etc/iptables/rules.v4"
+    
+    # Assurer la persistance au redémarrage
+    systemctl enable netfilter-persistent
+    systemctl restart netfilter-persistent
+    log "Persistance iptables activée via netfilter-persistent."
 }
 
 create_wrapper_script() {
@@ -175,11 +180,10 @@ main() {
     log "NameServer enregistré dans $CONFIG_FILE"
 
     configure_sysctl
-    configure_ufw
+    configure_iptables
     create_wrapper_script
     create_systemd_service
 
-    # Génération du fichier slowdns.env pour Xray
     cat <<EOF > /etc/slowdns/slowdns.env
 NS=$NAMESERVER
 PUB_KEY=$(cat "$SERVER_PUB")
