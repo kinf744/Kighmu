@@ -16,6 +16,17 @@ RESET="\e[0m"
 # Créer le dossier local si inexistant
 mkdir -p "$BANNER_DIR"
 
+# 🔍 Détection du bon service SSH
+detect_ssh_service() {
+    if systemctl list-units --type=service | grep -q "ssh.service"; then
+        echo "ssh"
+    elif systemctl list-units --type=service | grep -q "sshd.service"; then
+        echo "sshd"
+    else
+        echo ""
+    fi
+}
+
 show_banner() {
     clear
     if [ -f "$BANNER_FILE" ]; then
@@ -58,9 +69,15 @@ create_banner() {
         echo -e "${GREEN}Ligne Banner ajoutée à $sshd_conf${RESET}"
     fi
 
-    # Redémarrage du service SSH
-    sudo systemctl restart sshd
-    echo -e "${GREEN}Service SSH redémarré. Le banner sera affiché à la prochaine connexion.${RESET}"
+    # Redémarrage du service SSH (auto-détection)
+    SSH_SERVICE=$(detect_ssh_service)
+    if [ -n "$SSH_SERVICE" ]; then
+        sudo systemctl restart "$SSH_SERVICE" && \
+        echo -e "${GREEN}Service SSH (${SSH_SERVICE}.service) redémarré. Le banner sera affiché à la prochaine connexion.${RESET}" || \
+        echo -e "${RED}Échec du redémarrage du service SSH.${RESET}"
+    else
+        echo -e "${RED}Impossible de détecter le service SSH. Veuillez vérifier l’installation d’OpenSSH.${RESET}"
+    fi
 
     read -p "Appuyez sur Entrée pour continuer..."
 }
@@ -87,13 +104,20 @@ delete_banner() {
         echo -e "${GREEN}Directive Banner supprimée dans $sshd_conf${RESET}"
     fi
 
-    # Redémarrer le service SSH
-    sudo systemctl restart ssh
-    echo -e "${GREEN}Service SSH redémarré.${RESET}"
+    # Redémarrage du service SSH (auto-détection)
+    SSH_SERVICE=$(detect_ssh_service)
+    if [ -n "$SSH_SERVICE" ]; then
+        sudo systemctl restart "$SSH_SERVICE" && \
+        echo -e "${GREEN}Service SSH (${SSH_SERVICE}.service) redémarré.${RESET}" || \
+        echo -e "${RED}Échec du redémarrage du service SSH.${RESET}"
+    else
+        echo -e "${RED}Impossible de détecter le service SSH.${RESET}"
+    fi
 
     read -p "Appuyez sur Entrée pour continuer..."
 }
 
+# === MENU PRINCIPAL ===
 while true; do
     clear
     echo -e "${CYAN}+===================== Gestion Banner =====================+${RESET}"
