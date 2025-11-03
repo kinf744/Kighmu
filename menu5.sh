@@ -310,25 +310,65 @@ HYST_PORT=22000
 
 install_hysteria() {
     echo ">>> Installation Hysteria..."
-    if [ -f "$HOME/Kighmu/hysteria.sh" ]; then
-        bash "$HOME/Kighmu/hysteria.sh" || echo "Script hysteria introuvable."
-    else
-        echo "❌ Script hysteria.sh introuvable."
+
+    local SCRIPT_PATH="$HOME/Kighmu/hysteria.sh"
+
+    # Vérification de la présence du script
+    if [ ! -f "$SCRIPT_PATH" ]; then
+        echo "❌ Script hysteria.sh introuvable à l’emplacement attendu : $SCRIPT_PATH"
         return 1
     fi
-    echo -e "${GREEN}[OK] Hysteria installé et lancé.${RESET}"
+
+    # Exécution sécurisée du script externe
+    bash "$SCRIPT_PATH" || {
+        echo "❌ Erreur lors de l’exécution du script hysteria.sh."
+        return 1
+    }
+
+    # Vérification du service systemd
+    if systemctl is-active --quiet hysteria; then
+        echo -e "${GREEN}[OK] Hysteria installé et lancé.${RESET}"
+    else
+        echo -e "${RED}❌ Hysteria ne s’est pas lancé correctement.${RESET}"
+        systemctl status hysteria --no-pager
+        journalctl -u hysteria -n 20 --no-pager
+    fi
 }
 
 uninstall_hysteria() {
     echo ">>> Désinstallation Hysteria..."
-    systemctl stop hysteria.service 2>/dev/null || true
-    systemctl disable hysteria.service 2>/dev/null || true
-    rm -f /etc/systemd/system/hysteria.service
-    systemctl daemon-reload
-    pkill -f hysteria || true
-    iptables -D INPUT -p udp --dport "$HYST_PORT" -j ACCEPT 2>/dev/null || true
-    iptables -D OUTPUT -p udp --sport "$HYST_PORT" -j ACCEPT 2>/dev/null || true
-    echo -e "${GREEN}[OK] Hysteria désinstallé.${RESET}"
+
+    # Arrêt et suppression du service systemd
+    if systemctl list-units --full -all | grep -Fq 'hysteria.service'; then
+        echo "==> Arrêt et désactivation du service systemd..."
+        systemctl stop hysteria.service 2>/dev/null || true
+        systemctl disable hysteria.service 2>/dev/null || true
+        rm -f /etc/systemd/system/hysteria.service
+        systemctl daemon-reload
+    fi
+
+    # Arrêt des processus encore en mémoire
+    if pgrep -f hysteria >/dev/null 2>&1; then
+        echo "==> Arrêt des processus Hysteria en cours..."
+        pkill -f hysteria || true
+        sleep 1
+    fi
+
+    # Nettoyage du port UDP 22000
+    echo "==> Nettoyage des règles iptables pour le port 22000..."
+    iptables -D INPUT -p udp --dport 22000 -j ACCEPT 2>/dev/null || true
+    iptables -D OUTPUT -p udp --sport 22000 -j ACCEPT 2>/dev/null || true
+
+    # Suppression optionnelle de la configuration
+    read -rp "Souhaitez-vous supprimer la configuration (/etc/hysteria) ? [y/N] : " CONFIRM
+    if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
+        rm -rf /etc/hysteria
+        echo "==> Configuration supprimée."
+    else
+        echo "==> Configuration conservée."
+    fi
+
+    echo -e "${GREEN}[OK] Hysteria désinstallé proprement.${RESET}"
 }
 
 # --- AJOUT WS/WSS SSH ---
