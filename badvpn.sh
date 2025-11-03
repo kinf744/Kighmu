@@ -1,5 +1,5 @@
 #!/bin/bash
-# badvpn.sh - Installation complète de BadVPN-UDPGW avec message de succès et logs
+# badvpn.sh - Installation complète de BadVPN-UDPGW avec iptables persistantes
 # Auteur: kinf744 (2025) - Licence MIT
 
 set -euo pipefail
@@ -19,7 +19,6 @@ fi
 # Config
 BIN_PATH="/root/Kighmu/badvpn-udpgw"
 BINARY_URL="https://raw.githubusercontent.com/kinf744/binaries/main/badvpn-udpgw"
-
 PORT="7300"
 LOG_DIR="/var/log/badvpn"
 LOG_FILE="$LOG_DIR/install.log"
@@ -32,40 +31,27 @@ echo "+--------------------------------------------+"
 echo "|             DÉBUT D'INSTALLATION           |"
 echo "+--------------------------------------------+"
 
-echo "Démarrage de l'installation BadVPN-UDPGW..."
-
 # Vérifie si wget ou curl est disponible
 if ! command -v wget >/dev/null 2>&1 && ! command -v curl >/dev/null 2>&1; then
-  echo -e "${RED}Erreur : wget ou curl doit être installé pour télécharger le binaire.${RESET}"
+  echo -e "${RED}Erreur : wget ou curl doit être installé.${RESET}"
   exit 1
 fi
 
-# Utiliser le binaire existant ou le télécharger
-if [ -x "$BIN_PATH" ]; then
-  echo -e "${GREEN}BadVPN déjà installé sur $BIN_PATH.${RESET}"
-else
+# Télécharger ou utiliser le binaire existant
+if [ ! -x "$BIN_PATH" ]; then
   mkdir -p "$(dirname "$BIN_PATH")"
-
-  if [ ! -f "$BIN_PATH" ]; then
-    echo "Téléchargement du binaire BadVPN depuis $BINARY_URL..."
-    if command -v wget >/dev/null 2>&1; then
-      wget -q --show-progress -O "$BIN_PATH" "$BINARY_URL" || {
-        echo -e "${RED}Échec du téléchargement du binaire BadVPN.${RESET}"
-        exit 1
-      }
-    else
-      curl -L --progress-bar -o "$BIN_PATH" "$BINARY_URL" || {
-        echo -e "${RED}Échec du téléchargement du binaire BadVPN.${RESET}"
-        exit 1
-      }
-    fi
-    chmod +x "$BIN_PATH"
+  echo "Téléchargement du binaire BadVPN..."
+  if command -v wget >/dev/null 2>&1; then
+    wget -q --show-progress -O "$BIN_PATH" "$BINARY_URL" || { echo -e "${RED}Échec téléchargement.${RESET}"; exit 1; }
   else
-    chmod +x "$BIN_PATH"
+    curl -L --progress-bar -o "$BIN_PATH" "$BINARY_URL" || { echo -e "${RED}Échec téléchargement.${RESET}"; exit 1; }
   fi
+  chmod +x "$BIN_PATH"
+else
+  echo -e "${GREEN}BadVPN déjà installé sur $BIN_PATH.${RESET}"
 fi
 
-# Vérifie si le port est déjà utilisé
+# Vérifie si le port UDP est libre
 if ss -lun | grep -q ":$PORT "; then
   echo -e "${RED}Le port UDP $PORT est déjà utilisé. Abandon.${RESET}"
   exit 1
@@ -95,17 +81,16 @@ EOF
 systemctl daemon-reload
 systemctl enable badvpn.service
 if ! systemctl restart badvpn.service; then
-  echo -e "${RED}Erreur lors du démarrage du service BadVPN.${RESET}"
+  echo -e "${RED}Erreur lors du démarrage du service.${RESET}"
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] INSTALL_FAILED: service_start" >> "$LOG_FILE"
   exit 1
 fi
 
-# Ouverture du port UDP (idempotence)
-if command -v ufw >/dev/null 2>&1; then
-  ufw allow "$PORT/udp" >/dev/null 2>&1 || true
-fi
+# Ouverture du port UDP via iptables persistantes
 iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
 iptables -C OUTPUT -p udp --sport "$PORT" -j ACCEPT 2>/dev/null || iptables -I OUTPUT -p udp --sport "$PORT" -j ACCEPT
+iptables-save | tee /etc/iptables/rules.v4
+systemctl restart netfilter-persistent || true
 
 # Vérification finale
 if systemctl is-active --quiet badvpn.service; then
@@ -126,5 +111,4 @@ echo "  ➤ Service     : badvpn.service"
 echo "  ➤ Logs        : $LOG_FILE"
 
 echo -e "\nInstallation terminée avec succès."
-echo -e "Appuyez sur Entrée pour quitter..."
-read -r
+read -r -p "Appuyez sur Entrée pour quitter..."
