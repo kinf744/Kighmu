@@ -1,7 +1,8 @@
 #!/bin/bash
-# Installation & configuration complète de Stunnel avec service systemd et port SSL fixe 444 optimisé
+# Installation & configuration complète de Stunnel avec service systemd et port SSL fixe 444
+# Adapté pour Kighmu style SlowDNS (iptables uniquement)
 
-set -e
+set -euo pipefail
 
 STUNNEL_CONF="/etc/stunnel/stunnel.conf"
 STUNNEL_PEM="/etc/stunnel/stunnel.pem"
@@ -16,7 +17,6 @@ apt-get update && apt-get upgrade -y
 
 echo "Installation de Stunnel4..."
 apt-get install -y stunnel4
-apt-get install -y ufw
 
 echo "Activation de stunnel au démarrage..."
 sed -i 's/ENABLED=0/ENABLED=1/g' /etc/default/stunnel4
@@ -71,13 +71,9 @@ echo "Activation et démarrage du service Stunnel..."
 systemctl enable stunnel4
 systemctl restart stunnel4
 
-echo "Ouverture du port $LISTEN_PORT dans le firewall UFW (si utilisé)..."
-if command -v ufw &> /dev/null; then
-    ufw allow $LISTEN_PORT/tcp
-    ufw reload
-else
-    echo "UFW non installé ou non présent, vérifier le firewall manuellement."
-fi
+# --- Ouverture du port TCP 444 via iptables (style SlowDNS) ---
+iptables -C INPUT -p tcp --dport $LISTEN_PORT -j ACCEPT 2>/dev/null || iptables -I INPUT -p tcp --dport $LISTEN_PORT -j ACCEPT
+iptables -C OUTPUT -p tcp --sport $LISTEN_PORT -j ACCEPT 2>/dev/null || iptables -I OUTPUT -p tcp --sport $LISTEN_PORT -j ACCEPT
 
 echo "Installation terminée. Stunnel écoute en SSL sur le port $LISTEN_PORT et protège le port $TARGET_PORT en local."
 echo "Le service est configuré pour redémarrer automatiquement en cas de plantage ou au démarrage du VPS."
