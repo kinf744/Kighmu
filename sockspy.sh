@@ -1,6 +1,8 @@
 #!/bin/bash
 # sockspy.sh
-# Installation / activation du proxy SOCKS Python WebSocket via systemd
+# Installation / activation du proxy SOCKS Python WebSocket via systemd avec persistance SlowDNS-style
+
+set -euo pipefail
 
 echo "+--------------------------------------------+"
 echo "|        CONFIG SOCKS/PYTHON WS              |"
@@ -9,200 +11,139 @@ echo "+--------------------------------------------+"
 # Port par défaut
 DEFAULT_PORT=9090
 PORT=${2:-$DEFAULT_PORT}
+CONF_DIR="/etc/sockspy"
+SCRIPT_PATH="/usr/local/bin/ws2_proxy.py"
+SCRIPT_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main/ws2_proxy.py"
+SYSTEMD_SERVICE="/etc/systemd/system/socks_python_ws.service"
+ENV_FILE="$CONF_DIR/sockspy.env"
+LOG_FILE="/var/log/sockspy.log"
 
-# Gestion paramètre auto bypass prompt
-if [ "$1" == "auto" ]; then
-    confirm="oui"
-else
-    read -p "Voulez-vous démarrer le proxy SOCKS/PYTHON WS sur le port $PORT ? [oui/non] : " confirm
-fi
+mkdir -p "$CONF_DIR"
 
+# Fonction de log
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"; }
+
+# Vérification module pysocks
 install_pysocks() {
-  echo "Installation du module Python pysocks..."
-
-  if sudo apt-get install -y python3-socks; then
-    echo "Module pysocks installé via apt avec succès."
-    return 0
-  fi
-
-  echo "Le paquet python3-socks n'est pas disponible via apt ou l'installation a échoué."
-
-  if ! dpkg -s python3-venv &> /dev/null; then
-    echo "Installation de python3-venv..."
-    if ! sudo apt-get install -y python3-venv; then
-      echo "Échec de l'installation de python3-venv, abandon."
-      return 1
+    log "Installation du module Python pysocks..."
+    if ! python3 -c "import socks" &>/dev/null; then
+        if ! apt-get install -y python3-socks; then
+            apt-get install -y python3-venv
+            VENV_DIR="$HOME/socksenv"
+            python3 -m venv "$VENV_DIR"
+            source "$VENV_DIR/bin/activate"
+            pip install --upgrade pip setuptools
+            pip install pysocks
+            deactivate
+        fi
     fi
-  fi
-
-  VENV_DIR="$HOME/socksenv"
-  if [[ ! -d "$VENV_DIR" ]]; then
-    echo "Création de l'environnement virtuel Python dans $VENV_DIR..."
-    python3 -m venv "$VENV_DIR"
-  fi
-
-  source "$VENV_DIR/bin/activate"
-
-  if ! pip install --upgrade pip setuptools && pip install pysocks; then
-    echo "Échec de l'installation de pysocks via pip."
-    deactivate
-    return 1
-  fi
-
-  deactivate
-  echo "Module pysocks installé dans l'environnement virtuel $VENV_DIR."
-  echo "Activez-le avec : source $VENV_DIR/bin/activate"
-  return 0
+    log "Module pysocks installé."
 }
 
-check_ufw() {
-  if ! command -v ufw &> /dev/null; then
-    echo "UFW non détecté. Voulez-vous installer UFW ? [oui/non]"
-    read -r ans
-    if [[ "$ans" =~ ^(o|oui|y|yes)$ ]]; then
-      sudo apt-get update
-      sudo apt-get install -y ufw
-      sudo ufw enable
-      sudo ufw allow ssh
-    else
-      echo "Attention : UFW non installé. Le port $PORT ne sera pas autorisé automatiquement."
+# Nettoyage port et anciens processus
+cleanup_port() {
+    local port="$1"
+    log "Nettoyage du port $port..."
+    PIDS=$(pgrep -f "ws2_proxy.py" || true)
+    if [ -n "$PIDS" ]; then
+        log "Arrêt des processus existants : $PIDS"
+        kill -9 $PIDS
+        sleep 2
     fi
-  fi
+    # Vérifier si le port est encore occupé
+    if lsof -ti tcp:"$port" &>/dev/null; then
+        log "Port $port encore utilisé après nettoyage."
+        exit 1
+    fi
 }
 
+# Téléchargement du script
+download_script() {
+    if [ ! -f "$SCRIPT_PATH" ] || [ $(( $(date +%s) - $(stat -c %Y "$SCRIPT_PATH") )) -ge 86400 ]; then
+        log "Téléchargement / mise à jour du script proxy..."
+        wget -q -O "$SCRIPT_PATH" "$SCRIPT_URL"
+        chmod +x "$SCRIPT_PATH"
+    fi
+    log "Script proxy prêt : $SCRIPT_PATH"
+}
+
+# Création du service systemd avec persistance SlowDNS-style
 create_systemd_service() {
-  SERVICE_PATH="/etc/systemd/system/socks_python_ws.service"
-  SCRIPT_PATH="/usr/local/bin/ws2_proxy.py"
-
-  echo "Création du service systemd socks_python_ws.service..."
-
-  sudo tee "$SERVICE_PATH" > /dev/null <<EOF
+    cat <<EOF > "$SYSTEMD_SERVICE"
 [Unit]
-Description=Proxy SOCKS/PYTHON WS - port $PORT
-After=network.target
-Wants=network.target
+Description=Proxy SOCKS/Python WS
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=root
-ExecStart=/usr/bin/python3 $SCRIPT_PATH $PORT
+ExecStart=$SCRIPT_PATH $PORT
 Restart=always
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=socks-python-ws-proxy
+SyslogIdentifier=sockspy
+LimitNOFILE=1048576
+Nice=-5
+CPUSchedulingPolicy=fifo
+CPUSchedulingPriority=99
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-  sudo systemctl daemon-reload
-  sudo systemctl enable socks_python_ws.service
-  sudo systemctl restart socks_python_ws.service
-
-  # Vérification du démarrage du service
-  if sudo systemctl is-active --quiet socks_python_ws.service; then
-    echo "Service socks_python_ws démarré avec succès sur le port $PORT."
-  else
-    echo "Échec du démarrage du service socks_python_ws. Vérifiez les logs avec : sudo journalctl -u socks_python_ws.service"
-  fi
+    systemctl daemon-reload
+    systemctl enable socks_python_ws.service
+    systemctl restart socks_python_ws.service
+    log "Service systemd socks_python_ws démarré et activé pour persistance."
 }
 
-kill_old_instances() {
-  PIDS=$(pgrep -f "ws2_proxy.py")
-  if [ -n "$PIDS" ]; then
-    echo "Arrêt des anciennes instances du proxy WS (PID: $PIDS)..."
-    sudo kill -9 $PIDS
-    sleep 3
-  fi
+# Configuration iptables persistante
+configure_iptables() {
+    log "Configuration iptables persistante pour le port $PORT..."
+    iptables -I INPUT -p tcp --dport "$PORT" -j ACCEPT
+    iptables-save > /etc/iptables/rules.v4
+    systemctl enable netfilter-persistent
+    systemctl restart netfilter-persistent
+    log "Règles iptables appliquées et persistantes."
 }
 
-kill_and_clean_port80() {
-  local port="$PORT"
-  local PIDS
-  PIDS=$(sudo lsof -ti tcp:"$port")
-
-  if [ -n "$PIDS" ]; then
-    echo "Les processus suivants utilisent le port $port :"
-    sudo lsof -nP -i TCP:"$port"
-
-    # Identifier et stopper les services systemd associés
-    SERVICES_STOPPED=()
-    for pid in $PIDS; do
-      unit_name=$(systemctl show -p Id -p Names $(ps -p $pid -o unit=) 2>/dev/null | grep '^Names=' | cut -d= -f2)
-      if [ -n "$unit_name" ] && [[ ! " ${SERVICES_STOPPED[@]} " =~ " ${unit_name} " ]]; then
-        echo "Arrêt et désactivation temporaire du service $unit_name..."
-        sudo systemctl stop "$unit_name"
-        sudo systemctl disable "$unit_name"
-        SERVICES_STOPPED+=("$unit_name")
-      fi
-    done
-
-    echo "Arrêt des processus sur le port $port..."
-    sudo kill -9 $PIDS
-    sleep 3
-
-    echo "Nettoyage terminé. Vérification :"
-    sudo lsof -nP -i TCP:"$port" || echo "Aucun processus n'utilise encore le port $port."
-
-    if [ ${#SERVICES_STOPPED[@]} -gt 0 ]; then
-      echo "Les services suivants ont été arrêtés et désactivés temporairement :"
-      for svc in "${SERVICES_STOPPED[@]}"; do
-        echo " - $svc"
-      done
-      echo "N'oubliez pas de les redémarrer après l'installation, par exemple :"
-      echo "sudo systemctl enable ${SERVICES_STOPPED[0]} && sudo systemctl start ${SERVICES_STOPPED[0]}"
-    fi
-  else
-    echo "Aucun processus n'occupe le port $port."
-  fi
+# Génération du fichier .env
+create_env_file() {
+    log "Création du fichier de configuration $ENV_FILE..."
+    cat <<EOF > "$ENV_FILE"
+PORT=$PORT
+SCRIPT_PATH=$SCRIPT_PATH
+SYSTEMD_SERVICE=$SYSTEMD_SERVICE
+EOF
+    chmod 600 "$ENV_FILE"
+    log "Fichier .env généré."
 }
 
-case "$confirm" in
-  [oO][uU][iI]|[yY][eE][sS])
-    echo "Vérification du module pysocks..."
-    if ! python3 -c "import socks" &> /dev/null; then
-      echo "Module pysocks absent, installation requise."
-      if ! install_pysocks; then
-        echo "Erreur installation pysocks, abandon."
-        exit 1
-      fi
+# Démarrage principal
+main() {
+    if [ "${1:-}" != "auto" ]; then
+        read -p "Voulez-vous démarrer le proxy SOCKS/Python WS sur le port $PORT ? [oui/non] : " confirm
     else
-      echo "Module pysocks déjà installé."
+        confirm="oui"
     fi
 
-    check_ufw
+    case "$confirm" in
+        [oO][uU][iI]|[yY][eE][sS])
+            install_pysocks
+            cleanup_port "$PORT"
+            download_script
+            configure_iptables
+            create_systemd_service
+            create_env_file
+            log "Installation et configuration terminées. Vérifiez les logs : $LOG_FILE"
+            ;;
+        *)
+            log "Installation annulée."
+            exit 0
+            ;;
+    esac
+}
 
-    echo "Autorisation du port $PORT dans le firewall UFW..."
-    sudo ufw allow "$PORT"/tcp
-
-    SCRIPT_PATH="/usr/local/bin/ws2_proxy.py"
-    SCRIPT_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main/ws2_proxy.py"
-
-    if [ ! -f "$SCRIPT_PATH" ] || [ $(( $(date +%s) - $(stat -c %Y "$SCRIPT_PATH") )) -ge 86400 ]; then
-      echo "Téléchargement / mise à jour du script proxy..."
-      sudo wget -q -O "$SCRIPT_PATH" "$SCRIPT_URL" || { echo "Erreur téléchargement."; exit 1; }
-      sudo chmod +x "$SCRIPT_PATH"
-      echo "Script proxy prêt à l'emploi."
-    else
-      echo "Script proxy à jour : $SCRIPT_PATH"
-    fi
-
-    kill_old_instances
-
-    kill_and_clean_port80
-
-    if sudo lsof -i :"$PORT" >/dev/null; then
-      echo "Le port $PORT est encore utilisé, veuillez vérifier manuellement."
-      exit 1
-    fi
-
-    create_systemd_service
-
-    echo "Vérifier les logs : sudo journalctl -u socks_python_ws.service"
-    ;;
-  *)
-    echo "Installation annulée."
-    exit 1
-    ;;
-esac
+main "$@"
