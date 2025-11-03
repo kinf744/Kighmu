@@ -5,7 +5,8 @@
 
 set -euo pipefail
 
-INSTALL_DIR="/root/udp-custom"
+# --- Variables ---
+INSTALL_DIR="/opt/udp-custom"
 CONFIG_FILE="$INSTALL_DIR/config/config.json"
 BIN_PATH="$INSTALL_DIR/bin/udp-custom-linux-amd64"
 UDP_PORT=54000
@@ -23,13 +24,13 @@ log "+--------------------------------------------+"
 log "|             INSTALLATION UDP CUSTOM        |"
 log "+--------------------------------------------+"
 
-# Dépendances
+# --- Dépendances ---
 install_package_if_missing() {
   local pkg="$1"
   log "Installation de $pkg..."
-  if apt-get update -y >/dev/null 2>&1; then :; fi
+  apt-get update -y >/dev/null 2>&1 || true
   if ! apt-get install -y "$pkg" >/dev/null 2>&1; then
-    log "⚠️ Attention : échec de l'installation du paquet $pkg, le script continue..."
+    log "⚠️ Échec de l'installation de $pkg, le script continue..."
   else
     log "Le paquet $pkg a été installé avec succès."
   fi
@@ -40,7 +41,7 @@ for p in "${essential_packages[@]}"; do
   install_package_if_missing "$p"
 done
 
-# Vérification IP publique
+# --- Vérification IP publique ---
 if ! command -v curl >/dev/null 2>&1; then
   install_package_if_missing curl
 fi
@@ -49,7 +50,7 @@ if [[ -z "$IP_TEST" ]]; then
   log "⚠️ Impossible de déterminer l’IP publique via curl."
 fi
 
-# Clonage ou mise à jour du dépôt
+# --- Clonage ou mise à jour du dépôt ---
 if [ ! -d "$INSTALL_DIR" ]; then
   log "Clonage du dépôt udp-custom..."
   git clone https://github.com/http-custom/udp-custom.git "$INSTALL_DIR" 2>>"$LOG_FILE" || {
@@ -61,10 +62,9 @@ else
   cd "$INSTALL_DIR"
   git pull 2>>"$LOG_FILE" || log "Échec de la mise à jour, le script continue."
 fi
-
 cd "$INSTALL_DIR"
 
-# Vérification du binaire
+# --- Vérification du binaire ---
 if [ ! -x "$BIN_PATH" ]; then
   if [ -f "$BIN_PATH" ]; then
     chmod +x "$BIN_PATH"
@@ -75,7 +75,7 @@ if [ ! -x "$BIN_PATH" ]; then
   exit 1
 fi
 
-# Configuration JSON
+# --- Configuration JSON ---
 log "Configuration UDP..."
 mkdir -p "$(dirname "$CONFIG_FILE")"
 cat > "$CONFIG_FILE" << EOF
@@ -87,26 +87,26 @@ cat > "$CONFIG_FILE" << EOF
 }
 EOF
 
-# Création utilisateur dédié
+# --- Création utilisateur dédié ---
 if ! id -u udpuser >/dev/null 2>&1; then
   useradd -r -m -d /home/udpuser udpuser || true
   log "Utilisateur dédié udpuser créé."
 fi
 chown -R udpuser:udpuser "$INSTALL_DIR"
 
-# Ouverture du port UDP via iptables persistantes
+# --- iptables persistantes ---
 log "Configuration du port UDP $UDP_PORT avec iptables..."
 iptables -C INPUT -p udp --dport "$UDP_PORT" -j ACCEPT 2>/dev/null || iptables -I INPUT -p udp --dport "$UDP_PORT" -j ACCEPT
 iptables -C OUTPUT -p udp --sport "$UDP_PORT" -j ACCEPT 2>/dev/null || iptables -I OUTPUT -p udp --sport "$UDP_PORT" -j ACCEPT
 
-# Sauvegarde iptables persistante
+# Sauvegarde persistante
 mkdir -p /etc/iptables
 iptables-save | tee /etc/iptables/rules.v4
 systemctl enable netfilter-persistent
 systemctl restart netfilter-persistent || true
 log "Règles iptables appliquées et persistantes."
 
-# Service systemd
+# --- Service systemd ---
 SERVICE_PATH="/etc/systemd/system/udp_custom.service"
 log "Création du fichier systemd udp_custom.service..."
 cat > "$SERVICE_PATH" <<EOF
@@ -136,7 +136,7 @@ systemctl daemon-reload
 systemctl enable udp_custom.service
 systemctl restart udp_custom.service
 
-# Vérification du démarrage
+# --- Vérification démarrage ---
 sleep 3
 if pgrep -f "udp-custom-linux-amd64" >/dev/null; then
   log "UDP Custom démarré avec succès sur le port $UDP_PORT."
@@ -147,11 +147,11 @@ fi
 
 log "+--------------------------------------------+"
 log "|          Configuration terminée            |"
-log "|  Port UDP $UDP_PORT ouvert et persistant    |"
+log "|  Port UDP $UDP_PORT ouvert et persistant   |"
 log "|  Service systemd udp_custom actif          |"
 log "+--------------------------------------------+"
 
-# Fonction de désinstallation
+# --- Désinstallation ---
 uninstall_udp_custom() {
     log ">>> Désinstallation UDP Custom..."
     systemctl stop udp_custom.service || true
