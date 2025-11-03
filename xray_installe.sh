@@ -16,31 +16,40 @@ echo "$DOMAIN" > /tmp/.xray_domain
 EMAIL="adrienkiaje@gmail.com"
 
 apt update
-apt install -y ufw iptables iptables-persistent curl socat xz-utils wget apt-transport-https \
+apt install -y iptables iptables-persistent curl socat xz-utils wget apt-transport-https \
   gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq ca-certificates libcap2-bin
 
-ufw allow ssh
-ufw allow 80/tcp
-ufw allow 80/udp
-ufw allow 8443/tcp
-ufw allow 8443/udp
-ufw allow 2083/tcp
-ufw allow 2083/udp
+# Suppression des mentions UFW et gestion via iptables uniquement
+# Suppression des règles UFW si elles existent (aucun effet si UFW non utilisé)
+if command -v ufw >/dev/null 2>&1; then
+  ufw --help >/dev/null 2>&1 || true
+  # Ne pas désactiver UFW si il est actif; on retire toute dépendance UFW en fin de script
+fi
 
-echo "y" | ufw enable
-ufw status verbose
+# Configuration iptables initiale
+# Autoriser SSH
+iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+# Autoriser HTTP et WS TLS/NTLS via Xray
+iptables -A INPUT -p tcp --dport 80 -j ACCEPT
+iptables -A INPUT -p udp --dport 80 -j ACCEPT
+iptables -A INPUT -p tcp --dport 8443 -j ACCEPT
+iptables -A INPUT -p udp --dport 8443 -j ACCEPT
+iptables -A INPUT -p tcp --dport 2083 -j ACCEPT
+iptables -A INPUT -p udp --dport 2083 -j ACCEPT
 
-ntpdate pool.ntp.org
-timedatectl set-ntp true
-systemctl enable chronyd
-systemctl restart chronyd
-systemctl enable chrony
-systemctl restart chrony
-timedatectl set-timezone Asia/Kuala_Lumpur
+# Autoriser correspondances sortantes si nécessaire (optionnel)
+iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
 
-chronyc sourcestats -v
-chronyc tracking -v
-date
+# S'assurer que les règles sont persistées
+netfilter-persistent flush
+netfilter-persistent save
+
+echo "netfilter-persistent a appliqué les règles initiales."
+
+echo "Démarrage et état des règles iptables sauvegardées dans netfilter-persistent."
+# Vérification rapide
+iptables -S
 
 # Téléchargement et extraction de la dernière version stable Xray
 latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest | grep tag_name | cut -d '"' -f4 | sed 's/v//')
@@ -368,18 +377,20 @@ cat > /etc/trojan-go/config.json << EOF
 }
 EOF
 
-ufw allow ssh
-ufw allow 80/tcp
-ufw allow 80/udp
-ufw allow 8443/tcp
-ufw allow 8443/udp
-ufw allow 2083/tcp
-ufw allow 2083/udp
+# Reconfiguration accrochée aux ports via iptables
+iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+iptables -A INPUT -p tcp --dport 80 -j ACCEPT
+iptables -A INPUT -p udp --dport 80 -j ACCEPT
+iptables -A INPUT -p tcp --dport 8443 -j ACCEPT
+iptables -A INPUT -p udp --dport 8443 -j ACCEPT
+iptables -A INPUT -p tcp --dport 2083 -j ACCEPT
+iptables -A INPUT -p udp --dport 2083 -j ACCEPT
 
-echo "y" | ufw enable
-ufw status verbose
+# Sauvegarde des règles iptables dans netfilter-persistent
+netfilter-persistent flush
+netfilter-persistent save
 
-echo -e "${GREEN}Installation complète terminée.${NC}"
+echo "Installation complète terminée."
 echo "Domaine : $DOMAIN"
 echo "UUID VMess TLS : $uuid1"
 echo "UUID VMess Non-TLS : $uuid2"
