@@ -1,6 +1,4 @@
 #!/bin/bash
-# Script SlowDNS modifié pour pointer vers le port Xray (127.0.0.1:10800)
-
 set -euo pipefail
 
 SLOWDNS_DIR="/etc/slowdns"
@@ -39,7 +37,6 @@ install_slowdns_bin() {
 
 install_fixed_keys() {
     mkdir -p "$SLOWDNS_DIR"
-    # Clés hardcodées de l'utilisateur
     echo "4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa" > "$SERVER_KEY"
     echo "2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c" > "$SERVER_PUB"
     chmod 600 "$SERVER_KEY"
@@ -70,33 +67,22 @@ EOF
 
 stop_systemd_resolved() {
     log "Arrêt de systemd-resolved pour libérer le port 53..."
-    systemctl stop systemd-resolved || true
-    systemctl disable systemd-resolved || true
+    systemctl stop systemd-resolved
+    systemctl disable systemd-resolved
     rm -f /etc/resolv.conf
     echo "nameserver 8.8.8.8" > /etc/resolv.conf
 }
 
 configure_iptables() {
     log "Configuration du pare-feu via iptables..."
-    # Règle SlowDNS
     iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
-    # Règle SSH (port 22)
     iptables -I INPUT -p tcp --dport 22 -j ACCEPT
-    
-    # Ajout des ports Xray pour s'assurer qu'ils sont ouverts
-    iptables -A INPUT -p tcp --dport 80 -j ACCEPT
-    iptables -A INPUT -p udp --dport 80 -j ACCEPT
-    iptables -A INPUT -p tcp --dport 8443 -j ACCEPT
-    iptables -A INPUT -p udp --dport 8443 -j ACCEPT
-    iptables -A INPUT -p tcp --dport 2083 -j ACCEPT
-    iptables -A INPUT -p udp --dport 2083 -j ACCEPT
-    
     iptables-save > /etc/iptables/rules.v4
     log "Règles iptables appliquées et sauvegardées dans /etc/iptables/rules.v4"
     
     # Assurer la persistance au redémarrage
-    systemctl enable netfilter-persistent || true
-    systemctl restart netfilter-persistent || true
+    systemctl enable netfilter-persistent
+    systemctl restart netfilter-persistent
     log "Persistance iptables activée via netfilter-persistent."
 }
 
@@ -127,7 +113,7 @@ wait_for_interface() {
 
 setup_iptables() {
     interface="$1"
-    # Règle de redirection du port 53 vers le port d'écoute de sldns-server (5300)
+    iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
     iptables -t nat -I PREROUTING -i "$interface" -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
 }
 
@@ -135,14 +121,15 @@ log "Attente de l'interface réseau..."
 interface=$(wait_for_interface)
 log "Interface détectée : $interface"
 
-log "Application des règles iptables de redirection..."
+log "Application des règles iptables..."
 setup_iptables "$interface"
 
-log "Démarrage SlowDNS pointant vers Xray SOCKS (127.0.0.1:10800)..."
+log "Démarrage SlowDNS..."
 NS=$(cat "$CONFIG_FILE")
+ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
+[ -z "$ssh_port" ] && ssh_port=22
 
-# MODIFICATION CRUCIALE : Pointe vers le port SOCKS de Xray (10800) au lieu du port SSH
-exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 127.0.0.1:10800
+exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
 EOF
     chmod +x /usr/local/bin/slowdns-start.sh
 }
@@ -150,7 +137,7 @@ EOF
 create_systemd_service() {
     cat <<EOF > /etc/systemd/system/slowdns.service
 [Unit]
-Description=SlowDNS Server Tunnel (Combiné Xray)
+Description=SlowDNS Server Tunnel
 After=network-online.target
 Wants=network-online.target
 
@@ -213,7 +200,6 @@ EOF
     echo ""
     echo "Clé publique : $PUB_KEY"
     echo "NameServer  : $NAMESERVER"
-    echo "Le tunnel SlowDNS pointe maintenant vers Xray SOCKS (127.0.0.1:10800)."
     echo ""
     log "Installation et configuration SlowDNS terminées."
 }
