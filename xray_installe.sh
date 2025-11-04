@@ -1,5 +1,7 @@
 #!/bin/bash
-# xray_installe.sh  Installation complète Xray + Trojan Go + UFW, avec users.json pour menu
+# Script Xray modifié pour ajouter l'inbound SOCKS 10800 pour SlowDNS
+
+set -euo pipefail
 
 RED='\u001B[0;31m'
 GREEN='\u001B[0;32m'
@@ -20,10 +22,8 @@ apt install -y iptables iptables-persistent curl socat xz-utils wget apt-transpo
   gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq ca-certificates libcap2-bin
 
 # Suppression des mentions UFW et gestion via iptables uniquement
-# Suppression des règles UFW si elles existent (aucun effet si UFW non utilisé)
 if command -v ufw >/dev/null 2>&1; then
   ufw --help >/dev/null 2>&1 || true
-  # Ne pas désactiver UFW si il est actif; on retire toute dépendance UFW en fin de script
 fi
 
 # Configuration iptables initiale
@@ -122,6 +122,18 @@ cat > /etc/xray/config.json << EOF
     "loglevel": "info"
   },
   "inbounds": [
+    # INBOUND SOCKS POUR SLOWDNS (Ajouté pour la combinaison)
+    {
+      "listen": "127.0.0.1",
+      "port": 10800,
+      "protocol": "socks",
+      "settings": {
+        "auth": "noauth",
+        "udp": true
+      },
+      "tag": "slowdns-in"
+    },
+    # INBOUNDS EXISTANTS
     {
       "port": 8443,
       "protocol": "vmess",
