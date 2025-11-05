@@ -1,6 +1,8 @@
 #!/bin/bash
 # xray_installe.sh  Installation complète Xray + Trojan Go + UFW, avec users.json pour menu
 
+set -euo pipefail
+
 RED='\u001B[0;31m'
 GREEN='\u001B[0;32m'
 NC='\u001B[0m'
@@ -122,6 +124,17 @@ cat > /etc/xray/config.json << EOF
     "loglevel": "info"
   },
   "inbounds": [
+    # INBOUND SOCKS POUR MULTIPLEXAGE SLOWDNS (Ajouté)
+    {
+      "listen": "127.0.0.1",
+      "port": 10801,
+      "protocol": "socks",
+      "settings": {
+        "auth": "noauth",
+        "udp": true
+      },
+      "tag": "slowdns-in"
+    },
     {
       "port": 8443,
       "protocol": "vmess",
