@@ -1,4 +1,3 @@
-#!/bin/bash
 set -euo pipefail
 
 SLOWDNS_DIR="/etc/slowdns"
@@ -7,11 +6,6 @@ PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 SERVER_PUB="$SLOWDNS_DIR/server.pub"
-
-# Port d'écoute pour le multiplexeur sslh (cible du SlowDNS)
-SSLH_PORT=10800
-# Port d'écoute pour l'inbound SOCKS de Xray (cible du sslh)
-XRAY_SOCKS_PORT=10801
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
@@ -23,9 +17,9 @@ check_root() {
 }
 
 install_dependencies() {
-    log "Installation des dépendances (sslh ajouté)..."
+    log "Installation des dépendances..."
     apt-get update -q
-    apt-get install -y iptables iptables-persistent wget tcpdump sslh
+    apt-get install -y iptables iptables-persistent wget tcpdump
 }
 
 install_slowdns_bin() {
@@ -72,8 +66,8 @@ EOF
 
 disable_systemd_resolved() {
     log "Désactivation non-destructive du stub DNS systemd-resolved (libère le port 53 localement)..."
-    systemctl stop systemd-resolved || true
-    systemctl disable systemd-resolved || true
+    systemctl stop systemd-resolved
+    systemctl disable systemd-resolved
     rm -f /etc/resolv.conf
     echo "nameserver 8.8.8.8" > /etc/resolv.conf
 }
@@ -95,19 +89,6 @@ configure_iptables() {
     log "Persistance iptables activée via netfilter-persistent."
 }
 
-# --- Ajout de la configuration sslh ---
-configure_sslh() {
-    log "Configuration du multiplexeur sslh..."
-    # sslh écoute sur le port 10800 (cible du SlowDNS)
-    # Il redirige vers SSH (22) ou Xray SOCKS (10801)
-    cat > /etc/default/sslh <<EOF
-RUN=yes
-DAEMON_OPTS="--user sslh --listen 127.0.0.1:$SSLH_PORT --ssh 127.0.0.1:22 --anyprot 127.0.0.1:$XRAY_SOCKS_PORT --pidfile /var/run/sslh/sslh.pid"
-EOF
-    systemctl enable sslh
-    systemctl restart sslh
-}
-
 create_wrapper_script() {
     cat <<'EOF' > /usr/local/bin/slowdns-start.sh
 #!/bin/bash
@@ -118,7 +99,6 @@ SLOWDNS_BIN="/usr/local/bin/sldns-server"
 PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
-SSLH_PORT=10800 # Port du multiplexeur sslh
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
@@ -153,11 +133,13 @@ log "Interface détectée : $interface"
 log "Application des règles iptables..."
 setup_iptables "$interface"
 
-log "Démarrage du serveur SlowDNS pointant vers sslh (port $SSLH_PORT)..."
+log "Démarrage du serveur SlowDNS..."
 
 NS=$(cat "$CONFIG_FILE")
-# MODIFICATION CRUCIALE : Pointe vers le port du multiplexeur sslh
-exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 127.0.0.1:$SSLH_PORT
+ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
+[ -z "$ssh_port" ] && ssh_port=22
+
+exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
 EOF
 
     chmod +x /usr/local/bin/slowdns-start.sh
@@ -166,7 +148,7 @@ EOF
 create_systemd_service() {
     cat <<EOF > /etc/systemd/system/slowdns.service
 [Unit]
-Description=SlowDNS Server Tunnel (Multiplexé)
+Description=SlowDNS Server Tunnel
 After=network-online.target
 Wants=network-online.target
 Documentation=https://github.com/fisabiliyusri/SLDNS
@@ -214,7 +196,6 @@ main() {
 
     configure_sysctl
     configure_iptables
-    configure_sslh # Ajout de la configuration sslh
     create_wrapper_script
     create_systemd_service
 
@@ -234,7 +215,6 @@ EOF
     echo ""
     echo "Clé publique : $PUB_KEY"
     echo "NameServer  : $NAMESERVER"
-    echo "Le tunnel SlowDNS pointe vers le multiplexeur sslh (port $SSLH_PORT)."
     echo ""
     log "Installation et configuration SlowDNS terminées."
 }
