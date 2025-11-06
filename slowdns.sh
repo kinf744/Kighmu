@@ -43,9 +43,17 @@ install_fixed_keys() {
     chmod 644 "$SERVER_PUB"
 }
 
+disable_systemd_resolved() {
+    log "Libération du port 53 localement..."
+    systemctl stop systemd-resolved || true
+    systemctl disable systemd-resolved || true
+    rm -f /etc/resolv.conf
+    echo "nameserver 8.8.8.8" > /etc/resolv.conf
+}
+
 configure_sysctl() {
     log "Optimisation sysctl..."
-    sed -i '/# Optimisations SlowDNS/,+10d' /etc/sysctl.conf || true
+    sed -i '/# Optimisations SlowDNS/,+20d' /etc/sysctl.conf || true
     cat <<EOF >> /etc/sysctl.conf
 
 # Optimisations SlowDNS
@@ -68,19 +76,10 @@ EOF
     sysctl -p
 }
 
-disable_systemd_resolved() {
-    log "Libération du port 53 localement..."
-    systemctl stop systemd-resolved || true
-    systemctl disable systemd-resolved || true
-    rm -f /etc/resolv.conf
-    echo "nameserver 8.8.8.8" > /etc/resolv.conf
-}
-
 configure_iptables() {
     log "Configuration du pare-feu via iptables..."
     if ! iptables -C INPUT -p udp --dport 53 -j ACCEPT &>/dev/null; then
         iptables -I INPUT -p udp --dport 53 -j ACCEPT
-        log "Rule added: ACCEPT udp dport 53"
     fi
     iptables-save > /etc/iptables/rules.v4
     systemctl enable netfilter-persistent
@@ -108,9 +107,9 @@ NS=$(cat "$CONFIG_FILE")
 ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
 [ -z "$ssh_port" ] && ssh_port=22
 
-# Lancement du serveur en mode DNS natif
+# Lancement du serveur en mode UDP DNS correct
 log "Démarrage du serveur SlowDNS sur le port $PORT..."
-exec "$SLOWDNS_BIN" -dns :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
+exec "$SLOWDNS_BIN" -udp :$PORT -privkey "$SERVER_KEY" -domain "$NS" -forward 127.0.0.1:$ssh_port
 EOF
 
     chmod +x /usr/local/bin/slowdns-start.sh
@@ -176,7 +175,6 @@ PUB_KEY=$(cat "$SERVER_PUB")
 PRIV_KEY=$(cat "$SERVER_KEY")
 EOF
     chmod 600 /etc/slowdns/slowdns.env
-    log "Fichier slowdns.env généré avec succès."
 
     PUB_KEY=$(cat "$SERVER_PUB")
     echo ""
@@ -187,7 +185,7 @@ EOF
     echo "Clé publique : $PUB_KEY"
     echo "NameServer  : $NAMESERVER"
     echo ""
-    log "Installation et configuration SlowDNS terminées (version optimisée)."
+    log "Installation et configuration SlowDNS terminées (version corrigée et optimisée)."
 }
 
 main "$@"
