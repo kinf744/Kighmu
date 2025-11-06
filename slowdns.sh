@@ -3,7 +3,7 @@ set -euo pipefail
 
 SLOWDNS_DIR="/etc/slowdns"
 SLOWDNS_BIN="/usr/local/bin/sldns-server"
-PORT=53
+PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 SERVER_PUB="$SLOWDNS_DIR/server.pub"
@@ -12,7 +12,7 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
 check_root() {
     if [ "$EUID" -ne 0 ]; then
-        echo "Ce script doit être exécuté en root." >&2
+        echo "Ce script doit être executé en root ou via sudo." >&2
         exit 1
     fi
 }
@@ -43,24 +43,16 @@ install_fixed_keys() {
     chmod 644 "$SERVER_PUB"
 }
 
-disable_systemd_resolved() {
-    log "Libération du port 53 localement..."
-    systemctl stop systemd-resolved || true
-    systemctl disable systemd-resolved || true
-    rm -f /etc/resolv.conf
-    echo "nameserver 8.8.8.8" > /etc/resolv.conf
-}
-
 configure_sysctl() {
     log "Optimisation sysctl..."
-    sed -i '/# Optimisations SlowDNS/,+20d' /etc/sysctl.conf || true
+    sed -i '/# Optimisations SlowDNS/,+10d' /etc/sysctl.conf || true
     cat <<EOF >> /etc/sysctl.conf
 
 # Optimisations SlowDNS
-net.core.rmem_max=8388608
-net.core.wmem_max=8388608
-net.core.rmem_default=262144
-net.core.wmem_default=262144
+net.core.rmem_max=26214400
+net.core.wmem_max=26214400
+net.core.rmem_default=26214400
+net.core.wmem_default=26214400
 net.core.optmem_max=25165824
 net.ipv4.udp_rmem_min=16384
 net.ipv4.udp_wmem_min=16384
@@ -69,19 +61,26 @@ net.ipv4.tcp_fin_timeout=10
 net.ipv4.tcp_tw_reuse=1
 net.ipv4.tcp_mtu_probing=1
 net.ipv4.ip_forward=1
-net.ipv4.tcp_congestion_control=bbr
-net.ipv4.tcp_slow_start_after_idle=0
-net.ipv4.tcp_no_metrics_save=1
 EOF
     sysctl -p
 }
 
+stop_systemd_resolved() {
+    log "Arrêt de systemd-resolved pour libérer le port 53..."
+    systemctl stop systemd-resolved
+    systemctl disable systemd-resolved
+    rm -f /etc/resolv.conf
+    echo "nameserver 8.8.8.8" > /etc/resolv.conf
+}
+
 configure_iptables() {
     log "Configuration du pare-feu via iptables..."
-    if ! iptables -C INPUT -p udp --dport 53 -j ACCEPT &>/dev/null; then
-        iptables -I INPUT -p udp --dport 53 -j ACCEPT
-    fi
+    iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
+    iptables -I INPUT -p tcp --dport 22 -j ACCEPT
     iptables-save > /etc/iptables/rules.v4
+    log "Règles iptables appliquées et sauvegardées dans /etc/iptables/rules.v4"
+    
+    # Assurer la persistance au redémarrage
     systemctl enable netfilter-persistent
     systemctl restart netfilter-persistent
     log "Persistance iptables activée via netfilter-persistent."
@@ -94,24 +93,44 @@ set -euo pipefail
 
 SLOWDNS_DIR="/etc/slowdns"
 SLOWDNS_BIN="/usr/local/bin/sldns-server"
-PORT=53
+PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
-log "Initialisation du service SlowDNS..."
+wait_for_interface() {
+    interface=""
+    while [ -z "$interface" ]; do
+        interface=$(ip -o link show up | awk -F': ' '{print $2}' \
+                    | grep -v '^lo$' \
+                    | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' \
+                    | head -n1)
+        [ -z "$interface" ] && sleep 2
+    done
+    echo "$interface"
+}
 
-# Récupération du NS et du port SSH
+setup_iptables() {
+    interface="$1"
+    iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
+    iptables -t nat -I PREROUTING -i "$interface" -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
+}
+
+log "Attente de l'interface réseau..."
+interface=$(wait_for_interface)
+log "Interface détectée : $interface"
+
+log "Application des règles iptables..."
+setup_iptables "$interface"
+
+log "Démarrage SlowDNS..."
 NS=$(cat "$CONFIG_FILE")
 ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
 [ -z "$ssh_port" ] && ssh_port=22
 
-# Lancement du serveur selon la syntaxe officielle de cette version du binaire
-log "Démarrage du serveur SlowDNS sur le port $PORT..."
 exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
 EOF
-
     chmod +x /usr/local/bin/slowdns-start.sh
 }
 
@@ -121,24 +140,20 @@ create_systemd_service() {
 Description=SlowDNS Server Tunnel
 After=network-online.target
 Wants=network-online.target
-Documentation=https://github.com/fisabiliyusri/SLDNS
 
 [Service]
 Type=simple
 User=root
 ExecStart=/usr/local/bin/slowdns-start.sh
-Restart=on-failure
-RestartSec=3
-StandardOutput=append:/var/log/slowdns.log
-StandardError=append:/var/log/slowdns.log
-SyslogIdentifier=slowdns
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=slowdns-server
 LimitNOFILE=1048576
-Nice=0
-CPUSchedulingPolicy=other
-IOSchedulingClass=best-effort
-IOSchedulingPriority=4
-TimeoutStartSec=20
-NoNewPrivileges=yes
+Nice=-5
+CPUSchedulingPolicy=fifo
+CPUSchedulingPriority=99
 
 [Install]
 WantedBy=multi-user.target
@@ -154,7 +169,7 @@ main() {
     install_dependencies
     install_slowdns_bin
     install_fixed_keys
-    disable_systemd_resolved
+    stop_systemd_resolved
 
     read -rp "Entrez le NameServer (NS) (ex: ns.example.com) : " NAMESERVER
     if [[ -z "$NAMESERVER" ]]; then
@@ -175,6 +190,7 @@ PUB_KEY=$(cat "$SERVER_PUB")
 PRIV_KEY=$(cat "$SERVER_KEY")
 EOF
     chmod 600 /etc/slowdns/slowdns.env
+    log "Fichier slowdns.env généré avec succès."
 
     PUB_KEY=$(cat "$SERVER_PUB")
     echo ""
@@ -185,7 +201,7 @@ EOF
     echo "Clé publique : $PUB_KEY"
     echo "NameServer  : $NAMESERVER"
     echo ""
-    log "Installation et configuration SlowDNS terminées (version corrigée et compatible)."
+    log "Installation et configuration SlowDNS terminées."
 }
 
 main "$@"
