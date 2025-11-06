@@ -1,8 +1,9 @@
+#!/bin/bash
 set -euo pipefail
 
 SLOWDNS_DIR="/etc/slowdns"
 SLOWDNS_BIN="/usr/local/bin/sldns-server"
-PORT=5300
+PORT=53
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 SERVER_PUB="$SLOWDNS_DIR/server.pub"
@@ -60,14 +61,17 @@ net.ipv4.tcp_fin_timeout=10
 net.ipv4.tcp_tw_reuse=1
 net.ipv4.tcp_mtu_probing=1
 net.ipv4.ip_forward=1
+net.ipv4.tcp_congestion_control=bbr
+net.ipv4.tcp_slow_start_after_idle=0
+net.ipv4.tcp_no_metrics_save=1
 EOF
     sysctl -p
 }
 
 disable_systemd_resolved() {
-    log "Désactivation non-destructive du stub DNS systemd-resolved (libère le port 53 localement)..."
-    systemctl stop systemd-resolved
-    systemctl disable systemd-resolved
+    log "Libération du port 53 localement..."
+    systemctl stop systemd-resolved || true
+    systemctl disable systemd-resolved || true
     rm -f /etc/resolv.conf
     echo "nameserver 8.8.8.8" > /etc/resolv.conf
 }
@@ -76,12 +80,7 @@ configure_iptables() {
     log "Configuration du pare-feu via iptables..."
     if ! iptables -C INPUT -p udp --dport 53 -j ACCEPT &>/dev/null; then
         iptables -I INPUT -p udp --dport 53 -j ACCEPT
-    else
-        log "Rule exists: ACCEPT udp dport 53"
-    fi
-    if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
-        iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
-        log "Rule added: ACCEPT udp dport $PORT"
+        log "Rule added: ACCEPT udp dport 53"
     fi
     iptables-save > /etc/iptables/rules.v4
     systemctl enable netfilter-persistent
@@ -96,50 +95,22 @@ set -euo pipefail
 
 SLOWDNS_DIR="/etc/slowdns"
 SLOWDNS_BIN="/usr/local/bin/sldns-server"
-PORT=5300
+PORT=53
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
-wait_for_interface() {
-    interface=""
-    while [ -z "$interface" ]; do
-        interface=$(ip -o link show up | awk -F': ' '{print $2}' \
-                    | grep -v '^lo$' \
-                    | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' \
-                    | head -n1)
-        [ -z "$interface" ] && sleep 2
-    done
-    echo "$interface"
-}
+log "Initialisation du service SlowDNS..."
 
-setup_iptables() {
-    interface="$1"
-    if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
-        iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
-    fi
-    if ! iptables -t nat -C PREROUTING -i "$interface" -p udp --dport 53 -j REDIRECT --to-ports "$PORT" &>/dev/null; then
-        iptables -t nat -I PREROUTING -i "$interface" -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
-    else
-        log "Règles NAT déjà présentes pour le port 53"
-    fi
-}
-
-log "Attente de l'interface réseau..."
-interface=$(wait_for_interface)
-log "Interface détectée : $interface"
-
-log "Application des règles iptables..."
-setup_iptables "$interface"
-
-log "Démarrage du serveur SlowDNS..."
-
+# Récupération du NS et du port SSH
 NS=$(cat "$CONFIG_FILE")
 ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
 [ -z "$ssh_port" ] && ssh_port=22
 
-exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
+# Lancement du serveur en mode DNS natif
+log "Démarrage du serveur SlowDNS sur le port $PORT..."
+exec "$SLOWDNS_BIN" -dns :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
 EOF
 
     chmod +x /usr/local/bin/slowdns-start.sh
@@ -216,7 +187,7 @@ EOF
     echo "Clé publique : $PUB_KEY"
     echo "NameServer  : $NAMESERVER"
     echo ""
-    log "Installation et configuration SlowDNS terminées."
+    log "Installation et configuration SlowDNS terminées (version optimisée)."
 }
 
 main "$@"
