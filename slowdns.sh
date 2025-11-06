@@ -107,9 +107,9 @@ NS=$(cat "$CONFIG_FILE")
 ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
 [ -z "$ssh_port" ] && ssh_port=22
 
-# Lancement du serveur en mode UDP DNS correct
+# Lancement du serveur selon la syntaxe officielle de cette version du binaire
 log "Démarrage du serveur SlowDNS sur le port $PORT..."
-exec "$SLOWDNS_BIN" -udp :$PORT -privkey "$SERVER_KEY" -domain "$NS" -forward 127.0.0.1:$ssh_port
+exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
 EOF
 
     chmod +x /usr/local/bin/slowdns-start.sh
@@ -185,7 +185,7 @@ EOF
     echo "Clé publique : $PUB_KEY"
     echo "NameServer  : $NAMESERVER"
     echo ""
-    log "Installation et configuration SlowDNS terminées (version corrigée et optimisée)."
+    log "Installation et configuration SlowDNS terminées (version corrigée et compatible)."
 }
 
 main "$@"
