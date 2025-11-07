@@ -12,7 +12,7 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
 check_root() {
     if [ "$EUID" -ne 0 ]; then
-        echo "Ce script doit être exécuté en root ou via sudo." >&2
+        echo "Ce script doit être executé en root ou via sudo." >&2
         exit 1
     fi
 }
@@ -25,11 +25,11 @@ install_dependencies() {
 
 install_slowdns_bin() {
     if [ ! -x "$SLOWDNS_BIN" ]; then
-        log "Téléchargement du binaire SlowDNS v2 (Go 1.20)..."
-        wget -q -O "$SLOWDNS_BIN" https://raw.githubusercontent.com/fisabiliyusri/SLDNS/main/sldns-server-v2
+        log "Téléchargement du binaire SlowDNS..."
+        wget -q -O "$SLOWDNS_BIN" https://raw.githubusercontent.com/fisabiliyusri/SLDNS/main/slowdns/sldns-server
         chmod +x "$SLOWDNS_BIN"
         if [ ! -x "$SLOWDNS_BIN" ]; then
-            echo "ERREUR : Échec du téléchargement du binaire SlowDNS v2." >&2
+            echo "ERREUR : Échec du téléchargement du binaire SlowDNS." >&2
             exit 1
         fi
     fi
@@ -67,8 +67,8 @@ EOF
 
 stop_systemd_resolved() {
     log "Arrêt de systemd-resolved pour libérer le port 53..."
-    systemctl stop systemd-resolved 2>/dev/null || true
-    systemctl disable systemd-resolved 2>/dev/null || true
+    systemctl stop systemd-resolved
+    systemctl disable systemd-resolved
     rm -f /etc/resolv.conf
     echo "nameserver 8.8.8.8" > /etc/resolv.conf
 }
@@ -78,9 +78,12 @@ configure_iptables() {
     iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
     iptables -I INPUT -p tcp --dport 22 -j ACCEPT
     iptables-save > /etc/iptables/rules.v4
+    log "Règles iptables appliquées et sauvegardées dans /etc/iptables/rules.v4"
+    
+    # Assurer la persistance au redémarrage
     systemctl enable netfilter-persistent
     systemctl restart netfilter-persistent
-    log "Pare-feu configuré et persistant."
+    log "Persistance iptables activée via netfilter-persistent."
 }
 
 create_wrapper_script() {
@@ -121,12 +124,12 @@ log "Interface détectée : $interface"
 log "Application des règles iptables..."
 setup_iptables "$interface"
 
-log "Démarrage SlowDNS (v2)..."
+log "Démarrage SlowDNS..."
 NS=$(cat "$CONFIG_FILE")
 ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
 [ -z "$ssh_port" ] && ssh_port=22
 
-exec "$SLOWDNS_BIN" -udp :$PORT -privkey "$SERVER_KEY" -domain "$NS" -forward 127.0.0.1:$ssh_port
+exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
 EOF
     chmod +x /usr/local/bin/slowdns-start.sh
 }
@@ -134,7 +137,7 @@ EOF
 create_systemd_service() {
     cat <<EOF > /etc/systemd/system/slowdns.service
 [Unit]
-Description=SlowDNS Server Tunnel (v2)
+Description=SlowDNS Server Tunnel
 After=network-online.target
 Wants=network-online.target
 
@@ -173,7 +176,6 @@ main() {
         echo "NameServer invalide." >&2
         exit 1
     fi
-    mkdir -p "$SLOWDNS_DIR"
     echo "$NAMESERVER" > "$CONFIG_FILE"
     log "NameServer enregistré dans $CONFIG_FILE"
 
@@ -193,13 +195,13 @@ EOF
     PUB_KEY=$(cat "$SERVER_PUB")
     echo ""
     echo "+--------------------------------------------+"
-    echo "|          CONFIGURATION SLOWDNS v2          |"
+    echo "|          CONFIGURATION SLOWDNS             |"
     echo "+--------------------------------------------+"
     echo ""
     echo "Clé publique : $PUB_KEY"
-    echo "NameServer   : $NAMESERVER"
+    echo "NameServer  : $NAMESERVER"
     echo ""
-    log "Installation et configuration SlowDNS v2 terminées."
+    log "Installation et configuration SlowDNS terminées."
 }
 
 main "$@"
