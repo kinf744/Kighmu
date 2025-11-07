@@ -12,7 +12,7 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
 check_root() {
     if [ "$EUID" -ne 0 ]; then
-        echo "Ce script doit être executé en root ou via sudo." >&2
+        echo "Ce script doit être exécuté en root." >&2
         exit 1
     fi
 }
@@ -49,10 +49,10 @@ configure_sysctl() {
     cat <<EOF >> /etc/sysctl.conf
 
 # Optimisations SlowDNS
-net.core.rmem_max=26214400
-net.core.wmem_max=26214400
-net.core.rmem_default=26214400
-net.core.wmem_default=26214400
+net.core.rmem_max=8388608
+net.core.wmem_max=8388608
+net.core.rmem_default=262144
+net.core.wmem_default=262144
 net.core.optmem_max=25165824
 net.ipv4.udp_rmem_min=16384
 net.ipv4.udp_wmem_min=16384
@@ -65,8 +65,8 @@ EOF
     sysctl -p
 }
 
-stop_systemd_resolved() {
-    log "Arrêt de systemd-resolved pour libérer le port 53..."
+disable_systemd_resolved() {
+    log "Désactivation non-destructive du stub DNS systemd-resolved (libère le port 53 localement)..."
     systemctl stop systemd-resolved
     systemctl disable systemd-resolved
     rm -f /etc/resolv.conf
@@ -75,12 +75,16 @@ stop_systemd_resolved() {
 
 configure_iptables() {
     log "Configuration du pare-feu via iptables..."
-    iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
-    iptables -I INPUT -p tcp --dport 22 -j ACCEPT
+    if ! iptables -C INPUT -p udp --dport 53 -j ACCEPT &>/dev/null; then
+        iptables -I INPUT -p udp --dport 53 -j ACCEPT
+    else
+        log "Rule exists: ACCEPT udp dport 53"
+    fi
+    if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
+        iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
+        log "Rule added: ACCEPT udp dport $PORT"
+    fi
     iptables-save > /etc/iptables/rules.v4
-    log "Règles iptables appliquées et sauvegardées dans /etc/iptables/rules.v4"
-    
-    # Assurer la persistance au redémarrage
     systemctl enable netfilter-persistent
     systemctl restart netfilter-persistent
     log "Persistance iptables activée via netfilter-persistent."
@@ -113,24 +117,35 @@ wait_for_interface() {
 
 setup_iptables() {
     interface="$1"
-    iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
-    iptables -t nat -I PREROUTING -i "$interface" -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
+    if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
+        iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
+    fi
+    if ! iptables -t nat -C PREROUTING -i "$interface" -p udp --dport 53 -j REDIRECT --to-ports "$PORT" &>/dev/null; then
+        iptables -t nat -I PREROUTING -i "$interface" -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
+    else
+        log "Règles NAT déjà présentes pour le port 53"
+    fi
 }
 
 log "Attente de l'interface réseau..."
 interface=$(wait_for_interface)
 log "Interface détectée : $interface"
 
+log "Réglage MTU à 1400 pour éviter la fragmentation DNS..."
+ip link set dev "$interface" mtu 1400 || log "Échec réglage MTU, continuer"
+
 log "Application des règles iptables..."
 setup_iptables "$interface"
 
-log "Démarrage SlowDNS..."
+log "Démarrage du serveur SlowDNS..."
+
 NS=$(cat "$CONFIG_FILE")
 ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
 [ -z "$ssh_port" ] && ssh_port=22
 
 exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
 EOF
+
     chmod +x /usr/local/bin/slowdns-start.sh
 }
 
@@ -140,20 +155,24 @@ create_systemd_service() {
 Description=SlowDNS Server Tunnel
 After=network-online.target
 Wants=network-online.target
+Documentation=https://github.com/fisabiliyusri/SLDNS
 
 [Service]
 Type=simple
 User=root
 ExecStart=/usr/local/bin/slowdns-start.sh
-Restart=always
-RestartSec=5
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=slowdns-server
+Restart=on-failure
+RestartSec=3
+StandardOutput=append:/var/log/slowdns.log
+StandardError=append:/var/log/slowdns.log
+SyslogIdentifier=slowdns
 LimitNOFILE=1048576
-Nice=-5
-CPUSchedulingPolicy=fifo
-CPUSchedulingPriority=99
+Nice=0
+CPUSchedulingPolicy=other
+IOSchedulingClass=best-effort
+IOSchedulingPriority=4
+TimeoutStartSec=20
+NoNewPrivileges=yes
 
 [Install]
 WantedBy=multi-user.target
@@ -169,7 +188,7 @@ main() {
     install_dependencies
     install_slowdns_bin
     install_fixed_keys
-    stop_systemd_resolved
+    disable_systemd_resolved
 
     read -rp "Entrez le NameServer (NS) (ex: ns.example.com) : " NAMESERVER
     if [[ -z "$NAMESERVER" ]]; then
@@ -200,6 +219,14 @@ EOF
     echo ""
     echo "Clé publique : $PUB_KEY"
     echo "NameServer  : $NAMESERVER"
+    echo ""
+    echo "IMPORTANT : Pour améliorer le débit SSH, modifiez manuellement /etc/ssh/sshd_config en ajoutant :"
+    echo "Ciphers aes128-ctr,aes192-ctr,aes128-gcm@openssh.com"
+    echo "MACs hmac-sha2-256-etm@openssh.com,hmac-sha2-256"
+    echo "Compression yes"
+    echo "Puis redémarrez SSH avec : systemctl restart sshd"
+    echo ""
+    echo "Le MTU du tunnel est fixé à 1400 via le script de démarrage pour limiter la fragmentation DNS."
     echo ""
     log "Installation et configuration SlowDNS terminées."
 }
