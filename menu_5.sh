@@ -16,7 +16,7 @@ afficher_menu() {
   clear
   echo -e "${CYAN}╔══════════════════════════════════════════════════╗${RESET}"
   echo -e "${YELLOW}║       V2RAY PROTOCOLE${RESET}"
-  echo -e "${YELLOW}║----------------------------------------------------------${RESET}"
+  echo -e "${YELLOW}║--------------------------------------------------${RESET}"
 }
 
 # Affiche la ligne indiquant l'état du tunnel V2Ray WS
@@ -30,7 +30,7 @@ afficher_mode_v2ray_ws() {
 
 # Affiche les options du menu
 show_menu() {
-  echo -e "${YELLOW}║----------------------------------------------------------${RESET}"
+  echo -e "${YELLOW}║--------------------------------------------------${RESET}"
   echo -e "${YELLOW}║ 1) Installer tunnel V2Ray WS${RESET}"
   echo -e "${YELLOW}║ 2) Créer nouvel utilisateur${RESET}"
   echo -e "${YELLOW}║ 3) Supprimer un utilisateur${RESET}"
