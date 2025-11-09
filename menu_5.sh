@@ -179,6 +179,9 @@ creer_utilisateur() {
     domaine="votre-domaine.com"
   fi
 
+  local port="8088"
+  lien_vmess=$(generer_lien_vmess "$nom" "$domaine" "$port" "$uuid")
+
   clear
   echo -e "=============================="
   echo -e "🧩 VMESS"
@@ -187,7 +190,7 @@ creer_utilisateur() {
   echo -e "--------------------------------------------------"
   echo -e "➤ DOMAINE : $domaine"
   echo -e "➤ PORTs :"
-  echo -e "   NTLS  : 8088"
+  echo -e "   NTLS  : $port"
   echo -e "➤ UUID généré :"
   echo -e "   NTLS  : $uuid"
   echo -e "➤ Paths :"
@@ -195,7 +198,7 @@ creer_utilisateur() {
   echo -e "➤ Validité : $duree jours (expire le $date_exp)"
   echo -e "●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
   echo ""
-  echo -e "┃ Non‑TLS : vmess://$uuid@$domaine:8088?security=none&type=ws&host=$domaine&path=/vmess-ws&encryption=none#$nom"
+  echo -e "┃ Non‑TLS : $lien_vmess"
   echo -e "●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
   echo ""
   read -p "Appuyez sur Entrée pour continuer..."
