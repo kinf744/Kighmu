@@ -17,6 +17,8 @@ afficher_menu() {
   echo -e "${CYAN}╔════════════════════════════════╗${RESET}"
   echo -e "${YELLOW}║       V2RAY PROTOCOLE${RESET}"
   echo -e "${YELLOW}║--------------------------------${RESET}"
+  afficher_mode_v2ray_ws
+  show_menu
 }
 
 # Affiche la ligne indiquant l'état du tunnel V2Ray WS
