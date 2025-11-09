@@ -17,13 +17,11 @@ afficher_menu() {
   echo -e "${CYAN}╔════════════════════════════════╗${RESET}"
   echo -e "${YELLOW}║       V2RAY PROTOCOLE${RESET}"
   echo -e "${YELLOW}║--------------------------------${RESET}"
-  afficher_mode_v2ray_ws
-  show_menu
 }
 
 # Affiche la ligne indiquant l'état du tunnel V2Ray WS
 afficher_mode_v2ray_ws() {
-  if pgrep -f "v2ray run -config" >/dev/null 2>&1; then
+  if systemctl is-active --quiet v2ray.service; then
     local v2ray_port=$(jq -r '.inbounds[0].port' /etc/v2ray/config.json 2>/dev/null || echo "8088")
     echo -e "${CYAN}Tunnel actif:${RESET}"
     echo -e "  - V2Ray WS sur le port TCP ${GREEN}$v2ray_port${RESET}"
