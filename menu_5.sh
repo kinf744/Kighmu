@@ -17,6 +17,8 @@ afficher_menu() {
   echo -e "${CYAN}╔════════════════════════════════╗${RESET}"
   echo -e "${YELLOW}║       V2RAY PROTOCOLE${RESET}"
   echo -e "${YELLOW}║--------------------------------${RESET}"
+}
+  
 afficher_mode_v2ray_ws() {
     # Vérifie si V2Ray est lancé avec config run
     if pgrep -f "v2ray run -config" >/dev/null 2>&1; then
@@ -27,6 +29,7 @@ afficher_mode_v2ray_ws() {
     fi
 }
 
+  echo -e "${YELLOW}║--------------------------------${RESET}"
   echo -e "${YELLOW}║ 1) Installer tunnel V2Ray WS${RESET}"
   echo -e "${YELLOW}║ 2) Créer nouvel utilisateur${RESET}"
   echo -e "${YELLOW}║ 3) Supprimer un utilisateur${RESET}"
