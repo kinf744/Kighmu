@@ -14,7 +14,7 @@ RESET="\u001B[0m"
 # Affiche le menu avec titre dans cadre
 afficher_menu() {
   clear
-  echo -e "${CYAN}╔══════════════════════════════════════════════════╗${RESET}"
+  echo -e "${CYAN}╔═══════════════════════════════════════════════════════╗${RESET}"
   echo -e "${YELLOW}║       V2RAY PROTOCOLE${RESET}"
   echo -e "${YELLOW}║--------------------------------------------------${RESET}"
 }
@@ -36,7 +36,7 @@ show_menu() {
   echo -e "${YELLOW}║ 3) Supprimer un utilisateur${RESET}"
   echo -e "${YELLOW}║ 4) Désinstaller V2Ray${RESET}"
   echo -e "${RED}║ 0) Quitter${RESET}"
-  echo -e "${CYAN}╚══════════════════════════════════════════════════╝${RESET}"
+  echo -e "${CYAN}╚═══════════════════════════════════════════════════════╝${RESET}"
   echo -n "Choisissez une option : "
 }
 
