@@ -76,7 +76,7 @@ installer_v2ray() {
 EOF
 
   sudo pkill v2ray 2>/dev/null
-  sudo /usr/local/bin/v2ray -config /etc/v2ray/config.json &
+  sudo /usr/local/bin/v2ray run -config /etc/v2ray/config.json &
 
   echo -e "${GREEN}V2Ray WS installé et lancé sur le port 8088 avec path /vmess-ws pour le domaine ${domaine}${RESET}"
   echo "N'oubliez pas d'ouvrir et rediriger le port 8088 sur votre VPS."
