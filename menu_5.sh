@@ -29,6 +29,7 @@ afficher_mode_v2ray_ws() {
     fi
 }
 
+show_menu() {
   echo -e "${YELLOW}║--------------------------------${RESET}"
   echo -e "${YELLOW}║ 1) Installer tunnel V2Ray WS${RESET}"
   echo -e "${YELLOW}║ 2) Créer nouvel utilisateur${RESET}"
