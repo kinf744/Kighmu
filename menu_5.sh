@@ -25,7 +25,7 @@ afficher_mode_v2ray_ws() {
         # Essaye de lire le port configuré dans /etc/v2ray/config.json
         local v2ray_port=$(jq -r '.inbounds[0].port' /etc/v2ray/config.json 2>/dev/null || echo "8088")
         echo -e "${CYAN}Tunnel actif:${RESET}"
-        echo -e "  - V2Ray WS sur le port TCP ${GREEN}$v2ray_port${RESET}"
+        echo -e "  - V2Ray WS sur le port TCP ${GREEN}$8088${RESET}"
     fi
 }
 
@@ -137,7 +137,7 @@ creer_utilisateur() {
   echo -e "--------------------------------------------------"
   echo -e "➤ DOMAINE : $domaine"
   echo -e "➤ PORTs :"
-  echo -e "   NTLS  : 80"
+  echo -e "   NTLS  : 8088"
   echo -e "➤ UUID généré :"
   echo -e "   NTLS  : $uuid"
   echo -e "➤ Paths :"
@@ -145,7 +145,7 @@ creer_utilisateur() {
   echo -e "➤ Validité : $duree jours (expire le $date_exp)"
   echo -e "●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
   echo ""
-  echo -e "┃ Non‑TLS : vmess://$uuid@$domaine:80?security=none&type=ws&host=$domaine&path=/vmess-ws&encryption=none#$nom"
+  echo -e "┃ Non‑TLS : vmess://$uuid@$domaine:8088?security=none&type=ws&host=$domaine&path=/vmess-ws&encryption=none#$nom"
   echo -e "●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
   echo ""
   read -p "Appuyez sur Entrée pour continuer..."
