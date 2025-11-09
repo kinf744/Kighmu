@@ -11,24 +11,26 @@ RED="\u001B[1;31m"
 WHITE="\u001B[1;37m"
 RESET="\u001B[0m"
 
-# Fonction d’affichage du menu
+# Affiche le menu avec titre dans cadre
 afficher_menu() {
   clear
   echo -e "${CYAN}╔════════════════════════════════╗${RESET}"
   echo -e "${YELLOW}║       V2RAY PROTOCOLE${RESET}"
   echo -e "${YELLOW}║--------------------------------${RESET}"
-}
-  
-afficher_mode_v2ray_ws() {
-    # Vérifie si V2Ray est lancé avec config run
-    if pgrep -f "v2ray run -config" >/dev/null 2>&1; then
-        # Essaye de lire le port configuré dans /etc/v2ray/config.json
-        local v2ray_port=$(jq -r '.inbounds[0].port' /etc/v2ray/config.json 2>/dev/null || echo "8088")
-        echo -e "${CYAN}Tunnel actif:${RESET}"
-        echo -e "  - V2Ray WS sur le port TCP ${GREEN}$8088${RESET}"
-    fi
+  afficher_mode_v2ray_ws
+  show_menu
 }
 
+# Affiche la ligne indiquant l'état du tunnel V2Ray WS
+afficher_mode_v2ray_ws() {
+  if pgrep -f "v2ray run -config" >/dev/null 2>&1; then
+    local v2ray_port=$(jq -r '.inbounds[0].port' /etc/v2ray/config.json 2>/dev/null || echo "8088")
+    echo -e "${CYAN}Tunnel actif:${RESET}"
+    echo -e "  - V2Ray WS sur le port TCP ${GREEN}$v2ray_port${RESET}"
+  fi
+}
+
+# Affiche les options du menu
 show_menu() {
   echo -e "${YELLOW}║--------------------------------${RESET}"
   echo -e "${YELLOW}║ 1) Installer tunnel V2Ray WS${RESET}"
@@ -45,21 +47,71 @@ generer_uuid() {
   cat /proc/sys/kernel/random/uuid
 }
 
-# Installer V2Ray WS sans TLS (demande domaine)
+# Créer et démarrer le service systemd V2Ray
+creer_service_systemd_v2ray() {
+  echo "Création du service systemd pour V2Ray..."
+  sudo tee /etc/systemd/system/v2ray.service > /dev/null <<EOF
+[Unit]
+Description=V2Ray Service
+After=network.target
+Wants=network-online.target
+
+[Service]
+User=root
+ExecStart=/usr/local/bin/v2ray run -config /etc/v2ray/config.json
+Restart=on-failure
+RestartSec=5s
+LimitNOFILE=65536
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=v2ray
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  sudo systemctl daemon-reload
+  sudo systemctl enable v2ray.service
+  sudo systemctl start v2ray.service
+  sudo systemctl status v2ray.service --no-pager
+  echo "Service systemd V2Ray configuré et démarré."
+}
+
+# Installer V2Ray WS sans TLS avec gestion avancée des logs
 installer_v2ray() {
   echo -n "Entrez votre domaine (ex: example.com) : "
   read domaine
 
-  echo "Installation de V2Ray WS sans TLS..."
-  # Téléchargement et installation de V2Ray
-  wget -q https://github.com/v2fly/v2ray-core/releases/latest/download/v2ray-linux-64.zip -O /tmp/v2ray.zip
-  unzip -q /tmp/v2ray.zip -d /tmp/v2ray
-  sudo mv /tmp/v2ray/v2ray /usr/local/bin/
-  sudo mv /tmp/v2ray/v2ctl /usr/local/bin/
-  sudo chmod +x /usr/local/bin/v2ray /usr/local/bin/v2ctl
+  LOGFILE="/var/log/v2ray_install.log"
+  sudo touch $LOGFILE
+  sudo chmod 640 $LOGFILE
+
+  echo "Installation de V2Ray WS sans TLS... (logs: $LOGFILE)"
+
+  set +e
+  wget -q https://github.com/v2fly/v2ray-core/releases/latest/download/v2ray-linux-64.zip -O /tmp/v2ray.zip 2>> $LOGFILE
+  ret=$?
+  set -e
+  if [[ $ret -ne 0 ]]; then
+    echo "Erreur: échec du téléchargement, voir $LOGFILE"
+    return 1
+  fi
+
+  unzip -o /tmp/v2ray.zip -d /tmp/v2ray >> $LOGFILE 2>&1 || {
+    echo "Erreur: échec de la décompression, voir $LOGFILE"
+    return 1
+  }
+
+  if [[ -f /tmp/v2ray/v2ray ]]; then
+    sudo mv /tmp/v2ray/v2ray /usr/local/bin/
+    sudo chmod +x /usr/local/bin/v2ray
+  else
+    echo "Erreur: binaire v2ray non trouvé après décompression." | tee -a $LOGFILE
+    return 1
+  fi
+
   sudo mkdir -p /etc/v2ray
 
-  # Config basique WS sans TLS, port 8088 (modifié via port inclus dans la config), path /vmess-ws
   cat <<EOF | sudo tee /etc/v2ray/config.json > /dev/null
 {
   "inbounds": [
@@ -89,15 +141,14 @@ installer_v2ray() {
 }
 EOF
 
-  sudo pkill v2ray 2>/dev/null
-  sudo /usr/local/bin/v2ray run -config /etc/v2ray/config.json &
+  creer_service_systemd_v2ray
 
   echo -e "${GREEN}V2Ray WS installé et lancé sur le port 8088 avec path /vmess-ws pour le domaine ${domaine}${RESET}"
   echo "N'oubliez pas d'ouvrir et rediriger le port 8088 sur votre VPS."
   read -p "Appuyez sur Entrée pour continuer..."
 }
 
-# Charger utilisateurs JSON
+# Gestion utilisateurs (charger, sauvegarder, créer, supprimer)
 charger_utilisateurs() {
   if [[ ! -f $USER_DB ]]; then
     echo "[]" > "$USER_DB"
@@ -105,15 +156,12 @@ charger_utilisateurs() {
   utilisateurs=$(cat "$USER_DB")
 }
 
-# Sauvegarder utilisateurs JSON
 sauvegarder_utilisateurs() {
   echo "$utilisateurs" > "$USER_DB"
 }
 
-# Ajouter un utilisateur
 creer_utilisateur() {
   charger_utilisateurs
-
   echo -n "Entrez un nom d'utilisateur : "
   read nom
   echo -n "Durée de validité (en jours) : "
@@ -121,8 +169,6 @@ creer_utilisateur() {
 
   uuid=$(generer_uuid)
   date_exp=$(date -d "+${duree} days" +%Y-%m-%d)
-
-  # Ajouter dans JSON
   utilisateurs=$(echo "$utilisateurs" | jq --arg n "$nom" --arg u "$uuid" --arg d "$date_exp" '. += [{"nom": $n, "uuid": $u, "expire": $d}]')
   sauvegarder_utilisateurs
 
@@ -151,7 +197,6 @@ creer_utilisateur() {
   read -p "Appuyez sur Entrée pour continuer..."
 }
 
-# Supprimer utilisateur
 supprimer_utilisateur() {
   charger_utilisateurs
   count=$(echo "$utilisateurs" | jq length)
@@ -160,23 +205,19 @@ supprimer_utilisateur() {
     read -p "Appuyez sur Entrée pour continuer..."
     return
   fi
-
   echo "Utilisateurs actuels :"
   for i in $(seq 0 $((count - 1))); do
     nom=$(echo "$utilisateurs" | jq -r ".[$i].nom")
     expire=$(echo "$utilisateurs" | jq -r ".[$i].expire")
     echo "$((i+1))) $nom (expire le $expire)"
   done
-
   echo -n "Entrez le numéro de l'utilisateur à supprimer : "
   read choix
-
   if (( choix < 1 || choix > count )); then
     echo "Choix invalide."
     read -p "Appuyez sur Entrée pour continuer..."
     return
   fi
-
   index=$((choix - 1))
   utilisateurs=$(echo "$utilisateurs" | jq "del(.[${index}])")
   sauvegarder_utilisateurs
@@ -184,11 +225,14 @@ supprimer_utilisateur() {
   read -p "Appuyez sur Entrée pour continuer..."
 }
 
-# Désinstaller V2Ray avec confirmation
 desinstaller_v2ray() {
   echo -n "Êtes-vous sûr de vouloir désinstaller V2Ray ? (o/N) : "
   read reponse
   if [[ "$reponse" =~ ^[Oo]$ ]]; then
+    sudo systemctl stop v2ray.service
+    sudo systemctl disable v2ray.service
+    sudo rm -f /etc/systemd/system/v2ray.service
+    sudo systemctl daemon-reload
     sudo pkill v2ray 2>/dev/null
     sudo rm -rf /usr/local/bin/v2ray /usr/local/bin/v2ctl /etc/v2ray
     echo "V2Ray désinstallé et nettoyé."
