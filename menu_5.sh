@@ -11,6 +11,34 @@ RED="\u001B[1;31m"
 WHITE="\u001B[1;37m"
 RESET="\u001B[0m"
 
+# Générer lien vmess au format base64 JSON (fonction globale)
+generer_lien_vmess() {
+  local nom="$1"
+  local domaine="$2"
+  local port="$3"
+  local uuid="$4"
+
+  local json_config=$(cat <<-EOF
+{
+  "v": "2",
+  "ps": "$nom",
+  "add": "$domaine",
+  "port": "$port",
+  "id": "$uuid",
+  "aid": "0",
+  "net": "ws",
+  "type": "none",
+  "host": "$domaine",
+  "path": "/vmess-ws",
+  "tls": "none",
+  "scy": "auto"
+}
+EOF
+  )
+
+  echo "vmess://$(echo -n "$json_config" | base64 -w 0)"
+}
+
 # Affiche le menu avec titre dans cadre
 afficher_menu() {
   clear
