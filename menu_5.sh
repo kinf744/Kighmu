@@ -17,8 +17,6 @@ afficher_menu() {
   echo -e "${CYAN}╔════════════════════════════════╗${RESET}"
   echo -e "${YELLOW}║       V2RAY PROTOCOLE${RESET}"
   echo -e "${YELLOW}║--------------------------------${RESET}"
-  afficher_mode_v2ray_ws
-  show_menu
 }
 
 # Affiche la ligne indiquant l'état du tunnel V2Ray WS
@@ -245,6 +243,8 @@ desinstaller_v2ray() {
 # Programme principal
 while true; do
   afficher_menu
+  afficher_mode_v2ray_ws
+  show_menu
   read option
   case "$option" in
     1) installer_v2ray ;;
