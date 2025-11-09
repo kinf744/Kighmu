@@ -139,6 +139,9 @@ installer_v2ray() {
 }
 EOF
 
+  # Stockage du domaine pour réutilisation dans la création utilisateur
+  echo "$domaine" | sudo tee /.v2ray_domain > /dev/null
+
   creer_service_systemd_v2ray
 
   echo -e "${GREEN}V2Ray WS installé et lancé sur le port 8088 avec path /vmess-ws pour le domaine ${domaine}${RESET}"
@@ -170,8 +173,11 @@ creer_utilisateur() {
   utilisateurs=$(echo "$utilisateurs" | jq --arg n "$nom" --arg u "$uuid" --arg d "$date_exp" '. += [{"nom": $n, "uuid": $u, "expire": $d}]')
   sauvegarder_utilisateurs
 
-  domaine_default="votre-domaine.com"
-  domaine="$domaine_default"
+  if [[ -f /.v2ray_domain ]]; then
+    domaine=$(cat /.v2ray_domain)
+  else
+    domaine="votre-domaine.com"
+  fi
 
   clear
   echo -e "=============================="
@@ -233,6 +239,7 @@ desinstaller_v2ray() {
     sudo systemctl daemon-reload
     sudo pkill v2ray 2>/dev/null
     sudo rm -rf /usr/local/bin/v2ray /usr/local/bin/v2ctl /etc/v2ray
+    sudo rm -f /.v2ray_domain
     echo "V2Ray désinstallé et nettoyé."
   else
     echo "Désinstallation annulée."
