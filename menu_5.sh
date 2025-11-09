@@ -17,6 +17,16 @@ afficher_menu() {
   echo -e "${CYAN}╔════════════════════════════════╗${RESET}"
   echo -e "${YELLOW}║       V2RAY PROTOCOLE${RESET}"
   echo -e "${YELLOW}║--------------------------------${RESET}"
+afficher_mode_v2ray_ws() {
+    # Vérifie si V2Ray est lancé avec config run
+    if pgrep -f "v2ray run -config" >/dev/null 2>&1; then
+        # Essaye de lire le port configuré dans /etc/v2ray/config.json
+        local v2ray_port=$(jq -r '.inbounds[0].port' /etc/v2ray/config.json 2>/dev/null || echo "8088")
+        echo -e "${CYAN}Tunnel actif:${RESET}"
+        echo -e "  - V2Ray WS sur le port TCP ${GREEN}$v2ray_port${RESET}"
+    fi
+}
+
   echo -e "${YELLOW}║ 1) Installer tunnel V2Ray WS${RESET}"
   echo -e "${YELLOW}║ 2) Créer nouvel utilisateur${RESET}"
   echo -e "${YELLOW}║ 3) Supprimer un utilisateur${RESET}"
