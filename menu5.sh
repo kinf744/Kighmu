@@ -479,7 +479,7 @@ while true; do
         8) manage_mode "proxy ws" install_proxy_ws uninstall_proxy_ws ;;
         9) manage_mode "Hysteria" install_hysteria uninstall_hysteria ;;
         10) manage_mode "Tunnel WS/WSS SSH" install_ws_wss uninstall_ws_wss ;;
-        11) manage_mode "Slowdns_ws" install_ws_slowdns ;;
+        11) manage_mode "Slowdns_ws" install_ws_slowdns uninstall_ws_slowdns ;;
         0) echo -e "${RED}🚪 Sortie du panneau de contrôle.${RESET}" ; exit 0 ;;
         *) echo -e "${RED}❌ Option invalide, réessayez.${RESET}" ;;
     esac
