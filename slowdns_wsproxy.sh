@@ -9,7 +9,7 @@ CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 SERVER_PUB="$SLOWDNS_DIR/server.pub"
 SSH_PORT=22
-SLOWDNS_PORT=5302
+SLOWDNS_PORT=5300
 WS_PORT=9900
 
 read -rp "Entrez le NameServer (NS) (ex: ns.example.com): " NAMESERVER
