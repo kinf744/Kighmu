@@ -36,32 +36,44 @@ echo "$NAMESERVER" > "$CONFIG_FILE"
 # Dépôt du fichier proxy Python (mets ici ton slowdns_wsproxy.py complet après installation !)
 touch "$PROXYWS_PATH" && chmod +x "$PROXYWS_PATH"
 
-# Service systemd pour SlowDNS
+# Service systemd pour SlowDNS (avec redémarrage automatique et watchdog)
 cat > /etc/systemd/system/slowdns.service <<EOF
 [Unit]
 Description=SlowDNS Server Tunnel
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 ExecStart=$SLOWDNS_BIN -udp :$SLOWDNS_PORT -privkey-file $SERVER_KEY $NAMESERVER 0.0.0.0:$SSH_PORT
 Restart=always
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=5
+WatchdogSec=30
+NotifyAccess=all
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# Service systemd pour slowdns_wsproxy.py
+# Service systemd pour slowdns_wsproxy.py (avec redémarrage automatique et watchdog)
 cat > /etc/systemd/system/wsproxy.service <<EOF
 [Unit]
 Description=WebSocket Proxy pour SlowDNS
-After=slowdns.service
+After=slowdns.service network-online.target
+Wants=slowdns.service network-online.target
 
 [Service]
 Type=simple
 ExecStart=python3 $PROXYWS_PATH -p $WS_PORT
 WorkingDirectory=/root
 Restart=always
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=5
+WatchdogSec=30
+NotifyAccess=all
 
 [Install]
 WantedBy=multi-user.target
