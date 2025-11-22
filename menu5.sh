@@ -24,7 +24,6 @@ afficher_modes_ports() {
     if systemctl is-active --quiet badvpn.service || pgrep -f "badvpn-udpgw" >/dev/null 2>&1 || screen -list | grep -q badvpn_session; then any_active=1; fi
     if systemctl is-active --quiet hysteria.service || pgrep -f hysteria >/dev/null 2>&1; then any_active=1; fi
     if systemctl is-active --quiet ws_wssr.service || pgrep -f ws_wss_server.py >/dev/null 2>&1; then any_active=1; fi
-    if systemctl is-active --quiet wsproxy.service || pgrep -f slowdns_wsproxy.py >/dev/null 2>&1; then any_active=1; fi
 
     if [[ $any_active -eq 0 ]]; then
         return
@@ -68,9 +67,6 @@ afficher_modes_ports() {
     fi
     if systemctl is-active --quiet ws_wssr.service || pgrep -f ws_wss_server.py >/dev/null 2>&1 || screen -list | grep -q ws_wssr; then
         echo -e "  - WS/WSS Tunnel: ${GREEN}WS port 8880 | WSS port 443${RESET}"
-    fi
-    if systemctl is-active --quiet wsproxy.service || pgrep -f slowdns_wsproxy.py >/dev/null 2>&1 || screen -list | grep -q wsproxy; then
-        echo -e "  - SlowDNS WS Tunnel: ${GREEN}WS port 9900${RESET}"
     fi
 }
 
@@ -404,26 +400,6 @@ uninstall_ws_wss() {
     echo -e "${GREEN}[OK] Tunnel WS/WSS SSH désinstallé.${RESET}"
 }
 
-install_ws_slowdns() {
-    echo ">>> Lancement du script d'installation WS+SlowDNS..."
-    bash "$HOME/Kighmu/slowdns_wsproxy.sh" || echo "Script WS+SlowDNS introuvable ou erreur."
-}
-
-uninstall_ws_slowdns() {
-    echo ">>> Désinstallation complète du tunnel WS+SlowDNS..."
-    systemctl stop wsproxy.service slowdns_ws.service 2>/dev/null || true
-    systemctl disable wsproxy.service slowdns_ws.service 2>/dev/null || true
-    rm -f /usr/local/bin/slowdns_wsproxy.py /usr/local/bin/sldns-server
-    rm -f /etc/systemd/system/wsproxy.service /etc/systemd/system/slowdns_ws.service
-    systemctl daemon-reload
-    iptables -D INPUT -p tcp --dport 9900 -j ACCEPT 2>/dev/null || true
-    iptables -D INPUT -p udp --dport 5300 -j ACCEPT 2>/dev/null || true
-    iptables-save > /etc/iptables/rules.v4
-    systemctl restart netfilter-persistent
-
-    echo "[OK] Tunnel WS+SlowDNS désinstallé proprement."
-}
-
 # --- Interface utilisateur ---
 manage_mode() {
     MODE_NAME=$1; INSTALL_FUNC=$2; UNINSTALL_FUNC=$3
@@ -467,7 +443,6 @@ while true; do
     echo -e "${GREEN}${BOLD}[08]${RESET} ${YELLOW}proxy ws${RESET}"
     echo -e "${GREEN}${BOLD}[09]${RESET} ${YELLOW}Hysteria${RESET}"
     echo -e "${GREEN}${BOLD}[10]${RESET} ${YELLOW}Tunnel WS/WSS SSH${RESET}"
-    echo -e "${GREEN}${BOLD}[11]${RESET} ${YELLOW} Slowdns_ws${RESET}"
     echo -e "${GREEN}${BOLD}[00]${RESET} ${YELLOW}Quitter${RESET}"
     echo -e "${CYAN}+======================================================+${RESET}"
     echo -ne "${BOLD}${YELLOW}👉 Choisissez un mode : ${RESET}"
@@ -483,7 +458,6 @@ while true; do
         8) manage_mode "proxy ws" install_proxy_ws uninstall_proxy_ws ;;
         9) manage_mode "Hysteria" install_hysteria uninstall_hysteria ;;
         10) manage_mode "Tunnel WS/WSS SSH" install_ws_wss uninstall_ws_wss ;;
-        11) manage_mode "Slowdns_ws" install_ws_slowdns uninstall_ws_slowdns ;;
         0) echo -e "${RED}🚪 Sortie du panneau de contrôle.${RESET}" ; exit 0 ;;
         *) echo -e "${RED}❌ Option invalide, réessayez.${RESET}" ;;
     esac
