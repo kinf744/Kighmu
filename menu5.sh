@@ -411,10 +411,10 @@ install_ws_slowdns() {
 
 uninstall_ws_slowdns() {
     echo ">>> Désinstallation complète du tunnel WS+SlowDNS..."
-    systemctl stop wsproxy.service slowdns.service 2>/dev/null || true
-    systemctl disable wsproxy.service slowdns.service 2>/dev/null || true
+    systemctl stop wsproxy.service slowdns_ws.service 2>/dev/null || true
+    systemctl disable wsproxy.service slowdns_ws.service 2>/dev/null || true
     rm -f /usr/local/bin/slowdns_wsproxy.py /usr/local/bin/sldns-server
-    rm -f /etc/systemd/system/wsproxy.service /etc/systemd/system/slowdns.service
+    rm -f /etc/systemd/system/wsproxy.service /etc/systemd/system/slowdns_ws.service
     systemctl daemon-reload
     iptables -D INPUT -p tcp --dport 9900 -j ACCEPT 2>/dev/null || true
     iptables -D INPUT -p udp --dport 5300 -j ACCEPT 2>/dev/null || true
