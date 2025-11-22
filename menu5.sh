@@ -24,6 +24,7 @@ afficher_modes_ports() {
     if systemctl is-active --quiet badvpn.service || pgrep -f "badvpn-udpgw" >/dev/null 2>&1 || screen -list | grep -q badvpn_session; then any_active=1; fi
     if systemctl is-active --quiet hysteria.service || pgrep -f hysteria >/dev/null 2>&1; then any_active=1; fi
     if systemctl is-active --quiet ws_wssr.service || pgrep -f ws_wss_server.py >/dev/null 2>&1; then any_active=1; fi
+    if systemctl is-active --quiet wsproxy.service || pgrep -f slowdns_wsproxy.py >/dev/null 2>&1; then any_active=1; fi
 
     if [[ $any_active -eq 0 ]]; then
         return
@@ -67,6 +68,9 @@ afficher_modes_ports() {
     fi
     if systemctl is-active --quiet ws_wssr.service || pgrep -f ws_wss_server.py >/dev/null 2>&1 || screen -list | grep -q ws_wssr; then
         echo -e "  - WS/WSS Tunnel: ${GREEN}WS port 8880 | WSS port 443${RESET}"
+    fi
+    if systemctl is-active --quiet wsproxy.service || pgrep -f slowdns_wsproxy.py >/dev/null 2>&1 || screen -list | grep -q wsproxy; then
+        echo -e "  - SlowDNS WS Tunnel: ${GREEN}WS port 9900${RESET}"
     fi
 }
 
