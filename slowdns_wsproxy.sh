@@ -37,7 +37,7 @@ echo "$NAMESERVER" > "$CONFIG_FILE"
 touch "$PROXYWS_PATH" && chmod +x "$PROXYWS_PATH"
 
 # Service systemd pour SlowDNS (avec redémarrage automatique et watchdog)
-cat > /etc/systemd/system/slowdns.service <<EOF
+cat > /etc/systemd/system/slowdns_ws.service <<EOF
 [Unit]
 Description=SlowDNS Server Tunnel
 After=network-online.target
@@ -61,8 +61,8 @@ EOF
 cat > /etc/systemd/system/wsproxy.service <<EOF
 [Unit]
 Description=WebSocket Proxy pour SlowDNS
-After=slowdns.service network-online.target
-Wants=slowdns.service network-online.target
+After=slowdns_ws.service network-online.target
+Wants=slowdns_ws.service network-online.target
 
 [Service]
 Type=simple
@@ -86,7 +86,7 @@ iptables-save > /etc/iptables/rules.v4
 
 # Activation des services
 systemctl daemon-reload
-systemctl enable --now slowdns.service wsproxy.service
+systemctl enable --now slowdns_ws.service wsproxy.service
 
 # Messages de fin
 echo
