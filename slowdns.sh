@@ -96,7 +96,7 @@ create_wrapper_script() {
 set -euo pipefail
 
 SLOWDNS_DIR="/etc/slowdns"
-SLOWDNS_BIN="/usr/local/bin/sldns-server"
+SLOWDNS_BIN="/usr/local/bin/dns-server"
 PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
