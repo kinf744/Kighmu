@@ -372,32 +372,28 @@ uninstall_hysteria() {
 }
 
 # --- AJOUT WS/WSS SSH ---
-install_ws_wss() {
-    echo ">>> Installation du tunnel WS/WSS SSH..."
-    if [ -f /usr/local/bin/ws_wssr.sh ]; then
-        bash /usr/local/bin/ws_wssr.sh
-    elif [ -f "$HOME/Kighmu/ws_wssr.sh" ]; then
-        bash "$HOME/Kighmu/ws_wssr.sh"
-    else
-        echo "❌ Script ws_wssr.sh introuvable."
-        return 1
-    fi
-    echo -e "${GREEN}[OK] Tunnel WS/WSS SSH installé et lancé.${RESET}"
+install_proxy_ws_servic() {
+    echo ">>> Installation BadVPN via script..."
+    bash "$HOME/Kighmu/proxy--ws.sh" || echo "Script introuvable."
 }
 
-uninstall_ws_wss() {
-    echo ">>> Désinstallation complète du tunnel WS/WSS SSH..."
-    systemctl stop ws_wss_server.service 2>/dev/null || true
-    systemctl disable ws_wss_server.service 2>/dev/null || true
-    rm -f /etc/systemd/system/ws_wss_server.service
-    rm -f /usr/local/bin/ws_wss_server.py /usr/local/bin/ws_wssr.sh
+uninstall_proxy_ws_servic() {
+    echo ">>> Désinstallation du service systemd proxy--ws..."
+
+    if systemctl list-units --full -all | grep -q "proxy--ws.service"; then
+        systemctl stop proxy--ws.service 2>/dev/null || true
+        systemctl disable proxy--ws.service 2>/dev/null || true
+    fi
+
+    [ -f "$SYSTEMD_SERVICE_FILE" ] && rm -f "$SYSTEMD_SERVICE_FILE"
+    [ -f "$PROXY_WS_BIN" ] && rm -f "$PROXY_WS_BIN"
+
     systemctl daemon-reload
-    # Suppression ports sans UFW
+
     iptables -D INPUT -p tcp --dport 8880 -j ACCEPT 2>/dev/null || true
-    iptables -D INPUT -p tcp --dport 443 -j ACCEPT 2>/dev/null || true
     iptables -D OUTPUT -p tcp --sport 8880 -j ACCEPT 2>/dev/null || true
-    iptables -D OUTPUT -p tcp --sport 443 -j ACCEPT 2>/dev/null || true
-    echo -e "${GREEN}[OK] Tunnel WS/WSS SSH désinstallé.${RESET}"
+
+    echo "[OK] Service proxy--ws désinstallé proprement."
 }
 
 # --- Interface utilisateur ---
@@ -457,7 +453,7 @@ while true; do
         7) manage_mode "BadVPN" install_badvpn uninstall_badvpn ;;
         8) manage_mode "proxy ws" install_proxy_ws uninstall_proxy_ws ;;
         9) manage_mode "Hysteria" install_hysteria uninstall_hysteria ;;
-        10) manage_mode "Tunnel WS/WSS SSH" install_ws_wss uninstall_ws_wss ;;
+        10) manage_mode "Tunnel WS/WSS SSH" install_proxy_ws_servic uninstall_proxy_ws_servic ;;
         0) echo -e "${RED}🚪 Sortie du panneau de contrôle.${RESET}" ; exit 0 ;;
         *) echo -e "${RED}❌ Option invalide, réessayez.${RESET}" ;;
     esac
