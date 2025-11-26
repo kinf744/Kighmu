@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# install-proxy--ws.sh
+# proxy--ws.sh
 # Installation complète wstunnel + managing iptables + service systemd
 # Pare-feu géré uniquement via iptables + persistance netfilter-persistent
 
