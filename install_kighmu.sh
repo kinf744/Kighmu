@@ -149,7 +149,7 @@ FILES=(
   "menu_6.sh"
   "xray_installe.sh"
   "ws_wss_server.py"
-  "ws_wssr.sh"
+  "proxy--ws.sh"
   "sockspy.sh"
   "ws2_proxy.py"
   "hysteria.sh"
