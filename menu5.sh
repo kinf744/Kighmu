@@ -378,22 +378,28 @@ install_proxy_ws_servic() {
 }
 
 uninstall_proxy_ws_servic() {
-    echo ">>> Désinstallation du service systemd proxy--ws..."
+    echo ">>> Désinstallation complète du tunnel SSH WebSocket..."
 
-    if systemctl list-units --full -all | grep -q "proxy--ws.service"; then
-        systemctl stop proxy--ws.service 2>/dev/null || true
-        systemctl disable proxy--ws.service 2>/dev/null || true
+    if systemctl list-units --full -all | grep -Fq 'proxy--ws.service'; then
+        echo "Arrêt et désactivation du service proxy--ws.service..."
+        systemctl stop proxy--ws.service || true
+        systemctl disable proxy--ws.service || true
+        [ -f "$SYSTEMD_SERVICE_FILE" ] && rm -f "$SYSTEMD_SERVICE_FILE"
+        systemctl daemon-reload
     fi
 
-    [ -f "$SYSTEMD_SERVICE_FILE" ] && rm -f "$SYSTEMD_SERVICE_FILE"
-    [ -f "$PROXY_WS_BIN" ] && rm -f "$PROXY_WS_BIN"
+    if [ -f "$PROXY_WS_BIN" ]; then
+        echo "Suppression du script proxy--ws..."
+        rm -f "$PROXY_WS_BIN"
+    fi
 
-    systemctl daemon-reload
+    echo "Suppression des règles iptables pour le port TCP $PORT..."
+    iptables -D INPUT -p tcp --dport "$PORT" -j ACCEPT 2>/dev/null || true
+    iptables -D OUTPUT -p tcp --sport "$PORT" -j ACCEPT 2>/dev/null || true
+    iptables-save | tee /etc/iptables/rules.v4
+    systemctl restart netfilter-persistent || true
 
-    iptables -D INPUT -p tcp --dport 8880 -j ACCEPT 2>/dev/null || true
-    iptables -D OUTPUT -p tcp --sport 8880 -j ACCEPT 2>/dev/null || true
-
-    echo "[OK] Service proxy--ws désinstallé proprement."
+    echo -e "${GREEN}[OK] Tunnel SSH WebSocket désinstallé.${RESET}"
 }
 
 # --- Interface utilisateur ---
