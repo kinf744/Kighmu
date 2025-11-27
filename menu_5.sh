@@ -101,6 +101,18 @@ EOF
   sudo systemctl start v2ray.service
   sudo systemctl status v2ray.service --no-pager
   echo "Service systemd V2Ray configuré et démarré."
+
+  echo "Configuration des règles iptables pour le port V2Ray 8088..."
+  sudo iptables -I INPUT -p tcp --dport 8088 -j ACCEPT
+  sudo iptables -I INPUT -p udp --dport 8088 -j ACCEPT
+
+  if ! command -v netfilter-persistent &>/dev/null; then
+      sudo apt update
+      sudo apt install -y netfilter-persistent
+  fi
+
+  sudo netfilter-persistent save
+  echo "Règles iptables configurées et sauvegardées."
 }
 
 # Installer V2Ray WS sans TLS avec gestion avancée des logs
