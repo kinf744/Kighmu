@@ -355,6 +355,13 @@ creer_utilisateur() {
     utilisateurs=$(echo "$utilisateurs" | jq --arg n "$nom" --arg u "$uuid" --arg d "$date_exp" '. += [{"nom": $n, "uuid": $u, "expire": $d}]')
     sauvegarder_utilisateurs
 
+    # ← AJOUT AUTOMATIQUE UUID DANS V2RAY → 
+    if [[ -f /etc/v2ray/config.json ]] && command -v jq >/dev/null 2>&1; then
+        ajouter_client_v2ray "$uuid" "$nom"
+    else
+        echo "⚠️  Installez d'abord V2Ray (option 1) pour activer les clients"
+    fi
+
     if [[ -f /.v2ray_domain ]]; then
         domaine=$(cat /.v2ray_domain)
     else
@@ -363,7 +370,6 @@ creer_utilisateur() {
 
     local V2RAY_INTER_PORT="5401"
     lien_vmess=$(generer_lien_vmess "$nom" "$domaine" "$V2RAY_INTER_PORT" "$uuid")
-
 
     PUB_KEY=$SLOWDNS_PUBLIC_KEY
     NAMESERVER=$(cat /etc/slowdns_v2ray/ns.conf 2>/dev/null || echo "NS_non_defini")
