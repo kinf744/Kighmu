@@ -374,7 +374,7 @@ creer_utilisateur() {
     echo -e "   V2Ray TCP  : ${GREEN}$V2RAY_INTER_PORT${RESET}"
     echo -e "➤ UUID      : ${GREEN}$uuid${RESET}"
     echo -e "➤ Path      : /vmess-ws"
-    echo -e "➤ Validité  : ${YELLOW}$duree${RESET} jours (expire: $date_exp)"
+    echo -e "➤ Validité  : ${YELLOW}$duree${RESET} jours expire: $date_exp"
     echo ""
     echo -e "${CYAN}Clé publique SlowDNS:${RESET} $PUB_KEY"
     echo -e "${CYAN}NameServer:${RESET} $NAMESERVER"
