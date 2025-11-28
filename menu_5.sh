@@ -381,7 +381,7 @@ creer_utilisateur() {
     echo ""
     echo -e "${GREEN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
     echo ""
-    echo -e "${YELLOW}┃ Lien VMess (copiez-collez) : $lien_vmess${RESET}"
+    echo -e "${YELLOW}┃ Lien VMess copiez-collez : $lien_vmess${RESET}"
     echo -e "${GREEN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
     echo ""
     read -p "Appuyez sur Entrée pour continuer..."
@@ -416,7 +416,7 @@ supprimer_utilisateur() {
 }
 
 desinstaller_v2ray() {
-    echo -n "Êtes-vous sûr ? (o/N) : "
+    echo -n "Êtes-vous sûr ? o/N : "
     read reponse
     if [[ "$reponse" =~ ^[Oo]$ ]]; then
         sudo systemctl stop v2ray.service slowdns_v2ray.service
