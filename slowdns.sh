@@ -176,7 +176,7 @@ main() {
     install_slowdns_bin
     install_fixed_keys
 
-    read -rp "Entrez le NameServer (NS) pour SSH SlowDNS (ex: ns1.example.com) : " NAMESERVER
+    read -rp "Entrez le NameServer (NS) (ex: ns.example.com) : " NAMESERVER
     if [[ -z "$NAMESERVER" ]]; then
         echo "NameServer invalide." >&2
         exit 1
