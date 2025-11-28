@@ -314,7 +314,7 @@ EOF
     fi
     sudo netfilter-persistent save
     
-    echo -e "${GREEN}✅ SlowDNS (DNS-AGN) installé et démarré !${RESET}"
+    echo -e "${GREEN}✅ SlowDNS DNSTT installé et démarré !${RESET}"
     echo -e "${YELLOW}Port UDP 5400 ouvert - NS: $NAMESERVER${RESET}"
     echo -e "${GREEN}Clé publique: $SLOWDNS_PUBLIC_KEY${RESET}"
 }
