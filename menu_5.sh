@@ -237,7 +237,7 @@ installer_slowdns() {
     sudo chmod 600 "$SERVER_KEY"
     sudo chmod 644 "$SERVER_PUB"
 
-    read -rp "Entrez le NameServer (NS) pour SlowDNS (ex: ns.example.com) : " NAMESERVER
+    read -p "Entrez le NameServer (NS) pour SlowDNS (ex: ns.example.com) : " NAMESERVER
     if [[ -z "$NAMESERVER" ]]; then
         echo "NameServer invalide." >&2
         return 1
