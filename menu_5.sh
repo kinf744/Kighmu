@@ -314,9 +314,9 @@ EOF
     fi
     sudo netfilter-persistent save
     
-    echo -e "${GREEN}✅ SlowDNS DNSTT installé et démarré !${RESET}"
-    echo -e "${YELLOW}Port UDP 5400 ouvert - NS: $NAMESERVER${RESET}"
-    echo -e "${GREEN}Clé publique: $SLOWDNS_PUBLIC_KEY${RESET}"
+    echo -e "✅ SlowDNS DNSTT installé et démarré !"
+    echo -e "Port UDP 5400 ouvert - NS: $NAMESERVER"
+    echo -e "Clé publique: $SLOWDNS_PUBLIC_KEY"
 }
 
 # Gestion utilisateurs
