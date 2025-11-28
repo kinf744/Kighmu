@@ -25,11 +25,7 @@ SLOWDNS_PUBLIC_KEY="2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d
 
 # Générer lien vmess au format base64 JSON
 generer_lien_vmess() {
-    local nom="$1"
-    local domaine="$2"
-    local port="$3"
-    local uuid="$4"
-
+    local nom="$1" domaine="$2" port="$3" uuid="$4"
     local json_config=$(cat <<-EOF
 {
 "v": "2",
@@ -46,29 +42,25 @@ generer_lien_vmess() {
 "scy": "auto"
 }
 EOF
-    )
+)
     echo "vmess://$(echo -n "$json_config" | base64 -w 0)"
 }
 
-# ✅ AJOUTÉ: Fonction pour ajouter UUID dans V2Ray
+# ✅ CORRIGÉ: Ajout UUID V2Ray
 ajouter_client_v2ray() {
-    local uuid="$1"
-    local nom="$2"
-    
+    local uuid="$1" nom="$2"
     if ! command -v jq >/dev/null 2>&1 || [[ ! -f /etc/v2ray/config.json ]]; then
         echo "⚠️  V2Ray non installé ou jq manquant"
         return 1
     fi
-    
     jq --arg id "$uuid" --arg email "$nom" \
        '.inbounds[0].settings.clients += [{"id": $id, "alterId": 0, "level": 1, "email": $email}]' \
        /etc/v2ray/config.json | sudo tee /etc/v2ray/config.json >/dev/null
-    
     sudo systemctl reload v2ray.service 2>/dev/null || sudo systemctl restart v2ray.service
-    echo "✅ UUID $uuid ajouté à V2Ray (service rechargé)"
+    echo "✅ UUID $uuid ajouté à V2Ray"
 }
 
-# Affiche le menu avec titre dans cadre
+# Menu et affichage
 afficher_menu() {
     clear
     echo -e "${CYAN}╔═════════════════════════════════════════════════════╗${RESET}"
@@ -76,40 +68,32 @@ afficher_menu() {
     echo -e "${YELLOW}║--------------------------------------------------${RESET}"
 }
 
-# Affiche l'état du tunnel V2Ray WS
 afficher_mode_v2ray_ws() {
     if systemctl is-active --quiet v2ray.service; then
         local v2ray_port=$(jq -r '.inbounds[0].port' /etc/v2ray/config.json 2>/dev/null || echo "5401")
-        echo -e "${CYAN}Tunnel V2Ray actif:${RESET}"
-        echo -e "  - V2Ray WS sur le port TCP ${GREEN}$v2ray_port${RESET}"
+        echo -e "${CYAN}✅ V2Ray actif:${RESET} TCP ${GREEN}$v2ray_port${RESET}"
     fi
     if systemctl is-active --quiet slowdns_v2ray.service; then
-        echo -e "${CYAN}Tunnel SlowDNS actif:${RESET}"
-        echo -e "  - SlowDNS sur le port UDP ${GREEN}5400${RESET} → V2Ray 5401"
+        echo -e "${CYAN}✅ SlowDNS actif:${RESET} UDP ${GREEN}5400${RESET} → V2Ray 5401"
     fi
 }
 
-# Affiche les options du menu
 show_menu() {
     echo -e "${YELLOW}║--------------------------------------------------${RESET}"
-    echo -e "${YELLOW}║ 1) Installer tunnel V2Ray WS${RESET}"
-    echo -e "${YELLOW}║ 2) Créer nouvel utilisateur${RESET}"
-    echo -e "${YELLOW}║ 3) Supprimer un utilisateur${RESET}"
-    echo -e "${YELLOW}║ 4) Désinstaller V2Ray + SlowDNS${RESET}"
-    echo -e "${YELLOW}║ 5) Installer tunnel SlowDNS (DNS-AGN)${RESET}"
+    echo -e "${YELLOW}║ 1) Installer V2Ray WS${RESET}"
+    echo -e "${YELLOW}║ 2) Créer utilisateur${RESET}"
+    echo -e "${YELLOW}║ 3) Supprimer utilisateur${RESET}"
+    echo -e "${YELLOW}║ 4) Désinstaller tout${RESET}"
+    echo -e "${YELLOW}║ 5) Installer SlowDNS${RESET}"
     echo -e "${RED}║ 0) Quitter${RESET}"
     echo -e "${CYAN}╚═════════════════════════════════════════════════════╝${RESET}"
-    echo -n "Choisissez une option : "
+    echo -n "Choisissez : "
 }
 
-# Générer UUID v4
-generer_uuid() {
-    cat /proc/sys/kernel/random/uuid
-}
+# Utilitaires
+generer_uuid() { cat /proc/sys/kernel/random/uuid; }
 
-# Créer et démarrer le service systemd V2Ray
 creer_service_systemd_v2ray() {
-    echo "Création du service systemd pour V2Ray..."
     sudo tee /etc/systemd/system/v2ray.service > /dev/null <<EOF
 [Unit]
 Description=V2Ray Service
@@ -129,63 +113,29 @@ SyslogIdentifier=v2ray
 [Install]
 WantedBy=multi-user.target
 EOF
-
     sudo systemctl daemon-reload
     sudo systemctl enable v2ray.service
-    sudo systemctl start v2ray.service
-    sudo systemctl status v2ray.service --no-pager
-    echo "✅ Service systemd V2Ray configuré et démarré."
-
-    echo "Configuration des règles iptables pour le port V2Ray 5401..."
+    sudo systemctl restart v2ray.service
     sudo iptables -I INPUT -p tcp --dport 5401 -j ACCEPT
-
-    if ! command -v netfilter-persistent &>/dev/null; then
-        sudo apt update
-        sudo apt install -y netfilter-persistent
-    fi
+    sudo apt install -y netfilter-persistent 2>/dev/null || true
     sudo netfilter-persistent save
-    echo "✅ Règles iptables configurées et sauvegardées."
+    echo "✅ V2Ray service + iptables OK"
 }
 
-# ✅ CORRIGÉ: Installer V2Ray WS avec config complète
+# ✅ INSTALL V2RAY
 installer_v2ray() {
-    echo -n "Entrez votre domaine/IP VPS (ex: example.com ou 1.2.3.4) : "
-    read domaine
-
-    LOGFILE="/var/log/v2ray_install.log"
-    sudo touch $LOGFILE
-    sudo chmod 640 $LOGFILE
-
-    echo "Installation de V2Ray WS sans TLS... (logs: $LOGFILE)"
-
-    # Installer dépendances
+    echo -n "Domaine/IP VPS : "; read domaine
     sudo apt update && sudo apt install -y jq unzip
-
-    set +e
-    wget -q https://github.com/v2fly/v2ray-core/releases/latest/download/v2ray-linux-64.zip -O /tmp/v2ray.zip 2>> $LOGFILE
-    ret=$?
-    set -e
-    if [[ $ret -ne 0 ]]; then
-        echo "Erreur: échec du téléchargement, voir $LOGFILE"
-        return 1
-    fi
-
-    unzip -o /tmp/v2ray.zip -d /tmp/v2ray >> $LOGFILE 2>&1 || {
-        echo "Erreur: échec de la décompression, voir $LOGFILE"
-        return 1
+    LOGFILE="/var/log/v2ray_install.log"
+    sudo touch "$LOGFILE" && sudo chmod 640 "$LOGFILE"
+    
+    wget -q "https://github.com/v2fly/v2ray-core/releases/latest/download/v2ray-linux-64.zip" -O /tmp/v2ray.zip || {
+        echo "❌ Download failed"; return 1
     }
-
-    if [[ -f /tmp/v2ray/v2ray ]]; then
-        sudo mv /tmp/v2ray/v2ray /usr/local/bin/
-        sudo chmod +x /usr/local/bin/v2ray
-    else
-        echo "Erreur: binaire v2ray non trouvé après décompression." | tee -a $LOGFILE
-        return 1
-    fi
-
+    unzip -o /tmp/v2ray.zip -d /tmp/v2ray || { echo "❌ Unzip failed"; return 1; }
+    sudo mv /tmp/v2ray/v2ray /usr/local/bin/ && sudo chmod +x /usr/local/bin/v2ray
+    
     sudo mkdir -p /etc/v2ray
-
-    # ✅ CONFIG V2RAY COMPLÈTE AVEC CLIENT PAR DÉFAUT
     cat <<EOF | sudo tee /etc/v2ray/config.json > /dev/null
 {
   "log": {"loglevel": "warning"},
@@ -204,45 +154,26 @@ installer_v2ray() {
   "outbounds": [{"protocol": "freedom", "settings": {"domainStrategy": "UseIP"}}]
 }
 EOF
-
     echo "$domaine" | sudo tee /.v2ray_domain > /dev/null
     creer_service_systemd_v2ray
-
-    echo -e "${GREEN}✅ V2Ray WS installé et lancé sur le port 5401 avec path /vmess-ws pour ${domaine}${RESET}"
-    echo -e "${YELLOW}Ouvrez le port TCP 5401 sur votre VPS provider.${RESET}"
-    echo -e "${GREEN}Client test: ${RESET}00000000-0000-0000-0000-000000000001"
-    read -p "Appuyez sur Entrée pour continuer..."
+    echo -e "${GREEN}✅ V2Ray OK ! Port 5401${RESET}
+${YELLOW}UUID test:${GREEN} 00000000-0000-0000-0000-000000000001${RESET}"
 }
 
-# ✅ CORRIGÉ: Installer SlowDNS avec NAMESERVER fixe
+# ✅ INSTALL SLOWDNS - CORRECTION INTERFACE FIX
 installer_slowdns() {
-    echo "Installation SlowDNS (DNS-AGN) en cours..."
-
+    echo -n "NameServer (ns.example.com) : "; read NAMESERVER
     sudo mkdir -p "$SLOWDNS_DIR"
-
-    echo "Téléchargement du binaire DNS-AGN..."
+    
     sudo wget -q -O "$SLOWDNS_BIN" https://github.com/khaledagn/DNS-AGN/raw/main/dns-server
     sudo chmod +x "$SLOWDNS_BIN"
-    if [ ! -x "$SLOWDNS_BIN" ]; then
-        echo "ERREUR : Échec du téléchargement du binaire DNS-AGN." >&2
-        return 1
-    fi
-
+    
     echo "$SLOWDNS_PRIVATE_KEY" | sudo tee "$SERVER_KEY" > /dev/null
-    echo "$SLOWDNS_PUBLIC_KEY"  | sudo tee "$SERVER_PUB" > /dev/null
-    sudo chmod 600 "$SERVER_KEY"
-    sudo chmod 644 "$SERVER_PUB"
-
-    read -rp "Entrez le NameServer (NS) pour SlowDNS (ex: ns.example.com) : " NAMESERVER
-    if [[ -z "$NAMESERVER" ]]; then
-        echo "NameServer invalide." >&2
-        return 1
-    fi
+    echo "$SLOWDNS_PUBLIC_KEY" | sudo tee "$SERVER_PUB" > /dev/null
     echo "$NAMESERVER" | sudo tee "$CONFIG_FILE" > /dev/null
-    echo "NameServer enregistré dans $CONFIG_FILE"
-
-    # ✅ CORRIGÉ: Script wrapper SlowDNS avec NAMESERVER fixe
-    sudo tee /usr/local/bin/slowdns_v2ray-start.sh > /dev/null <<EOF
+    
+    # ✅ SCRIPT CORRIGÉ - FIX "dev not valid ifname"
+    sudo tee /usr/local/bin/slowdns_v2ray-start.sh > /dev/null <<'EOF'
 #!/bin/bash
 set -euo pipefail
 
@@ -251,63 +182,46 @@ SLOWDNS_BIN="/usr/local/bin/dns-server"
 PORT=5400
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
-NAMESERVER="$NAMESERVER"
+NAMESERVER="$(cat "$CONFIG_FILE")"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
+# ✅ FIX INTERFACE - Forçage si détection échoue
 wait_for_interface() {
-    interface=""
-    while [ -z "$interface" ]; do
-        interface=$(ip -o link show up | awk -F': ' '{print $2}' \
-            | grep -v '^lo$' \
-            | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' \
-            | head -n1)
-        [ -z "$interface" ] && sleep 2
+    local interface tries=0
+    while [ -z "$interface" ] && [ $tries -lt 10 ]; do
+        interface=$(ip -o link show up | awk -F': ' '{print $2}' | grep -v '^lo$' | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' | head -n1)
+        [ -z "$interface" ] && { sleep 1; tries=$((tries+1)); }
     done
+    [ -z "$interface" ] && interface="eth0" && log "⚠️ Interface forcée: eth0"
+    log "Interface: $interface"
     echo "$interface"
 }
 
-PORT=5400
-V2RAY_INTER_PORT=5401
-
-setup_iptables() {
-    interface="$1"
-    iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || true
-    iptables -I INPUT -p tcp --dport "$V2RAY_INTER_PORT" -j ACCEPT 2>/dev/null || true
-}
-
-log "Attente de l'interface réseau..."
-interface=$(wait_for_interface)
-log "Interface détectée : $interface"
-
-log "Réglage MTU à 1400..."
-ip link set dev "$interface" mtu 1400 || log "Échec MTU, continuer"
-
-setup_iptables "$interface"
-
 log "Démarrage SlowDNS → V2Ray..."
-exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NAMESERVER" 127.0.0.1:$V2RAY_INTER_PORT
-EOF
+interface=$(wait_for_interface)
+ip link set dev "$interface" mtu 1400 2>/dev/null || log "MTU skip"
 
+iptables -I INPUT -p udp --dport 5400 -j ACCEPT 2>/dev/null || true
+iptables -I INPUT -p tcp --dport 5401 -j ACCEPT 2>/dev/null || true
+
+exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NAMESERVER" 127.0.0.1:5401
+EOF
     sudo chmod +x /usr/local/bin/slowdns_v2ray-start.sh
 
     sudo tee /etc/systemd/system/slowdns_v2ray.service > /dev/null <<EOF
 [Unit]
-Description=SlowDNS Server Tunnel (DNS-AGN)
-After=network-online.target
+Description=SlowDNS → V2Ray (DNS-AGN)
+After=network-online.target v2ray.service
 Wants=network-online.target
 
 [Service]
-Type=simple
-User=root
+Type=simple User=root
 ExecStart=/usr/local/bin/slowdns_v2ray-start.sh
-Restart=on-failure
-RestartSec=3
+Restart=on-failure RestartSec=3
 StandardOutput=append:/var/log/slowdns_v2ray.log
 StandardError=append:/var/log/slowdns_v2ray.log
-SyslogIdentifier=slowdns_v2ray
-LimitNOFILE=1048576
-TimeoutStartSec=20
+LimitNOFILE=1048576 TimeoutStartSec=30
 
 [Install]
 WantedBy=multi-user.target
@@ -316,61 +230,35 @@ EOF
     sudo systemctl daemon-reload
     sudo systemctl enable slowdns_v2ray.service
     sudo systemctl restart slowdns_v2ray.service
-
-    sudo iptables -I INPUT -p udp --dport $SLOWDNS_PORT -j ACCEPT
-    if ! command -v netfilter-persistent &>/dev/null; then
-        sudo apt update && sudo apt install -y netfilter-persistent
-    fi
-    sudo netfilter-persistent save
+    sudo iptables -I INPUT -p udp --dport 5400 -j ACCEPT
+    sudo netfilter-persistent save 2>/dev/null || true
     
-    echo -e "${GREEN}✅ SlowDNS (DNS-AGN) installé et démarré !${RESET}"
-    echo -e "${YELLOW}Port UDP 5400 ouvert - NS: $NAMESERVER${RESET}"
-    echo -e "${GREEN}Clé publique: $SLOWDNS_PUBLIC_KEY${RESET}"
+    echo -e "${GREEN}✅ SlowDNS OK !${RESET} UDP:5400 → V2Ray:5401"
+    echo -e "${CYAN}NS:${GREEN} $NAMESERVER ${CYAN}PubKey:${GREEN} $SLOWDNS_PUBLIC_KEY${RESET}"
 }
 
 # Gestion utilisateurs
 charger_utilisateurs() {
-    if [[ ! -f $USER_DB ]]; then
-        echo "[]" > "$USER_DB"
-    fi
+    [[ ! -f $USER_DB ]] && echo "[]" > "$USER_DB"
     utilisateurs=$(cat "$USER_DB")
 }
 
-sauvegarder_utilisateurs() {
-    echo "$utilisateurs" > "$USER_DB"
-}
+sauvegarder_utilisateurs() { echo "$utilisateurs" > "$USER_DB"; }
 
-# ✅ CORRIGÉ: Création utilisateur avec UUID auto-ajouté
 creer_utilisateur() {
     charger_utilisateurs
-    echo -n "Entrez un nom d'utilisateur : "
-    read nom
-    echo -n "Durée de validité (en jours) : "
-    read duree
-
+    echo -n "Nom utilisateur : "; read nom
+    echo -n "Jours validité : "; read duree
     uuid=$(generer_uuid)
     date_exp=$(date -d "+${duree} days" +%Y-%m-%d)
     utilisateurs=$(echo "$utilisateurs" | jq --arg n "$nom" --arg u "$uuid" --arg d "$date_exp" '. += [{"nom": $n, "uuid": $u, "expire": $d}]')
     sauvegarder_utilisateurs
-
-    if [[ -f /etc/v2ray/config.json ]] && command -v jq >/dev/null 2>&1; then
-        ajouter_client_v2ray "$uuid" "$nom"
-    else
-        echo "⚠️  Installez d'abord V2Ray (option 1)"
-    fi
-
-    if [[ -f /.v2ray_domain ]]; then
-        domaine=$(cat /.v2ray_domain)
-    else
-        domaine="votre-domaine.com"
-    fi
-
-    local V2RAY_INTER_PORT="5401"
-    lien_vmess=$(generer_lien_vmess "$nom" "$domaine" "$V2RAY_INTER_PORT" "$uuid")
-
-    PUB_KEY=$SLOWDNS_PUBLIC_KEY
-    NAMESERVER=$(cat /etc/slowdns_v2ray/ns.conf 2>/dev/null || echo "NS_non_defini")
-
+    [[ -f /etc/v2ray/config.json ]] && command -v jq >/dev/null 2>&1 && ajouter_client_v2ray "$uuid" "$nom"
+    
+    domaine=$(cat /.v2ray_domain 2>/dev/null || echo "votre-ip.com")
+    lien_vmess=$(generer_lien_vmess "$nom" "$domaine" "5401" "$uuid")
+    NAMESERVER=$(cat /etc/slowdns_v2ray/ns.conf 2>/dev/null || echo "NS?")
+    
     clear
     echo -e "${GREEN}=============================="
     echo -e "🧩 VMESS + SLOWDNS"
@@ -399,47 +287,28 @@ creer_utilisateur() {
 supprimer_utilisateur() {
     charger_utilisateurs
     count=$(echo "$utilisateurs" | jq length)
-    if [ "$count" -eq 0 ]; then
-        echo "Aucun utilisateur à supprimer."
-        read -p "Appuyez sur Entrée pour continuer..."
-        return
-    fi
-    echo "Utilisateurs actuels :"
-    for i in $(seq 0 $((count - 1))); do
-        nom=$(echo "$utilisateurs" | jq -r ".[$i].nom")
-        expire=$(echo "$utilisateurs" | jq -r ".[$i].expire")
-        echo "$((i+1))) $nom (expire le $expire)"
+    [[ $count -eq 0 ]] && { echo "Aucun utilisateur"; read -p "Entrée..."; return; }
+    for i in $(seq 0 $((count-1))); do
+        echo "$((i+1))) $(echo "$utilisateurs" | jq -r ".[$i].nom") ($(echo "$utilisateurs" | jq -r ".[$i].expire"))"
     done
-    echo -n "Numéro à supprimer : "
-    read choix
-    if (( choix < 1 || choix > count )); then
-        echo "Choix invalide."
-        read -p "Appuyez sur Entrée pour continuer..."
-        return
-    fi
-    index=$((choix - 1))
-    utilisateurs=$(echo "$utilisateurs" | jq "del(.[${index}])")
+    echo -n "Numéro supprimer : "; read choix
+    [[ $choix -ge 1 && $choix -le $count ]] || { echo "Invalide"; read -p "Entrée..."; return; }
+    utilisateurs=$(echo "$utilisateurs" | jq "del(.[$((choix-1))])")
     sauvegarder_utilisateurs
-    echo "✅ Utilisateur supprimé."
-    read -p "Appuyez sur Entrée pour continuer..."
+    echo "✅ Supprimé"; read -p "Entrée..."
 }
 
 desinstaller_v2ray() {
-    echo -n "Êtes-vous sûr ? (o/N) : "
-    read reponse
-    if [[ "$reponse" =~ ^[Oo]$ ]]; then
-        sudo systemctl stop v2ray.service slowdns_v2ray.service
-        sudo systemctl disable v2ray.service slowdns_v2ray.service
-        sudo rm -f /etc/systemd/system/v2ray.service /etc/systemd/system/slowdns_v2ray.service
-        sudo pkill v2ray dns-server 2>/dev/null
-        sudo rm -rf /usr/local/bin/v2ray /usr/local/bin/dns-server /etc/v2ray /etc/slowdns_v2ray /.v2ray_domain
-        sudo systemctl daemon-reload
-        sudo rm -f $USER_DB
-        echo "✅ Tout désinstallé et nettoyé."
-    else
-        echo "Annulé."
-    fi
-    read -p "Appuyez sur Entrée pour continuer..."
+    echo -n "Tout supprimer ? (o/N) : "; read reponse
+    [[ $reponse =~ ^[Oo]$ ]] || { echo "Annulé"; read -p "Entrée..."; return; }
+    sudo systemctl stop v2ray.service slowdns_v2ray.service 2>/dev/null
+    sudo systemctl disable v2ray.service slowdns_v2ray.service 2>/dev/null
+    sudo rm -f /etc/systemd/system/{v2ray,slowdns_v2ray}.service
+    sudo pkill -f v2ray dns-server 2>/dev/null
+    sudo rm -rf /usr/local/bin/{v2ray,dns-server} /etc/v2ray /etc/slowdns_v2ray /.v2ray_domain
+    sudo systemctl daemon-reload
+    rm -f "$USER_DB"
+    echo "✅ Tout nettoyé"
 }
 
 # Programme principal
@@ -454,7 +323,7 @@ while true; do
         3) supprimer_utilisateur ;;
         4) desinstaller_v2ray ;;
         5) installer_slowdns ;;
-        0) echo "Au revoir ! 👋"; exit 0 ;;
-        *) echo "Option invalide."; sleep 1 ;;
+        0) echo "👋 Au revoir !"; exit 0 ;;
+        *) echo "❌ Option invalide"; sleep 1 ;;
     esac
 done
