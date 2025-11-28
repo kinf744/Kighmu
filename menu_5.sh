@@ -241,60 +241,39 @@ installer_slowdns() {
     echo "$NAMESERVER" | sudo tee "$CONFIG_FILE" > /dev/null
     echo "NameServer enregistré dans $CONFIG_FILE"
 
-    # ✅ CORRIGÉ: Script wrapper SlowDNS avec NAMESERVER fixe
-    sudo tee /usr/local/bin/slowdns_v2ray-start.sh > /dev/null <<EOF
+    # ✅ SCRIPT CORRIGÉ - SANS set -euo ET NS lu du fichier
+    sudo tee /usr/local/bin/slowdns_v2ray-start.sh > /dev/null <<'EOF'
 #!/bin/bash
-set -euo pipefail
 
 SLOWDNS_DIR="/etc/slowdns_v2ray"
 SLOWDNS_BIN="/usr/local/bin/dns-server"
 PORT=5400
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
-NAMESERVER="$NAMESERVER"
 
-log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
+# Log simple
+timestamp() { date '+%Y-%m-%d %H:%M:%S'; }
 
-wait_for_interface() {
-    local interface=""
-    local tries=0
-    while [ -z "$interface" ] && [ $tries -lt 10 ]; do
-        interface=$(ip -o link show up | awk -F': ' '{print $2}' \
-            | grep -v '^lo$' \
-            | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' \
-            | head -n1)
-        if [ -z "$interface" ]; then
-            sleep 1
-            tries=$((tries+1))
-        fi
-    done
-    if [ -z "$interface" ]; then
-        interface="eth0"
-        log "⚠️ Interface forcée à $interface"
-    fi
-    echo "$interface"
-}
+echo "[$(timestamp)] Démarrage SlowDNS → V2Ray..."
 
-PORT=5400
-V2RAY_INTER_PORT=5401
+# ✅ NS lu DU FICHIER (pas variable vide)
+NAMESERVER=$(cat "$CONFIG_FILE" 2>/dev/null || echo "8.8.8.8")
+echo "[$(timestamp)] NS: $NAMESERVER"
 
-setup_iptables() {
-    interface="$1"
-    iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || true
-    iptables -I INPUT -p tcp --dport "$V2RAY_INTER_PORT" -j ACCEPT 2>/dev/null || true
-}
+# ✅ INTERFACE SIMPLE (pas de fonction complexe)
+interface=$(ip -o link show up | awk -F': ' '{print $2}' | grep -E '^(eth|ens)' | head -1)
+[ -z "$interface" ] && interface="eth0"
+echo "[$(timestamp)] Interface: $interface"
 
-log "Attente de l'interface réseau..."
-interface=$(wait_for_interface)
-log "Interface détectée : $interface"
+# MTU safe
+ip link set "$interface" mtu 1400 2>/dev/null && echo "[$(timestamp)] MTU OK" || echo "[$(timestamp)] MTU skip"
 
-log "Réglage MTU à 1400..."
-ip link set dev "$interface" mtu 1400 || log "Échec MTU, continuer"
+# iptables
+iptables -I INPUT -p udp --dport 5400 -j ACCEPT 2>/dev/null || true
+iptables -I INPUT -p tcp --dport 5401 -j ACCEPT 2>/dev/null || true
 
-setup_iptables "$interface"
-
-log "Démarrage SlowDNS → V2Ray..."
-exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NAMESERVER" 127.0.0.1:$V2RAY_INTER_PORT
+echo "[$(timestamp)] Lancement: $SLOWDNS_BIN -udp :$PORT → 127.0.0.1:5401"
+exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NAMESERVER" 127.0.0.1:5401
 EOF
 
     sudo chmod +x /usr/local/bin/slowdns_v2ray-start.sh
