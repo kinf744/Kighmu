@@ -116,8 +116,8 @@ EOF
     echo "Service systemd V2Ray configuré et démarré."
 
     echo "Configuration des règles iptables pour le port V2Ray 8088..."
-    sudo iptables -I INPUT -p tcp --dport 8088 -j ACCEPT
-    sudo iptables -I INPUT -p udp --dport 8088 -j ACCEPT
+    sudo iptables -I INPUT -p tcp --dport 5401 -j ACCEPT
+    sudo iptables -I INPUT -p udp --dport 5401 -j ACCEPT
 
     if ! command -v netfilter-persistent &>/dev/null; then
         sudo apt update
