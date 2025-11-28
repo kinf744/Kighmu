@@ -221,7 +221,6 @@ EOF
 
 # ✅ CORRIGÉ: Installer SlowDNS avec NAMESERVER fixe
 installer_slowdns() {
-    echo "Installation SlowDNS (DNS-AGN) en cours..."
 
     sudo mkdir -p "$SLOWDNS_DIR"
 
