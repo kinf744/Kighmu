@@ -109,7 +109,7 @@ generer_uuid() {
 
 # Créer et démarrer le service systemd V2Ray
 creer_service_systemd_v2ray() {
-    echo "Création du service systemd pour V2Ray..."
+    echo "Création du service systemd MODERNE pour V2Ray..."
     sudo tee /etc/systemd/system/v2ray.service > /dev/null <<EOF
 [Unit]
 Description=V2Ray Service
@@ -122,9 +122,6 @@ ExecStart=/usr/local/bin/v2ray run -config /etc/v2ray/config.json
 Restart=on-failure
 RestartSec=5s
 LimitNOFILE=65536
-StandardOutput=syslog
-StandardError=syslog
-SyslogIdentifier=v2ray
 
 [Install]
 WantedBy=multi-user.target
@@ -132,19 +129,14 @@ EOF
 
     sudo systemctl daemon-reload
     sudo systemctl enable v2ray.service
-    sudo systemctl start v2ray.service
+    sudo systemctl restart v2ray.service
     sudo systemctl status v2ray.service --no-pager
-    echo "✅ Service systemd V2Ray configuré et démarré."
+    echo "✅ Service V2Ray STABLE (syslog supprimé)"
 
-    echo "Configuration des règles iptables pour le port V2Ray 5401..."
     sudo iptables -I INPUT -p tcp --dport 5401 -j ACCEPT
-
-    if ! command -v netfilter-persistent &>/dev/null; then
-        sudo apt update
-        sudo apt install -y netfilter-persistent
-    fi
+    sudo apt install -y netfilter-persistent 2>/dev/null || true
     sudo netfilter-persistent save
-    echo "✅ Règles iptables configurées et sauvegardées."
+    echo "✅ iptables OK"
 }
 
 # ✅ CORRIGÉ: Installer V2Ray WS avec config complète
