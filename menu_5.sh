@@ -107,43 +107,29 @@ generer_uuid() {
     cat /proc/sys/kernel/random/uuid
 }
 
-# ✅ INSTALL V2RAY - VERSION COMPLÈTE ET STABLE
+# ✅ INSTALL V2RAY - AVEC VOTRE CONFIG PRÉCISE
 installer_v2ray() {
     echo -e "${CYAN}=== Installation V2Ray WS (Port 5401) ===${RESET}"
-    echo -n "Domaine/IP VPS (ex: example.com ou 1.2.3.4) : "; read domaine
+    echo -n "Domaine/IP VPS : "; read domaine
 
     LOGFILE="/var/log/v2ray_install.log"
     sudo touch "$LOGFILE" && sudo chmod 640 "$LOGFILE"
     
     echo "📥 Téléchargement V2Ray... (logs: $LOGFILE)"
 
-    # Dépendances
+    # Dépendances + binaire (code robuste)
     sudo apt update && sudo apt install -y jq unzip netfilter-persistent 2>/dev/null || true
-
-    # Téléchargement + installation binaire
     set +e
     wget -q "https://github.com/v2fly/v2ray-core/releases/latest/download/v2ray-linux-64.zip" -O /tmp/v2ray.zip 2>>"$LOGFILE"
-    ret=$?
+    [[ $? -ne 0 ]] && { echo -e "${RED}❌ Échec téléchargement${RESET}"; return 1; }
     set -e
-    if [[ $ret -ne 0 ]]; then
-        echo -e "${RED}❌ Échec téléchargement V2Ray${RESET}"
-        return 1
-    fi
-
-    unzip -o /tmp/v2ray.zip -d /tmp/v2ray >>"$LOGFILE" 2>&1 || {
-        echo -e "${RED}❌ Échec décompression${RESET}"
-        return 1
-    }
-
-    sudo mv /tmp/v2ray/v2ray /usr/local/bin/ && sudo chmod +x /usr/local/bin/v2ray || {
-        echo -e "${RED}❌ Binaire V2Ray manquant${RESET}"
-        return 1
-    }
+    unzip -o /tmp/v2ray.zip -d /tmp/v2ray >>"$LOGFILE" 2>&1 || { echo -e "${RED}❌ Échec décompression${RESET}"; return 1; }
+    sudo mv /tmp/v2ray/v2ray /usr/local/bin/ && sudo chmod +x /usr/local/bin/v2ray || { echo -e "${RED}❌ Binaire manquant${RESET}"; return 1; }
 
     sudo mkdir -p /etc/v2ray
     echo "$domaine" | sudo tee /.v2ray_domain > /dev/null
 
-    # ✅ CONFIG V2RAY SIMPLIFIÉE (anti-crash)
+    # ✅ VOTRE CONFIG EXACTE (copiée-collée)
     cat <<EOF | sudo tee /etc/v2ray/config.json > /dev/null
 {
   "log": {
@@ -182,7 +168,7 @@ installer_v2ray() {
 }
 EOF
 
-    # ✅ SERVICE SYSTEMD MODERNE (SANS syslog obsolète)
+    # ✅ SERVICE SYSTEMD MODERNE
     sudo tee /etc/systemd/system/v2ray.service > /dev/null <<EOF
 [Unit]
 Description=V2Ray Service (WS 5401)
@@ -200,30 +186,37 @@ LimitNOFILE=65536
 WantedBy=multi-user.target
 EOF
 
-    # Démarrage + iptables
-    sudo systemctl daemon-reload
-    sudo systemctl enable v2ray.service
-    sudo systemctl restart v2ray.service
-
-    # iptables
+    # 🚀 DÉMARRAGE + LOGS TEMPS RÉEL
+    echo -e "${YELLOW}🔄 Démarrage V2Ray + LOGS TEMPS RÉEL...${RESET}"
     sudo iptables -I INPUT -p tcp --dport 5401 -j ACCEPT
     sudo netfilter-persistent save 2>/dev/null || true
 
-    # Vérification finale
+    sudo systemctl daemon-reload
+    sudo systemctl enable v2ray.service
+    sudo systemctl restart v2ray.service &
+
+    # LOGS TEMPS RÉEL 10s
+    echo -e "${CYAN}📊 SUIVI LOGS V2Ray (10s)...${RESET}"
+    timeout 10 sudo journalctl -u v2ray.service -f --no-pager | grep -E "(listener|transport|started|error)" || true
+
+    # VÉRIFICATION FINALE
     sleep 2
     if systemctl is-active --quiet v2ray.service && ss -tuln | grep -q :5401; then
-        echo -e "${GREEN}🎉 V2Ray INSTALLÉ ET ACTIF !${RESET}"
-        echo -e "${YELLOW}Port:${GREEN} TCP 5401${RESET}"
-        echo -e "${YELLOW}Path:${GREEN} /vmess-ws${RESET}"
-        echo -e "${YELLOW}UUID:${GREEN} 00000000-0000-0000-0000-000000000001${RESET}"
-        echo -e "${YELLOW}Domaine:${GREEN} $domaine${RESET}"
-        echo -e "${RED}⚠️  Ouvrez TCP 5401 dans RackNerd Firewall !${RESET}"
+        echo -e "${GREEN}🎉 V2Ray 100% ACTIF !${RESET}"
+        echo -e "${GREEN}✅ Service: $(systemctl is-active v2ray.service)${RESET}"
+        echo -e "${GREEN}✅ Port: $(ss -tuln | grep :5401 | awk '{print $4" → "$5}')"${RESET}"
+        echo ""
+        echo -e "${YELLOW}📱 CLIENT VMESS:${RESET}"
+        echo -e "${GREEN}IP:${RESET} $domaine:5401"
+        echo -e "${GREEN}UUID:${RESET} 00000000-0000-0000-0000-000000000001"
+        echo -e "${GREEN}Path:${RESET} /vmess-ws"
+        echo -e "${RED}⚠️ → TCP 5401 ALLOW !${RESET}"
     else
-        echo -e "${RED}❌ V2Ray ne démarre pas !${RESET}"
-        echo "Logs: sudo journalctl -u v2ray.service -n 20"
+        echo -e "${RED}❌ V2Ray ÉCHEC !${RESET}"
+        sudo journalctl -u v2ray.service -n 20 --no-pager
     fi
 
-    read -p "Appuyez sur Entrée pour continuer..."
+    read -p "Entrée pour continuer..."
 }
 
 # ✅ CORRIGÉ: Installer SlowDNS avec NAMESERVER fixe
