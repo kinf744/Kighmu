@@ -197,8 +197,8 @@ EOF
 
     creer_service_systemd_v2ray
 
-    echo -e "${GREEN}V2Ray WS installé et lancé sur le port 8088 avec path /vmess-ws pour le domaine ${domaine}${RESET}"
-    echo "N'oubliez pas d'ouvrir et rediriger le port 8088 sur votre VPS."
+    echo -e "${GREEN}V2Ray WS installé et lancé sur le port 5401 avec path /vmess-ws pour le domaine ${domaine}${RESET}"
+    echo "N'oubliez pas d'ouvrir et rediriger le port 5401 sur votre VPS."
     read -p "Appuyez sur Entrée pour continuer..."
 }
 
