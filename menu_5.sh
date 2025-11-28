@@ -446,6 +446,8 @@ while true; do
         4) desinstaller_v2ray ;;
         5) installer_slowdns ;;
         0) echo "Au revoir ! 👋"; exit 0 ;;
-        *) echo "Option invalide."; sleep 1 ;;
+        *) echo "Option invalide."
+           sleep 1 
+           ;;
     esac
 done
