@@ -445,7 +445,7 @@ while true; do
         3) supprimer_utilisateur ;;
         4) desinstaller_v2ray ;;
         5) installer_slowdns ;;
-        0) echo "Au revoir ! 👋"; exit 0 ;;
+        0) echo "Au revoir !"; exit 0 ;;
         *) echo "Option invalide."
            sleep 1 
            ;;
