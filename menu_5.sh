@@ -399,7 +399,7 @@ supprimer_utilisateur() {
     for i in $(seq 0 $((count - 1))); do
         nom=$(echo "$utilisateurs" | jq -r ".[$i].nom")
         expire=$(echo "$utilisateurs" | jq -r ".[$i].expire")
-        echo "$((i+1))) $nom expire le $expire"
+        echo "$((i+1)) $nom expire le $expire"
     done
     echo -n "Numéro à supprimer : "
     read choix
