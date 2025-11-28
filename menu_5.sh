@@ -281,7 +281,7 @@ log "Application des règles iptables..."
 setup_iptables "$interface"
 
 log "Démarrage du serveur SlowDNS (DNS-AGN)..."
-NS=$(cat "$CONFIG_FILE")
+NAMESERVER=$(cat "$CONFIG_FILE")
 
 exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NAMESERVER" 127.0.0.1:$V2RAY_INTER_PORT
 
