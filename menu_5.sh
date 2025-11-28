@@ -204,7 +204,7 @@ EOF
     if systemctl is-active --quiet v2ray.service && ss -tuln | grep -q :5401; then
         echo -e "${GREEN}🎉 V2Ray 100% ACTIF !${RESET}"
         echo -e "${GREEN}✅ Service: $(systemctl is-active v2ray.service)${RESET}"
-        echo -e "${GREEN}✅ Port: $(ss -tuln | grep :5401 | awk '{print $4" → "$5}')"${RESET}"
+        echo -e "${GREEN}✅ Port: $(ss -tuln | grep :5401 | awk '{print $4" → "$5}')${RESET}"
         echo ""
         echo -e "${YELLOW}📱 CLIENT VMESS:${RESET}"
         echo -e "${GREEN}IP:${RESET} $domaine:5401"
