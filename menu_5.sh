@@ -347,7 +347,7 @@ creer_utilisateur() {
     if [[ -f /etc/v2ray/config.json ]] && command -v jq >/dev/null 2>&1; then
         ajouter_client_v2ray "$uuid" "$nom"
     else
-        echo "⚠️  Installez d'abord V2Ray (option 1)"
+        echo "⚠️  Installez d'abord V2Ray option 1"
     fi
 
     if [[ -f /.v2ray_domain ]]; then
