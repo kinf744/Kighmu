@@ -227,77 +227,68 @@ installer_slowdns() {
     sudo wget -q -O "$SLOWDNS_BIN" https://github.com/khaledagn/DNS-AGN/raw/main/dns-server
     sudo chmod +x "$SLOWDNS_BIN"
 
-    echo "$SLOWDNS_PRIVATE_KEY" | sudo tee "$SERVER_KEY" > /dev/null
-    echo "$SLOWDNS_PUBLIC_KEY"  | sudo tee "$SERVER_PUB" > /dev/null
+    # ✅ VOS CLÉS EXACTES
+    echo "4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa" | sudo tee "$SERVER_KEY" > /dev/null
+    echo "2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c" | sudo tee "$SERVER_PUB" > /dev/null
     sudo chmod 600 "$SERVER_KEY"
     sudo chmod 644 "$SERVER_PUB"
 
     read -p "NameServer NS (ex: slowdns.pay.googleusercontent.kingdom.qzz.io) : " NAMESERVER
     echo "$NAMESERVER" | sudo tee "$CONFIG_FILE" > /dev/null
 
-    # ✅ SCRIPT CORRIGÉ AVEC -forward 127.0.0.1:5401
+    # ✅ SYNTAXE DNS-AGN AVEC PRIVKEY
     sudo tee /usr/local/bin/slowdns_v2ray-start.sh > /dev/null <<'EOF'
 #!/bin/bash
-SLOWDNS_DIR="/etc/slowdns_v2ray"
-SLOWDNS_BIN="/usr/local/bin/dns-server"
-PORT=5400
-CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
-SERVER_KEY="$SLOWDNS_DIR/server.key"
 LOG="/var/log/slowdns_v2ray.log"
+PORT=5400
+CONFIG_FILE="/etc/slowdns_v2ray/ns.conf"
+SERVER_KEY="/etc/slowdns_v2ray/server.key"
 
 timestamp() { date '+%Y-%m-%d %H:%M:%S'; }
 
-echo "[$(timestamp)] Démarrage SlowDNS → V2Ray..." | tee -a "$LOG"
+echo "[$(timestamp)] Démarrage SlowDNS UDP $PORT..." | tee -a "$LOG"
 NAMESERVER=$(cat "$CONFIG_FILE" 2>/dev/null || echo "8.8.8.8")
 echo "[$(timestamp)] NS: $NAMESERVER" | tee -a "$LOG"
 
-interface=$(ip -o link show up | awk -F': ' '{print $2}' | grep -E '^(eth|ens)' | head -1)
-[ -z "$interface" ] && interface="eth0"
-echo "[$(timestamp)] Interface: $interface" | tee -a "$LOG"
-
-ip link set "$interface" mtu 1400 2>/dev/null && echo "[$(timestamp)] MTU OK" | tee -a "$LOG"
-
-iptables -I INPUT -p udp --dport 5400 -j ACCEPT 2>/dev/null
-iptables -I INPUT -p tcp --dport 5401 -j ACCEPT 2>/dev/null
-
-echo "[$(timestamp)] Lancement: $SLOWDNS_BIN -udp :$PORT -forward 127.0.0.1:5401" | tee -a "$LOG"
-
-# ✅ SYNTAXE CORRIGÉE AVEC -forward
-exec "$SLOWDNS_BIN" -udp :$PORT -forward 127.0.0.1:5401 -privkey-file "$SERVER_KEY" "$NAMESERVER"
+# ✅ SYNTAXE DNS-AGN CORRECTE AVEC PRIVKEY
+echo "[$(timestamp)] Lancement: dns-server -udp :$PORT -privkey-file $SERVER_KEY $NAMESERVER" | tee -a "$LOG"
+/usr/local/bin/dns-server -udp :$PORT -privkey-file "$SERVER_KEY" "$NAMESERVER" | tee -a "$LOG" 2>&1
 EOF
 
     sudo chmod +x /usr/local/bin/slowdns_v2ray-start.sh
 
     sudo tee /etc/systemd/system/slowdns_v2ray.service > /dev/null <<EOF
 [Unit]
-Description=SlowDNS → V2Ray (UDP 5400 → TCP 5401)
-After=network-online.target v2ray.service
-Wants=v2ray.service
+Description=SlowDNS UDP 5400 (DNS-AGN + PRIVKEY)
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=root
 ExecStart=/usr/local/bin/slowdns_v2ray-start.sh
-Restart=on-failure
-RestartSec=3
+Restart=always
+RestartSec=5
 LimitNOFILE=1048576
-TimeoutStartSec=20
+TimeoutStartSec=30
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
     sudo systemctl daemon-reload
+    sudo systemctl enable slowdns_v2ray.service
     sudo systemctl restart slowdns_v2ray.service
+    
     sudo iptables -I INPUT -p udp --dport 5400 -j ACCEPT
     sudo netfilter-persistent save 2>/dev/null || true
 
-    sleep 3
-    echo "✅ SlowDNS + V2Ray COMBO ACTIF !"
-    echo "UDP 5400 → TCP 5401 (V2Ray)"
+    sleep 5
+    echo "✅ SlowDNS UDP 5400 ACTIF avec VOS CLÉS !"
     echo "NS: $NAMESERVER"
-    echo "PubKey: $SLOWDNS_PUBLIC_KEY"
-    ps aux | grep dns-server | grep 5400
+    echo "PubKey (CLIENT): $(cat "$SERVER_PUB")"
+    echo "PrivKey (SERVEUR): $(sudo cat "$SERVER_KEY" | cut -c1-16)..."
+    ps aux | grep dns-server | grep 5400 || echo "❌ Processus absent !"
 }
 
 # Gestion utilisateurs
