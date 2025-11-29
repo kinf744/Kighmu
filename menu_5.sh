@@ -236,13 +236,13 @@ installer_slowdns() {
     read -p "NameServer NS (ex: slowdns.pay.googleusercontent.kingdom.qzz.io) : " NAMESERVER
     echo "$NAMESERVER" | sudo tee "$CONFIG_FILE" > /dev/null
 
-    # Script de lancement systemd
+    # Script de lancement
     sudo tee /usr/local/bin/slowdns_v2ray-start.sh > /dev/null <<EOF
 #!/bin/bash
 LOG="/var/log/slowdns_v2ray.log"
 PORT=5400
-CONFIG_FILE="/etc/slowdns_v2ray/ns.conf"
-SERVER_KEY="/etc/slowdns_v2ray/server.key"
+CONFIG_FILE="$CONFIG_FILE"
+SERVER_KEY="$SERVER_KEY"
 
 timestamp() { date '+%Y-%m-%d %H:%M:%S'; }
 
@@ -250,14 +250,13 @@ echo "[\$(timestamp)] Démarrage SlowDNS UDP \$PORT..." | tee -a "\$LOG"
 NAMESERVER=\$(cat "\$CONFIG_FILE" 2>/dev/null || echo "8.8.8.8")
 echo "[\$(timestamp)] NS: \$NAMESERVER" | tee -a "\$LOG"
 
-# Lancement du serveur avec exec (systemd prendra le relais)
-echo "[\$(timestamp)] Lancement: /usr/local/bin/dns-server -udp :\$PORT -privkey-file \$SERVER_KEY \$NAMESERVER 0.0.0.0:5401" | tee -a "\$LOG"
-exec /usr/local/bin/dns-server -udp :\$PORT -privkey-file "\$SERVER_KEY" "\$NAMESERVER" 0.0.0.0:5401 | tee -a "\$LOG" 2>&1
+echo "[\$(timestamp)] Lancement: $SLOWDNS_BIN -udp :\$PORT -privkey-file \$SERVER_KEY \$NAMESERVER 0.0.0.0:5401" | tee -a "\$LOG"
+exec $SLOWDNS_BIN -udp :\$PORT -privkey-file "\$SERVER_KEY" "\$NAMESERVER" 0.0.0.0:5401 | tee -a "\$LOG" 2>&1
 EOF
 
     sudo chmod +x /usr/local/bin/slowdns_v2ray-start.sh
 
-    # Création du service systemd
+    # Service systemd
     sudo tee /etc/systemd/system/slowdns_v2ray.service > /dev/null <<EOF
 [Unit]
 Description=SlowDNS UDP 5400 (DARKSSH)
@@ -284,13 +283,24 @@ EOF
     sudo iptables -I INPUT -p udp --dport 5400 -j ACCEPT
     sudo netfilter-persistent save 2>/dev/null || true
 
-    # ✅ Affichage infos pour le panneau de contrôle
+    # ✅ VÉRIFICATION FINALE
     sleep 2
-    echo "✅ SlowDNS UDP 5400 → TCP 5401 ACTIF !"
-    echo "NS: $NAMESERVER"
-    echo "PubKey CLIENT: $(cat "$SERVER_PUB")"
-    echo "Commande complète: /usr/local/bin/dns-server -udp :5400 -privkey-file server.key $NAMESERVER 0.0.0.0:5401"
-    ps aux | grep dns-server | grep 5400 || echo "❌ Processus KO"
+    if systemctl is-active --quiet slowdns_v2ray.service && ss -u -l | grep -q :5400; then
+        echo -e "${GREEN}🎉 SlowDNS 100% ACTIF !${RESET}"
+        echo -e "${GREEN}✅ Service: $(systemctl is-active slowdns_v2ray.service)${RESET}"
+        echo -e "${GREEN}✅ Port UDP: $(ss -u -l | grep :5400 | awk '{print $4}')${RESET}"
+        echo -e "${GREEN}✅ Port TCP: 5401${RESET}"
+        echo ""
+        echo -e "${YELLOW}📱 CLIENT SLOWDNS:${RESET}"
+        echo -e "${GREEN}NS:${RESET} $NAMESERVER"
+        echo -e "${GREEN}PubKey:${RESET} $(cat "$SERVER_PUB")"
+        echo -e "${RED}⚠️ → UDP 5400 & TCP 5401 doivent être autorisés !${RESET}"
+    else
+        echo -e "${RED}❌ SlowDNS ÉCHEC !${RESET}"
+        sudo journalctl -u slowdns_v2ray.service -n 20 --no-pager
+    fi
+
+    read -p "Entrée pour continuer..."
 }
     
 # ✅ CORRIGÉ: Création utilisateur avec UUID auto-ajouté
