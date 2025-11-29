@@ -271,7 +271,7 @@ fi
 
 # Lancement du tunnel dans screen
 echo "[\$(timestamp)] Démarrage SlowDNS UDP \$PORT dans screen session '\$SCREEN_NAME'..." | tee -a "\$LOG"
-screen -dmS "\$SCREEN_NAME" $SLOWDNS_BIN -udp :\$PORT -privkey-file "\$SERVER_KEY" "\$NAMESERVER" 0.0.0.0:5401
+screen -dmS "\$SCREEN_NAME" $SLOWDNS_BIN -udp :\$PORT -privkey-file "\$SERVER_KEY" "\$NAMESERVER" 127.0.0.1:5401
 
 # Vérification
 sleep 2
@@ -324,7 +324,7 @@ EOF
     if systemctl is-active --quiet slowdns_v2ray.service && ss -u -l | grep -q :5400; then
         echo -e "${GREEN}🎉 SlowDNS 100% ACTIF !${RESET}"
         echo -e "${GREEN}✅ Service: $(systemctl is-active slowdns_v2ray.service)${RESET}"
-        echo -e "${GREEN}✅ Port UDP: $(ss -u -l | grep :5400 | awk '{print $4}')${RESET}"
+        echo -e "${GREEN}✅ Port UDP: $(ss -u -l | grep :5400 | awk '{print \$4}')${RESET}"
         echo -e "${GREEN}✅ Port TCP: 5401${RESET}"
         echo ""
         echo -e "${YELLOW}📱 CLIENT SLOWDNS:${RESET}"
