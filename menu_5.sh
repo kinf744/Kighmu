@@ -313,9 +313,9 @@ creer_utilisateur() {
     uuid=$(generer_uuid)
     date_exp=$(date -d "+${duree} days" +%Y-%m-%d)
     utilisateurs=$(echo "$utilisateurs" | jq --arg n "$nom" --arg u "$uuid" --arg d "$date_exp" '. += [{"nom": $n, "uuid": $u, "expire": $d}]')
-    sauvegarder_utilisateurs() {
+
+    # ✅ sauvegarde directement
     echo "$utilisateurs" > "$USER_DB"
-}
 
     if [[ -f /etc/v2ray/config.json ]] && command -v jq >/dev/null 2>&1; then
         ajouter_client_v2ray "$uuid" "$nom"
