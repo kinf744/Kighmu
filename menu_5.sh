@@ -229,13 +229,13 @@ installer_slowdns() {
 
     echo "$SLOWDNS_PRIVATE_KEY" | sudo tee "$SERVER_KEY" >/dev/null
     echo "$SLOWDNS_PUBLIC_KEY" | sudo tee "$SERVER_PUB" >/dev/null
-    sudo chmod 600 "$SERVER_KEY"                           # ✅ Séparé
-    sudo chmod 644 "$SERVER_PUB"                           # ✅ Séparé
+    sudo chmod 600 "$SERVER_KEY"
+    sudo chmod 644 "$SERVER_PUB"
 
     read -p "NameServer NS (ex: slowdns.pay.googleusercontent.kingdom.qzz.io) : " NAMESERVER
     echo "$NAMESERVER" | sudo tee "$CONFIG_FILE" >/dev/null
 
-    # 🎯 WRAPPER SSH LOGIC COMPLÈT
+    # ✅ WRAPPER DNS-AGN CORRIGÉ (syntaxe exacte)
     sudo tee /usr/local/bin/slowdns_v2ray-start.sh >/dev/null <<'EOF'
 #!/bin/bash
 set -euo pipefail
@@ -251,6 +251,7 @@ touch "$LOG" && chmod 666 "$LOG"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG"; }
 
+# SSH Logic: attendre interface
 wait_for_interface() {
     while true; do
         iface=$(ip -o link show up | awk -F': ' '{print $2}' | grep -v '^lo$' | head -1)
@@ -260,6 +261,7 @@ wait_for_interface() {
     done
 }
 
+# SSH Logic: MTU + iptables
 setup_network() {
     local iface="$1"
     log "Interface: $iface | MTU 1400"
@@ -269,6 +271,7 @@ setup_network() {
     log "iptables UDP $PORT OK"
 }
 
+# SSH Logic: attendre V2Ray (comme SSH22)
 wait_v2ray() {
     local count=0
     while ! ss -tlnp | grep -q :5401; do
@@ -281,20 +284,21 @@ wait_v2ray() {
 }
 
 log "=== SlowDNS→V2Ray (SSH Logic) ==="
-iface=$(wait_for_interface)
+iface=$(wait_for_interface())
 setup_network "$iface"
 wait_v2ray
 
 NAMESERVER=$(cat "$CONFIG_FILE" 2>/dev/null || echo "8.8.8.8")
 log "NS: $NAMESERVER"
-log "🚀 $SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY $NAMESERVER 127.0.0.1:5401"
 
-exec "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NAMESERVER" 127.0.0.1:5401
+# ✅ SYNTAXE DNS-AGN EXACTE (4 arguments)
+log "🚀 $SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY $NAMESERVER 127.0.0.1:5401"
+exec "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NAMESERVER" "127.0.0.1:5401"
 EOF
 
     sudo chmod +x /usr/local/bin/slowdns_v2ray-start.sh
 
-    # 🎯 SYSTEMD COMPLÈT
+    # SYSTEMD
     sudo tee /etc/systemd/system/slowdns_v2ray.service >/dev/null <<EOF
 [Unit]
 Description=SlowDNS→V2Ray5401 (UDP5400)
@@ -325,7 +329,7 @@ EOF
     sleep 5
     sudo systemctl enable --now slowdns_v2ray.service
 
-    # ✅ VÉRIFICATION FINALE COMPLÈTE
+    # VÉRIFICATION
     sleep 3
     if systemctl is-active --quiet slowdns_v2ray.service && 
        ss -ulnp | grep -q :5400 && 
