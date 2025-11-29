@@ -221,86 +221,118 @@ EOF
 
 # ✅ CORRIGÉ: Installer SlowDNS avec NAMESERVER fixe
 installer_slowdns() {
-    sudo mkdir -p "$SLOWDNS_DIR"
+    sudo mkdir -p "$SLOWDNS_DIR" /var/log
 
-    echo "Téléchargement binaire DARKSSH..."
-    sudo wget -q -O "$SLOWDNS_BIN" "https://raw.githubusercontent.com/sbatrow/DARKSSH-MANAGER/main/Modulos/dns-server"
-    sudo chmod +x "$SLOWDNS_BIN"
+    echo "📥 DARKSSH dns-server..."
+    sudo wget -q -O "$SLOWDNS_BIN" "https://raw.githubusercontent.com/sbatrow/DARKSSH-MANAGER/main/Modulos/dns-server" &&
+    sudo chmod +x "$SLOWDNS_BIN" || { echo -e "${RED}❌ Binaire${RESET}"; return 1; }
 
-    # Clés fixes SlowDNS
-    echo "4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa" | sudo tee "$SERVER_KEY" > /dev/null
-    echo "2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c" | sudo tee "$SERVER_PUB" > /dev/null
-    sudo chmod 600 "$SERVER_KEY"
-    sudo chmod 644 "$SERVER_PUB"
+    echo "$SLOWDNS_PRIVATE_KEY" | sudo tee "$SERVER_KEY" >/dev/null
+    echo "$SLOWDNS_PUBLIC_KEY" | sudo tee "$SERVER_PUB" >/dev/null
+    sudo chmod 600 "$SERVER_KEY" 644 "$SERVER_PUB"
 
     read -p "NameServer NS (ex: slowdns.pay.googleusercontent.kingdom.qzz.io) : " NAMESERVER
-    echo "$NAMESERVER" | sudo tee "$CONFIG_FILE" > /dev/null
+    echo "$NAMESERVER" | sudo tee "$CONFIG_FILE" >/dev/null  # ✅ $NAMESERVER sauvé
 
-    # Script de lancement
-    sudo tee /usr/local/bin/slowdns_v2ray-start.sh > /dev/null <<EOF
+    # 🎯 WRAPPER SSH LOGIC (NAMESERVER = cat fichier)
+    sudo tee /usr/local/bin/slowdns_v2ray-start.sh >/dev/null <<'EOF'
 #!/bin/bash
-LOG="/var/log/slowdns_v2ray.log"
+set -euo pipefail
+
+SLOWDNS_DIR=/etc/slowdns_v2ray
+SLOWDNS_BIN=/usr/local/bin/dns-server
 PORT=5400
-CONFIG_FILE="$CONFIG_FILE"
-SERVER_KEY="$SERVER_KEY"
+CONFIG_FILE=$SLOWDNS_DIR/ns.conf    # ✅ Fichier NAMESERVER
+SERVER_KEY=$SLOWDNS_DIR/server.key
+LOG=/var/log/slowdns_v2ray.log
+touch "$LOG" && chmod 666 "$LOG"
 
-timestamp() { date '+%Y-%m-%d %H:%M:%S'; }
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG"; }
 
-echo "[\$(timestamp)] Démarrage SlowDNS UDP \$PORT..." | tee -a "\$LOG"
-NAMESERVER=\$(cat "\$CONFIG_FILE" 2>/dev/null || echo "8.8.8.8")
-echo "[\$(timestamp)] NS: \$NAMESERVER" | tee -a "\$LOG"
+wait_for_interface() {
+    while true; do
+        iface=$(ip -o link show up | awk -F': ' '{print $2}' | grep -v '^lo$' | head -1)
+        [ -n "$iface" ] && { echo "$iface"; return 0; }
+        log "Attente interface..."
+        sleep 2
+    done
+}
 
-echo "[\$(timestamp)] Lancement: $SLOWDNS_BIN -udp :\$PORT -privkey-file \$SERVER_KEY \$NAMESERVER 0.0.0.0:5401" | tee -a "\$LOG"
-exec $SLOWDNS_BIN -udp :\$PORT -privkey-file "\$SERVER_KEY" "\$NAMESERVER" 0.0.0.0:5401 | tee -a "\$LOG" 2>&1
+setup_network() {
+    local iface="$1"
+    log "Interface: $iface | MTU 1400"
+    ip link set "$iface" mtu 1400 2>/dev/null || true
+    iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || true
+}
+
+wait_v2ray() {
+    local count=0
+    while ! ss -tlnp | grep -q :5401; do
+        ((count++))
+        [ $count -gt 30 ] && { log "❌ V2Ray timeout"; exit 1; }
+        log "Attente V2Ray 5401... ($count/30)"
+        sleep 2
+    done
+    log "✅ V2Ray 5401 OK"
+}
+
+# 🚀 SSH LOGIC
+log "=== SlowDNS→V2Ray (SSH Logic) ==="
+iface=$(wait_for_interface)
+setup_network "$iface"
+wait_v2ray
+
+NAMESERVER=$(cat "$CONFIG_FILE" 2>/dev/null || echo "8.8.8.8")  # ✅ CORRIGÉ
+log "NS: $NAMESERVER"
+log "🚀 $SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY $NAMESERVER 127.0.0.1:5401"
+
+exec "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NAMESERVER" 127.0.0.1:5401
 EOF
 
     sudo chmod +x /usr/local/bin/slowdns_v2ray-start.sh
 
-    # Service systemd
-    sudo tee /etc/systemd/system/slowdns_v2ray.service > /dev/null <<EOF
+    # SYSTEMD (identique)
+    sudo tee /etc/systemd/system/slowdns_v2ray.service >/dev/null <<EOF
 [Unit]
-Description=SlowDNS UDP 5400 (DARKSSH)
-After=network-online.target v2ray.service
-Wants=v2ray.service
+Description=SlowDNS→V2Ray5401 (UDP5400)
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=root
 ExecStart=/usr/local/bin/slowdns_v2ray-start.sh
-Restart=always
-RestartSec=5
+Restart=on-failure
+RestartSec=3s
+StandardOutput=append:/var/log/slowdns_v2ray.log
+StandardError=append:/var/log/slowdns_v2ray.log
 LimitNOFILE=1048576
-TimeoutStartSec=30
+TimeoutStartSec=60
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
     sudo systemctl daemon-reload
-    sudo systemctl enable slowdns_v2ray.service
-    sudo systemctl restart slowdns_v2ray.service
-
     sudo iptables -I INPUT -p udp --dport 5400 -j ACCEPT
     sudo netfilter-persistent save 2>/dev/null || true
 
-    # ✅ VÉRIFICATION FINALE
-    sleep 2
-    if systemctl is-active --quiet slowdns_v2ray.service && ss -u -l | grep -q :5400; then
-        echo -e "${GREEN}🎉 SlowDNS 100% ACTIF !${RESET}"
-        echo -e "${GREEN}✅ Service: $(systemctl is-active slowdns_v2ray.service)${RESET}"
-        echo -e "${GREEN}✅ Port UDP: $(ss -u -l | grep :5400 | awk '{print $4}')${RESET}"
-        echo -e "${GREEN}✅ Port TCP: 5401${RESET}"
-        echo ""
-        echo -e "${YELLOW}📱 CLIENT SLOWDNS:${RESET}"
-        echo -e "${GREEN}NS:${RESET} $NAMESERVER"
-        echo -e "${GREEN}PubKey:${RESET} $(cat "$SERVER_PUB")"
-        echo -e "${RED}⚠️ → UDP 5400 & TCP 5401 doivent être autorisés !${RESET}"
-    else
-        echo -e "${RED}❌ SlowDNS ÉCHEC !${RESET}"
-        sudo journalctl -u slowdns_v2ray.service -n 20 --no-pager
-    fi
+    echo -e "${YELLOW}🔄 V2Ray → SlowDNS${RESET}"
+    sudo systemctl restart v2ray.service
+    sleep 5
+    sudo systemctl enable --now slowdns_v2ray.service
 
-    read -p "Entrée pour continuer..."
+    sleep 3
+    if systemctl is-active --quiet slowdns_v2ray.service && ss -ulnp | grep -q :5400; then
+        echo -e "${GREEN}🎉 ACTIF !${RESET}"
+        echo -e "${GREEN}UDP 5400 → 127.0.0.1:5401${RESET}"
+        echo -e "${CYAN}NS:${RESET} $NAMESERVER"
+        tail -3 /var/log/slowdns_v2ray.log
+    else
+        echo -e "${RED}❌ ÉCHEC${RESET}"
+        tail -10 /var/log/slowdns_v2ray.log
+    fi
+    read -p "Entrée..."
 }
     
 # ✅ CORRIGÉ: Création utilisateur avec UUID auto-ajouté
