@@ -221,6 +221,17 @@ EOF
 
 # ✅ CORRIGÉ: Installer SlowDNS avec NAMESERVER fixe
 installer_slowdns() {
+    SLOWDNS_DIR="/etc/slowdns"
+    SLOWDNS_BIN="/usr/local/bin/dns-server"
+    CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
+    SERVER_KEY="$SLOWDNS_DIR/server.key"
+    SERVER_PUB="$SLOWDNS_DIR/server.pub"
+
+    GREEN="\e[1;32m"
+    YELLOW="\e[1;33m"
+    RED="\e[1;31m"
+    RESET="\e[0m"
+
     sudo mkdir -p "$SLOWDNS_DIR"
 
     echo "Téléchargement binaire DARKSSH..."
@@ -236,22 +247,43 @@ installer_slowdns() {
     read -p "NameServer NS (ex: slowdns.pay.googleusercontent.kingdom.qzz.io) : " NAMESERVER
     echo "$NAMESERVER" | sudo tee "$CONFIG_FILE" > /dev/null
 
-    # Script de lancement
+    # Script de lancement avec screen
     sudo tee /usr/local/bin/slowdns_v2ray-start.sh > /dev/null <<EOF
 #!/bin/bash
 LOG="/var/log/slowdns_v2ray.log"
 PORT=5400
 CONFIG_FILE="$CONFIG_FILE"
 SERVER_KEY="$SERVER_KEY"
+SCREEN_NAME="slowdns"
 
 timestamp() { date '+%Y-%m-%d %H:%M:%S'; }
 
-echo "[\$(timestamp)] Démarrage SlowDNS UDP \$PORT..." | tee -a "\$LOG"
+# Lecture du NS
 NAMESERVER=\$(cat "\$CONFIG_FILE" 2>/dev/null || echo "8.8.8.8")
 echo "[\$(timestamp)] NS: \$NAMESERVER" | tee -a "\$LOG"
 
-echo "[\$(timestamp)] Lancement: $SLOWDNS_BIN -udp :\$PORT -privkey-file \$SERVER_KEY \$NAMESERVER 0.0.0.0:5401" | tee -a "\$LOG"
-exec $SLOWDNS_BIN -udp :\$PORT -privkey-file "\$SERVER_KEY" "\$NAMESERVER" 0.0.0.0:5401 | tee -a "\$LOG" 2>&1
+# Supprimer session screen existante si présente
+if screen -list | grep -q "\$SCREEN_NAME"; then
+    echo "[\$(timestamp)] Une session screen existante '\$SCREEN_NAME' sera arrêtée..." | tee -a "\$LOG"
+    screen -S "\$SCREEN_NAME" -X quit
+    sleep 1
+fi
+
+# Lancement du tunnel dans screen
+echo "[\$(timestamp)] Démarrage SlowDNS UDP \$PORT dans screen session '\$SCREEN_NAME'..." | tee -a "\$LOG"
+screen -dmS "\$SCREEN_NAME" $SLOWDNS_BIN -udp :\$PORT -privkey-file "\$SERVER_KEY" "\$NAMESERVER" 0.0.0.0:5401
+
+# Vérification
+sleep 2
+if screen -list | grep -q "\$SCREEN_NAME"; then
+    echo "[\$(timestamp)] ✅ SlowDNS actif dans screen !" | tee -a "\$LOG"
+else
+    echo "[\$(timestamp)] ❌ Échec du démarrage SlowDNS !" | tee -a "\$LOG"
+    exit 1
+fi
+
+# Garder le script actif pour systemd
+tail -f "\$LOG"
 EOF
 
     sudo chmod +x /usr/local/bin/slowdns_v2ray-start.sh
@@ -260,8 +292,8 @@ EOF
     sudo tee /etc/systemd/system/slowdns_v2ray.service > /dev/null <<EOF
 [Unit]
 Description=SlowDNS UDP 5400 (DARKSSH)
-After=network-online.target v2ray.service
-Wants=v2ray.service
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
@@ -271,6 +303,8 @@ Restart=always
 RestartSec=5
 LimitNOFILE=1048576
 TimeoutStartSec=30
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Install]
 WantedBy=multi-user.target
@@ -280,10 +314,12 @@ EOF
     sudo systemctl enable slowdns_v2ray.service
     sudo systemctl restart slowdns_v2ray.service
 
+    # Autoriser ports
     sudo iptables -I INPUT -p udp --dport 5400 -j ACCEPT
+    sudo iptables -I INPUT -p tcp --dport 5401 -j ACCEPT
     sudo netfilter-persistent save 2>/dev/null || true
 
-    # ✅ VÉRIFICATION FINALE
+    # Vérification finale
     sleep 2
     if systemctl is-active --quiet slowdns_v2ray.service && ss -u -l | grep -q :5400; then
         echo -e "${GREEN}🎉 SlowDNS 100% ACTIF !${RESET}"
