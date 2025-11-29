@@ -227,7 +227,7 @@ installer_slowdns() {
     sudo wget -q -O "$SLOWDNS_BIN" https://github.com/khaledagn/DNS-AGN/raw/main/dns-server
     sudo chmod +x "$SLOWDNS_BIN"
 
-    # ✅ VOS CLÉS EXACTES
+    # VOS CLÉS
     echo "4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa" | sudo tee "$SERVER_KEY" > /dev/null
     echo "2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c" | sudo tee "$SERVER_PUB" > /dev/null
     sudo chmod 600 "$SERVER_KEY"
@@ -236,7 +236,7 @@ installer_slowdns() {
     read -p "NameServer NS (ex: slowdns.pay.googleusercontent.kingdom.qzz.io) : " NAMESERVER
     echo "$NAMESERVER" | sudo tee "$CONFIG_FILE" > /dev/null
 
-    # ✅ SYNTAXE DNS-AGN AVEC PRIVKEY
+    # ✅ SYNTAXE DNS-AGN COMPLÈTE (DOMAIN + UPSTREAM)
     sudo tee /usr/local/bin/slowdns_v2ray-start.sh > /dev/null <<'EOF'
 #!/bin/bash
 LOG="/var/log/slowdns_v2ray.log"
@@ -250,18 +250,18 @@ echo "[$(timestamp)] Démarrage SlowDNS UDP $PORT..." | tee -a "$LOG"
 NAMESERVER=$(cat "$CONFIG_FILE" 2>/dev/null || echo "8.8.8.8")
 echo "[$(timestamp)] NS: $NAMESERVER" | tee -a "$LOG"
 
-# ✅ SYNTAXE DNS-AGN CORRECTE AVEC PRIVKEY
-echo "[$(timestamp)] Lancement: dns-server -udp :$PORT -privkey-file $SERVER_KEY $NAMESERVER" | tee -a "$LOG"
-/usr/local/bin/dns-server -udp :$PORT -privkey-file "$SERVER_KEY" "$NAMESERVER" | tee -a "$LOG" 2>&1
+# ✅ SYNTAXE COMPLÈTE : -udp :PORT -privkey-file KEY DOMAIN 8.8.8.8:53
+echo "[$(timestamp)] Lancement: dns-server -udp :$PORT -privkey-file $SERVER_KEY $NAMESERVER 8.8.8.8:53" | tee -a "$LOG"
+exec /usr/local/bin/dns-server -udp :$PORT -privkey-file "$SERVER_KEY" "$NAMESERVER" 8.8.8.8:53 | tee -a "$LOG" 2>&1
 EOF
 
     sudo chmod +x /usr/local/bin/slowdns_v2ray-start.sh
 
     sudo tee /etc/systemd/system/slowdns_v2ray.service > /dev/null <<EOF
 [Unit]
-Description=SlowDNS UDP 5400 (DNS-AGN + PRIVKEY)
-After=network-online.target
-Wants=network-online.target
+Description=SlowDNS UDP 5400 (DNS-AGN)
+After=network-online.target v2ray.service
+Wants=v2ray.service
 
 [Service]
 Type=simple
@@ -284,11 +284,11 @@ EOF
     sudo netfilter-persistent save 2>/dev/null || true
 
     sleep 5
-    echo "✅ SlowDNS UDP 5400 ACTIF avec VOS CLÉS !"
+    echo "✅ SlowDNS UDP 5400 ACTIF !"
     echo "NS: $NAMESERVER"
-    echo "PubKey (CLIENT): $(cat "$SERVER_PUB")"
-    echo "PrivKey (SERVEUR): $(sudo cat "$SERVER_KEY" | cut -c1-16)..."
-    ps aux | grep dns-server | grep 5400 || echo "❌ Processus absent !"
+    echo "PubKey CLIENT: $(cat "$SERVER_PUB")"
+    echo "Commande: dns-server -udp :5400 -privkey-file server.key $NAMESERVER 8.8.8.8:53"
+    ps aux | grep dns-server | grep 5400 || echo "❌ Processus KO"
 }
 
 # Gestion utilisateurs
