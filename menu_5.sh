@@ -237,7 +237,7 @@ installer_slowdns() {
     echo "$NAMESERVER" | sudo tee "$CONFIG_FILE" > /dev/null
 
     # Script de lancement
-    sudo tee /usr/local/bin/slowdns_v2ray-start.sh > /dev/null <<'EOF'
+    sudo tee /usr/local/bin/slowdns_v2ray-start.sh > /dev/null <<EOF
 #!/bin/bash
 LOG="/var/log/slowdns_v2ray.log"
 PORT=5400
@@ -246,17 +246,19 @@ SERVER_KEY="/etc/slowdns_v2ray/server.key"
 
 timestamp() { date '+%Y-%m-%d %H:%M:%S'; }
 
-echo "[$(timestamp)] Démarrage SlowDNS UDP $PORT..." | tee -a "$LOG"
-NAMESERVER=$(cat "$CONFIG_FILE" 2>/dev/null || echo "8.8.8.8")
-echo "[$(timestamp)] NS: $NAMESERVER" | tee -a "$LOG"
+NAMESERVER=\$(cat "\$CONFIG_FILE" 2>/dev/null || echo "8.8.8.8")
+echo "[$(timestamp)] Démarrage SlowDNS UDP \$PORT..." | tee -a "\$LOG"
+echo "[$(timestamp)] NS: \$NAMESERVER" | tee -a "\$LOG"
+echo "PubKey CLIENT: \$(cat \$SERVER_KEY)" | tee -a "\$LOG"
+echo "Commande complète: dns-server -udp :\$PORT -privkey-file \$SERVER_KEY \$NAMESERVER 0.0.0.0:5401" | tee -a "\$LOG"
 
 # Lancement avec binaire DARKSSH
-echo "[$(timestamp)] Lancement: dns-server -udp :$PORT -privkey-file $SERVER_KEY $NAMESERVER 0.0.0.0:5401" | tee -a "$LOG"
-exec /usr/local/bin/dns-server -udp :$PORT -privkey-file "$SERVER_KEY" "$NAMESERVER" 0.0.0.0:5401 | tee -a "$LOG" 2>&1
+exec /usr/local/bin/dns-server -udp :\$PORT -privkey-file "\$SERVER_KEY" "\$NAMESERVER" 0.0.0.0:5401 | tee -a "\$LOG" 2>&1
 EOF
 
     sudo chmod +x /usr/local/bin/slowdns_v2ray-start.sh
 
+    # Service systemd
     sudo tee /etc/systemd/system/slowdns_v2ray.service > /dev/null <<EOF
 [Unit]
 Description=SlowDNS UDP 5400 (DARKSSH)
@@ -283,7 +285,8 @@ EOF
     sudo iptables -I INPUT -p udp --dport 5400 -j ACCEPT
     sudo netfilter-persistent save 2>/dev/null || true
 
-    sleep 5
+    sleep 2
+    # Affichage final pour le panneau de contrôle
     echo "✅ SlowDNS UDP 5400 → TCP 5401 ACTIF !"
     echo "NS: $NAMESERVER"
     echo "PubKey CLIENT: $(cat "$SERVER_PUB")"
