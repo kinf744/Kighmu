@@ -221,45 +221,85 @@ EOF
 
 # ✅ CORRIGÉ: Installer SlowDNS avec NAMESERVER fixe
 installer_slowdns() {
+    echo -e "${CYAN}=== Installation DNSTT (SlowDNS compatible VMess WS) ===${RESET}"
+
+    LOG="/var/log/slowdns_v2ray-install.log"
     sudo mkdir -p "$SLOWDNS_DIR"
+    sudo touch "$LOG" && sudo chmod 640 "$LOG"
 
-    echo "Téléchargement DNS-AGN..."
-    sudo wget -q -O "$SLOWDNS_BIN" https://github.com/khaledagn/DNS-AGN/raw/main/dns-server
-    sudo chmod +x "$SLOWDNS_BIN"
+    # Dépendances
+    sudo apt update -y >>"$LOG" 2>&1
+    sudo apt install -y wget git build-essential golang-go net-tools iptables-persistent >>"$LOG" 2>&1 || true
 
-    # VOS CLÉS
-    echo "4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa" | sudo tee "$SERVER_KEY" > /dev/null
-    echo "2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c" | sudo tee "$SERVER_PUB" > /dev/null
+    # Télécharger binaire Mygod/dnstt-server
+    DNSTT_BIN="/usr/local/bin/dnstt-server"
+    if ! command -v dnstt-server >/dev/null 2>&1; then
+        echo ">> Téléchargement du binaire dnstt-server..." | tee -a "$LOG"
+        if wget -q -O /tmp/dnstt-server "https://github.com/Mygod/dnstt/releases/latest/download/dnstt-server_linux_amd64" 2>>"$LOG"; then
+            sudo mv /tmp/dnstt-server "$DNSTT_BIN"
+            sudo chmod +x "$DNSTT_BIN"
+        else
+            echo -e "${RED}❌ Impossible de télécharger dnstt-server${RESET}"
+            return 1
+        fi
+    fi
+
+    # Préparer dossier SlowDNS
+    sudo mkdir -p "$SLOWDNS_DIR"
+    sudo chown root:root "$SLOWDNS_DIR"
+    sudo chmod 700 "$SLOWDNS_DIR"
+
+    : "${SLOWDNS_PORT:=5400}"
+    SERVER_KEY="$SLOWDNS_DIR/server.key"
+    SERVER_PUB="$SLOWDNS_DIR/server.pub"
+    CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
+
+    # 🔑 Clés fixes
+    SLOWDNS_PRIVATE_KEY="4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa"
+    SLOWDNS_PUBLIC_KEY="2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c"
+
+    echo ">> Écriture des clés fixes DNSTT..." | tee -a "$LOG"
+    echo "$SLOWDNS_PRIVATE_KEY" | sudo tee "$SERVER_KEY" > /dev/null
+    echo "$SLOWDNS_PUBLIC_KEY"  | sudo tee "$SERVER_PUB" > /dev/null
     sudo chmod 600 "$SERVER_KEY"
     sudo chmod 644 "$SERVER_PUB"
 
-    read -p "NameServer NS (ex: slowdns.pay.googleusercontent.kingdom.qzz.io) : " NAMESERVER
+    # NameServer
+    read -p "NameServer (ex: ns.example.com) : " NAMESERVER
+    if [[ -z "$NAMESERVER" ]]; then
+        echo "Nom de serveur invalide."
+        return 1
+    fi
     echo "$NAMESERVER" | sudo tee "$CONFIG_FILE" > /dev/null
 
-    # ✅ SYNTAXE DNS-AGN COMPLÈTE (DOMAIN + UPSTREAM)
-    sudo tee /usr/local/bin/slowdns_v2ray-start.sh > /dev/null <<'EOF'
+    # Script de démarrage DNSTT → forward V2Ray 127.0.0.1:5401
+    sudo tee /usr/local/bin/slowdns_v2ray-start.sh > /dev/null <<EOF
 #!/bin/bash
 LOG="/var/log/slowdns_v2ray.log"
-PORT=5400
-CONFIG_FILE="/etc/slowdns_v2ray/ns.conf"
-SERVER_KEY="/etc/slowdns_v2ray/server.key"
+DNSTT_BIN="$DNSTT_BIN"
+PORT=${SLOWDNS_PORT}
+CONFIG_FILE="$CONFIG_FILE"
+SERVER_KEY="$SERVER_KEY"
+UPSTREAM="127.0.0.1:5401"
 
 timestamp() { date '+%Y-%m-%d %H:%M:%S'; }
 
-echo "[$(timestamp)] Démarrage SlowDNS UDP $PORT..." | tee -a "$LOG"
-NAMESERVER=$(cat "$CONFIG_FILE" 2>/dev/null || echo "8.8.8.8")
-echo "[$(timestamp)] NS: $NAMESERVER" | tee -a "$LOG"
+echo "[\$(timestamp)] Démarrage DNSTT sur UDP \$PORT -> \$UPSTREAM" | tee -a "\$LOG"
+NAMESERVER=\$(cat "\$CONFIG_FILE" 2>/dev/null || echo "")
+if [[ -z "\$NAMESERVER" ]]; then
+  echo "[\$(timestamp)] No nameserver set in \$CONFIG_FILE" | tee -a "\$LOG"
+  exit 1
+fi
 
-# ✅ SYNTAXE COMPLÈTE : -udp :PORT -privkey-file KEY DOMAIN 8.8.8.8:53
-echo "[$(timestamp)] Lancement: dns-server -udp :$PORT -privkey-file $SERVER_KEY $NAMESERVER 8.8.8.8:53" | tee -a "$LOG"
-exec /usr/local/bin/dns-server -udp :$PORT -privkey-file "$SERVER_KEY" "$NAMESERVER" 8.8.8.8:53 | tee -a "$LOG" 2>&1
+exec "\$DNSTT_BIN" -udp :\$PORT -privkey-file "\$SERVER_KEY" "\$NAMESERVER" "\$UPSTREAM" 2>&1 | tee -a "\$LOG"
 EOF
 
     sudo chmod +x /usr/local/bin/slowdns_v2ray-start.sh
 
+    # Systemd
     sudo tee /etc/systemd/system/slowdns_v2ray.service > /dev/null <<EOF
 [Unit]
-Description=SlowDNS UDP 5400 (DNS-AGN)
+Description=DNSTT SlowDNS pour V2Ray (UDP ${SLOWDNS_PORT})
 After=network-online.target v2ray.service
 Wants=v2ray.service
 
@@ -270,7 +310,6 @@ ExecStart=/usr/local/bin/slowdns_v2ray-start.sh
 Restart=always
 RestartSec=5
 LimitNOFILE=1048576
-TimeoutStartSec=30
 
 [Install]
 WantedBy=multi-user.target
@@ -279,28 +318,19 @@ EOF
     sudo systemctl daemon-reload
     sudo systemctl enable slowdns_v2ray.service
     sudo systemctl restart slowdns_v2ray.service
-    
-    sudo iptables -I INPUT -p udp --dport 5400 -j ACCEPT
+
+    # Firewall
+    sudo iptables -I INPUT -p udp --dport ${SLOWDNS_PORT} -j ACCEPT
     sudo netfilter-persistent save 2>/dev/null || true
 
-    sleep 5
-    echo "✅ SlowDNS UDP 5400 ACTIF !"
-    echo "NS: $NAMESERVER"
-    echo "PubKey CLIENT: $(cat "$SERVER_PUB")"
-    echo "Commande: dns-server -udp :5400 -privkey-file server.key $NAMESERVER 8.8.8.8:53"
-    ps aux | grep dns-server | grep 5400 || echo "❌ Processus KO"
-}
-
-# Gestion utilisateurs
-charger_utilisateurs() {
-    if [[ ! -f $USER_DB ]]; then
-        echo "[]" > "$USER_DB"
-    fi
-    utilisateurs=$(cat "$USER_DB")
-}
-
-sauvegarder_utilisateurs() {
-    echo "$utilisateurs" > "$USER_DB"
+    sleep 2
+    echo -e "${GREEN}✅ DNSTT (SlowDNS) installé et démarré sur UDP ${SLOWDNS_PORT}${RESET}"
+    echo "NameServer: $NAMESERVER"
+    echo "PubKey (server.pub):"
+    sudo cat "$SERVER_PUB"
+    echo ""
+    echo "Commande (server): $DNSTT_BIN -udp :${SLOWDNS_PORT} -privkey-file $SERVER_KEY $NAMESERVER 127.0.0.1:5401"
+    ps aux | grep dnstt-server | grep -v grep || echo "❌ Processus DNSTT non trouvé"
 }
 
 # ✅ CORRIGÉ: Création utilisateur avec UUID auto-ajouté
