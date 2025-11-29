@@ -293,7 +293,6 @@ EOF
 
 # ✅ CORRIGÉ: Création utilisateur avec UUID auto-ajouté
 creer_utilisateur() {
-    charger_utilisateurs
     echo -n "Entrez un nom d'utilisateur : "
     read nom
     echo -n "Durée de validité (en jours) : "
