@@ -244,15 +244,16 @@ PORT=5400
 CONFIG_FILE="/etc/slowdns_v2ray/ns.conf"
 SERVER_KEY="/etc/slowdns_v2ray/server.key"
 
+# Définition de la fonction timestamp avant toute utilisation
 timestamp() { date '+%Y-%m-%d %H:%M:%S'; }
 
 NAMESERVER=\$(cat "\$CONFIG_FILE" 2>/dev/null || echo "8.8.8.8")
-echo "[$(timestamp)] Démarrage SlowDNS UDP \$PORT..." | tee -a "\$LOG"
-echo "[$(timestamp)] NS: \$NAMESERVER" | tee -a "\$LOG"
-echo "PubKey CLIENT: \$(cat \$SERVER_KEY)" | tee -a "\$LOG"
+echo "[\$(timestamp)] Démarrage SlowDNS UDP \$PORT..." | tee -a "\$LOG"
+echo "[\$(timestamp)] NS: \$NAMESERVER" | tee -a "\$LOG"
+echo "PubKey CLIENT: \$(cat \$SERVER_PUB)" | tee -a "\$LOG"
 echo "Commande complète: dns-server -udp :\$PORT -privkey-file \$SERVER_KEY \$NAMESERVER 0.0.0.0:5401" | tee -a "\$LOG"
 
-# Lancement avec binaire DARKSSH
+# Lancement du serveur avec binaire DARKSSH
 exec /usr/local/bin/dns-server -udp :\$PORT -privkey-file "\$SERVER_KEY" "\$NAMESERVER" 0.0.0.0:5401 | tee -a "\$LOG" 2>&1
 EOF
 
@@ -285,12 +286,11 @@ EOF
     sudo iptables -I INPUT -p udp --dport 5400 -j ACCEPT
     sudo netfilter-persistent save 2>/dev/null || true
 
-    sleep 2
-    # Affichage final pour le panneau de contrôle
+    sleep 5
     echo "✅ SlowDNS UDP 5400 → TCP 5401 ACTIF !"
     echo "NS: $NAMESERVER"
     echo "PubKey CLIENT: $(cat "$SERVER_PUB")"
-    echo "Commande: dns-server -udp :5400 -privkey-file server.key $NAMESERVER 0.0.0.0:5401"
+    echo "Commande complète: dns-server -udp :5400 -privkey-file server.key $NAMESERVER 0.0.0.0:5401"
     ps aux | grep dns-server | grep 5400 || echo "❌ Processus KO"
 }
 
