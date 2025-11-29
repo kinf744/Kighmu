@@ -233,33 +233,44 @@ installer_slowdns() {
     sudo chmod 600 "$SERVER_KEY"
     sudo chmod 644 "$SERVER_PUB"
 
+    # Demande NS
     read -p "NameServer NS (ex: slowdns.pay.googleusercontent.kingdom.qzz.io) : " NAMESERVER
     echo "$NAMESERVER" | sudo tee "$CONFIG_FILE" > /dev/null
 
     # Script de lancement
-    sudo tee /usr/local/bin/slowdns_v2ray-start.sh > /dev/null <<EOF
+    sudo tee /usr/local/bin/slowdns_v2ray-start.sh > /dev/null <<'EOF'
 #!/bin/bash
 LOG="/var/log/slowdns_v2ray.log"
 PORT=5400
 CONFIG_FILE="/etc/slowdns_v2ray/ns.conf"
 SERVER_KEY="/etc/slowdns_v2ray/server.key"
 
-# Définition de la fonction timestamp avant toute utilisation
 timestamp() { date '+%Y-%m-%d %H:%M:%S'; }
 
-NAMESERVER=\$(cat "\$CONFIG_FILE" 2>/dev/null || echo "8.8.8.8")
-echo "[\$(timestamp)] Démarrage SlowDNS UDP \$PORT..." | tee -a "\$LOG"
-echo "[\$(timestamp)] NS: \$NAMESERVER" | tee -a "\$LOG"
-echo "PubKey CLIENT: \$(cat \$SERVER_PUB)" | tee -a "\$LOG"
-echo "Commande complète: dns-server -udp :\$PORT -privkey-file \$SERVER_KEY \$NAMESERVER 0.0.0.0:5401" | tee -a "\$LOG"
+echo "[$(timestamp)] Démarrage SlowDNS UDP $PORT..." | tee -a "$LOG"
+NAMESERVER=$(cat "$CONFIG_FILE" 2>/dev/null || echo "8.8.8.8")
+echo "[$(timestamp)] NS: $NAMESERVER" | tee -a "$LOG"
 
-# Lancement du serveur avec binaire DARKSSH
-exec /usr/local/bin/dns-server -udp :\$PORT -privkey-file "\$SERVER_KEY" "\$NAMESERVER" 0.0.0.0:5401 | tee -a "\$LOG" 2>&1
+# Lancement temporaire du serveur
+echo "[$(timestamp)] Lancement: dns-server -udp :$PORT -privkey-file $SERVER_KEY $NAMESERVER 0.0.0.0:5401" | tee -a "$LOG"
+exec /usr/local/bin/dns-server -udp :$PORT -privkey-file "$SERVER_KEY" "$NAMESERVER" 0.0.0.0:5401 | tee -a "$LOG" 2>&1
 EOF
 
     sudo chmod +x /usr/local/bin/slowdns_v2ray-start.sh
 
-    # Service systemd
+    # --- Lancement temporaire pour affichage dans le panneau ---
+    echo "Démarrage temporaire de SlowDNS pour afficher les informations..."
+    bash /usr/local/bin/slowdns_v2ray-start.sh &
+    TEMP_PID=$!
+    sleep 3
+    kill "$TEMP_PID" 2>/dev/null || true
+
+    echo "✅ SlowDNS prêt !"
+    echo "NS: $NAMESERVER"
+    echo "PubKey CLIENT: $(cat "$SERVER_PUB")"
+    echo "Commande complète: dns-server -udp :5400 -privkey-file server.key $NAMESERVER 0.0.0.0:5401"
+
+    # --- Installation systemd ---
     sudo tee /etc/systemd/system/slowdns_v2ray.service > /dev/null <<EOF
 [Unit]
 Description=SlowDNS UDP 5400 (DARKSSH)
@@ -280,17 +291,12 @@ WantedBy=multi-user.target
 EOF
 
     sudo systemctl daemon-reload
-    sudo systemctl enable slowdns_v2ray.service
-    sudo systemctl restart slowdns_v2ray.service
+    sudo systemctl enable --now slowdns_v2ray.service
 
     sudo iptables -I INPUT -p udp --dport 5400 -j ACCEPT
     sudo netfilter-persistent save 2>/dev/null || true
 
-    sleep 5
-    echo "✅ SlowDNS UDP 5400 → TCP 5401 ACTIF !"
-    echo "NS: $NAMESERVER"
-    echo "PubKey CLIENT: $(cat "$SERVER_PUB")"
-    echo "Commande complète: dns-server -udp :5400 -privkey-file server.key $NAMESERVER 0.0.0.0:5401"
+    sleep 2
     ps aux | grep dns-server | grep 5400 || echo "❌ Processus KO"
 }
 
