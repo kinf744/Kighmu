@@ -221,24 +221,27 @@ EOF
 
 # ✅ CORRIGÉ: Installer SlowDNS avec NAMESERVER fixe
 installer_slowdns() {
-    SLOWDNS_DIR="/etc/slowdns"
+    SLOWDNS_DIR="/etc/slowdns_v2ray"  # Changé pour éviter conflit
     SLOWDNS_BIN="/usr/local/bin/dns-server"
     CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
     SERVER_KEY="$SLOWDNS_DIR/server.key"
     SERVER_PUB="$SLOWDNS_DIR/server.pub"
 
-    GREEN="\e[1;32m"
-    YELLOW="\e[1;33m"
-    RED="\e[1;31m"
-    RESET="\e[0m"
+    GREEN="e[1;32m"
+    YELLOW="e[1;33m"
+    RED="e[1;31m"
+    RESET="e[0m"
 
+    # Nettoyage + création
+    sudo systemctl stop slowdns_v2ray.service || true
+    sudo rm -f /usr/local/bin/slowdns_v2ray-start.sh
     sudo mkdir -p "$SLOWDNS_DIR"
 
     echo "Téléchargement binaire DARKSSH..."
     sudo wget -q -O "$SLOWDNS_BIN" "https://raw.githubusercontent.com/sbatrow/DARKSSH-MANAGER/main/Modulos/dns-server"
     sudo chmod +x "$SLOWDNS_BIN"
 
-    # Clés fixes SlowDNS
+    # Clés fixes
     echo "4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa" | sudo tee "$SERVER_KEY" > /dev/null
     echo "2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c" | sudo tee "$SERVER_PUB" > /dev/null
     sudo chmod 600 "$SERVER_KEY"
@@ -247,56 +250,37 @@ installer_slowdns() {
     read -p "NameServer NS (ex: slowdns.pay.googleusercontent.kingdom.qzz.io) : " NAMESERVER
     echo "$NAMESERVER" | sudo tee "$CONFIG_FILE" > /dev/null
 
-    # Script de lancement avec screen
-    sudo tee /usr/local/bin/slowdns_v2ray-start.sh > /dev/null <<'EOF'
+    # ✅ SCRIPT BASH CORRIGÉ (SANS 'EOF' → pas d'échappement $())
+    sudo tee /usr/local/bin/slowdns_v2ray-start.sh > /dev/null <<EOF
 #!/bin/bash
-
 LOG="/var/log/slowdns_v2ray.log"
 PORT=5400
-CONFIG_FILE="/etc/slowdns/ns.conf"
-SERVER_KEY="/etc/slowdns/server.key"
-SLOWDNS_BIN="/usr/local/bin/dns-server"
-SCREEN_NAME="slowdns"
+CONFIG_FILE="$CONFIG_FILE"
+SERVER_KEY="$SERVER_KEY"
+SLOWDNS_BIN="$SLOWDNS_BIN"
 
 timestamp() { date '+%Y-%m-%d %H:%M:%S'; }
 
-# Lire le NS
-NAMESERVER=$(cat "$CONFIG_FILE" 2>/dev/null)
-if [ -z "$NAMESERVER" ]; then
-    NAMESERVER="8.8.8.8"
-fi
+echo "[$(timestamp)] Démarrage SlowDNS UDP $PORT..." | tee -a "$LOG"
 
-echo "[\$(timestamp)] NS: \$NAMESERVER" | tee -a "\$LOG"
+# ✅ LECTURE NS SANS ERREUR SYNTAXE
+NAMESERVER=$(cat "$CONFIG_FILE" 2>/dev/null || echo "8.8.8.8")
+echo "[$(timestamp)] NS: $NAMESERVER" | tee -a "$LOG"
 
-# Fermer ancienne session
-if screen -list | grep -q "\$SCREEN_NAME"; then
-    screen -S "\$SCREEN_NAME" -X quit
-    sleep 1
-fi
+echo "[$(timestamp)] Lancement: $SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY $NAMESERVER 8.8.8.8:53" | tee -a "$LOG"
 
-# Démarrer SlowDNS
-echo "[\$(timestamp)] Lancement SlowDNS..." | tee -a "\$LOG"
-screen -dmS "\$SCREEN_NAME" \$SLOWDNS_BIN -udp :\$PORT -privkey-file "\$SERVER_KEY" "\$NAMESERVER" 127.0.0.1:5401
-
-sleep 2
-if screen -list | grep -q "\$SCREEN_NAME"; then
-    echo "[\$(timestamp)] ✔ SlowDNS actif !" | tee -a "\$LOG"
-else
-    echo "[\$(timestamp)] ❌ SlowDNS FAILED !" | tee -a "\$LOG"
-    exit 1
-fi
-
-tail -f "\$LOG"
+# ✅ SYNTAXE DNS-AGN COMPLÈTE
+exec $SLOWDNS_BIN -udp :$PORT -privkey-file "$SERVER_KEY" "$NAMESERVER" 8.8.8.8:53 >>"$LOG" 2>&1
 EOF
 
     sudo chmod +x /usr/local/bin/slowdns_v2ray-start.sh
 
-    # Service systemd corrigé
-    sudo tee /etc/systemd/system/slowdns_v2ray.service > /dev/null <<'EOF'
+    # ✅ SYSTEMD UNIT CORRIGÉ (StartLimitIntervalSec dans [Unit])
+    sudo tee /etc/systemd/system/slowdns_v2ray.service > /dev/null <<EOF
 [Unit]
 Description=SlowDNS UDP 5400 (DARKSSH)
-After=network-online.target
-Wants=network-online.target
+After=network-online.target v2ray.service
+Wants=network-online.target v2ray.service
 StartLimitIntervalSec=60
 StartLimitBurst=5
 
@@ -307,6 +291,7 @@ ExecStart=/usr/local/bin/slowdns_v2ray-start.sh
 Restart=always
 RestartSec=5
 LimitNOFILE=1048576
+TimeoutStartSec=30
 
 [Install]
 WantedBy=multi-user.target
@@ -316,23 +301,21 @@ EOF
     sudo systemctl enable slowdns_v2ray.service
     sudo systemctl restart slowdns_v2ray.service
 
-    # Autoriser ports
+    # Firewall
     sudo iptables -I INPUT -p udp --dport 5400 -j ACCEPT
     sudo iptables -I INPUT -p tcp --dport 5401 -j ACCEPT
     sudo netfilter-persistent save 2>/dev/null || true
 
     # Vérification finale
-    sleep 2
-    if systemctl is-active --quiet slowdns_v2ray.service && ss -u -l | grep -q :5400; then
+    sleep 5
+    if systemctl is-active --quiet slowdns_v2ray.service && ss -uln | grep -q :5400; then
         echo -e "${GREEN}🎉 SlowDNS 100% ACTIF !${RESET}"
         echo -e "${GREEN}✅ Service: $(systemctl is-active slowdns_v2ray.service)${RESET}"
-        echo -e "${GREEN}✅ Port UDP: $(ss -u -l | grep :5400 | awk '{print $4}')${RESET}"
-        echo -e "${GREEN}✅ Port TCP: 5401${RESET}"
-        echo ""
-        echo -e "${YELLOW}📱 CLIENT SLOWDNS:${RESET}"
-        echo -e "${GREEN}NS:${RESET} $NAMESERVER"
-        echo -e "${GREEN}PubKey:${RESET} $(cat "$SERVER_PUB")"
-        echo -e "${RED}⚠️ → UDP 5400 & TCP 5401 doivent être autorisés !${RESET}"
+        echo -e "${GREEN}✅ Port UDP: $(ss -uln | grep :5400)${RESET}"
+        echo -e "${YELLOW}📱 CLIENT:${RESET}"
+        echo "Server: kiaje.kighmuop.dpdns.org:5400"
+        echo "NS: $NAMESERVER"
+        echo "PubKey: $(cat "$SERVER_PUB")"
     else
         echo -e "${RED}❌ SlowDNS ÉCHEC !${RESET}"
         sudo journalctl -u slowdns_v2ray.service -n 20 --no-pager
