@@ -128,7 +128,7 @@ show_menu() {
     echo -e "${YELLOW}║ 2) Créer nouvel utilisateur${RESET}"
     echo -e "${YELLOW}║ 3) Supprimer un utilisateur${RESET}"
     echo -e "${YELLOW}║ 4) Désinstaller V2Ray + SlowDNS${RESET}"
-    echo -e "${YELLOW}║ 5) Installer tunnel SlowDNS (DNSTT)${RESET}"
+    echo -e "${YELLOW}║ 5) Installer tunnel SlowDNS (DNS)${RESET}"
     echo -e "${RED}║ 0) Quitter${RESET}"
     echo -e "${CYAN}╚═════════════════════════════════════════════════════╝${RESET}"
     echo -n "Choisissez une option : "
