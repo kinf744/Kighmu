@@ -258,7 +258,7 @@ installer_slowdns() {
     echo "🚀 Lancement SlowDNS → V2Ray sur UDP $PORT"
     screen -dmS slowdns_v2ray bash -c "
         echo '[INFO] SlowDNS démarrage...' >> $LOG_FILE
-        exec $SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY $NAMESERVER 0.0.0.0:$V2RAY_PORT >>$LOG_FILE 2>&1
+        exec $SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY $NAMESERVER 127.0.0.1:$V2RAY_PORT >>$LOG_FILE 2>&1
     "
 
     echo "⏳ Vérification du tunnel et affichage des logs récents (10s)..."
