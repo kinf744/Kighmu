@@ -221,91 +221,63 @@ EOF
 
 # ✅ CORRIGÉ: Installer SlowDNS avec NAMESERVER fixe
 installer_slowdns() {
+    # Directories & variables
     SLOWDNS_DIR="/etc/slowdns_v2ray"
     SLOWDNS_BIN="/usr/local/bin/dns-server"
     SERVER_KEY="$SLOWDNS_DIR/server.key"
     SERVER_PUB="$SLOWDNS_DIR/server.pub"
-    CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
-    PORT=5400         # UDP SlowDNS
-    V2RAY_PORT=5401   # TCP V2Ray
+    PORT=5400
+    AUTOSTART="/etc/autostart"
+
+    # Clés fixes
+    SLOWDNS_PRIVATE_KEY="4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa"
+    SLOWDNS_PUBLIC_KEY="2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c"
 
     sudo mkdir -p "$SLOWDNS_DIR" /var/log
 
-    echo "📥 DARKSSH dns-server..."
-    sudo wget -q -O "$SLOWDNS_BIN" "https://github.com/sbatrow/DARKSSH-MANAGER/raw/main/Modulos/dns-server" || { echo "❌ Binaire non téléchargé"; return 1; }
+    # Téléchargement du binaire
+    echo "📥 Téléchargement du binaire dns-server..."
+    sudo wget -q -O "$SLOWDNS_BIN" "https://raw.githubusercontent.com/sbatrow/DARKSSH-MANAGER/main/Modulos/dns-server"
     sudo chmod +x "$SLOWDNS_BIN"
 
-    # Générer clés si elles n'existent pas
-    if [[ ! -f "$SERVER_KEY" || ! -f "$SERVER_PUB" ]]; then
-        sudo "$SLOWDNS_BIN" -gen-key -privkey-file "$SERVER_KEY" -pubkey-file "$SERVER_PUB"
-    fi
+    # Clés
+    echo "$SLOWDNS_PRIVATE_KEY" | sudo tee "$SERVER_KEY" >/dev/null
+    echo "$SLOWDNS_PUBLIC_KEY" | sudo tee "$SERVER_PUB" >/dev/null
     sudo chmod 600 "$SERVER_KEY"
     sudo chmod 644 "$SERVER_PUB"
 
-    # Nom du NS
-    read -p "NameServer NS (ex: t.example.com) : " NAMESERVER
-    echo "$NAMESERVER" | sudo tee "$CONFIG_FILE" >/dev/null
+    # NS
+    read -p "NameServer NS (ex: slowdns.pay.googleusercontent.kingdom.qzz.io) : " NAMESERVER
+    [[ -z "$NAMESERVER" ]] && NAMESERVER="8.8.8.8"
 
-    # Wrapper systemd
-    cat > /tmp/slowdns_v2ray-start.sh << EOF
-#!/bin/bash
-SLOWDNS_DIR="$SLOWDNS_DIR"
-PORT=$PORT
-V2RAY_PORT=$V2RAY_PORT
-NS="\$(cat $CONFIG_FILE)"
-exec $SLOWDNS_BIN -udp ":$PORT" -privkey-file "\$SLOWDNS_DIR/server.key" "\$NS" "0.0.0.0:\$V2RAY_PORT"
-EOF
+    # Interface & iptables
+    IFACE=$(ip -o link show up | awk -F': ' 'NR==2{print $2}' | head -1)
+    ip link set dev "$IFACE" mtu 1400 2>/dev/null || true
+    iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || \
+        iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
 
-    sudo mv /tmp/slowdns_v2ray-start.sh /usr/local/bin/slowdns_v2ray-start.sh
-    sudo chmod +x /usr/local/bin/slowdns_v2ray-start.sh
+    # Lancement SlowDNS dans screen
+    echo "🚀 Lancement SlowDNS → V2Ray sur UDP $PORT"
+    screen -dmS slowdns_v2ray "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NAMESERVER" 0.0.0.0:5401
 
-    # Systemd
-    cat > /tmp/slowdns_v2ray.service << EOF
-[Unit]
-Description=SlowDNS→V2Ray (UDP$PORT)
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=root
-ExecStart=/usr/local/bin/slowdns_v2ray-start.sh
-Restart=on-failure
-RestartSec=3
-StandardOutput=append:/var/log/slowdns_v2ray.log
-StandardError=append:/var/log/slowdns_v2ray.log
-LimitNOFILE=1048576
-TimeoutStartSec=60
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-    sudo mv /tmp/slowdns_v2ray.service /etc/systemd/system/slowdns_v2ray.service
-
-    # Activer ports et systemd
-    sudo iptables -I INPUT -p udp --dport $PORT -j ACCEPT
-    sudo iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
-
-    sudo systemctl daemon-reload
-    sudo systemctl restart v2ray.service
-    sleep 5
-    sudo systemctl enable --now slowdns_v2ray.service
+    # Respawn automatique
+    if ! grep -q "$SLOWDNS_BIN" "$AUTOSTART"; then
+        echo "screen -dmS slowdns_v2ray $SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY $NAMESERVER 0.0.0.0:5401" | sudo tee -a "$AUTOSTART" >/dev/null
+    fi
 
     # Vérification
     sleep 5
-    if systemctl is-active --quiet slowdns_v2ray.service && \
-       ss -ulnp | grep -q :$PORT && \
-       ss -tlnp | grep -q :$V2RAY_PORT; then
-        echo "🎉 SLOWDNS+V2RAY actif !"
-        echo "✅ UDP SlowDNS:$PORT → $(ss -ulnp | grep :$PORT | awk '{print $5}')"
-        echo "✅ TCP V2Ray:$V2RAY_PORT → $(ss -tlnp | grep :$V2RAY_PORT | awk '{print $5}')"
-        echo "NS: $NAMESERVER"
-        echo "PubKey: $(cat $SERVER_PUB)"
+    if ss -ulnp | grep -q ":$PORT" && ss -tlnp | grep -q ":5401"; then
+        echo -e "\033[1;32m🎉 SLOWDNS + V2RAY actif !\033[0m"
+        echo -e "\033[1;33mNS:\033[0m $NAMESERVER"
+        echo -e "\033[1;33mPubKey:\033[0m $(cat "$SERVER_PUB")"
     else
-        echo "❌ Échec ! Vérifier logs :"
-        sudo journalctl -u slowdns_v2ray.service -n 20 --no-pager
+        echo -e "\033[1;31m❌ Échec du démarrage ! Vérifiez les logs.\033[0m"
+        ss -ulnp | grep ":$PORT" || echo "❌ UDP $PORT absent"
+        ss -tlnp | grep ":5401" || echo "❌ TCP 5401 absent"
     fi
+
+    read -p "Appuyez sur Entrée pour continuer..."
 }
     
 # ✅ CORRIGÉ: Création utilisateur avec UUID auto-ajouté
