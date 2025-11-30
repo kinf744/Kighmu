@@ -78,12 +78,16 @@ afficher_menu() {
 
 # Affiche l'état du tunnel V2Ray WS
 afficher_mode_v2ray_ws() {
+    # Vérification du service V2Ray
     if systemctl is-active --quiet v2ray.service; then
-        local v2ray_port=$(jq -r '.inbounds[0].port' /etc/v2ray/config.json 2>/dev/null || echo "5401")
+        local v2ray_port
+        v2ray_port=$(jq -r '.inbounds[0].port' /etc/v2ray/config.json 2>/dev/null || echo "5401")
         echo -e "${CYAN}Tunnel V2Ray actif:${RESET}"
         echo -e "  - V2Ray WS sur le port TCP ${GREEN}$v2ray_port${RESET}"
     fi
-    if systemctl is-active --quiet slowdns_v2ray.service; then
+
+    # Vérification du tunnel SlowDNS via screen
+    if screen -list | grep -q "slowdns_v2ray"; then
         echo -e "${CYAN}Tunnel SlowDNS actif:${RESET}"
         echo -e "  - SlowDNS sur le port UDP ${GREEN}5400${RESET} → V2Ray 5401"
     fi
