@@ -221,80 +221,48 @@ EOF
 
 # ✅ CORRIGÉ: Installer SlowDNS avec NAMESERVER fixe
 installer_slowdns() {
+    SLOWDNS_DIR="/etc/slowdns_v2ray"
+    SLOWDNS_BIN="/usr/local/bin/dns-server"
+    SERVER_KEY="$SLOWDNS_DIR/server.key"
+    SERVER_PUB="$SLOWDNS_DIR/server.pub"
+    CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
+    PORT=5400         # UDP SlowDNS
+    V2RAY_PORT=5401   # TCP V2Ray
+
     sudo mkdir -p "$SLOWDNS_DIR" /var/log
 
     echo "📥 DARKSSH dns-server..."
-    sudo wget -q -O "$SLOWDNS_BIN" "https://raw.githubusercontent.com/sbatrow/DARKSSH-MANAGER/main/Modulos/dns-server" &&
-    sudo chmod +x "$SLOWDNS_BIN" || { echo -e "${RED}❌ Binaire${RESET}"; return 1; }
+    sudo wget -q -O "$SLOWDNS_BIN" "https://github.com/sbatrow/DARKSSH-MANAGER/raw/main/Modulos/dns-server" || { echo "❌ Binaire non téléchargé"; return 1; }
+    sudo chmod +x "$SLOWDNS_BIN"
 
-    echo "$SLOWDNS_PRIVATE_KEY" | sudo tee "$SERVER_KEY" >/dev/null
-    echo "$SLOWDNS_PUBLIC_KEY" | sudo tee "$SERVER_PUB" >/dev/null
+    # Générer clés si elles n'existent pas
+    if [[ ! -f "$SERVER_KEY" || ! -f "$SERVER_PUB" ]]; then
+        sudo "$SLOWDNS_BIN" -gen-key -privkey-file "$SERVER_KEY" -pubkey-file "$SERVER_PUB"
+    fi
     sudo chmod 600 "$SERVER_KEY"
     sudo chmod 644 "$SERVER_PUB"
 
-    read -p "NameServer NS (ex: slowdns.pay.googleusercontent.kingdom.qzz.io) : " NAMESERVER
+    # Nom du NS
+    read -p "NameServer NS (ex: t.example.com) : " NAMESERVER
     echo "$NAMESERVER" | sudo tee "$CONFIG_FILE" >/dev/null
 
-    # ✅ WRAPPER (syntaxe bash propre)
-    cat > /tmp/slowdns_wrapper.sh << 'EOF'
+    # Wrapper systemd
+    cat > /tmp/slowdns_v2ray-start.sh << EOF
 #!/bin/bash
-set -euo pipefail
-
-SLOWDNS_DIR=/etc/slowdns_v2ray
-SLOWDNS_BIN=/usr/local/bin/dns-server
-PORT=5400
-CONFIG_FILE=$SLOWDNS_DIR/ns.conf
-SERVER_KEY=$SLOWDNS_DIR/server.key
-LOG=/var/log/slowdns_v2ray.log
-
-touch "$LOG" && chmod 666 "$LOG"
-
-log() { 
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG"
-}
-
-log "=== SlowDNS→V2Ray (SSH Logic) ==="
-
-# Interface
-while ! ip -o link show up | grep -qv '^lo:'; do
-    log "Attente interface..."
-    sleep 2
-done
-log "Interface OK"
-
-# MTU + iptables
-IFACE=$(ip -o link show up | awk -F': ' 'NR==2{print $2}' | head -1)
-ip link set dev "$IFACE" mtu 1400 2>/dev/null || true
-iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || \
-iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
-log "MTU + iptables UDP $PORT OK"
-
-# V2Ray
-for i in {1..30}; do
-    if ss -tlnp | grep -q :5401; then
-        log "✅ V2Ray 5401 OK"
-        break
-    fi
-    [ $i -eq 30 ] && { log "❌ V2Ray 5401 timeout"; exit 1; }
-    log "Attente V2Ray... ($i/30)"
-    sleep 2
-done
-
-NAMESERVER=$(cat "$CONFIG_FILE" 2>/dev/null || echo "8.8.8.8")
-log "NS: $NAMESERVER"
-
-log "🚀 $SLOWDNS_BIN -d $NAMESERVER -k $SERVER_KEY -l 0.0.0.0:$PORT -f 127.0.0.1:5401"
-exec "$SLOWDNS_BIN" -d "$NAMESERVER" -k "$SERVER_KEY" -l "0.0.0.0:$PORT" -f "127.0.0.1:5401"
+SLOWDNS_DIR="$SLOWDNS_DIR"
+PORT=$PORT
+V2RAY_PORT=$V2RAY_PORT
+NS="\$(cat $CONFIG_FILE)"
+exec $SLOWDNS_BIN -udp ":$PORT" -privkey-file "\$SLOWDNS_DIR/server.key" "\$NS" "0.0.0.0:\$V2RAY_PORT"
 EOF
 
-    sudo cp /tmp/slowdns_wrapper.sh /usr/local/bin/slowdns_v2ray-start.sh
+    sudo mv /tmp/slowdns_v2ray-start.sh /usr/local/bin/slowdns_v2ray-start.sh
     sudo chmod +x /usr/local/bin/slowdns_v2ray-start.sh
-    rm /tmp/slowdns_wrapper.sh
 
-    # ✅ SYSTEMD PROPRE (sans heredoc)
-    cat > /tmp/slowdns.service << 'EOF'
+    # Systemd
+    cat > /tmp/slowdns_v2ray.service << EOF
 [Unit]
-Description=SlowDNS→V2Ray5401 (UDP5400)
+Description=SlowDNS→V2Ray (UDP$PORT)
 After=network-online.target
 Wants=network-online.target
 
@@ -313,45 +281,31 @@ TimeoutStartSec=60
 WantedBy=multi-user.target
 EOF
 
-    sudo cp /tmp/slowdns.service /etc/systemd/system/slowdns_v2ray.service
-    rm /tmp/slowdns.service
+    sudo mv /tmp/slowdns_v2ray.service /etc/systemd/system/slowdns_v2ray.service
+
+    # Activer ports et systemd
+    sudo iptables -I INPUT -p udp --dport $PORT -j ACCEPT
+    sudo iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
 
     sudo systemctl daemon-reload
-    sudo iptables -I INPUT -p udp --dport 5400 -j ACCEPT
-    sudo netfilter-persistent save 2>/dev/null || true
-
-    echo -e "${YELLOW}🔄 V2Ray → SlowDNS${RESET}"
     sudo systemctl restart v2ray.service
     sleep 5
     sudo systemctl enable --now slowdns_v2ray.service
 
-    # VÉRIFICATION
+    # Vérification
     sleep 5
-    if systemctl is-active --quiet slowdns_v2ray.service && 
-       ss -ulnp | grep -q :5400 && 
-       ss -tlnp | grep -q :5401; then
-        echo -e "${GREEN}🎉 SLOWDNS+V2RAY 100% ACTIF !${RESET}"
-        echo -e "${GREEN}✅ SlowDNS UDP:${RESET} $(ss -ulnp | grep :5400 | awk '{print $5}' | cut -d',' -f1)"
-        echo -e "${GREEN}✅ V2Ray TCP:${RESET} $(ss -tlnp | grep :5401 | awk '{print $5}' | cut -d',' -f1)"
-        echo -e "${CYAN}NS:${RESET} $NAMESERVER"
-        echo -e "${CYAN}PubKey:${RESET} $(cat "$SERVER_PUB")"
-        echo ""
-        echo -e "${YELLOW}📱 CLIENT SLOWDNS:${RESET}"
-        echo -e "${GREEN}NS:${RESET} $NAMESERVER"
-        echo -e "${GREEN}PubKey:${RESET} $(cat "$SERVER_PUB")"
-        echo -e "${RED}⚠️ UDP 5400 + TCP 5401 ALLOW !${RESET}"
-        tail -n 5 /var/log/slowdns_v2ray.log
+    if systemctl is-active --quiet slowdns_v2ray.service && \
+       ss -ulnp | grep -q :$PORT && \
+       ss -tlnp | grep -q :$V2RAY_PORT; then
+        echo "🎉 SLOWDNS+V2RAY actif !"
+        echo "✅ UDP SlowDNS:$PORT → $(ss -ulnp | grep :$PORT | awk '{print $5}')"
+        echo "✅ TCP V2Ray:$V2RAY_PORT → $(ss -tlnp | grep :$V2RAY_PORT | awk '{print $5}')"
+        echo "NS: $NAMESERVER"
+        echo "PubKey: $(cat $SERVER_PUB)"
     else
-        echo -e "${RED}❌ ÉCHEC !${RESET}"
-        echo "SlowDNS: $(systemctl is-active slowdns_v2ray.service)"
-        echo "V2Ray:  $(systemctl is-active v2ray.service)"
-        ss -ulnp | grep 5400 || echo "❌ UDP 5400 absent"
-        ss -tlnp | grep 5401 || echo "❌ TCP 5401 absent"
-        sudo tail -n 15 /var/log/slowdns_v2ray.log 2>/dev/null || true
-        sudo journalctl -u slowdns_v2ray.service -n 20 --no-pager 2>/dev/null || true
+        echo "❌ Échec ! Vérifier logs :"
+        sudo journalctl -u slowdns_v2ray.service -n 20 --no-pager
     fi
-
-    read -p "Appuyez sur Entrée pour continuer..."
 }
     
 # ✅ CORRIGÉ: Création utilisateur avec UUID auto-ajouté
