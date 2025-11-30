@@ -26,24 +26,25 @@ generer_lien_vmess() {
     local port="$3"
     local uuid="$4"
 
-    local json_config=$(cat <<-EOF
+    local json=$(cat <<EOF
 {
-"v": "2",
-"ps": "$nom",
-"add": "$domaine",
-"port": "$port",
-"id": "$uuid",
-"aid": "0",
-"net": "ws",
-"type": "none",
-"host": "$domaine",
-"path": "/vmess-ws",
-"tls": "none",
-"scy": "auto"
+  "v": "2",
+  "ps": "$nom",
+  "add": "$domaine",
+  "port": "$port",
+  "id": "$uuid",
+  "aid": "0",
+  "net": "ws",
+  "type": "none",
+  "host": "$domaine",
+  "path": "/vmess-ws",
+  "tls": "none"
 }
 EOF
-    )
-    echo "vmess://$(echo -n "$json_config" | base64 -w 0)"
+)
+
+    # encodage base64 propre (sans retour à la ligne)
+    echo -n "vmess://$(echo -n "$json" | base64 -w 0)"
 }
 
 # ✅ AJOUTÉ: Fonction pour ajouter UUID dans V2Ray
