@@ -366,13 +366,19 @@ desinstaller_v2ray() {
     echo -n "Êtes-vous sûr ? o/N : "
     read reponse
     if [[ "$reponse" =~ ^[Oo]$ ]]; then
-        sudo systemctl stop v2ray.service slowdns_v2ray.service
-        sudo systemctl disable v2ray.service slowdns_v2ray.service
-        sudo rm -f /etc/systemd/system/v2ray.service /etc/systemd/system/slowdns_v2ray.service
+        sudo systemctl stop v2ray.service
+        sudo systemctl disable v2ray.service
+        sudo rm -f /etc/systemd/system/v2ray.service
+
+        if screen -list | grep -q "slowdns_v2ray"; then
+            screen -S slowdns_v2ray -X quit
+        fi
+
         sudo pkill v2ray dns-server 2>/dev/null
-        sudo rm -rf /usr/local/bin/v2ray /usr/local/bin/dns-server /etc/v2ray /etc/slowdns_v2ray /.v2ray_domain
+        sudo rm -rf /usr/local/bin/v2ray /usr/local/bin/dns-server /etc/v2ray /etc/DARKssh/dns /.v2ray_domain
         sudo systemctl daemon-reload
-        sudo rm -f $USER_DB
+        [ -f "$USER_DB" ] && sudo rm -f "$USER_DB"
+
         echo "✅ Tout désinstallé et nettoyé."
     else
         echo "Annulé."
