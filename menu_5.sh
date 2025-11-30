@@ -230,7 +230,7 @@ installer_slowdns() {
     CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
     LOG_FILE="/var/log/slowdns_v2ray.log"
 
-    # Clés statiques (tu peux générer des nouvelles si nécessaire)
+    # Clés statiques (ou génère de nouvelles si nécessaire)
     SLOWDNS_PRIVATE_KEY="4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa"
     SLOWDNS_PUBLIC_KEY="2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c"
 
@@ -259,16 +259,20 @@ installer_slowdns() {
         sleep 1
     fi
 
-    # Lancement du tunnel SlowDNS → V2Ray
+    # Vérification si le port UDP est déjà utilisé
+    if ss -ulnp | grep -q ":$PORT"; then
+        echo "⚠️  Port UDP $PORT déjà utilisé, arrêt du processus..."
+        sudo fuser -k $PORT/udp
+        sleep 1
+    fi
+
     echo "🚀 Lancement SlowDNS → V2Ray sur UDP $PORT"
     screen -dmS slowdns_v2ray bash -c "
         echo '[INFO] SlowDNS démarrage...' >> $LOG_FILE
         exec $SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY $NAMESERVER 127.0.0.1:$V2RAY_PORT >>$LOG_FILE 2>&1
     "
 
-    # Vérification rapide du log
-    echo "⏳ Logs récents..."
-    sleep 2
+    echo "⏳ Affichage du log en continu (Ctrl+C pour quitter)..."
     tail -f "$LOG_FILE"
 
     # Vérification des ports ouverts
