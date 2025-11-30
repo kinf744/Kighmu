@@ -51,18 +51,37 @@ EOF
 ajouter_client_v2ray() {
     local uuid="$1"
     local nom="$2"
-    
-    if ! command -v jq >/dev/null 2>&1 || [[ ! -f /etc/v2ray/config.json ]]; then
-        echo "⚠️  V2Ray non installé ou jq manquant"
+    local config="/etc/v2ray/config.json"
+
+    if [[ ! -f "$config" ]]; then
+        echo "❌ Fichier V2Ray introuvable : $config"
         return 1
     fi
-    
-    jq --arg id "$uuid" --arg email "$nom" \
-       '.inbounds[0].settings.clients += [{"id": $id, "alterId": 0, "level": 1, "email": $email}]' \
-       /etc/v2ray/config.json | sudo tee /etc/v2ray/config.json >/dev/null
-    
-    sudo systemctl reload v2ray.service 2>/dev/null || sudo systemctl restart v2ray.service
-    echo "✅ UUID $uuid ajouté à V2Ray (service rechargé)"
+
+    # Vérification structure JSON
+    if ! jq empty "$config" 2>/dev/null; then
+        echo "❌ config.json est invalide — V2Ray ne peut pas démarrer."
+        return 1
+    fi
+
+    # Ajout de l'utilisateur dans la liste des clients
+    tmpfile=$(mktemp)
+
+    jq --arg uuid "$uuid" --arg email "$nom" '
+        (.inbounds[] | select(.protocol=="vmess").settings.clients) +=
+        [{"id": $uuid, "alterId": 0, "email": $email}]
+    ' "$config" > "$tmpfile"
+
+    if jq empty "$tmpfile" 2>/dev/null; then
+        mv "$tmpfile" "$config"
+        systemctl restart v2ray
+        echo "✅ Utilisateur ajouté dans V2Ray"
+        return 0
+    else
+        echo "❌ Erreur lors de la modification de config.json"
+        rm -f "$tmpfile"
+        return 1
+    fi
 }
 
 # Affiche le menu avec titre dans cadre
