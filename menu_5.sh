@@ -230,55 +230,40 @@ installer_slowdns() {
     CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
     LOG_FILE="/var/log/slowdns_v2ray.log"
 
-    SLOWDNS_PRIVATE_KEY="4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa"
-    SLOWDNS_PUBLIC_KEY="2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c"
-
-    # Création des dossiers et fichiers
     sudo mkdir -p "$SLOWDNS_DIR" /var/log
     sudo touch "$LOG_FILE" && sudo chmod 644 "$LOG_FILE"
 
-    # Téléchargement du binaire
     echo "📥 Téléchargement du binaire dns-server..."
     sudo wget -q -O "$SLOWDNS_BIN" "https://raw.githubusercontent.com/sbatrow/DARKSSH-MANAGER/main/Modulos/dns-server"
     sudo chmod +x "$SLOWDNS_BIN"
 
-    # Clés
-    echo "$SLOWDNS_PRIVATE_KEY" | sudo tee "$SERVER_KEY" >/dev/null
-    echo "$SLOWDNS_PUBLIC_KEY" | sudo tee "$SERVER_PUB" >/dev/null
-    sudo chmod 600 "$SERVER_KEY"
-    sudo chmod 644 "$SERVER_PUB"
+    # Générer la paire de clés si elle n'existe pas
+    if [ ! -f "$SERVER_KEY" ] || [ ! -f "$SERVER_PUB" ]; then
+        echo "🔑 Génération des clés SlowDNS..."
+        $SLOWDNS_BIN -gen-key -privkey-file "$SERVER_KEY" -pubkey-file "$SERVER_PUB" >>"$LOG_FILE" 2>&1
+        sudo chmod 600 "$SERVER_KEY"
+        sudo chmod 644 "$SERVER_PUB"
+    fi
 
-    # NameServer
     read -p "NameServer NS (ex: slowdns.pay.googleusercontent.kingdom.qzz.io) : " NAMESERVER
     echo "$NAMESERVER" | sudo tee "$CONFIG_FILE" >/dev/null
 
-    # Interface réseau (pour éviter l'erreur "dev not valid ifname")
-    INTERFACE=$(ip route | grep '^default' | awk '{print $5}')
-    if [ -z "$INTERFACE" ]; then
-        echo "❌ Impossible de détecter l'interface réseau. Vérifiez votre connexion."
-        return 1
-    fi
-
-    # Arrêt éventuel d'une session existante
+    # Arrêter session existante
     if screen -list | grep -q "slowdns_v2ray"; then
         echo "❗ Une session SlowDNS existante est active. Arrêt..."
         screen -S slowdns_v2ray -X quit
         sleep 1
     fi
 
-    # Lancement de SlowDNS dans screen
     echo "🚀 Lancement SlowDNS → V2Ray sur UDP $PORT"
     screen -dmS slowdns_v2ray bash -c "
-        echo '[INFO] SlowDNS démarrage...' >> \"$LOG_FILE\"
-        exec \"$SLOWDNS_BIN\" -udp :$PORT -privkey-file \"$SERVER_KEY\" \"$NAMESERVER\" 0.0.0.0:$V2RAY_PORT -dev \"$INTERFACE\" >> \"$LOG_FILE\" 2>&1
+        echo '[INFO] SlowDNS démarrage...' >> $LOG_FILE
+        exec $SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY $NAMESERVER 0.0.0.0:$V2RAY_PORT >>$LOG_FILE 2>&1
     "
 
-    # Petit délai pour que le service démarre
+    echo "⏳ Vérification du tunnel et affichage des logs récents (10s)..."
     sleep 2
-
-    # Affichage des logs récents
-    echo "⏳ Logs récents (20 dernières lignes) :"
-    tail -n 20 "$LOG_FILE"
+    timeout 10 tail -f "$LOG_FILE"
 
     # Vérification des ports
     if ss -ulnp | grep -q ":$PORT" && ss -tlnp | grep -q ":$V2RAY_PORT"; then
