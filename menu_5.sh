@@ -19,6 +19,18 @@ CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 SERVER_PUB="$SLOWDNS_DIR/server.pub"
 
+charger_utilisateurs() {
+    if [[ -f "$USER_DB" && -s "$USER_DB" ]]; then
+        utilisateurs=$(cat "$USER_DB")
+    else
+        utilisateurs="[]"
+    fi
+}
+
+sauvegarder_utilisateurs() {
+    echo "$utilisateurs" > "$USER_DB"
+}
+
 # Générer lien vmess au format base64 JSON
 generer_lien_vmess() {
     local nom="$1"
