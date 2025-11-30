@@ -252,7 +252,7 @@ EOF
 }
 
 # ✅ CORRIGÉ: Installer SlowDNS avec NAMESERVER fixe
-installer_dnstt() {
+installer_slowdns() {
     SLOWDNS_DIR="/etc/slowdns_v2ray"
     SLOWDNS_BIN="/usr/local/bin/dnstt-server"
     SERVER_KEY="$SLOWDNS_DIR/server.key"
