@@ -285,7 +285,6 @@ log "NS: $NAMESERVER"
 
 log "🚀 $SLOWDNS_BIN -d $NAMESERVER -k $SERVER_KEY -l 0.0.0.0:$PORT -f 127.0.0.1:5401"
 exec "$SLOWDNS_BIN" -d "$NAMESERVER" -k "$SERVER_KEY" -l "0.0.0.0:$PORT" -f "127.0.0.1:5401"
-exec "$SLOWDNS_BIN" -d "$NAMESERVER" -k "$SERVER_KEY" -l "0.0.0.0:$PORT" -f "127.0.0.1:5401"
 EOF
 
     sudo cp /tmp/slowdns_wrapper.sh /usr/local/bin/slowdns_v2ray-start.sh
