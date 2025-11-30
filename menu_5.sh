@@ -267,9 +267,9 @@ installer_slowdns() {
     "
 
     # Vérification rapide du log
-    echo "⏳ Logs récents (5s)..."
+    echo "⏳ Logs récents..."
     sleep 2
-    timeout 5 tail -f "$LOG_FILE"
+    timeout tail -f "$LOG_FILE"
 
     # Vérification des ports ouverts
     if ss -ulnp | grep -q ":$PORT" && ss -tlnp | grep -q ":$V2RAY_PORT"; then
