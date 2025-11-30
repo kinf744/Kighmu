@@ -256,7 +256,7 @@ installer_slowdns() {
     sudo netfilter-persistent save 2>/dev/null || true
 
     echo "🚀 Lancement SlowDNS → V2Ray sur UDP $PORT via screen..."
-    screen -dmS slowdns_v2ray bash -c "$SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY $NAMESERVER 0.0.0.0:5401 >>$LOGFILE 2>&1"
+    screen -dmS slowdns_v2ray "$SLOWDNS_BIN" -udp ":5400" -privkey-file "$SERVER_KEY" "$NAMESERVER" "0.0.0.0:5401" >>$LOGFILE 2>&1"
 
     sleep 2
 
