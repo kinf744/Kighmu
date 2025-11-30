@@ -230,6 +230,11 @@ installer_slowdns() {
     CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
     LOG_FILE="/var/log/slowdns_v2ray.log"
 
+    # Clés statiques (tu peux générer des nouvelles si nécessaire)
+    SLOWDNS_PRIVATE_KEY="4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa"
+    SLOWDNS_PUBLIC_KEY="2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c"
+
+    # Création des dossiers et fichiers
     sudo mkdir -p "$SLOWDNS_DIR" /var/log
     sudo touch "$LOG_FILE" && sudo chmod 644 "$LOG_FILE"
 
@@ -237,35 +242,36 @@ installer_slowdns() {
     sudo wget -q -O "$SLOWDNS_BIN" "https://raw.githubusercontent.com/sbatrow/DARKSSH-MANAGER/main/Modulos/dns-server"
     sudo chmod +x "$SLOWDNS_BIN"
 
-    # Générer la paire de clés si elle n'existe pas
-    if [ ! -f "$SERVER_KEY" ] || [ ! -f "$SERVER_PUB" ]; then
-        echo "🔑 Génération des clés SlowDNS..."
-        $SLOWDNS_BIN -gen-key -privkey-file "$SERVER_KEY" -pubkey-file "$SERVER_PUB" >>"$LOG_FILE" 2>&1
-        sudo chmod 600 "$SERVER_KEY"
-        sudo chmod 644 "$SERVER_PUB"
-    fi
+    # Sauvegarde des clés
+    echo "$SLOWDNS_PRIVATE_KEY" | sudo tee "$SERVER_KEY" >/dev/null
+    echo "$SLOWDNS_PUBLIC_KEY" | sudo tee "$SERVER_PUB" >/dev/null
+    sudo chmod 600 "$SERVER_KEY"
+    sudo chmod 644 "$SERVER_PUB"
 
+    # Saisie du NameServer
     read -p "NameServer NS (ex: slowdns.pay.googleusercontent.kingdom.qzz.io) : " NAMESERVER
     echo "$NAMESERVER" | sudo tee "$CONFIG_FILE" >/dev/null
 
-    # Arrêter session existante
+    # Arrêt d'une session existante si présente
     if screen -list | grep -q "slowdns_v2ray"; then
         echo "❗ Une session SlowDNS existante est active. Arrêt..."
         screen -S slowdns_v2ray -X quit
         sleep 1
     fi
 
+    # Lancement du tunnel SlowDNS → V2Ray
     echo "🚀 Lancement SlowDNS → V2Ray sur UDP $PORT"
     screen -dmS slowdns_v2ray bash -c "
         echo '[INFO] SlowDNS démarrage...' >> $LOG_FILE
         exec $SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY $NAMESERVER 127.0.0.1:$V2RAY_PORT >>$LOG_FILE 2>&1
     "
 
-    echo "⏳ Vérification du tunnel et affichage des logs récents (10s)..."
+    # Vérification rapide du log
+    echo "⏳ Logs récents (5s)..."
     sleep 2
-    timeout 10 tail -f "$LOG_FILE"
+    timeout 5 tail -f "$LOG_FILE"
 
-    # Vérification des ports
+    # Vérification des ports ouverts
     if ss -ulnp | grep -q ":$PORT" && ss -tlnp | grep -q ":$V2RAY_PORT"; then
         echo -e "\n🎉 SLOWDNS + V2RAY actif !"
         echo "NS: $NAMESERVER"
