@@ -270,13 +270,15 @@ installer_slowdns() {
     sudo wget -q -O "$SLOWDNS_BIN" "https://dnstt.network/binaries/dnstt-server-linux-amd64"
     sudo chmod +x "$SLOWDNS_BIN"
 
-    # Génération ou sauvegarde des clés DNSTT
-    if [[ ! -f "$SERVER_KEY" ]]; then
-        echo "🔑 Génération des clés DNSTT..."
-        "$SLOWDNS_BIN" -gen-key "$SERVER_KEY" "$SERVER_PUB"
-        sudo chmod 600 "$SERVER_KEY"
-        sudo chmod 644 "$SERVER_PUB"
-    fi
+    # ✅ Clés fixes
+    SLOWDNS_PRIVATE_KEY="4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa"
+    SLOWDNS_PUBLIC_KEY="2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c"
+
+    echo "$SLOWDNS_PRIVATE_KEY" | sudo tee "$SERVER_KEY" >/dev/null
+    echo "$SLOWDNS_PUBLIC_KEY"  | sudo tee "$SERVER_PUB" >/dev/null
+
+    sudo chmod 600 "$SERVER_KEY"
+    sudo chmod 644 "$SERVER_PUB"
 
     # Saisie du NameServer / domaine
     read -p "NameServer NS (ex: slowdns.mondomaine.com) : " NAMESERVER
