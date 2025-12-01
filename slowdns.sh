@@ -3,7 +3,7 @@ set -euo pipefail
 
 SLOWDNS_DIR="/etc/slowdns"
 SLOWDNS_BIN="/usr/local/bin/sldns-server"
-PORT=5300
+PORT=53  # 🔹 Modification : SlowDNS écoute directement sur le port 53
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 SERVER_PUB="$SLOWDNS_DIR/server.pub"
@@ -76,8 +76,7 @@ disable_systemd_resolved() {
 configure_iptables() {
     log "Configuration du pare-feu via iptables..."
 
-    # ❌ suppression de l’ouverture du port 53
-    # uniquement ouverture du port SlowDNS
+    # 🔹 Autoriser uniquement le port SlowDNS (53 maintenant)
     if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
         iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
         log "Rule added: ACCEPT udp dport $PORT"
@@ -96,7 +95,7 @@ set -euo pipefail
 
 SLOWDNS_DIR="/etc/slowdns"
 SLOWDNS_BIN="/usr/local/bin/sldns-server"
-PORT=5300
+PORT=53  # 🔹 Écoute directe sur 53
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 
@@ -129,7 +128,7 @@ ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
 exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
 EOF
 
-chmod +x /usr/local/bin/slowdns-start.sh
+    chmod +x /usr/local/bin/slowdns-start.sh
 }
 
 create_systemd_service() {
