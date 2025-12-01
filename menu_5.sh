@@ -254,7 +254,7 @@ EOF
 # ✅ CORRIGÉ: Installer SlowDNS avec NAMESERVER fixe
 installer_slowdns() {
     SLOWDNS_DIR="/etc/slowdns_v2ray"
-    SLOWDNS_BIN="/usr/local/bin/dnstt-server"
+    SLOWDNS_BIN="/usr/local/bin/dns-server"
     SERVER_KEY="$SLOWDNS_DIR/server.key"
     SERVER_PUB="$SLOWDNS_DIR/server.pub"
     PORT=5400
@@ -262,31 +262,31 @@ installer_slowdns() {
     CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
     LOG_FILE="/var/log/slowdns_v2ray.log"
 
+    # Clés statiques (ou générer de nouvelles si nécessaire)
+    SLOWDNS_PRIVATE_KEY="4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa"
+    SLOWDNS_PUBLIC_KEY="2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c"
+
     # Création des dossiers et fichiers
     sudo mkdir -p "$SLOWDNS_DIR" /var/log
     sudo touch "$LOG_FILE" && sudo chmod 644 "$LOG_FILE"
 
-    echo "📥 Téléchargement du binaire DNSTT..."
-    sudo wget -q -O "$SLOWDNS_BIN" "https://dnstt.network/binaries/dnstt-server-linux-amd64"
+    echo "📥 Téléchargement du binaire dns-server..."
+    sudo wget -q -O "$SLOWDNS_BIN" "https://raw.githubusercontent.com/sbatrow/DARKSSH-MANAGER/main/Modulos/dns-server"
     sudo chmod +x "$SLOWDNS_BIN"
 
-    # ✅ Clés fixes
-    SLOWDNS_PRIVATE_KEY="4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa"
-    SLOWDNS_PUBLIC_KEY="2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c"
-
+    # Sauvegarde des clés
     echo "$SLOWDNS_PRIVATE_KEY" | sudo tee "$SERVER_KEY" >/dev/null
-    echo "$SLOWDNS_PUBLIC_KEY"  | sudo tee "$SERVER_PUB" >/dev/null
-
+    echo "$SLOWDNS_PUBLIC_KEY" | sudo tee "$SERVER_PUB" >/dev/null
     sudo chmod 600 "$SERVER_KEY"
     sudo chmod 644 "$SERVER_PUB"
 
-    # Saisie du NameServer / domaine
-    read -p "NameServer NS (ex: slowdns.mondomaine.com) : " NAMESERVER
+    # Saisie du NameServer
+    read -p "NameServer NS (ex: slowdns.pay.googleusercontent.kingdom.qzz.io) : " NAMESERVER
     echo "$NAMESERVER" | sudo tee "$CONFIG_FILE" >/dev/null
 
     # Arrêt d'une session existante si présente
     if screen -list | grep -q "slowdns_v2ray"; then
-        echo "❗ Une session DNSTT existante est active. Arrêt..."
+        echo "❗ Une session SlowDNS existante est active. Arrêt..."
         screen -S slowdns_v2ray -X quit
         sleep 1
     fi
@@ -298,14 +298,14 @@ installer_slowdns() {
         sleep 1
     fi
 
-    echo "🚀 Lancement DNSTT → V2Ray sur UDP $PORT (auto-restart)..."
+    echo "🚀 Lancement SlowDNS → V2Ray sur UDP $PORT (auto-restart)..."
 
     # Lancer dans screen avec boucle de redémarrage
     screen -dmS slowdns_v2ray bash -c "
         while true; do
-            echo '[INFO] DNSTT démarrage...' >> $LOG_FILE
-            $SLOWDNS_BIN -udp :$PORT -privkey $SERVER_KEY -resolver $NAMESERVER 127.0.0.1:$V2RAY_PORT >> $LOG_FILE 2>&1
-            echo '[WARN] DNSTT a planté ! Redémarrage dans 5s...' >> $LOG_FILE
+            echo '[INFO] SlowDNS démarrage...' >> $LOG_FILE
+            $SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY $NAMESERVER 127.0.0.1:$V2RAY_PORT >> $LOG_FILE 2>&1
+            echo '[WARN] SlowDNS a planté ! Redémarrage dans 5s...' >> $LOG_FILE
             sleep 5
         done
     "
@@ -315,10 +315,10 @@ installer_slowdns() {
 
     # Vérification des ports ouverts
     if ss -ulnp | grep -q ":$PORT" && ss -tlnp | grep -q ":$V2RAY_PORT"; then
-        echo -e "\n🎉 DNSTT + V2RAY actif !"
+        echo -e "\n🎉 SLOWDNS + V2RAY actif !"
         echo "NS: $NAMESERVER"
         echo "PubKey: $(cat "$SERVER_PUB")"
-        echo "DNSTT UDP: $PORT → V2Ray TCP: $V2RAY_PORT"
+        echo "SlowDNS UDP: $PORT → V2Ray TCP: $V2RAY_PORT"
         echo "Pour arrêter le tunnel: screen -S slowdns_v2ray -X quit"
     else
         echo -e "\n❌ ÉCHEC ! Vérifiez le log complet : $LOG_FILE"
