@@ -520,20 +520,41 @@ desinstaller_v2ray() {
     echo -n "Êtes-vous sûr ? o/N : "
     read reponse
     if [[ "$reponse" =~ ^[Oo]$ ]]; then
-        sudo systemctl stop v2ray.service
-        sudo systemctl disable v2ray.service
+        echo -e "${YELLOW}🛑 Arrêt des services...${RESET}"
+        
+        sudo systemctl stop v2ray.service 2>/dev/null || true
+        sudo systemctl disable v2ray.service 2>/dev/null || true
         sudo rm -f /etc/systemd/system/v2ray.service
 
+        sudo systemctl stop slowdns-v2ray.service 2>/dev/null || true
+        sudo systemctl disable slowdns-v2ray.service 2>/dev/null || true
+        
+        SLOWDNS_PID=$(sudo systemctl show slowdns-v2ray.service --property=MainPID --value 2>/dev/null || echo "")
+        [ -n "$SLOWDNS_PID" ] && sudo kill $SLOWDNS_PID 2>/dev/null || true
+
         if screen -list | grep -q "slowdns_v2ray"; then
-            screen -S slowdns_v2ray -X quit
+            screen -S slowdns_v2ray -X quit 2>/dev/null || true
         fi
 
-        sudo pkill v2ray dns-server 2>/dev/null
-        sudo rm -rf /usr/local/bin/v2ray /usr/local/bin/dns-server /etc/v2ray /etc/DARKssh/dns /.v2ray_domain
-        sudo systemctl daemon-reload
+        sudo iptables -D INPUT -p tcp --dport 5401 -j ACCEPT 2>/dev/null || true
+        sudo iptables -D INPUT -p udp --dport 5400 -j ACCEPT 2>/dev/null || true
+        sudo netfilter-persistent save 2>/dev/null || true
+
+        sudo rm -rf /etc/slowdns_v2ray 
+        sudo rm -f /usr/local/bin/slowdns-v2ray-start.sh
+        sudo rm -f /var/log/slowdns_v2ray.log
+        sudo rm -rf /.v2ray_domain
+        sudo rm -rf /etc/v2ray 
         [ -f "$USER_DB" ] && sudo rm -f "$USER_DB"
 
-        echo "✅ Tout désinstallé et nettoyé."
+        sudo systemctl daemon-reload
+        sudo rm -f /etc/systemd/system/slowdns-v2ray.service
+
+        echo -e "${GREEN}✅ V2Ray + SlowDNS V2Ray désinstallé.${RESET}"
+        echo -e "${GREEN}✅ Tunnel SSH SlowDNS préservé !${RESET}"
+        echo -e "${CYAN}📊 Vérification ports fermés:${RESET}"
+        ss -tuln | grep -E "(:5400|:5401)" || echo "✅ Ports 5400/5401 libres"
+        echo -e "${GREEN}✅ SSH SlowDNS toujours actif: $(systemctl is-active slowdns.service 2>/dev/null || echo "non installé")${RESET}"
     else
         echo "Annulé."
     fi
