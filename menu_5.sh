@@ -115,7 +115,7 @@ afficher_mode_v2ray_ws() {
     fi
 
     # Vérification du tunnel SlowDNS via screen
-    if screen -list | grep -q "slowdns_v2ray"; then
+    if systemctl is-active --quiet slowdns_v2ray.service; then
         echo -e "${CYAN}Tunnel SlowDNS actif:${RESET}"
         echo -e "  - SlowDNS sur le port UDP ${GREEN}5400${RESET} → V2Ray 5401"
     fi
