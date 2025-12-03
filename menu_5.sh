@@ -14,7 +14,7 @@ RESET="\u001B[0m"
 # === Configuration SlowDNS (DNS-AGN) ===
 SLOWDNS_DIR="/etc/slowdns_v2ray"
 SLOWDNS_BIN="/usr/local/bin/dns-server"
-SLOWDNS_PORT=5400
+PORT=5400
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 SERVER_PUB="$SLOWDNS_DIR/server.pub"
