@@ -254,25 +254,41 @@ EOF
 # ✅ CORRIGÉ: Installer SlowDNS avec NAMESERVER fixe
 installer_slowdns() {
     SLOWDNS_DIR="/etc/slowdns_v2ray"
-    SLOWDNS_BIN="/usr/local/bin/dns-server"
+    SLOWDNS_BIN="/usr/local/bin/dnstt-server"
     SERVER_KEY="$SLOWDNS_DIR/server.key"
     SERVER_PUB="$SLOWDNS_DIR/server.pub"
     PORT=5400
     V2RAY_PORT=5401
     CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
     LOG_FILE="/var/log/slowdns_v2ray.log"
+    SERVICE_NAME="slowdns-v2ray.service"
 
-    # Clés statiques (ou générer de nouvelles si nécessaire)
+    # Clés statiques (identiques à votre script SSH)
     SLOWDNS_PRIVATE_KEY="4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa"
     SLOWDNS_PUBLIC_KEY="2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c"
+
+    log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
+
+    echo -e "${CYAN}=== Installation SlowDNS → V2Ray (dnstt.network + Systemd) ===${RESET}"
 
     # Création des dossiers et fichiers
     sudo mkdir -p "$SLOWDNS_DIR" /var/log
     sudo touch "$LOG_FILE" && sudo chmod 644 "$LOG_FILE"
 
-    echo "📥 Téléchargement du binaire dns-server..."
-    sudo wget -q -O "$SLOWDNS_BIN" "https://raw.githubusercontent.com/sbatrow/DARKSSH-MANAGER/main/Modulos/dns-server"
-    sudo chmod +x "$SLOWDNS_BIN"
+    # ✅ BINAIRES OFFICIEL DNSTT.NETWORK (comme votre script SSH)
+    if [ ! -x "$SLOWDNS_BIN" ]; then
+        log "Téléchargement du binaire officiel DNSTT depuis dnstt.network..."
+        sudo curl -L -o "$SLOWDNS_BIN" https://dnstt.network/dnstt-server-linux-amd64
+        sudo chmod +x "$SLOWDNS_BIN"
+
+        # Vérification que le binaire n'est pas vide
+        if [ ! -s "$SLOWDNS_BIN" ]; then
+            echo "ERREUR : le binaire DNSTT téléchargé est vide !" >&2
+            sudo rm -f "$SLOWDNS_BIN"
+            return 1
+        fi
+        log "Binaire DNSTT téléchargé et prêt."
+    fi
 
     # Sauvegarde des clés
     echo "$SLOWDNS_PRIVATE_KEY" | sudo tee "$SERVER_KEY" >/dev/null
@@ -283,45 +299,111 @@ installer_slowdns() {
     # Saisie du NameServer
     read -p "NameServer NS (ex: slowdns.pay.googleusercontent.kingdom.qzz.io) : " NAMESERVER
     echo "$NAMESERVER" | sudo tee "$CONFIG_FILE" >/dev/null
+    log "NameServer enregistré : $NAMESERVER"
 
-    # Arrêt d'une session existante si présente
-    if screen -list | grep -q "slowdns_v2ray"; then
-        echo "❗ Une session SlowDNS existante est active. Arrêt..."
-        screen -S slowdns_v2ray -X quit
-        sleep 1
-    fi
-
-    # Vérification si le port UDP est déjà utilisé
+    # Arrêt processus existants sur le port
     if ss -ulnp | grep -q ":$PORT"; then
-        echo "⚠️  Port UDP $PORT déjà utilisé, arrêt du processus..."
+        log "Port UDP $PORT utilisé, arrêt du processus..."
         sudo fuser -k $PORT/udp
         sleep 1
     fi
 
-    echo "🚀 Lancement SlowDNS → V2Ray sur UDP $PORT (auto-restart)..."
+    # Arrêt service systemd existant
+    sudo systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+    sudo systemctl disable "$SERVICE_NAME" 2>/dev/null || true
+    sudo rm -f /etc/systemd/system/"$SERVICE_NAME"
 
-    # Lancer dans screen avec boucle de redémarrage
-    screen -dmS slowdns_v2ray bash -c "
-        while true; do
-            echo '[INFO] SlowDNS démarrage...' >> $LOG_FILE
-            $SLOWDNS_BIN -udp :$PORT -privkey-file $SERVER_KEY $NAMESERVER 127.0.0.1:$V2RAY_PORT >> $LOG_FILE 2>&1
-            echo '[WARN] SlowDNS a planté ! Redémarrage dans 5s...' >> $LOG_FILE
-            sleep 5
-        done
-    "
+    # === WRAPPER SCRIPT (identique à votre script SSH) ===
+    cat <<'EOF' > /usr/local/bin/slowdns-v2ray-start.sh
+#!/bin/bash
+set -euo pipefail
 
-    echo "⏳ Affichage du log en continu (Ctrl+C pour quitter)..."
-    tail -f "$LOG_FILE"
+SLOWDNS_DIR="/etc/slowdns_v2ray"
+SLOWDNS_BIN="/usr/local/bin/dnstt-server"
+PORT=5400
+CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
+SERVER_KEY="$SLOWDNS_DIR/server.key"
+LOG_FILE="/var/log/slowdns_v2ray.log"
 
-    # Vérification des ports ouverts
-    if ss -ulnp | grep -q ":$PORT" && ss -tlnp | grep -q ":$V2RAY_PORT"; then
-        echo -e "\n🎉 SLOWDNS + V2RAY actif !"
-        echo "NS: $NAMESERVER"
-        echo "PubKey: $(cat "$SERVER_PUB")"
-        echo "SlowDNS UDP: $PORT → V2Ray TCP: $V2RAY_PORT"
-        echo "Pour arrêter le tunnel: screen -S slowdns_v2ray -X quit"
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"; }
+
+wait_for_interface() {
+    interface=""
+    while [ -z "$interface" ]; do
+        interface=$(ip -o link show up | awk -F': ' '{print $2}' \
+                    | grep -v '^lo$' \
+                    | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' \
+                    | head -n1)
+        [ -z "$interface" ] && sleep 2
+    done
+    echo "$interface"
+}
+
+log "Recherche interface réseau..."
+interface=$(wait_for_interface)
+log "Interface utilisée : $interface"
+
+log "Réglage MTU à 1400..."
+ip link set dev "$interface" mtu 1400 || log "Échec réglage MTU (ignoré)"
+
+v2ray_port=$(ss -tlnp | grep :5401 | head -1 | awk '{print $4}' | cut -d: -f2)
+[ -z "$v2ray_port" ] && v2ray_port=5401
+
+log "Démarrage DNSTT → V2Ray (UDP $PORT → 127.0.0.1:$v2ray_port)..."
+NS=$(cat "$CONFIG_FILE")
+exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 127.0.0.1:$v2ray_port
+EOF
+    sudo chmod +x /usr/local/bin/slowdns-v2ray-start.sh
+
+    # === UNITÉ SYSTEMD (comme votre script SSH) ===
+    sudo tee /etc/systemd/system/$SERVICE_NAME > /dev/null <<EOF
+[Unit]
+Description=SlowDNS V2Ray Tunnel (DNSTT officiel)
+After=network-online.target v2ray.service
+Wants=network-online.target v2ray.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/slowdns-v2ray-start.sh
+Restart=on-failure
+RestartSec=3
+StandardOutput=append:$LOG_FILE
+StandardError=append:$LOG_FILE
+SyslogIdentifier=slowdns-v2ray
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    # Activation et démarrage
+    sudo systemctl daemon-reload
+    sudo systemctl enable "$SERVICE_NAME"
+    sudo systemctl restart "$SERVICE_NAME"
+
+    # Ouverture firewall
+    sudo iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
+    sudo netfilter-persistent save 2>/dev/null || true
+
+    # VÉRIFICATION FINALE
+    sleep 3
+    if systemctl is-active --quiet "$SERVICE_NAME" && ss -ulnp | grep -q ":$PORT"; then
+        echo -e "
+${GREEN}🎉 SLOWDNS + V2Ray ACTIF (dnstt.network + Systemd) !${RESET}"
+        echo -e "${GREEN}✅ Service: $(systemctl is-active $SERVICE_NAME)${RESET}"
+        echo -e "${GREEN}✅ Port UDP: $(ss -ulnp | grep ":$PORT" | awk '{print $5}' | cut -d: -f2)${RESET}"
+        echo -e "${CYAN}📊 Logs: tail -f $LOG_FILE${RESET}"
+        echo -e "${CYAN}🔄 Gestion: systemctl {start|stop|status|restart} $SERVICE_NAME${RESET}"
+        echo ""
+        echo -e "${GREEN}NS:${RESET} $NAMESERVER"
+        echo -e "${GREEN}PubKey:${RESET} $(cat "$SERVER_PUB")"
+        echo -e "${GREEN}Tunnel:${RESET} UDP $PORT → V2Ray TCP $V2RAY_PORT"
     else
-        echo -e "\n❌ ÉCHEC ! Vérifiez le log complet : $LOG_FILE"
+        echo -e "
+${RED}❌ ÉCHEC !${RESET}"
+        sudo journalctl -u "$SERVICE_NAME" -n 20 --no-pager
+        echo "Logs détaillés: $LOG_FILE"
     fi
 
     read -p "Appuyez sur Entrée pour continuer..."
