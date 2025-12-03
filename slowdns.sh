@@ -2,8 +2,8 @@
 set -euo pipefail
 
 SLOWDNS_DIR="/etc/slowdns"
-SLOWDNS_BIN="/usr/local/bin/sldns-server"
-PORT=53  # 🔹 Modification : SlowDNS écoute directement sur le port 53
+SLOWDNS_BIN="/usr/local/bin/dnstt-server"
+PORT=53
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 SERVER_PUB="$SLOWDNS_DIR/server.pub"
@@ -25,11 +25,11 @@ install_dependencies() {
 
 install_slowdns_bin() {
     if [ ! -x "$SLOWDNS_BIN" ]; then
-        log "Téléchargement du binaire SlowDNS..."
-        wget -q -O "$SLOWDNS_BIN" https://raw.githubusercontent.com/fisabiliyusri/SLDNS/main/slowdns/sldns-server
+        log "Téléchargement du binaire officiel DNSTT..."
+        wget -q -O "$SLOWDNS_BIN" https://github.com/gh4rib/dnstt/releases/latest/download/dnstt-server-linux-amd64
         chmod +x "$SLOWDNS_BIN"
         if [ ! -x "$SLOWDNS_BIN" ]; then
-            echo "ERREUR : Échec du téléchargement du binaire SlowDNS." >&2
+            echo "ERREUR : Échec du téléchargement du binaire DNSTT." >&2
             exit 1
         fi
     fi
@@ -66,7 +66,7 @@ EOF
 }
 
 disable_systemd_resolved() {
-    log "Désactivation non-destructive du stub DNS systemd-resolved..."
+    log "Désactivation de systemd-resolved..."
     systemctl stop systemd-resolved
     systemctl disable systemd-resolved
     rm -f /etc/resolv.conf
@@ -74,18 +74,14 @@ disable_systemd_resolved() {
 }
 
 configure_iptables() {
-    log "Configuration du pare-feu via iptables..."
-
-    # 🔹 Autoriser uniquement le port SlowDNS (53 maintenant)
+    log "Configuration iptables..."
     if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
         iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
         log "Rule added: ACCEPT udp dport $PORT"
     fi
-
     iptables-save > /etc/iptables/rules.v4
     systemctl enable netfilter-persistent
     systemctl restart netfilter-persistent
-    log "Persistance iptables activée."
 }
 
 create_wrapper_script() {
@@ -94,8 +90,8 @@ cat <<'EOF' > /usr/local/bin/slowdns-start.sh
 set -euo pipefail
 
 SLOWDNS_DIR="/etc/slowdns"
-SLOWDNS_BIN="/usr/local/bin/sldns-server"
-PORT=53  # 🔹 Écoute directe sur 53
+SLOWDNS_BIN="/usr/local/bin/dnstt-server"
+PORT=53
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 
@@ -113,14 +109,14 @@ wait_for_interface() {
     echo "$interface"
 }
 
-log "Attente de l'interface réseau..."
+log "Recherche de l'interface réseau..."
 interface=$(wait_for_interface)
-log "Interface détectée : $interface"
+log "Interface utilisée : $interface"
 
-log "Réglage MTU à 1400 pour éviter la fragmentation..."
+log "Réglage MTU à 1400..."
 ip link set dev "$interface" mtu 1400 || log "Échec réglage MTU"
 
-log "Démarrage du serveur SlowDNS..."
+log "Démarrage DNSTT (SlowDNS amélioré)..."
 NS=$(cat "$CONFIG_FILE")
 ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
 [ -z "$ssh_port" ] && ssh_port=22
@@ -134,7 +130,7 @@ EOF
 create_systemd_service() {
 cat <<EOF > /etc/systemd/system/slowdns.service
 [Unit]
-Description=SlowDNS Server Tunnel
+Description=SlowDNS Server Tunnel (DNSTT)
 After=network-online.target
 Wants=network-online.target
 
@@ -148,7 +144,6 @@ StandardOutput=append:/var/log/slowdns.log
 StandardError=append:/var/log/slowdns.log
 SyslogIdentifier=slowdns
 LimitNOFILE=1048576
-Nice=0
 
 [Install]
 WantedBy=multi-user.target
@@ -167,6 +162,7 @@ main() {
     disable_systemd_resolved
 
     read -rp "Entrez le NameServer (NS) (ex: ns.example.com) : " NAMESERVER
+    mkdir -p "$SLOWDNS_DIR"
     echo "$NAMESERVER" > "$CONFIG_FILE"
     log "NameServer enregistré."
 
@@ -182,7 +178,7 @@ PRIV_KEY=$(cat "$SERVER_KEY")
 EOF
     chmod 600 /etc/slowdns/slowdns.env
 
-    log "Installation et configuration SlowDNS terminées."
+    log "Installation SlowDNS (DNSTT) terminée."
 }
 
 main "$@"
