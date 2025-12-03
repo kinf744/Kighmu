@@ -20,18 +20,22 @@ check_root() {
 install_dependencies() {
     log "Installation des dépendances..."
     apt-get update -q
-    apt-get install -y iptables iptables-persistent wget tcpdump
+    apt-get install -y iptables iptables-persistent curl tcpdump
 }
 
 install_slowdns_bin() {
     if [ ! -x "$SLOWDNS_BIN" ]; then
-        log "Téléchargement du binaire officiel DNSTT..."
-        wget -q -O "$SLOWDNS_BIN" https://github.com/gh4rib/dnstt/releases/latest/download/dnstt-server-linux-amd64
+        log "Téléchargement du binaire officiel DNSTT depuis dnstt.network..."
+        curl -L -o "$SLOWDNS_BIN" https://dnstt.network/dnstt-server-linux-amd64
         chmod +x "$SLOWDNS_BIN"
-        if [ ! -x "$SLOWDNS_BIN" ]; then
-            echo "ERREUR : Échec du téléchargement du binaire DNSTT." >&2
+
+        # Vérification que le binaire n'est pas vide
+        if [ ! -s "$SLOWDNS_BIN" ]; then
+            echo "ERREUR : le binaire DNSTT téléchargé est vide !" >&2
+            rm -f "$SLOWDNS_BIN"
             exit 1
         fi
+        log "Binaire DNSTT téléchargé et prêt."
     fi
 }
 
@@ -77,7 +81,7 @@ configure_iptables() {
     log "Configuration iptables..."
     if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
         iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
-        log "Rule added: ACCEPT udp dport $PORT"
+        log "Règle ajoutée : ACCEPT udp dport $PORT"
     fi
     iptables-save > /etc/iptables/rules.v4
     systemctl enable netfilter-persistent
