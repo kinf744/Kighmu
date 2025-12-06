@@ -98,7 +98,7 @@ if [ ! -x "$SLOWDNS_BIN" ]; then
 fi
 
 echo -e "${CYAN}${BOLD}Choisissez le mode d'installation${NC} [${GREEN}auto${NC}/${YELLOW}man${NC}] :"
-read -rp "${GREEN} → ${NC}" MODE
+read -rp " → " MODE
 MODE=${MODE,,}
 
 if [[ "$MODE" == "auto" ]]; then
