@@ -23,17 +23,18 @@ fi
 
 # ---------- Prérequis ----------
 log "Installation des paquets requis..."
-apt update -y
-apt install -y curl jq iptables-persistent net-tools
+apt update -y || true
+apt install -y curl jq iptables-persistent net-tools || true
 
 mkdir -p "$SLOWDNS_DIR"
 chmod 700 "$SLOWDNS_DIR"
 
-# ---------- Vérification token Cloudflare ----------
+# ---------- Fonctions Cloudflare (uniquement auto) ----------
 verify_cloudflare_token() {
     log "Vérification du token Cloudflare..."
     RESPONSE=$(curl -s -X GET "https://api.cloudflare.com/client/v4/user/tokens/verify" \
         -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" || true)
+
     if ! echo "$RESPONSE" | grep -q '"status":"active"' ; then
         echo "❌ Token Cloudflare invalide ou permissions insuffisantes."
         echo "$RESPONSE"
@@ -46,13 +47,16 @@ verify_cloudflare_zone() {
     log "Vérification de la zone Cloudflare..."
     ZONE_INFO=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID" \
         -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" || true)
+
     if ! echo "$ZONE_INFO" | grep -q '"success":true' ; then
         echo "❌ Zone ID Cloudflare invalide : $CF_ZONE_ID"
         echo "$ZONE_INFO"
         exit 1
     fi
+
     ZONE_NAME=$(echo "$ZONE_INFO" | jq -r .result.name)
     log_debug "Zone trouvée : $ZONE_NAME"
+
     if [[ "$DOMAIN" != *"$ZONE_NAME" ]]; then
         echo "❌ Domaine '$DOMAIN' n'appartient pas à la zone Cloudflare '$ZONE_NAME'"
         exit 1
@@ -60,21 +64,21 @@ verify_cloudflare_zone() {
     log "✔️ Zone Cloudflare valide : $ZONE_NAME"
 }
 
-# ---------- Téléchargement dnstt-server si nécessaire ----------
+# ---------- Téléchargement DNSTT si nécessaire ----------
 if [ ! -x "$SLOWDNS_BIN" ]; then
     log "Téléchargement du binaire DNSTT..."
     curl -L -o "$SLOWDNS_BIN" https://dnstt.network/dnstt-server-linux-amd64
     chmod +x "$SLOWDNS_BIN"
 fi
 
-# ---------- Choix mode (auto/man) ----------
+# ---------- Choix mode ----------
 read -rp "Choisissez le mode d'installation [auto/man] : " MODE
 MODE=${MODE,,}
 
-verify_cloudflare_token
-verify_cloudflare_zone
-
 if [[ "$MODE" == "auto" ]]; then
+    verify_cloudflare_token
+    verify_cloudflare_zone
+
     log "Mode AUTO sélectionné."
     VPS_IP=$(curl -s ipv4.icanhazip.com)
     SUB_A="vpn-$(date +%s | sha256sum | head -c 6)"
@@ -105,29 +109,19 @@ fi
 echo "$DOMAIN_NS" > "$CONFIG_FILE"
 log "NS sélectionné : $DOMAIN_NS"
 
-# ---------------- Clefs serveur (fixes) ----------------
-if [ ! -f "$SERVER_KEY" ]; then
-    log "Création de la clé privée fixe (server.key)"
-    cat > "$SERVER_KEY" <<'EOF'
+# ---------- Clés serveur (fixes) ----------
+cat > "$SERVER_KEY" <<'EOF'
 4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa
 EOF
-    chmod 600 "$SERVER_KEY"
-else
-    log "Clé privée existante conservée : $SERVER_KEY"
-fi
+chmod 600 "$SERVER_KEY"
 
-if [ ! -f "$SERVER_PUB" ]; then
-    log "Création de la clé publique fixe (server.pub)"
-    cat > "$SERVER_PUB" <<'EOF'
+cat > "$SERVER_PUB" <<'EOF'
 2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c
 EOF
-    chmod 644 "$SERVER_PUB"
-else
-    log "Clé publique existante conservée : $SERVER_PUB"
-fi
+chmod 644 "$SERVER_PUB"
 
 # ---------- Optimisations système ----------
-log "Application des optimisations noyau (UDP buffers, backlog)..."
+log "Application des optimisations noyau..."
 cat <<'EOF' >> /etc/sysctl.conf
 
 # ---- Optim DNSTT (UDP heavy) ----
@@ -139,33 +133,30 @@ net.ipv4.udp_rmem_min = 2500000
 net.ipv4.udp_wmem_min = 2500000
 net.core.netdev_max_backlog = 5000
 net.core.somaxconn = 1024
-# Reduce latency jitter for TCP/UDP
 net.ipv4.tcp_low_latency = 1
 EOF
-
 sysctl -p || true
 
-# ---------- Libérer le port 53 ----------
-log "Libération du port 53 (arrêt systemd-resolved si présent)..."
+# ---------- Libération port 53 ----------
+log "Libération du port 53..."
 if systemctl list-unit-files | grep -q systemd-resolved; then
     if systemctl is-active --quiet systemd-resolved; then
         systemctl stop systemd-resolved || true
     fi
     systemctl disable systemd-resolved || true
-    rm -f /etc/resolv.conf || true
+    [ -f /etc/resolv.conf ] && rm -f /etc/resolv.conf
     echo "1.1.1.1" > /etc/resolv.conf
-    echo "8.8.8.8" >> /etc/resolv.conf
 fi
 
-# ---------- iptables ----------
-log "Configuration iptables pour autoriser UDP/53 et SSH..."
+# ---------- IPTABLES ----------
+log "Configuration iptables pour UDP/53 et SSH..."
 iptables -I INPUT -p udp --dport 53 -j ACCEPT
 iptables -I INPUT -p tcp --dport 53 -j ACCEPT
 iptables -I INPUT -p tcp --dport 22 -j ACCEPT
 netfilter-persistent save || true
 netfilter-persistent reload || true
 
-# ---------- Script de démarrage ----------
+# ---------- Script démarrage ----------
 cat > /usr/local/bin/slowdns-start.sh <<'EOF'
 #!/bin/bash
 SLOWDNS_DIR="/etc/slowdns"
@@ -174,6 +165,7 @@ SLOWDNS_BIN="/usr/local/bin/dnstt-server"
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 SSH_PORT=22
+
 NS=$(cat "$CONFIG_FILE")
 exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$SSH_PORT
 EOF
@@ -203,17 +195,9 @@ NoNewPrivileges=yes
 WantedBy=multi-user.target
 EOF
 
-# ---------- Enable and start ----------
 systemctl daemon-reload
-systemctl enable --now slowdns.service
-systemctl restart slowdns.service
-
-DNSTT_PID=$(pgrep -f dnstt-server || true)
-if [ -n "$DNSTT_PID" ]; then
-    taskset -cp 0 "$DNSTT_PID" || true
-    log_debug "Pinned dnstt-server (pid $DNSTT_PID) to CPU 0"
-fi
+systemctl enable --now slowdns.service || true
+systemctl restart slowdns.service || true
 
 log "✔️ SlowDNS (SSH-only) installé et démarré."
 log "✔️ NS utilisé : $(cat $CONFIG_FILE)"
-log "Vérifie que ton fournisseur VPS autorise l'utilisation du port 53 UDP."
