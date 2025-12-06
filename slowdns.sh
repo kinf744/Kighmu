@@ -123,7 +123,8 @@ if [[ "$MODE" == "auto" ]]; then
     log_debug "Réponse Cloudflare NS : $ADD_NS"
 
 elif [[ "$MODE" == "man" ]]; then
-    read -rp "Entrez le NS : " DOMAIN_NS
+    echo -e "${CYAN}${BOLD}Entrez le NS :${NC}"
+    read -rp "${GREEN} → ${NC}" DOMAIN_NS
 else
     echo -e "${RED}❌ Mode invalide.${NC}"
     exit 1
