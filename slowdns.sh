@@ -1,17 +1,16 @@
 #!/bin/bash
 set -euo pipefail
 
+# ---------- CONFIG ----------
 SLOWDNS_DIR="/etc/slowdns"
 SLOWDNS_BIN="/usr/local/bin/dnstt-server"
 PORT=53
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 SERVER_PUB="$SLOWDNS_DIR/server.pub"
-
 CF_API_TOKEN="7mn4LKcZARvdbLlCVFTtaX7LGM2xsnyjHkiTAt37"
 CF_ZONE_ID="7debbb8ea4946898a889c4b5745ab7eb"
 DOMAIN="kingom.ggff.net"
-
 DEBUG=true
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
@@ -22,27 +21,35 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
+# ---------- Prérequis ----------
+log "Installation des paquets requis..."
+apt update -y
+apt install -y curl jq iptables-persistent net-tools
+
+mkdir -p "$SLOWDNS_DIR"
+chmod 700 "$SLOWDNS_DIR"
+
+# ---------- Vérification token Cloudflare ----------
 verify_cloudflare_token() {
     log "Vérification du token Cloudflare..."
     RESPONSE=$(curl -s -X GET "https://api.cloudflare.com/client/v4/user/tokens/verify" \
-        -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json")
+        -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" || true)
 
-    if ! echo "$RESPONSE" | grep -q '"status":"active"'; then
+    if ! echo "$RESPONSE" | grep -q '"status":"active"' ; then
         echo "❌ Token Cloudflare invalide ou permissions insuffisantes."
         echo "$RESPONSE"
         exit 1
     fi
-    log_debug "Token vérifié : $RESPONSE"
     log "✔️ Token Cloudflare valide."
 }
-
 verify_cloudflare_zone() {
     log "Vérification de la zone Cloudflare..."
     ZONE_INFO=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID" \
-        -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json")
+        -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" || true)
 
-    if ! echo "$ZONE_INFO" | grep -q '"success":true'; then
+    if ! echo "$ZONE_INFO" | grep -q '"success":true' ; then
         echo "❌ Zone ID Cloudflare invalide : $CF_ZONE_ID"
+        echo "$ZONE_INFO"
         exit 1
     fi
 
@@ -53,36 +60,25 @@ verify_cloudflare_zone() {
         echo "❌ Domaine '$DOMAIN' n'appartient pas à la zone Cloudflare '$ZONE_NAME'"
         exit 1
     fi
-
     log "✔️ Zone Cloudflare valide : $ZONE_NAME"
 }
 
-log "Installation des dépendances..."
-apt update -y
-apt install -y iptables iptables-persistent curl jq python3 python3-venv python3-pip
-
-python3 -m venv "$SLOWDNS_DIR/venv"
-source "$SLOWDNS_DIR/venv/bin/activate"
-pip install --upgrade pip
-pip install cloudflare flask
-
-verify_cloudflare_token
-verify_cloudflare_zone
-
+# ---------- Téléchargement dnstt-server si nécessaire ----------
 if [ ! -x "$SLOWDNS_BIN" ]; then
     log "Téléchargement du binaire DNSTT..."
     curl -L -o "$SLOWDNS_BIN" https://dnstt.network/dnstt-server-linux-amd64
     chmod +x "$SLOWDNS_BIN"
 fi
 
-mkdir -p "$SLOWDNS_DIR"
-
+# ---------- Choix mode (auto/man) ----------
 read -rp "Choisissez le mode d'installation [auto/man] : " MODE
 MODE=${MODE,,}
 
+verify_cloudflare_token
+verify_cloudflare_zone
+
 if [[ "$MODE" == "auto" ]]; then
     log "Mode AUTO sélectionné."
-
     VPS_IP=$(curl -s ipv4.icanhazip.com)
     SUB_A="vpn-$(date +%s | sha256sum | head -c 6)"
     FQDN_A="$SUB_A.$DOMAIN"
@@ -103,7 +99,7 @@ if [[ "$MODE" == "auto" ]]; then
     log_debug "Réponse Cloudflare NS : $ADD_NS"
 
 elif [[ "$MODE" == "man" ]]; then
-    read -rp "Entrez le NS : " DOMAIN_NS
+    read -rp "Entrez le NS (ex: ns1.exemple.com) : " DOMAIN_NS
 else
     echo "❌ Mode invalide."
     exit 1
@@ -112,56 +108,119 @@ fi
 echo "$DOMAIN_NS" > "$CONFIG_FILE"
 log "NS sélectionné : $DOMAIN_NS"
 
-echo "4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa" > "$SERVER_KEY"
-echo "2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c" > "$SERVER_PUB"
+# ---------- Clefs serveur (utilise les tiennes si déjà présentes) ----------
+if [ ! -f "$SERVER_KEY" ]; then
+    cat > "$SERVER_KEY" <<'EOF'
+4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa
+EOF
+    chmod 600 "$SERVER_KEY"
+fi
 
-chmod 600 "$SERVER_KEY"
-chmod 644 "$SERVER_PUB"
+if [ ! -f "$SERVER_PUB" ]; then
+    cat > "$SERVER_PUB" <<'EOF'
+2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c
+EOF
+    chmod 644 "$SERVER_PUB"
+fi
 
-cat <<'EOF' > /usr/local/bin/slowdns-start.sh
+# ---------- Optimisations système (safe) ----------
+log "Application des optimisations noyau (UDP buffers, backlog)..."
+cat <<'EOF' >> /etc/sysctl.conf
+
+# ---- Optim DNSTT (UDP heavy) ----
+net.core.rmem_max = 2500000
+net.core.wmem_max = 2500000
+net.core.rmem_default = 2500000
+net.core.wmem_default = 2500000
+net.ipv4.udp_rmem_min = 2500000
+net.ipv4.udp_wmem_min = 2500000
+net.core.netdev_max_backlog = 5000
+net.core.somaxconn = 1024
+# Reduce latency jitter for TCP/UDP
+net.ipv4.tcp_low_latency = 1
+EOF
+
+sysctl -p || true
+
+# ---------- Libérer le port 53 (arrêter/respecter systemd-resolved en douceur) ----------
+log "Libération du port 53 (arrêt systemd-resolved si présent)..."
+if systemctl list-unit-files | grep -q systemd-resolved; then
+    if systemctl is-active --quiet systemd-resolved; then
+        systemctl stop systemd-resolved || true
+    fi
+    systemctl disable systemd-resolved || true
+    if [ -L /etc/resolv.conf ] || [ -f /etc/resolv.conf ]; then
+        rm -f /etc/resolv.conf || true
+    fi
+    echo "1.1.1.1" > /etc/resolv.conf
+fi
+
+# ---------- Ouvrir les règles iptables pour UDP/53 et SSH ----------
+log "Configuration iptables pour autoriser UDP/53 et SSH..."
+iptables -I INPUT -p udp --dport 53 -j ACCEPT
+iptables -I INPUT -p tcp --dport 53 -j ACCEPT
+iptables -I INPUT -p tcp --dport 22 -j ACCEPT
+
+# Save iptables persistently
+netfilter-persistent save || true
+netfilter-persistent reload || true
+
+# ---------- Créer script de démarrage optimisé (SSH only) ----------
+cat > /usr/local/bin/slowdns-start.sh <<'EOF'
 #!/bin/bash
 SLOWDNS_DIR="/etc/slowdns"
 PORT=53
 SLOWDNS_BIN="/usr/local/bin/dnstt-server"
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
+# SSH local port (serveur SSH)
+SSH_PORT=22
 
 NS=$(cat "$CONFIG_FILE")
-ssh_port=22
 
-exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
+# pin DNSTT process to cpu0 for stability (optional)
+exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$SSH_PORT
 EOF
 chmod +x /usr/local/bin/slowdns-start.sh
 
-cat <<EOF > /etc/systemd/system/slowdns.service
+# ---------- Systemd service (optimisé pour stabilité) ----------
+cat > /etc/systemd/system/slowdns.service <<'EOF'
 [Unit]
-Description=SlowDNS Tunnel (DNSTT)
+Description=SlowDNS Tunnel (DNSTT) - SSH only
 After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=root
+ExecStartPre=/bin/sleep 2
 ExecStart=/usr/local/bin/slowdns-start.sh
 Restart=on-failure
 RestartSec=3
-StandardOutput=append:/var/log/slowdns.log
-StandardError=append:/var/log/slowdns.log
-SyslogIdentifier=slowdns
 LimitNOFILE=1048576
-Nice=0
-CPUSchedulingPolicy=other
-IOSchedulingClass=best-effort
-IOSchedulingPriority=4
-TimeoutStartSec=20
+Nice=-5
+SyslogIdentifier=slowdns
+CPUAffinity=0
 NoNewPrivileges=yes
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
+# ---------- Reload systemd and enable service ----------
 systemctl daemon-reload
-systemctl enable slowdns.service
-systemctl restart slowdns.service
+systemctl enable --now slowdns.service || true
+systemctl restart slowdns.service || true
 
-log "✔️ SlowDNS installé avec succès !"
-log "✔️ NS utilisé : $DOMAIN_NS"
+# ---------- Optional: pin process to CPU 0 for consistent timing ----------
+DNSTT_PID=$(pgrep -f dnstt-server || true)
+if [ -n "$DNSTT_PID" ]; then
+    taskset -cp 0 "$DNSTT_PID" || true
+    log_debug "Pinned dnstt-server (pid $DNSTT_PID) to CPU 0"
+fi
+
+log "✔️ SlowDNS (SSH-only) installé et démarré."
+log "✔️ NS utilisé : $(cat $CONFIG_FILE)"
+log "⚠️ Vérifie que ton fournisseur VPS autorise l'utilisation du port 53 UDP."
+
+# ---------- Fin ----------
