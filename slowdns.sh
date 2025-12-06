@@ -8,11 +8,11 @@ PORT=53
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 SERVER_PUB="$SLOWDNS_DIR/server.pub"
+API_PORT=9999
 
-# Cloudflare API
+# --- Cloudflare API ---
 CF_API_TOKEN="t4RmpfDtvrrb9FvMzXTxZnJ3ZnP3KdlqWSlCsFMI"
 CF_ZONE_ID="45827ec075b0d9b60039d406765abead"
-DOMAIN="kingdom.qzz.io"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
@@ -25,7 +25,24 @@ fi
 # --- Dépendances ---
 log "Installation des dépendances..."
 apt update -y
-apt install -y curl jq iptables iptables-persistent
+apt install -y iptables iptables-persistent curl tcpdump jq python3 python3-venv python3-pip
+
+# --- Préparation dossier ---
+mkdir -p "$SLOWDNS_DIR"
+
+# --- Wrapper SlowDNS (créé en premier pour éviter 'script introuvable') ---
+cat <<'EOF' > /usr/local/bin/slowdns-start.sh
+#!/bin/bash
+SLOWDNS_DIR="/etc/slowdns"
+SLOWDNS_BIN="/usr/local/bin/dnstt-server"
+PORT=53
+CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
+SERVER_KEY="$SLOWDNS_DIR/server.key"
+NS=$(cat "$CONFIG_FILE")
+ssh_port=22
+exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
+EOF
+chmod +x /usr/local/bin/slowdns-start.sh
 
 # --- DNSTT ---
 if [ ! -x "$SLOWDNS_BIN" ]; then
@@ -34,34 +51,52 @@ if [ ! -x "$SLOWDNS_BIN" ]; then
     chmod +x "$SLOWDNS_BIN"
 fi
 
-mkdir -p "$SLOWDNS_DIR"
+# --- Clés fixes ---
+echo "4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa" > "$SERVER_KEY"
+echo "2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c" > "$SERVER_PUB"
+chmod 600 "$SERVER_KEY"
+chmod 644 "$SERVER_PUB"
 
-# --- Choix du mode auto/man ---
+# --- Créer venv Python pour API ---
+python3 -m venv "$SLOWDNS_DIR/venv"
+source "$SLOWDNS_DIR/venv/bin/activate"
+pip install --upgrade pip
+pip install flask cloudflare
+
+# --- Menu AUTO / MAN ---
 read -rp "Choisissez le mode d'installation [auto/man] : " MODE
 MODE=${MODE,,}  # minuscule
 
 if [[ "$MODE" == "auto" ]]; then
     log "Mode AUTO sélectionné : génération automatique du NS"
+    # --- API interne ---
+    API_SCRIPT="$SLOWDNS_DIR/api.py"
+    cat <<EOF > "$API_SCRIPT"
+from flask import Flask, request, jsonify
+import random, string
+app = Flask(__name__)
 
-    # Générer un sous-domaine aléatoire
-    SUBDOMAIN="tun-$(tr -dc a-z0-9 </dev/urandom | head -c6)"
-    DOMAIN_NS="${SUBDOMAIN}.${DOMAIN}"
-    VPS_IP=$(curl -s ipv4.icanhazip.com)
+DOMAIN = "kingdom.qzz.io"
 
-    log "Création de l'enregistrement A sur Cloudflare : $DOMAIN_NS -> $VPS_IP"
+def random_id(length=6):
+    return ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(length))
 
-    # Créer l'enregistrement A via l'API Cloudflare
-    RESPONSE=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
-        -H "Authorization: Bearer $CF_API_TOKEN" \
-        -H "Content-Type: application/json" \
-        --data "{\"type\":\"A\",\"name\":\"$DOMAIN_NS\",\"content\":\"$VPS_IP\",\"ttl\":120,\"proxied\":false}")
+@app.route("/create", methods=["GET"])
+def create():
+    ip = request.args.get("ip")
+    if not ip:
+        return jsonify({"error":"Missing IP"}),400
+    sub = "tun-" + random_id()
+    fqdn = f"{sub}.{DOMAIN}"
+    return jsonify({"domain": fqdn})
 
-    SUCCESS=$(echo "$RESPONSE" | jq -r .success)
-    if [[ "$SUCCESS" != "true" ]]; then
-        echo "Erreur Cloudflare : $(echo "$RESPONSE" | jq -r .errors[].message)"
-        exit 1
-    fi
+if __name__=="__main__":
+    app.run(host="0.0.0.0", port=$API_PORT)
+EOF
 
+    nohup "$SLOWDNS_DIR/venv/bin/python" "$API_SCRIPT" >/dev/null 2>&1 &
+    sleep 2
+    DOMAIN_NS=$(curl -s "http://127.0.0.1:$API_PORT/create?ip=$(curl -s ipv4.icanhazip.com)" | jq -r .domain)
 elif [[ "$MODE" == "man" ]]; then
     read -rp "Entrez le NameServer (NS) à utiliser : " DOMAIN_NS
 else
@@ -69,28 +104,8 @@ else
     exit 1
 fi
 
-# --- Écriture NS ---
 echo "$DOMAIN_NS" > "$CONFIG_FILE"
 log "NS sélectionné : $DOMAIN_NS"
-
-# --- Clés fixes ---
-echo "4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa" > "$SERVER_KEY"
-echo "2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c" > "$SERVER_PUB"
-chmod 600 "$SERVER_KEY"
-chmod 644 "$SERVER_PUB"
-
-# --- Wrapper SlowDNS ---
-cat <<'EOF' > /usr/local/bin/slowdns-start.sh
-#!/bin/bash
-SLOWDNS_DIR="/etc/slowdns"
-SLOWDNS_BIN="/usr/local/bin/dnstt-server"
-CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
-SERVER_KEY="$SLOWDNS_DIR/server.key"
-NS=$(cat "$CONFIG_FILE")
-ssh_port=22
-exec "$SLOWDNS_BIN" -udp :53 -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
-EOF
-chmod +x /usr/local/bin/slowdns-start.sh
 
 # --- Service systemd ---
 cat <<EOF > /etc/systemd/system/slowdns.service
