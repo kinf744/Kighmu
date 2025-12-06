@@ -21,6 +21,21 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
+# ---------- Vérification DNS avant installation ----------
+check_dns() {
+    if ! ping -c 1 1.1.1.1 &>/dev/null; then
+        log "⚠️ Résolution DNS problématique, vérification /etc/resolv.conf..."
+        # Si pas de résolveur valide, ajoute Cloudflare et Google
+        if ! grep -q "1.1.1.1" /etc/resolv.conf; then
+            echo "nameserver 1.1.1.1" >> /etc/resolv.conf
+        fi
+        if ! grep -q "8.8.8.8" /etc/resolv.conf; then
+            echo "nameserver 8.8.8.8" >> /etc/resolv.conf
+        fi
+    fi
+}
+check_dns
+
 # ---------- Prérequis ----------
 log "Installation des paquets requis..."
 apt update -y || true
@@ -29,12 +44,11 @@ apt install -y curl jq iptables-persistent net-tools || true
 mkdir -p "$SLOWDNS_DIR"
 chmod 700 "$SLOWDNS_DIR"
 
-# ---------- Fonctions Cloudflare (uniquement auto) ----------
+# ---------- Fonctions Cloudflare (auto seulement) ----------
 verify_cloudflare_token() {
     log "Vérification du token Cloudflare..."
     RESPONSE=$(curl -s -X GET "https://api.cloudflare.com/client/v4/user/tokens/verify" \
         -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" || true)
-
     if ! echo "$RESPONSE" | grep -q '"status":"active"' ; then
         echo "❌ Token Cloudflare invalide ou permissions insuffisantes."
         echo "$RESPONSE"
@@ -47,16 +61,13 @@ verify_cloudflare_zone() {
     log "Vérification de la zone Cloudflare..."
     ZONE_INFO=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID" \
         -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" || true)
-
     if ! echo "$ZONE_INFO" | grep -q '"success":true' ; then
         echo "❌ Zone ID Cloudflare invalide : $CF_ZONE_ID"
         echo "$ZONE_INFO"
         exit 1
     fi
-
     ZONE_NAME=$(echo "$ZONE_INFO" | jq -r .result.name)
     log_debug "Zone trouvée : $ZONE_NAME"
-
     if [[ "$DOMAIN" != *"$ZONE_NAME" ]]; then
         echo "❌ Domaine '$DOMAIN' n'appartient pas à la zone Cloudflare '$ZONE_NAME'"
         exit 1
@@ -64,7 +75,7 @@ verify_cloudflare_zone() {
     log "✔️ Zone Cloudflare valide : $ZONE_NAME"
 }
 
-# ---------- Téléchargement DNSTT si nécessaire ----------
+# ---------- Téléchargement DNSTT ----------
 if [ ! -x "$SLOWDNS_BIN" ]; then
     log "Téléchargement du binaire DNSTT..."
     curl -L -o "$SLOWDNS_BIN" https://dnstt.network/dnstt-server-linux-amd64
@@ -136,17 +147,6 @@ net.core.somaxconn = 1024
 net.ipv4.tcp_low_latency = 1
 EOF
 sysctl -p || true
-
-# ---------- Libération port 53 ----------
-log "Libération du port 53..."
-if systemctl list-unit-files | grep -q systemd-resolved; then
-    if systemctl is-active --quiet systemd-resolved; then
-        systemctl stop systemd-resolved || true
-    fi
-    systemctl disable systemd-resolved || true
-    [ -f /etc/resolv.conf ] && rm -f /etc/resolv.conf
-    echo "1.1.1.1" > /etc/resolv.conf
-fi
 
 # ---------- IPTABLES ----------
 log "Configuration iptables pour UDP/53 et SSH..."
