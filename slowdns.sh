@@ -139,11 +139,21 @@ Description=SlowDNS Tunnel (DNSTT)
 After=network-online.target
 
 [Service]
+Type=simple
+User=root
 ExecStart=/usr/local/bin/slowdns-start.sh
-Restart=always
-RestartSec=2
+Restart=on-failure
+RestartSec=3
 StandardOutput=append:/var/log/slowdns.log
 StandardError=append:/var/log/slowdns.log
+SyslogIdentifier=slowdns
+LimitNOFILE=1048576
+Nice=0
+CPUSchedulingPolicy=other
+IOSchedulingClass=best-effort
+IOSchedulingPriority=4
+TimeoutStartSec=20
+NoNewPrivileges=yes
 
 [Install]
 WantedBy=multi-user.target
