@@ -9,8 +9,8 @@ set -euo pipefail
 ########################
 # CONFIGURATION (edit or export env vars before running)
 ########################
-: "${CF_API_TOKEN:=""}"   # Cloudflare API Token (scoped to DNS edit)
-: "${CF_ZONE_ID:=""}"     # Cloudflare Zone ID
+: "${CF_API_TOKEN:="7mn4LKcZARvdbLlCVFTtaX7LGM2xsnyjHkiTAt37"}"   # Cloudflare API Token (scoped to DNS edit)
+: "${CF_ZONE_ID:="7debbb8ea4946898a889c4b5745ab7eb"}"     # Cloudflare Zone ID
 : "${DOMAIN:="kingom.ggff.net"}"  # Your base domain managed in Cloudflare
 : "${MODE:=auto}"         # auto or man
 : "${SLOWDNS_DIR:=/etc/slowdns}"
