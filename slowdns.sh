@@ -180,8 +180,7 @@ systemctl enable slowdns.service
 systemctl restart slowdns.service
 
 PUB_KEY=$(cat "$SERVER_PUB")
-log "✔️ SlowDNS installé avec succès !"
-log "✔️ NS utilisé : $DOMAIN_NS"
+echo -e "[${CYAN}$(date '+%Y-%m-%d %H:%M:%S')${NC}] ${GREEN}✔️ SlowDNS installé avec succès !${NC}"
 
 echo -e ""
 echo -e "${GREEN}${BOLD}============================================${NC}"
