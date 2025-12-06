@@ -56,8 +56,7 @@ verify_cloudflare_token() {
 verify_cloudflare_zone() {
     log "Vérification zone Cloudflare..."
     ZONE_INFO=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID" \
-        -H "Authorization: Bearer $CF_API_TOKEN" \
-        -H "Content-Type: application/json")
+        -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json")
     echo "$ZONE_INFO" | grep -q '"success":true' || { echo "❌ Zone Cloudflare invalide."; exit 1; }
     ZONE_NAME=$(echo "$ZONE_INFO" | jq -r .result.name)
     [[ "$DOMAIN" != *"$ZONE_NAME" ]] && { echo "❌ Domaine '$DOMAIN' n'appartient pas à la zone '$ZONE_NAME'"; exit 1; }
@@ -124,6 +123,10 @@ setup_ns_record() {
     else
         echo "❌ Mode invalide." && exit 1
     fi
+
+    # Vérification que le NS n'est pas vide
+    [ -z "$DOMAIN_NS" ] && { echo "❌ NS vide, installation annulée"; exit 1; }
+
     echo "$DOMAIN_NS" > "$CONFIG_FILE"
     log "NS utilisé : $DOMAIN_NS"
 }
@@ -139,13 +142,15 @@ PORT=53
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 
+# Lecture du NS
 NS=$(cat "$CONFIG_FILE")
 ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
 [ -z "$ssh_port" ] && ssh_port=22
 
 exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
 EOF
-    chmod +x /usr/local/bin/slowdns-start.sh
+
+    chmod 755 /usr/local/bin/slowdns-start.sh
 }
 
 create_systemd_service() {
@@ -168,6 +173,7 @@ LimitNOFILE=1048576
 [Install]
 WantedBy=multi-user.target
 EOF
+
     systemctl daemon-reload
     systemctl enable slowdns.service
     systemctl restart slowdns.service
@@ -194,6 +200,8 @@ main() {
     RESET="\e[0m"
 
     PUB_KEY=$(cat "$SERVER_PUB")
+    DOMAIN_NS=$(cat "$CONFIG_FILE")
+
     echo -e ""
     echo -e "${GREEN}+--------------------------------------------+${RESET}"
     echo -e "${GREEN}|           SLOWDNS DNSTT CONFIG             |${RESET}"
