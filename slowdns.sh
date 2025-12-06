@@ -17,6 +17,7 @@ DEBUG=true
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 log_debug() { if [ "$DEBUG" = true ]; then echo "[DEBUG] $*"; fi; }
 
+# -------------------------------------------------------
 check_root() {
     [ "$EUID" -ne 0 ] && { echo "❌ Ce script doit être exécuté en root."; exit 1; }
 }
@@ -172,6 +173,7 @@ EOF
     systemctl restart slowdns.service
 }
 
+# ----------------- MAIN -----------------
 main() {
     check_root
     install_dependencies
