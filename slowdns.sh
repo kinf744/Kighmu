@@ -1,113 +1,98 @@
 #!/bin/bash
 set -euo pipefail
 
+# --- Configuration principale ---
 SLOWDNS_DIR="/etc/slowdns"
 SLOWDNS_BIN="/usr/local/bin/dnstt-server"
-WRAPPER_SCRIPT="/usr/local/bin/slowdns-start.sh"
 PORT=53
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 SERVER_PUB="$SLOWDNS_DIR/server.pub"
-API_PORT=9999
 
-# Cloudflare
-CF_API_TOKEN="TON_TOKEN_CLOUDFLARE"
-CF_ZONE_ID="TON_ZONE_ID_CLOUDFLARE"
+# Cloudflare API
+CF_API_TOKEN="t4RmpfDtvrrb9FvMzXTxZnJ3ZnP3KdlqWSlCsFMI"
+CF_ZONE_ID="45827ec075b0d9b60039d406765abead"
 DOMAIN="kingdom.qzz.io"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
-# Vérification root
+# --- Vérification root ---
 if [ "$EUID" -ne 0 ]; then
     echo "Ce script doit être exécuté en root." >&2
     exit 1
 fi
 
-# Dépendances système
+# --- Dépendances ---
 log "Installation des dépendances..."
 apt update -y
-apt install -y iptables iptables-persistent curl tcpdump jq python3 python3-venv python3-pip
+apt install -y curl jq iptables iptables-persistent
 
-# Création du répertoire SlowDNS
-mkdir -p "$SLOWDNS_DIR"
-
-# Installation DNSTT
+# --- DNSTT ---
 if [ ! -x "$SLOWDNS_BIN" ]; then
     log "Téléchargement du binaire DNSTT..."
     curl -L -o "$SLOWDNS_BIN" https://dnstt.network/dnstt-server-linux-amd64
     chmod +x "$SLOWDNS_BIN"
 fi
 
-# Création d’un venv Python local pour Flask & Cloudflare
-PY_VENV="$SLOWDNS_DIR/venv"
-if [ ! -d "$PY_VENV" ]; then
-    log "Création du virtualenv Python..."
-    python3 -m venv "$PY_VENV"
-fi
+mkdir -p "$SLOWDNS_DIR"
 
-source "$PY_VENV/bin/activate"
-pip install --upgrade pip
-pip install flask cloudflare
-deactivate
+# --- Choix du mode auto/man ---
+read -rp "Choisissez le mode d'installation [auto/man] : " MODE
+MODE=${MODE,,}  # minuscule
 
-# Choix du mode d’installation
-read -rp "Choisissez le mode d'installation [auto/man] : " INSTALL_MODE
-
-if [[ "$INSTALL_MODE" == "auto" ]]; then
-    log "Mode AUTO sélectionné : génération automatique du NS et A record"
+if [[ "$MODE" == "auto" ]]; then
+    log "Mode AUTO sélectionné : génération automatique du NS"
 
     # Générer un sous-domaine aléatoire
-    SUBDOMAIN="tun-$(head /dev/urandom | tr -dc a-z0-9 | head -c 6)"
-    NS="$SUBDOMAIN.$DOMAIN"
+    SUBDOMAIN="tun-$(tr -dc a-z0-9 </dev/urandom | head -c6)"
+    DOMAIN_NS="${SUBDOMAIN}.${DOMAIN}"
+    VPS_IP=$(curl -s ipv4.icanhazip.com)
 
-    # Récupérer IP publique
-    PUBLIC_IP=$(curl -s ipv4.icanhazip.com)
+    log "Création de l'enregistrement A sur Cloudflare : $DOMAIN_NS -> $VPS_IP"
 
-    log "Création de l'enregistrement A sur Cloudflare pour $SUBDOMAIN -> $PUBLIC_IP"
-    CREATE_A=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
+    # Créer l'enregistrement A via l'API Cloudflare
+    RESPONSE=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
         -H "Authorization: Bearer $CF_API_TOKEN" \
         -H "Content-Type: application/json" \
-        --data "{\"type\":\"A\",\"name\":\"$SUBDOMAIN\",\"content\":\"$PUBLIC_IP\",\"ttl\":120,\"proxied\":false}")
+        --data "{\"type\":\"A\",\"name\":\"$DOMAIN_NS\",\"content\":\"$VPS_IP\",\"ttl\":120,\"proxied\":false}")
 
-    log "A record créé : $(echo $CREATE_A | jq -r '.success')"
+    SUCCESS=$(echo "$RESPONSE" | jq -r .success)
+    if [[ "$SUCCESS" != "true" ]]; then
+        echo "Erreur Cloudflare : $(echo "$RESPONSE" | jq -r .errors[].message)"
+        exit 1
+    fi
 
-    # Créer un NS pointant vers le même sous-domaine (si nécessaire côté VPN HC)
-    # Certains VPN HC utilisent directement le sous-domaine A comme NS
-    DOMAIN_NS="$NS"
-
-elif [[ "$INSTALL_MODE" == "man" ]]; then
-    log "Mode MANUEL sélectionné : veuillez saisir le NS"
-    read -rp "Entrez votre NameServer (NS) : " DOMAIN_NS
+elif [[ "$MODE" == "man" ]]; then
+    read -rp "Entrez le NameServer (NS) à utiliser : " DOMAIN_NS
 else
-    echo "Mode invalide ! Choisissez 'auto' ou 'man'."
+    echo "Mode invalide, utilisez 'auto' ou 'man'" >&2
     exit 1
 fi
 
-# Enregistrement du NS
+# --- Écriture NS ---
 echo "$DOMAIN_NS" > "$CONFIG_FILE"
 log "NS sélectionné : $DOMAIN_NS"
 
-# Clés fixes
+# --- Clés fixes ---
 echo "4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa" > "$SERVER_KEY"
 echo "2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c" > "$SERVER_PUB"
 chmod 600 "$SERVER_KEY"
 chmod 644 "$SERVER_PUB"
 
-# Wrapper SlowDNS
-cat <<EOF > "$WRAPPER_SCRIPT"
+# --- Wrapper SlowDNS ---
+cat <<'EOF' > /usr/local/bin/slowdns-start.sh
 #!/bin/bash
-SLOWDNS_DIR="$SLOWDNS_DIR"
-SLOWDNS_BIN="$SLOWDNS_BIN"
-PORT=$PORT
-CONFIG_FILE="$CONFIG_FILE"
-SERVER_KEY="$SERVER_KEY"
-NS=\$(cat "\$CONFIG_FILE")
+SLOWDNS_DIR="/etc/slowdns"
+SLOWDNS_BIN="/usr/local/bin/dnstt-server"
+CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
+SERVER_KEY="$SLOWDNS_DIR/server.key"
+NS=$(cat "$CONFIG_FILE")
 ssh_port=22
-exec "\$SLOWDNS_BIN" -udp :\$PORT -privkey-file "\$SERVER_KEY" "\$NS" 0.0.0.0:\$ssh_port
+exec "$SLOWDNS_BIN" -udp :53 -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
 EOF
-chmod +x "$WRAPPER_SCRIPT"
+chmod +x /usr/local/bin/slowdns-start.sh
 
-# Service systemd
+# --- Service systemd ---
 cat <<EOF > /etc/systemd/system/slowdns.service
 [Unit]
 Description=SlowDNS Server Tunnel (DNSTT)
@@ -117,7 +102,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=root
-ExecStart=$WRAPPER_SCRIPT
+ExecStart=/usr/local/bin/slowdns-start.sh
 Restart=on-failure
 RestartSec=3
 StandardOutput=append:/var/log/slowdns.log
