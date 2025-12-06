@@ -8,6 +8,7 @@ CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 SERVER_PUB="$SLOWDNS_DIR/server.pub"
 API_PORT=9999
+VENV_DIR="$SLOWDNS_DIR/venv"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
@@ -17,10 +18,9 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# Dépendances
+# Dépendances système
 apt update -y
-apt install -y iptables iptables-persistent curl tcpdump jq python3 python3-pip
-pip3 install flask cloudflare
+apt install -y iptables iptables-persistent curl tcpdump jq python3 python3-venv python3-pip
 
 # DNSTT
 if [ ! -x "$SLOWDNS_BIN" ]; then
@@ -31,12 +31,21 @@ fi
 
 mkdir -p "$SLOWDNS_DIR"
 
-# Choix du mode : auto ou manuel
+# === Choix du mode d'installation ===
 read -rp "Choisissez le mode d'installation [auto/man] : " MODE
-MODE="${MODE,,}" # met en minuscule
+MODE="${MODE,,}"  # minuscule
 
 if [[ "$MODE" == "auto" ]]; then
-    # === Création d'un serveur API Python interne ===
+    log "Mode AUTO sélectionné : génération automatique du NS"
+
+    # Créer un virtual environment pour l'API
+    python3 -m venv "$VENV_DIR"
+    source "$VENV_DIR/bin/activate"
+    pip install --upgrade pip
+    pip install flask cloudflare
+    deactivate
+
+    # Création du script API
     API_SCRIPT="$SLOWDNS_DIR/api.py"
     cat <<EOF > "$API_SCRIPT"
 from flask import Flask, request, jsonify
@@ -61,9 +70,11 @@ if __name__=="__main__":
     app.run(host="0.0.0.0", port=$API_PORT)
 EOF
 
-    # Lancer l’API en arrière-plan
-    nohup python3 "$API_SCRIPT" >/dev/null 2>&1 &
+    # Lancer l’API en arrière-plan via le venv
+    nohup "$VENV_DIR/bin/python" "$API_SCRIPT" >/dev/null 2>&1 &
     sleep 2
+
+    # Récupérer le NS automatiquement
     DOMAIN_NS=$(curl -s "http://127.0.0.1:$API_PORT/create?ip=$(curl -s ipv4.icanhazip.com)" | jq -r .domain)
     log "NS généré automatiquement : $DOMAIN_NS"
 
