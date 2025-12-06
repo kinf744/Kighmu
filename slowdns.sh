@@ -27,10 +27,68 @@ log "Installation des dépendances..."
 apt update -y
 apt install -y iptables iptables-persistent curl tcpdump jq python3 python3-venv python3-pip
 
-# --- Préparation dossier ---
+# --- Création venv ---
+python3 -m venv "$SLOWDNS_DIR/venv"
+source "$SLOWDNS_DIR/venv/bin/activate"
+pip install --upgrade pip
+pip install flask cloudflare
+
+# --- DNSTT ---
+if [ ! -x "$SLOWDNS_BIN" ]; then
+    log "Téléchargement du binaire DNSTT..."
+    curl -L -o "$SLOWDNS_BIN" https://dnstt.network/dnstt-server-linux-amd64
+    chmod +x "$SLOWDNS_BIN"
+fi
+
 mkdir -p "$SLOWDNS_DIR"
 
-# --- Wrapper SlowDNS (créé en premier pour éviter 'script introuvable') ---
+# --- Choix du mode auto/man ---
+read -rp "Choisissez le mode d'installation [auto/man] : " MODE
+MODE=${MODE,,}  # minuscule
+
+if [[ "$MODE" == "auto" ]]; then
+    log "Mode AUTO sélectionné : génération automatique du NS"
+
+    DOMAIN="kingdom.qzz.io"  # ton domaine principal
+    VPS_IP=$(curl -s ipv4.icanhazip.com)
+
+    # Création enregistrement A
+    SUB_A="vpn-$(date +%s | sha256sum | head -c 6)"
+    FQDN_A="$SUB_A.$DOMAIN"
+    log "Création de l'enregistrement A $FQDN_A -> $VPS_IP"
+    curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
+        -H "Authorization: Bearer $CF_API_TOKEN" \
+        -H "Content-Type: application/json" \
+        --data "{\"type\":\"A\",\"name\":\"$FQDN_A\",\"content\":\"$VPS_IP\",\"ttl\":120,\"proxied\":false}" \
+        | jq .
+
+    # Création enregistrement NS
+    SUB_NS="ns-$(date +%s | sha256sum | head -c 6)"
+    DOMAIN_NS="$SUB_NS.$DOMAIN"
+    log "Création de l'enregistrement NS $DOMAIN_NS -> $FQDN_A"
+    curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
+        -H "Authorization: Bearer $CF_API_TOKEN" \
+        -H "Content-Type: application/json" \
+        --data "{\"type\":\"NS\",\"name\":\"$DOMAIN_NS\",\"content\":\"$FQDN_A\",\"ttl\":120}" \
+        | jq .
+
+elif [[ "$MODE" == "man" ]]; then
+    read -rp "Entrez le NameServer (NS) à utiliser : " DOMAIN_NS
+else
+    echo "Mode invalide, utilisez 'auto' ou 'man'" >&2
+    exit 1
+fi
+
+echo "$DOMAIN_NS" > "$CONFIG_FILE"
+log "NS sélectionné : $DOMAIN_NS"
+
+# --- Clés fixes ---
+echo "4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa" > "$SERVER_KEY"
+echo "2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c" > "$SERVER_PUB"
+chmod 600 "$SERVER_KEY"
+chmod 644 "$SERVER_PUB"
+
+# --- Wrapper SlowDNS ---
 cat <<'EOF' > /usr/local/bin/slowdns-start.sh
 #!/bin/bash
 SLOWDNS_DIR="/etc/slowdns"
@@ -43,69 +101,6 @@ ssh_port=22
 exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
 EOF
 chmod +x /usr/local/bin/slowdns-start.sh
-
-# --- DNSTT ---
-if [ ! -x "$SLOWDNS_BIN" ]; then
-    log "Téléchargement du binaire DNSTT..."
-    curl -L -o "$SLOWDNS_BIN" https://dnstt.network/dnstt-server-linux-amd64
-    chmod +x "$SLOWDNS_BIN"
-fi
-
-# --- Clés fixes ---
-echo "4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa" > "$SERVER_KEY"
-echo "2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c" > "$SERVER_PUB"
-chmod 600 "$SERVER_KEY"
-chmod 644 "$SERVER_PUB"
-
-# --- Créer venv Python pour API ---
-python3 -m venv "$SLOWDNS_DIR/venv"
-source "$SLOWDNS_DIR/venv/bin/activate"
-pip install --upgrade pip
-pip install flask cloudflare
-
-# --- Menu AUTO / MAN ---
-read -rp "Choisissez le mode d'installation [auto/man] : " MODE
-MODE=${MODE,,}  # minuscule
-
-if [[ "$MODE" == "auto" ]]; then
-    log "Mode AUTO sélectionné : génération automatique du NS"
-    # --- API interne ---
-    API_SCRIPT="$SLOWDNS_DIR/api.py"
-    cat <<EOF > "$API_SCRIPT"
-from flask import Flask, request, jsonify
-import random, string
-app = Flask(__name__)
-
-DOMAIN = "kingdom.qzz.io"
-
-def random_id(length=6):
-    return ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(length))
-
-@app.route("/create", methods=["GET"])
-def create():
-    ip = request.args.get("ip")
-    if not ip:
-        return jsonify({"error":"Missing IP"}),400
-    sub = "tun-" + random_id()
-    fqdn = f"{sub}.{DOMAIN}"
-    return jsonify({"domain": fqdn})
-
-if __name__=="__main__":
-    app.run(host="0.0.0.0", port=$API_PORT)
-EOF
-
-    nohup "$SLOWDNS_DIR/venv/bin/python" "$API_SCRIPT" >/dev/null 2>&1 &
-    sleep 2
-    DOMAIN_NS=$(curl -s "http://127.0.0.1:$API_PORT/create?ip=$(curl -s ipv4.icanhazip.com)" | jq -r .domain)
-elif [[ "$MODE" == "man" ]]; then
-    read -rp "Entrez le NameServer (NS) à utiliser : " DOMAIN_NS
-else
-    echo "Mode invalide, utilisez 'auto' ou 'man'" >&2
-    exit 1
-fi
-
-echo "$DOMAIN_NS" > "$CONFIG_FILE"
-log "NS sélectionné : $DOMAIN_NS"
 
 # --- Service systemd ---
 cat <<EOF > /etc/systemd/system/slowdns.service
