@@ -13,7 +13,7 @@ SERVER_KEY="$SLOWDNS_DIR/server.key"
 SERVER_PUB="$SLOWDNS_DIR/server.pub"
 
 # ---------------- Cloudflare ----------------
-CF_API_TOKEN=""   # ← mets ton token ici
+CF_API_TOKEN="7mn4LKcZARvdbLlCVFTtaX7LGM2xsnyjHkiTAt37"   # ← mets ton token ici
 CF_ZONE_ID="7debbb8ea4946898a889c4b5745ab7eb"
 DOMAIN="kingom.ggff.net"
 
