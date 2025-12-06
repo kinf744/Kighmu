@@ -8,7 +8,7 @@ CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 SERVER_PUB="$SLOWDNS_DIR/server.pub"
 API_PORT=9999
-DOMAIN="kingdom.qzz.io"
+VENV_DIR="$SLOWDNS_DIR/venv"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
@@ -19,9 +19,8 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # Dépendances système
-log "Installation des dépendances système..."
 apt update -y
-apt install -y iptables iptables-persistent curl tcpdump jq python3 python3-venv python3-pip
+apt install -y iptables iptables-persistent curl tcpdump jq python3 python3-venv
 
 # DNSTT
 if [ ! -x "$SLOWDNS_BIN" ]; then
@@ -32,27 +31,21 @@ fi
 
 mkdir -p "$SLOWDNS_DIR"
 
-# Création de l'environnement Python isolé pour l'API
-VENV_DIR="$SLOWDNS_DIR/venv"
-python3 -m venv "$VENV_DIR"
+# Création du virtualenv Python
+if [ ! -d "$VENV_DIR" ]; then
+    python3 -m venv "$VENV_DIR"
+fi
 "$VENV_DIR/bin/pip" install --upgrade pip
 "$VENV_DIR/bin/pip" install flask cloudflare
 
-# Choix du mode
-read -rp "Choisissez le mode d'installation [auto/man] : " MODE
-MODE=${MODE,,}  # lowercase
-
-if [[ "$MODE" == "auto" ]]; then
-    log "Mode AUTO sélectionné : génération automatique du NS"
-
-    # Création du script API
-    API_SCRIPT="$SLOWDNS_DIR/api.py"
-    cat <<EOF > "$API_SCRIPT"
+# Création du serveur API interne (auto NS)
+API_SCRIPT="$SLOWDNS_DIR/api.py"
+cat <<EOF > "$API_SCRIPT"
 from flask import Flask, request, jsonify
 import random, string
 app = Flask(__name__)
 
-DOMAIN = "$DOMAIN"
+DOMAIN = "kingdom.qzz.io"
 
 def random_id(length=6):
     return ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(length))
@@ -70,26 +63,27 @@ if __name__=="__main__":
     app.run(host="0.0.0.0", port=$API_PORT)
 EOF
 
-    # Lancer l’API en arrière-plan via le venv
-    nohup "$VENV_DIR/bin/python" "$API_SCRIPT" >/dev/null 2>&1 &
+# Lancer l’API en arrière-plan
+nohup "$VENV_DIR/bin/python" "$API_SCRIPT" >/dev/null 2>&1 &
 
-    sleep 2  # attendre l'API
+# Choix du mode auto/man
+read -rp "Choisissez le mode d'installation [auto/man] : " INSTALL_MODE
+INSTALL_MODE="${INSTALL_MODE,,}"  # minuscule
 
-    # Récupération du NS depuis l'API
+if [[ "$INSTALL_MODE" == "man" ]]; then
+    read -rp "Entrez le NameServer (NS) à utiliser : " DOMAIN_NS
+elif [[ "$INSTALL_MODE" == "auto" ]]; then
+    sleep 2  # attendre que l'API soit prête
     DOMAIN_NS=$(curl -s "http://127.0.0.1:$API_PORT/create?ip=$(curl -s ipv4.icanhazip.com)" | jq -r .domain)
-    echo "$DOMAIN_NS" > "$CONFIG_FILE"
-    log "NS généré automatiquement : $DOMAIN_NS"
-
-elif [[ "$MODE" == "man" ]]; then
-    log "Mode MANUEL sélectionné : saisie manuelle du NS"
-    read -rp "Entrez le NameServer (NS) complet (ex: ns.example.com) : " DOMAIN_NS
-    echo "$DOMAIN_NS" > "$CONFIG_FILE"
 else
-    echo "Mode invalide. Utilisez 'auto' ou 'man'." >&2
+    echo "Mode invalide. Choisissez 'auto' ou 'man'." >&2
     exit 1
 fi
 
-# Clés fixes
+echo "$DOMAIN_NS" > "$CONFIG_FILE"
+log "NS sélectionné : $DOMAIN_NS"
+
+# Clés fixes (ou générer dynamiquement si tu veux)
 echo "4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa" > "$SERVER_KEY"
 echo "2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c" > "$SERVER_PUB"
 chmod 600 "$SERVER_KEY"
