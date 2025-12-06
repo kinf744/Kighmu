@@ -87,7 +87,11 @@ install_slowdns() {
     systemctl restart netfilter-persistent
 
     echo ">>> Installation/configuration SlowDNS..."
-    bash "$HOME/Kighmu/slowdns.sh" || echo "SlowDNS : script introuvable."
+    if [ -f "$HOME/Kighmu/slowdns.sh" ]; then
+        bash "$HOME/Kighmu/slowdns.sh"
+    else
+    echo "❌ SlowDNS : script introuvable à $HOME/Kighmu/slowdns.sh"
+    fi
 }
 
 uninstall_slowdns() {
