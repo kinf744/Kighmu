@@ -97,7 +97,8 @@ if [ ! -x "$SLOWDNS_BIN" ]; then
     chmod +x "$SLOWDNS_BIN"
 fi
 
-read -rp "Choisissez le mode d'installation [auto/man] : " MODE
+echo -e "${CYAN}${BOLD}Choisissez le mode d'installation${NC} [${GREEN}auto${NC}/${YELLOW}man${NC}] :"
+read -rp " → " MODE
 MODE=${MODE,,}
 
 if [[ "$MODE" == "auto" ]]; then
