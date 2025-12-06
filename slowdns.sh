@@ -221,6 +221,6 @@ fi
 
 log "✔️ SlowDNS (SSH-only) installé et démarré."
 log "✔️ NS utilisé : $(cat $CONFIG_FILE)"
-log "⚠️ Vérifie que ton fournisseur VPS autorise l'utilisation du port 53 UDP."
+log "Vérifie que ton fournisseur VPS autorise l'utilisation du port 53 UDP."
 
 # ---------- Fin ----------
