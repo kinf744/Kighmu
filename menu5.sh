@@ -23,7 +23,7 @@ afficher_modes_ports() {
     if systemctl is-active --quiet stunnel4.service || pgrep -f stunnel >/dev/null 2>&1; then any_active=1; fi
     if systemctl is-active --quiet badvpn.service || pgrep -f "badvpn-udpgw" >/dev/null 2>&1 || screen -list | grep -q badvpn_session; then any_active=1; fi
     if systemctl is-active --quiet hysteria.service || pgrep -f hysteria >/dev/null 2>&1; then any_active=1; fi
-    if systemctl is-active --quiet proxy--ws.service || pgrep -f proxy--ws >/dev/null 2>&1; then any_active=1; fi
+    if systemctl is-active --quiet ws_wssr.service || pgrep -f ws_wss_server.py >/dev/null 2>&1; then any_active=1; fi
 
     if [[ $any_active -eq 0 ]]; then
         return
@@ -65,7 +65,7 @@ afficher_modes_ports() {
     if systemctl is-active --quiet hysteria.service || pgrep -f hysteria >/dev/null 2>&1; then
         echo -e "  - Hysteria UDP : ${GREEN}port UDP 22000${RESET}"
     fi
-    if systemctl is-active --quiet proxy--ws.service || pgrep -f proxy--ws.service >/dev/null 2>&1 || screen -list | grep -q proxy--ws; then
+    if systemctl is-active --quiet ws_wssr.service || pgrep -f ws_wss_server.py >/dev/null 2>&1 || screen -list | grep -q ws_wssr; then
         echo -e "  - WS/WSS Tunnel: ${GREEN}WS port 8880 | WSS port 443${RESET}"
     fi
 }
@@ -372,34 +372,32 @@ uninstall_hysteria() {
 }
 
 # --- AJOUT WS/WSS SSH ---
-install_proxy_ws_servic() {
-    echo ">>> Installation BadVPN via script..."
-    bash "$HOME/Kighmu/proxy--ws.sh" || echo "Script introuvable."
+install_ws_wss() {
+    echo ">>> Installation du tunnel WS/WSS SSH..."
+    if [ -f /usr/local/bin/ws_wssr.sh ]; then
+        bash /usr/local/bin/ws_wssr.sh
+    elif [ -f "$HOME/Kighmu/ws_wssr.sh" ]; then
+        bash "$HOME/Kighmu/ws_wssr.sh"
+    else
+        echo "❌ Script ws_wssr.sh introuvable."
+        return 1
+    fi
+    echo -e "${GREEN}[OK] Tunnel WS/WSS SSH installé et lancé.${RESET}"
 }
 
-uninstall_proxy_ws_servic() {
-    echo ">>> Désinstallation complète du tunnel SSH WebSocket..."
-
-    if systemctl list-units --full -all | grep -Fq 'proxy--ws.service'; then
-        echo "Arrêt et désactivation du service proxy--ws.service..."
-        systemctl stop proxy--ws.service || true
-        systemctl disable proxy--ws.service || true
-        [ -f "$SYSTEMD_SERVICE_FILE" ] && rm -f "$SYSTEMD_SERVICE_FILE"
-        systemctl daemon-reload
-    fi
-
-    if [ -f "$PROXY_WS_BIN" ]; then
-        echo "Suppression du script proxy--ws..."
-        rm -f "$PROXY_WS_BIN"
-    fi
-
-    echo "Suppression des règles iptables pour le port TCP $PORT..."
-    iptables -D INPUT -p tcp --dport "$PORT" -j ACCEPT 2>/dev/null || true
-    iptables -D OUTPUT -p tcp --sport "$PORT" -j ACCEPT 2>/dev/null || true
-    iptables-save | tee /etc/iptables/rules.v4
-    systemctl restart netfilter-persistent || true
-
-    echo -e "${GREEN}[OK] Tunnel SSH WebSocket désinstallé.${RESET}"
+uninstall_ws_wss() {
+    echo ">>> Désinstallation complète du tunnel WS/WSS SSH..."
+    systemctl stop ws_wss_server.service 2>/dev/null || true
+    systemctl disable ws_wss_server.service 2>/dev/null || true
+    rm -f /etc/systemd/system/ws_wss_server.service
+    rm -f /usr/local/bin/ws_wss_server.py /usr/local/bin/ws_wssr.sh
+    systemctl daemon-reload
+    # Suppression ports sans UFW
+    iptables -D INPUT -p tcp --dport 8880 -j ACCEPT 2>/dev/null || true
+    iptables -D INPUT -p tcp --dport 443 -j ACCEPT 2>/dev/null || true
+    iptables -D OUTPUT -p tcp --sport 8880 -j ACCEPT 2>/dev/null || true
+    iptables -D OUTPUT -p tcp --sport 443 -j ACCEPT 2>/dev/null || true
+    echo -e "${GREEN}[OK] Tunnel WS/WSS SSH désinstallé.${RESET}"
 }
 
 # --- Interface utilisateur ---
@@ -459,7 +457,7 @@ while true; do
         7) manage_mode "BadVPN" install_badvpn uninstall_badvpn ;;
         8) manage_mode "proxy ws" install_proxy_ws uninstall_proxy_ws ;;
         9) manage_mode "Hysteria" install_hysteria uninstall_hysteria ;;
-        10) manage_mode "Tunnel WS/WSS SSH" install_proxy_ws_servic uninstall_proxy_ws_servic ;;
+        10) manage_mode "Tunnel WS/WSS SSH" install_ws_wss uninstall_ws_wss ;;
         0) echo -e "${RED}🚪 Sortie du panneau de contrôle.${RESET}" ; exit 0 ;;
         *) echo -e "${RED}❌ Option invalide, réessayez.${RESET}" ;;
     esac
