@@ -11,7 +11,7 @@ CF_API_TOKEN="7mn4LKcZARvdbLlCVFTtaX7LGM2xsnyjHkiTAt37"
 CF_ZONE_ID="7debbb8ea4946898a889c4b5745ab7eb"
 DOMAIN="kingom.ggff.net"
 DEBUG=true
-PORT=53
+PORT=5300
 SSH_PORT=22
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
