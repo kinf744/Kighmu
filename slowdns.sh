@@ -49,7 +49,7 @@ MODE=${MODE,,}  # minuscule
 if [[ "$MODE" == "auto" ]]; then
     log "Mode AUTO sélectionné : génération automatique du NS"
 
-    DOMAIN="kingdom.qzz.io"  # ton domaine principal
+    DOMAIN="kingom.ggff.net"  # ton domaine principal
     VPS_IP=$(curl -s ipv4.icanhazip.com)
 
     # Création enregistrement A
