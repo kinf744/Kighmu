@@ -40,12 +40,16 @@ if [[ ! -f "$SLOWDNS_BIN" ]]; then
 fi
 
 # ---------- Clés fixes ----------
-if [[ ! -f "$SERVER_KEY" ]] || [[ ! -f "$SERVER_PUB" ]]; then
-    log "Création clés DNSTT (fixes)..."
-    $SLOWDNS_BIN -gen-key -privkey "$SERVER_KEY" -pubkey "$SERVER_PUB"
-else
-    log "Clés existantes détectées : pas de régénération."
-fi
+cat > "$SERVER_KEY" <<'EOF'
+4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa
+EOF
+chmod 600 "$SERVER_KEY"
+
+cat > "$SERVER_PUB" <<'EOF'
+2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c
+EOF
+chmod 644 "$SERVER_PUB"
+log "Clés fixes installées."
 
 # ---------- Choix mode ----------
 read -rp "Choisissez le mode d'installation [auto/man] : " MODE
@@ -74,16 +78,14 @@ if [[ "$MODE" == "auto" ]]; then
 
 elif [[ "$MODE" == "man" ]]; then
     read -rp "Entrez le NS pour le client (ex: ns1.example.com) : " DOMAIN_NS
-    FQDN_A="$DOMAIN"   # Le serveur DNSTT utilisera le domaine principal / A-record
 else
     echo "❌ Mode invalide."
     exit 1
 fi
 
-# ---------- Configuration DNSTT ----------
-echo "$FQDN_A" > "$CONFIG_FILE"
-log "A-record utilisé par DNSTT : $FQDN_A"
-log "NS pour le client : $DOMAIN_NS"
+# ---------- Enregistrement NS dans ns.conf ----------
+echo "$DOMAIN_NS" > "$CONFIG_FILE"
+log "NS pour le client enregistré dans ns.conf : $DOMAIN_NS"
 
 # ---------- Optimisations système ----------
 log "Application des optimisations noyau..."
@@ -112,7 +114,7 @@ cat > /usr/local/bin/slowdns-start.sh <<EOF
 #!/bin/bash
 SLOWDNS_BIN="$SLOWDNS_BIN"
 SERVER_KEY="$SERVER_KEY"
-NS="$DOMAIN_NS"
+NS="\$(cat "$CONFIG_FILE")"
 exec "\$SLOWDNS_BIN" -udp :$PORT -privkey-file "\$SERVER_KEY" "\$NS" 0.0.0.0:$SSH_PORT
 EOF
 chmod +x /usr/local/bin/slowdns-start.sh
