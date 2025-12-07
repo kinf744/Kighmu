@@ -8,7 +8,7 @@ PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 SERVER_PUB="$SLOWDNS_DIR/server.pub"
-API_PORT=9999
+ENV_FILE="$SLOWDNS_DIR/slowdns.env"
 
 # --- Cloudflare API ---
 CF_API_TOKEN="7mn4LKcZARvdbLlCVFTtaX7LGM2xsnyjHkiTAt37"
@@ -46,8 +46,7 @@ mkdir -p "$SLOWDNS_DIR"
 read -rp "Choisissez le mode d'installation [auto/man] : " MODE
 MODE=${MODE,,}
 
-if [[ "$MODE" == "auto" ]]; then
-    log "Mode AUTO sélectionné : génération automatique du NS"
+generate_ns_auto() {
     DOMAIN="kingom.ggff.net"
     VPS_IP=$(curl -s ipv4.icanhazip.com)
 
@@ -62,33 +61,56 @@ if [[ "$MODE" == "auto" ]]; then
         | jq .
 
     SUB_NS="ns-$(date +%s | sha256sum | head -c 6)"
-    DOMAIN_NS="$SUB_NS.$DOMAIN"
-    log "Création de l'enregistrement NS $DOMAIN_NS -> $FQDN_A"
+    NS="$SUB_NS.$DOMAIN"
+    log "Création de l'enregistrement NS $NS -> $FQDN_A"
 
     curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
         -H "Authorization: Bearer $CF_API_TOKEN" \
         -H "Content-Type: application/json" \
-        --data "{\"type\":\"NS\",\"name\":\"$DOMAIN_NS\",\"content\":\"$FQDN_A\",\"ttl\":120}" \
+        --data "{\"type\":\"NS\",\"name\":\"$NS\",\"content\":\"$FQDN_A\",\"ttl\":120}" \
         | jq .
 
+    # Sauvegarde pour les prochaines installations auto
+    echo -e "NS=$NS\nMODE=auto" > "$ENV_FILE"
+    chmod 600 "$ENV_FILE"
+    log "NS auto sauvegardé dans $ENV_FILE"
+}
+
+# --- Gestion du NS persistant ---
+if [[ "$MODE" == "auto" ]]; then
+    if [[ -f "$ENV_FILE" ]]; then
+        source "$ENV_FILE"
+        if [[ "${MODE:-}" == "auto" ]]; then
+            log "NS auto existant détecté : $NS (utilisé pour cette installation auto)"
+        else
+            log "NS manuel détecté précédemment, génération d'un nouveau NS auto..."
+            generate_ns_auto
+        fi
+    else
+        log "Aucun NS existant, génération d'un nouveau NS auto..."
+        generate_ns_auto
+    fi
 elif [[ "$MODE" == "man" ]]; then
-    read -rp "Entrez le NameServer (NS) à utiliser : " DOMAIN_NS
+    read -rp "Entrez le NameServer (NS) à utiliser : " NS
+    echo -e "NS=$NS\nMODE=man" > "$ENV_FILE"
+    chmod 600 "$ENV_FILE"
+    log "NS manuel enregistré et sauvegardé dans $ENV_FILE"
 else
     echo "Mode invalide, utilisez 'auto' ou 'man'" >&2
     exit 1
 fi
 
-echo "$DOMAIN_NS" > "$CONFIG_FILE"
-log "NS sélectionné : $DOMAIN_NS"
+# --- Écriture du NS dans la config DNSTT ---
+echo "$NS" > "$CONFIG_FILE"
+log "NS sélectionné : $NS"
 
 # --- Clés fixes ---
-mkdir -p "$SLOWDNS_DIR"
 echo "4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa" > "$SERVER_KEY"
 echo "2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c" > "$SERVER_PUB"
 chmod 600 "$SERVER_KEY"
 chmod 644 "$SERVER_PUB"
 
-# --- Optimisation sysctl ---
+# --- Optimisations sysctl ---
 log "Application des optimisations réseau..."
 cat <<EOF >> /etc/sysctl.conf
 
@@ -107,7 +129,7 @@ EOF
 sysctl -p
 
 # --- Désactivation systemd-resolved ---
-log "Désactivation systemd-resolved pour libérer le port 53..."
+log "Désactivation systemd-resolved..."
 systemctl stop systemd-resolved
 systemctl disable systemd-resolved
 rm -f /etc/resolv.conf
@@ -192,4 +214,4 @@ systemctl daemon-reload
 systemctl enable slowdns.service
 systemctl restart slowdns.service
 
-log "SlowDNS installé et démarré avec NS : $DOMAIN_NS"
+log "SlowDNS installé et démarré avec NS : $NS"
