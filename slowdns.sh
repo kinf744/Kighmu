@@ -44,18 +44,19 @@ mkdir -p "$SLOWDNS_DIR"
 
 # --- Choix du mode auto/man ---
 read -rp "Choisissez le mode d'installation [auto/man] : " MODE
-MODE=${MODE,,}  # minuscule
+MODE=${MODE,,}
 
 if [[ "$MODE" == "auto" ]]; then
     log "Mode AUTO sélectionné : génération automatique du NS"
 
-    DOMAIN="kingom.ggff.net"  # ton domaine principal
+    DOMAIN="kingom.ggff.net"
     VPS_IP=$(curl -s ipv4.icanhazip.com)
 
     # Création enregistrement A
     SUB_A="vpn-$(date +%s | sha256sum | head -c 6)"
     FQDN_A="$SUB_A.$DOMAIN"
     log "Création de l'enregistrement A $FQDN_A -> $VPS_IP"
+
     curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
         -H "Authorization: Bearer $CF_API_TOKEN" \
         -H "Content-Type: application/json" \
@@ -66,6 +67,7 @@ if [[ "$MODE" == "auto" ]]; then
     SUB_NS="ns-$(date +%s | sha256sum | head -c 6)"
     DOMAIN_NS="$SUB_NS.$DOMAIN"
     log "Création de l'enregistrement NS $DOMAIN_NS -> $FQDN_A"
+
     curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
         -H "Authorization: Bearer $CF_API_TOKEN" \
         -H "Content-Type: application/json" \
@@ -87,6 +89,25 @@ echo "4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa" > "$SERV
 echo "2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c" > "$SERVER_PUB"
 chmod 600 "$SERVER_KEY"
 chmod 644 "$SERVER_PUB"
+
+# --- Redirection NAT 53 -> 5300 ---
+log "Application de la redirection NAT UDP 53 → $PORT..."
+
+# Suppression anciennes règles
+iptables -t nat -D PREROUTING -p udp --dport 53 -j REDIRECT --to-ports "$PORT" 2>/dev/null || true
+iptables -D INPUT -p udp --dport 53 -j ACCEPT 2>/dev/null || true
+iptables -D INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || true
+
+# Ajout nouvelles règles
+iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
+iptables -I INPUT -p udp --dport 53 -j ACCEPT
+iptables -t nat -I PREROUTING -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
+
+iptables-save > /etc/iptables/rules.v4
+systemctl enable netfilter-persistent
+systemctl restart netfilter-persistent
+
+log "Redirection 53 → $PORT activée avec succès."
 
 # --- Wrapper SlowDNS ---
 cat <<'EOF' > /usr/local/bin/slowdns-start.sh
