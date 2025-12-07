@@ -4,7 +4,7 @@ set -euo pipefail
 # --- Configuration principale ---
 SLOWDNS_DIR="/etc/slowdns"
 SLOWDNS_BIN="/usr/local/bin/dnstt-server"
-PORT=53
+PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 SERVER_PUB="$SLOWDNS_DIR/server.pub"
@@ -93,7 +93,7 @@ cat <<'EOF' > /usr/local/bin/slowdns-start.sh
 #!/bin/bash
 SLOWDNS_DIR="/etc/slowdns"
 SLOWDNS_BIN="/usr/local/bin/dnstt-server"
-PORT=53
+PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 NS=$(cat "$CONFIG_FILE")
