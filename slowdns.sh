@@ -1,13 +1,12 @@
 #!/bin/bash
 set -euo pipefail
 
-# ---------- CONFIG ----------
 SLOWDNS_DIR="/etc/slowdns"
 SLOWDNS_BIN="/usr/local/bin/dnstt-server"
-PORT=53
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 SERVER_PUB="$SLOWDNS_DIR/server.pub"
+
 CF_API_TOKEN="7mn4LKcZARvdbLlCVFTtaX7LGM2xsnyjHkiTAt37"
 CF_ZONE_ID="7debbb8ea4946898a889c4b5745ab7eb"
 DOMAIN="kingom.ggff.net"
@@ -17,69 +16,33 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 log_debug() { if [ "$DEBUG" = true ]; then echo "[DEBUG] $*"; fi; }
 
 if [ "$EUID" -ne 0 ]; then
-    echo "❌ Ce script doit être exécuté en root." >&2
+    echo "❌ Ce script doit être exécuté en root."
     exit 1
 fi
 
-# ---------- Vérification DNS avant installation ----------
-check_dns() {
-    if ! ping -c 1 1.1.1.1 &>/dev/null; then
-        log "⚠️ Résolution DNS problématique, vérification /etc/resolv.conf..."
-        # Si pas de résolveur valide, ajoute Cloudflare et Google
-        if ! grep -q "1.1.1.1" /etc/resolv.conf; then
-            echo "nameserver 1.1.1.1" >> /etc/resolv.conf
-        fi
-        if ! grep -q "8.8.8.8" /etc/resolv.conf; then
-            echo "nameserver 8.8.8.8" >> /etc/resolv.conf
-        fi
-    fi
-}
-check_dns
+# ---------- Détection IP publique ----------
+log "Détection IP publique..."
+PUBLIC_IP=$(hostname -I | awk '{print $1}')
+if [[ -z "$PUBLIC_IP" ]]; then
+    echo "❌ Impossible de détecter l'IP publique."
+    exit 1
+fi
+log "IP publique détectée : $PUBLIC_IP"
 
-# ---------- Prérequis ----------
-log "Installation des paquets requis..."
-apt update -y || true
-apt install -y curl jq iptables-persistent net-tools || true
-
+# ---------- Installation DNSTT ----------
 mkdir -p "$SLOWDNS_DIR"
-chmod 700 "$SLOWDNS_DIR"
-
-# ---------- Fonctions Cloudflare (auto seulement) ----------
-verify_cloudflare_token() {
-    log "Vérification du token Cloudflare..."
-    RESPONSE=$(curl -s -X GET "https://api.cloudflare.com/client/v4/user/tokens/verify" \
-        -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" || true)
-    if ! echo "$RESPONSE" | grep -q '"status":"active"' ; then
-        echo "❌ Token Cloudflare invalide ou permissions insuffisantes."
-        echo "$RESPONSE"
-        exit 1
-    fi
-    log "✔️ Token Cloudflare valide."
-}
-
-verify_cloudflare_zone() {
-    log "Vérification de la zone Cloudflare..."
-    ZONE_INFO=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID" \
-        -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" || true)
-    if ! echo "$ZONE_INFO" | grep -q '"success":true' ; then
-        echo "❌ Zone ID Cloudflare invalide : $CF_ZONE_ID"
-        echo "$ZONE_INFO"
-        exit 1
-    fi
-    ZONE_NAME=$(echo "$ZONE_INFO" | jq -r .result.name)
-    log_debug "Zone trouvée : $ZONE_NAME"
-    if [[ "$DOMAIN" != *"$ZONE_NAME" ]]; then
-        echo "❌ Domaine '$DOMAIN' n'appartient pas à la zone Cloudflare '$ZONE_NAME'"
-        exit 1
-    fi
-    log "✔️ Zone Cloudflare valide : $ZONE_NAME"
-}
-
-# ---------- Téléchargement DNSTT ----------
-if [ ! -x "$SLOWDNS_BIN" ]; then
-    log "Téléchargement du binaire DNSTT..."
-    curl -L -o "$SLOWDNS_BIN" https://dnstt.network/dnstt-server-linux-amd64
+if [[ ! -f "$SLOWDNS_BIN" ]]; then
+    log "Téléchargement dnstt-server..."
+    wget -q -O "$SLOWDNS_BIN" https://raw.githubusercontent.com/ycd/dnstt/main/dnstt-server
     chmod +x "$SLOWDNS_BIN"
+fi
+
+# ---------- Clés fixes ----------
+if [[ ! -f "$SERVER_KEY" ]] || [[ ! -f "$SERVER_PUB" ]]; then
+    log "Création clés DNSTT (fixes)..."
+    $SLOWDNS_BIN -gen-key -privkey "$SERVER_KEY" -pubkey "$SERVER_PUB"
+else
+    log "Clés existantes détectées : pas de régénération."
 fi
 
 # ---------- Choix mode ----------
@@ -87,55 +50,43 @@ read -rp "Choisissez le mode d'installation [auto/man] : " MODE
 MODE=${MODE,,}
 
 if [[ "$MODE" == "auto" ]]; then
-    verify_cloudflare_token
-    verify_cloudflare_zone
-
-    log "Mode AUTO sélectionné."
-    VPS_IP=$(curl -s ipv4.icanhazip.com)
+    # Création A + NS automatiques
     SUB_A="vpn-$(date +%s | sha256sum | head -c 6)"
     FQDN_A="$SUB_A.$DOMAIN"
-
-    log "Création de l'enregistrement A : $FQDN_A -> $VPS_IP"
-    ADD_A=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
-        -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" \
-        --data "{\"type\":\"A\",\"name\":\"$FQDN_A\",\"content\":\"$VPS_IP\",\"ttl\":1,\"proxied\":false}")
-    log_debug "Réponse Cloudflare A : $ADD_A"
-
     SUB_NS="ns-$(date +%s | sha256sum | head -c 6)"
     DOMAIN_NS="$SUB_NS.$DOMAIN"
 
-    log "Création de l'enregistrement NS : $DOMAIN_NS → $FQDN_A"
+    log "Mode AUTO sélectionné."
+    log "Création enregistrement A : $FQDN_A -> $PUBLIC_IP"
+    ADD_A=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
+        -H "Authorization: Bearer $CF_API_TOKEN" \
+        -H "Content-Type: application/json" \
+        --data "{\"type\":\"A\",\"name\":\"$FQDN_A\",\"content\":\"$PUBLIC_IP\",\"ttl\":1,\"proxied\":false}")
+    log_debug "Réponse Cloudflare A : $ADD_A"
+
+    log "Création enregistrement NS : $DOMAIN_NS -> $FQDN_A"
     ADD_NS=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
-        -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $CF_API_TOKEN" \
+        -H "Content-Type: application/json" \
         --data "{\"type\":\"NS\",\"name\":\"$DOMAIN_NS\",\"content\":\"$FQDN_A\",\"ttl\":1}")
     log_debug "Réponse Cloudflare NS : $ADD_NS"
 
 elif [[ "$MODE" == "man" ]]; then
-    read -rp "Entrez le NS (ex: ns1.exemple.com) : " DOMAIN_NS
+    read -rp "Entrez le NS pour le client (ex: ns1.example.com) : " DOMAIN_NS
+    FQDN_A="$DOMAIN"   # Le serveur DNSTT utilisera toujours le domaine principal / A-record existant
 else
     echo "❌ Mode invalide."
     exit 1
 fi
 
-echo "$DOMAIN_NS" > "$CONFIG_FILE"
-log "NS sélectionné : $DOMAIN_NS"
-
-# ---------- Clés serveur (fixes) ----------
-cat > "$SERVER_KEY" <<'EOF'
-4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa
-EOF
-chmod 600 "$SERVER_KEY"
-
-cat > "$SERVER_PUB" <<'EOF'
-2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c
-EOF
-chmod 644 "$SERVER_PUB"
+# ---------- Configuration DNSTT ----------
+echo "$FQDN_A" > "$CONFIG_FILE"
+log "A-record utilisé par DNSTT : $FQDN_A"
+log "NS pour le client : $DOMAIN_NS"
 
 # ---------- Optimisations système ----------
 log "Application des optimisations noyau..."
-cat <<'EOF' >> /etc/sysctl.conf
-
-# ---- Optim DNSTT (UDP heavy) ----
+cat <<'EOF' >/etc/sysctl.d/slowdns-opt.conf
 net.core.rmem_max = 2500000
 net.core.wmem_max = 2500000
 net.core.rmem_default = 2500000
@@ -146,42 +97,34 @@ net.core.netdev_max_backlog = 5000
 net.core.somaxconn = 1024
 net.ipv4.tcp_low_latency = 1
 EOF
-sysctl -p || true
+sysctl --system >/dev/null
 
 # ---------- IPTABLES ----------
-log "Configuration iptables pour UDP/53 et SSH..."
+log "Configuration iptables..."
 iptables -I INPUT -p udp --dport 53 -j ACCEPT
-iptables -I INPUT -p tcp --dport 53 -j ACCEPT
 iptables -I INPUT -p tcp --dport 22 -j ACCEPT
-netfilter-persistent save || true
-netfilter-persistent reload || true
+netfilter-persistent save >/dev/null 2>&1 || true
+netfilter-persistent reload >/dev/null 2>&1 || true
 
 # ---------- Script démarrage ----------
-cat > /usr/local/bin/slowdns-start.sh <<'EOF'
+cat > /usr/local/bin/slowdns-start.sh <<EOF
 #!/bin/bash
-SLOWDNS_DIR="/etc/slowdns"
-PORT=53
-SLOWDNS_BIN="/usr/local/bin/dnstt-server"
-CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
-SERVER_KEY="$SLOWDNS_DIR/server.key"
-SSH_PORT=22
-
-NS=$(cat "$CONFIG_FILE")
-exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$SSH_PORT
+SLOWDNS_BIN="$SLOWDNS_BIN"
+SERVER_KEY="$SERVER_KEY"
+CONFIG_FILE="$CONFIG_FILE"
+DOMAIN=\$(cat "\$CONFIG_FILE")
+exec "\$SLOWDNS_BIN" -udp $PUBLIC_IP:53 -privkey-file "\$SERVER_KEY" "\$DOMAIN" 127.0.0.1:22
 EOF
 chmod +x /usr/local/bin/slowdns-start.sh
 
 # ---------- Systemd service ----------
-cat > /etc/systemd/system/slowdns.service <<'EOF'
+cat > /etc/systemd/system/slowdns.service <<EOF
 [Unit]
-Description=SlowDNS Tunnel (DNSTT) - SSH only
-After=network-online.target
-Wants=network-online.target
+Description=SlowDNS Tunnel DNSTT (SSH)
+After=network.target
 
 [Service]
 Type=simple
-User=root
-ExecStartPre=/bin/sleep 2
 ExecStart=/usr/local/bin/slowdns-start.sh
 Restart=on-failure
 RestartSec=3
@@ -200,4 +143,7 @@ systemctl enable --now slowdns.service || true
 systemctl restart slowdns.service || true
 
 log "✔️ SlowDNS (SSH-only) installé et démarré."
-log "✔️ NS utilisé : $(cat $CONFIG_FILE)"
+log "✔️ NS pour le client : $DOMAIN_NS"
+log "✔️ A-record utilisé par le serveur DNSTT : $FQDN_A"
+log "✔️ Clé publique (à mettre dans le client) :"
+cat "$SERVER_PUB"
