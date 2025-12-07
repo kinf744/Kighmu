@@ -11,8 +11,8 @@ SERVER_PUB="$SLOWDNS_DIR/server.pub"
 API_PORT=9999
 
 # --- Cloudflare API ---
-CF_API_TOKEN="t4RmpfDtvrrb9FvMzXTxZnJ3ZnP3KdlqWSlCsFMI"
-CF_ZONE_ID="45827ec075b0d9b60039d406765abead"
+CF_API_TOKEN="7mn4LKcZARvdbLlCVFTtaX7LGM2xsnyjHkiTAt37"
+CF_ZONE_ID="7debbb8ea4946898a889c4b5745ab7eb"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
