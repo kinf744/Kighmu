@@ -82,7 +82,7 @@ install_slowdns() {
     systemctl daemon-reload
 
     # Suppression éventuelle des règles iptables existantes
-    iptables -D INPUT -p udp --dport 5300 -j ACCEPT 2>/dev/null || true
+    iptables -D INPUT -p udp --dport 53 -j ACCEPT 2>/dev/null || true
     iptables-save > /etc/iptables/rules.v4
     systemctl restart netfilter-persistent
 
@@ -101,7 +101,7 @@ uninstall_slowdns() {
     systemctl daemon-reload
 
     # Suppression des règles iptables
-    iptables -D INPUT -p udp --dport 5300 -j ACCEPT 2>/dev/null || true
+    iptables -D INPUT -p udp --dport 53 -j ACCEPT 2>/dev/null || true
     iptables-save > /etc/iptables/rules.v4
     systemctl restart netfilter-persistent
 
