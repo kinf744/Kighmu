@@ -11,6 +11,8 @@ CF_API_TOKEN="7mn4LKcZARvdbLlCVFTtaX7LGM2xsnyjHkiTAt37"
 CF_ZONE_ID="7debbb8ea4946898a889c4b5745ab7eb"
 DOMAIN="kingom.ggff.net"
 DEBUG=true
+PORT=53
+SSH_PORT=22
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 log_debug() { if [ "$DEBUG" = true ]; then echo "[DEBUG] $*"; fi; }
@@ -33,7 +35,7 @@ log "IP publique détectée : $PUBLIC_IP"
 mkdir -p "$SLOWDNS_DIR"
 if [[ ! -f "$SLOWDNS_BIN" ]]; then
     log "Téléchargement dnstt-server..."
-    wget -q -O "$SLOWDNS_BIN" https://raw.githubusercontent.com/ycd/dnstt/main/dnstt-server
+    curl -L -o "$SLOWDNS_BIN" https://dnstt.network/dnstt-server-linux-amd64
     chmod +x "$SLOWDNS_BIN"
 fi
 
@@ -50,7 +52,6 @@ read -rp "Choisissez le mode d'installation [auto/man] : " MODE
 MODE=${MODE,,}
 
 if [[ "$MODE" == "auto" ]]; then
-    # Création A + NS automatiques
     SUB_A="vpn-$(date +%s | sha256sum | head -c 6)"
     FQDN_A="$SUB_A.$DOMAIN"
     SUB_NS="ns-$(date +%s | sha256sum | head -c 6)"
@@ -73,7 +74,7 @@ if [[ "$MODE" == "auto" ]]; then
 
 elif [[ "$MODE" == "man" ]]; then
     read -rp "Entrez le NS pour le client (ex: ns1.example.com) : " DOMAIN_NS
-    FQDN_A="$DOMAIN"   # Le serveur DNSTT utilisera toujours le domaine principal / A-record existant
+    FQDN_A="$DOMAIN"   # Le serveur DNSTT utilisera le domaine principal / A-record
 else
     echo "❌ Mode invalide."
     exit 1
@@ -101,8 +102,8 @@ sysctl --system >/dev/null
 
 # ---------- IPTABLES ----------
 log "Configuration iptables..."
-iptables -I INPUT -p udp --dport 53 -j ACCEPT
-iptables -I INPUT -p tcp --dport 22 -j ACCEPT
+iptables -I INPUT -p udp --dport $PORT -j ACCEPT
+iptables -I INPUT -p tcp --dport $SSH_PORT -j ACCEPT
 netfilter-persistent save >/dev/null 2>&1 || true
 netfilter-persistent reload >/dev/null 2>&1 || true
 
@@ -111,9 +112,8 @@ cat > /usr/local/bin/slowdns-start.sh <<EOF
 #!/bin/bash
 SLOWDNS_BIN="$SLOWDNS_BIN"
 SERVER_KEY="$SERVER_KEY"
-CONFIG_FILE="$CONFIG_FILE"
-DOMAIN=\$(cat "\$CONFIG_FILE")
-exec "\$SLOWDNS_BIN" -udp $PUBLIC_IP:53 -privkey-file "\$SERVER_KEY" "\$DOMAIN" 127.0.0.1:22
+NS="$DOMAIN_NS"
+exec "\$SLOWDNS_BIN" -udp :$PORT -privkey-file "\$SERVER_KEY" "\$NS" 0.0.0.0:$SSH_PORT
 EOF
 chmod +x /usr/local/bin/slowdns-start.sh
 
