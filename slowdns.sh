@@ -144,6 +144,5 @@ systemctl restart slowdns.service || true
 
 log "✔️ SlowDNS (SSH-only) installé et démarré."
 log "✔️ NS pour le client : $DOMAIN_NS"
-log "✔️ A-record utilisé par le serveur DNSTT : $FQDN_A"
 log "✔️ Clé publique (à mettre dans le client) :"
 cat "$SERVER_PUB"
