@@ -31,7 +31,7 @@ apt install -y iptables iptables-persistent curl tcpdump jq python3 python3-venv
 python3 -m venv "$SLOWDNS_DIR/venv"
 source "$SLOWDNS_DIR/venv/bin/activate"
 pip install --upgrade pip
-pip install flask cloudflare
+pip install cloudflare
 
 # --- DNSTT ---
 if [ ! -x "$SLOWDNS_BIN" ]; then
@@ -48,11 +48,9 @@ MODE=${MODE,,}
 
 if [[ "$MODE" == "auto" ]]; then
     log "Mode AUTO sélectionné : génération automatique du NS"
-
     DOMAIN="kingom.ggff.net"
     VPS_IP=$(curl -s ipv4.icanhazip.com)
 
-    # Création enregistrement A
     SUB_A="vpn-$(date +%s | sha256sum | head -c 6)"
     FQDN_A="$SUB_A.$DOMAIN"
     log "Création de l'enregistrement A $FQDN_A -> $VPS_IP"
@@ -63,7 +61,6 @@ if [[ "$MODE" == "auto" ]]; then
         --data "{\"type\":\"A\",\"name\":\"$FQDN_A\",\"content\":\"$VPS_IP\",\"ttl\":120,\"proxied\":false}" \
         | jq .
 
-    # Création enregistrement NS
     SUB_NS="ns-$(date +%s | sha256sum | head -c 6)"
     DOMAIN_NS="$SUB_NS.$DOMAIN"
     log "Création de l'enregistrement NS $DOMAIN_NS -> $FQDN_A"
@@ -85,45 +82,92 @@ echo "$DOMAIN_NS" > "$CONFIG_FILE"
 log "NS sélectionné : $DOMAIN_NS"
 
 # --- Clés fixes ---
+mkdir -p "$SLOWDNS_DIR"
 echo "4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa" > "$SERVER_KEY"
 echo "2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c" > "$SERVER_PUB"
 chmod 600 "$SERVER_KEY"
 chmod 644 "$SERVER_PUB"
 
-# --- Redirection NAT 53 -> 5300 ---
-log "Application de la redirection NAT UDP 53 → $PORT..."
+# --- Optimisation sysctl ---
+log "Application des optimisations réseau..."
+cat <<EOF >> /etc/sysctl.conf
 
-# Suppression anciennes règles
-iptables -t nat -D PREROUTING -p udp --dport 53 -j REDIRECT --to-ports "$PORT" 2>/dev/null || true
-iptables -D INPUT -p udp --dport 53 -j ACCEPT 2>/dev/null || true
-iptables -D INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || true
+# Optimisations SlowDNS
+net.core.rmem_max=8388608
+net.core.wmem_max=8388608
+net.core.rmem_default=262144
+net.core.wmem_default=262144
+net.ipv4.udp_rmem_min=16384
+net.ipv4.udp_wmem_min=16384
+net.ipv4.tcp_fin_timeout=10
+net.ipv4.tcp_tw_reuse=1
+net.ipv4.tcp_mtu_probing=1
+net.ipv4.ip_forward=1
+EOF
+sysctl -p
 
-# Ajout nouvelles règles
-iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
-iptables -I INPUT -p udp --dport 53 -j ACCEPT
-iptables -t nat -I PREROUTING -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
+# --- Désactivation systemd-resolved ---
+log "Désactivation systemd-resolved pour libérer le port 53..."
+systemctl stop systemd-resolved
+systemctl disable systemd-resolved
+rm -f /etc/resolv.conf
+echo "nameserver 8.8.8.8" > /etc/resolv.conf
 
-iptables-save > /etc/iptables/rules.v4
-systemctl enable netfilter-persistent
-systemctl restart netfilter-persistent
-
-log "Redirection 53 → $PORT activée avec succès."
-
-# --- Wrapper SlowDNS ---
+# --- Wrapper SlowDNS optimisé ---
 cat <<'EOF' > /usr/local/bin/slowdns-start.sh
 #!/bin/bash
+set -euo pipefail
+
 SLOWDNS_DIR="/etc/slowdns"
 SLOWDNS_BIN="/usr/local/bin/dnstt-server"
 PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
+
+wait_for_interface() {
+    interface=""
+    while [ -z "$interface" ]; do
+        interface=$(ip -o link show up | awk -F': ' '{print $2}' \
+                    | grep -v '^lo$' \
+                    | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' \
+                    | head -n1)
+        [ -z "$interface" ] && sleep 2
+    done
+    echo "$interface"
+}
+
+setup_iptables() {
+    interface="$1"
+    if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
+        iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
+    fi
+    if ! iptables -t nat -C PREROUTING -i "$interface" -p udp --dport 53 -j REDIRECT --to-ports "$PORT" &>/dev/null; then
+        iptables -t nat -I PREROUTING -i "$interface" -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
+    fi
+}
+
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
+
+log "Détection interface réseau..."
+interface=$(wait_for_interface)
+log "Interface détectée : $interface"
+
+log "Réglage MTU à 1400..."
+ip link set dev "$interface" mtu 1400 || log "Impossible de régler MTU"
+
+log "Application des règles iptables..."
+setup_iptables "$interface"
+
 NS=$(cat "$CONFIG_FILE")
-ssh_port=22
+ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
+[ -z "$ssh_port" ] && ssh_port=22
+
+log "Démarrage du serveur SlowDNS..."
 exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
 EOF
 chmod +x /usr/local/bin/slowdns-start.sh
 
-# --- Service systemd ---
+# --- Service systemd optimisé ---
 cat <<EOF > /etc/systemd/system/slowdns.service
 [Unit]
 Description=SlowDNS Server Tunnel (DNSTT)
@@ -136,10 +180,9 @@ User=root
 ExecStart=/usr/local/bin/slowdns-start.sh
 Restart=on-failure
 RestartSec=3
-StandardOutput=append:/var/log/slowdns.log
-StandardError=append:/var/log/slowdns.log
-SyslogIdentifier=slowdns
 LimitNOFILE=1048576
+StandardOutput=file:/var/log/slowdns.log
+StandardError=file:/var/log/slowdns.log
 
 [Install]
 WantedBy=multi-user.target
