@@ -114,20 +114,25 @@ echo "2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c" > "$SERV
 chmod 600 "$SERVER_KEY"
 chmod 644 "$SERVER_PUB"
 
-# --- Optimisations ---
+# --- Kernel tuning pour haute performance ---
 log "Application des optimisations réseau..."
 cat <<EOF >> /etc/sysctl.conf
 
-net.core.rmem_max=8388608
-net.core.wmem_max=8388608
-net.core.rmem_default=262144
-net.core.wmem_default=262144
-net.ipv4.udp_rmem_min=16384
-net.ipv4.udp_wmem_min=16384
+net.core.rmem_max=16777216
+net.core.wmem_max=16777216
+net.core.rmem_default=524288
+net.core.wmem_default=524288
+net.core.netdev_max_backlog=250000
+net.core.somaxconn=4096
+net.ipv4.udp_rmem_min=32768
+net.ipv4.udp_wmem_min=32768
 net.ipv4.tcp_fin_timeout=10
 net.ipv4.tcp_tw_reuse=1
 net.ipv4.tcp_mtu_probing=1
 net.ipv4.ip_forward=1
+net.ipv4.tcp_window_scaling=1
+net.ipv4.tcp_rmem=4096 87380 16777216
+net.ipv4.tcp_wmem=4096 65536 16777216
 EOF
 sysctl -p
 
@@ -138,7 +143,7 @@ systemctl disable systemd-resolved
 rm -f /etc/resolv.conf
 echo "nameserver 8.8.8.8" > /etc/resolv.conf
 
-# --- Wrapper startup ---
+# --- Wrapper startup SlowDNS ---
 cat <<'EOF' > /usr/local/bin/slowdns-start.sh
 #!/bin/bash
 set -euo pipefail
@@ -175,7 +180,7 @@ ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
 [ -z "$ssh_port" ] && ssh_port=22
 
 log "Démarrage du serveur SlowDNS..."
-exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
+exec nice -n -5 "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
 EOF
 
 chmod +x /usr/local/bin/slowdns-start.sh
@@ -194,6 +199,8 @@ ExecStart=/usr/local/bin/slowdns-start.sh
 Restart=on-failure
 RestartSec=3
 LimitNOFILE=1048576
+LimitNPROC=65535
+TasksMax=infinity
 StandardOutput=file:/var/log/slowdns.log
 StandardError=file:/var/log/slowdns.log
 
@@ -208,18 +215,21 @@ Description=Redirect UDP port 53 → 5300 using socat
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/socat UDP4-RECVFROM:53,fork UDP4-SENDTO:127.0.0.1:5300
+ExecStart=/usr/bin/socat -v UDP4-RECVFROM:53,fork,reuseaddr UDP4-SENDTO:127.0.0.1:5300
 Restart=always
 RestartSec=1
+LimitNOFILE=1048576
+LimitNPROC=65535
+TasksMax=infinity
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
+# --- Activation services ---
 systemctl daemon-reload
 systemctl enable socat53
 systemctl restart socat53
-
 systemctl enable slowdns.service
 systemctl restart slowdns.service
 
