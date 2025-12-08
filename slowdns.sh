@@ -16,28 +16,17 @@ CF_ZONE_ID="7debbb8ea4946898a889c4b5745ab7eb"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
-# --- Vérification root ---
 if [ "$EUID" -ne 0 ]; then
     echo "Ce script doit être exécuté en root." >&2
     exit 1
 fi
 
-# --- Création dossier ---
 mkdir -p "$SLOWDNS_DIR"
 
 # --- Dépendances ---
 log "Installation des dépendances..."
 apt update -y
-apt install -y iptables iptables-persistent curl tcpdump jq python3 python3-venv python3-pip
-
-# --- Création venv ---
-if [ ! -d "$SLOWDNS_DIR/venv" ]; then
-    python3 -m venv "$SLOWDNS_DIR/venv"
-fi
-
-source "$SLOWDNS_DIR/venv/bin/activate"
-pip install --upgrade pip
-pip install cloudflare
+apt install -y iptables iptables-persistent curl jq
 
 # --- DNSTT ---
 if [ ! -x "$SLOWDNS_BIN" ]; then
@@ -46,41 +35,41 @@ if [ ! -x "$SLOWDNS_BIN" ]; then
     chmod +x "$SLOWDNS_BIN"
 fi
 
-# --- Choix du mode ---
-read -rp "Choisissez le mode d'installation [auto/man] : " MODE
-MODE=${MODE,,}
-
+# -------------------------------
+# GÉNÉRATION DU NS AUTO
+# -------------------------------
 generate_ns_auto() {
     DOMAIN="kingom.ggff.net"
     VPS_IP=$(curl -s ipv4.icanhazip.com)
 
     SUB_A="vpn-$(date +%s | sha256sum | head -c 6)"
     FQDN_A="$SUB_A.$DOMAIN"
-    log "Création du A : $FQDN_A -> $VPS_IP"
+    log "→ Création du A : $FQDN_A -> $VPS_IP"
 
     curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
         -H "Authorization: Bearer $CF_API_TOKEN" \
         -H "Content-Type: application/json" \
-        --data "{\"type\":\"A\",\"name\":\"$FQDN_A\",\"content\":\"$VPS_IP\",\"ttl\":120,\"proxied\":false}" \
-        | jq .
+        --data "{\"type\":\"A\",\"name\":\"$FQDN_A\",\"content\":\"$VPS_IP\",\"ttl\":1,\"proxied\":false}" > /dev/null
 
     SUB_NS="ns-$(date +%s | sha256sum | head -c 6)"
     NS="$SUB_NS.$DOMAIN"
-    log "Création du NS : $NS -> $FQDN_A"
+
+    log "→ Création du NS : $NS -> $FQDN_A"
 
     curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
         -H "Authorization: Bearer $CF_API_TOKEN" \
         -H "Content-Type: application/json" \
-        --data "{\"type\":\"NS\",\"name\":\"$NS\",\"content\":\"$FQDN_A\",\"ttl\":120}" \
-        | jq .
+        --data "{\"type\":\"NS\",\"name\":\"$NS\",\"content\":\"$FQDN_A\",\"ttl\":1}" > /dev/null
 
-    # Sauvegarde
     echo -e "NS=$NS\nENV_MODE=auto" > "$ENV_FILE"
-    chmod 600 "$ENV_FILE"
-    log "NS auto sauvegardé : $NS"
 }
 
-# --- Gestion du NS persistant ---
+# -------------------------------
+# CHOIX MODE
+# -------------------------------
+read -rp "Choisissez le mode d'installation [auto/man] : " MODE
+MODE=${MODE,,}
+
 if [[ "$MODE" == "auto" ]]; then
     if [[ -f "$ENV_FILE" ]]; then
         source "$ENV_FILE"
@@ -91,55 +80,60 @@ if [[ "$MODE" == "auto" ]]; then
             generate_ns_auto
         fi
     else
-        log "Aucun fichier NS existant → génération NS auto..."
+        log "Aucun NS auto → génération..."
         generate_ns_auto
     fi
 
 elif [[ "$MODE" == "man" ]]; then
-    read -rp "Entrez le NameServer (NS) à utiliser : " NS
+    read -rp "Entrez le NameServer (NS) : " NS
     echo -e "NS=$NS\nENV_MODE=man" > "$ENV_FILE"
-    chmod 600 "$ENV_FILE"
-    log "NS manuel sauvegardé : $NS"
 else
-    echo "Mode invalide." >&2
+    echo "Mode invalide."
     exit 1
 fi
 
-# --- Écriture du NS dans la config ---
 echo "$NS" > "$CONFIG_FILE"
-log "NS utilisé : $NS"
 
-# --- Clés fixes ---
+# -------------------------------
+# CLÉS FIXES (DEMANDÉ PAR TOI)
+# -------------------------------
 echo "4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa" > "$SERVER_KEY"
 echo "2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c" > "$SERVER_PUB"
 chmod 600 "$SERVER_KEY"
 chmod 644 "$SERVER_PUB"
 
-# --- Optimisations ---
-log "Application des optimisations réseau..."
-cat <<EOF >> /etc/sysctl.conf
-
-net.core.rmem_max=8388608
-net.core.wmem_max=8388608
-net.core.rmem_default=262144
-net.core.wmem_default=262144
-net.ipv4.udp_rmem_min=16384
-net.ipv4.udp_wmem_min=16384
+# -------------------------------
+# SYSCTL OPTIMISÉ (HAUTE PERFORMANCE UDP)
+# -------------------------------
+log "Optimisation réseau UDP..."
+cat <<EOF > /etc/sysctl.d/slowdns.conf
+net.core.rmem_max=16777216
+net.core.wmem_max=16777216
+net.core.rmem_default=8388608
+net.core.wmem_default=8388608
+net.ipv4.udp_mem=2097152 4194304 8388608
 net.ipv4.tcp_fin_timeout=10
 net.ipv4.tcp_tw_reuse=1
 net.ipv4.tcp_mtu_probing=1
 net.ipv4.ip_forward=1
 EOF
-sysctl -p
 
-# --- Désactivation systemd-resolved ---
+sysctl --system
+
+# -------------------------------
+# DNS
+# -------------------------------
 log "Désactivation systemd-resolved..."
 systemctl stop systemd-resolved
 systemctl disable systemd-resolved
-rm -f /etc/resolv.conf
-echo "nameserver 8.8.8.8" > /etc/resolv.conf
 
-# --- Wrapper startup ---
+rm -f /etc/resolv.conf
+echo "nameserver 1.1.1.1" > /etc/resolv.conf
+chattr +i /etc/resolv.conf
+
+# -------------------------------
+# WRAPPER STARTUP
+# -------------------------------
 cat <<'EOF' > /usr/local/bin/slowdns-start.sh
 #!/bin/bash
 set -euo pipefail
@@ -150,51 +144,27 @@ PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 
-wait_for_interface() {
-    iface=""
-    while [ -z "$iface" ]; do
-        iface=$(ip -o link show up | awk -F': ' '{print $2}' \
-                    | grep -v '^lo$' \
-                    | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' \
-                    | head -n1)
-        [ -z "$iface" ] && sleep 2
-    done
-    echo "$iface"
-}
-
-setup_iptables() {
-    iface="$1"
-    if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
-        iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
-    fi
-    if ! iptables -t nat -C PREROUTING -i "$iface" -p udp --dport 53 -j REDIRECT --to-ports "$PORT" &>/dev/null; then
-        iptables -t nat -I PREROUTING -i "$iface" -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
-    fi
-}
-
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
-log "Détection interface réseau..."
-iface=$(wait_for_interface)
+iface=$(ip route show default | awk '/default/ {print $5}' | head -n1)
 log "Interface détectée : $iface"
 
 log "Réglage MTU à 1400..."
 ip link set dev "$iface" mtu 1400 || true
 
-log "Application des règles iptables..."
-setup_iptables "$iface"
-
 NS=$(cat "$CONFIG_FILE")
-ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
+ssh_port=$(ss -tlnp | awk '/sshd/ {print $4}' | head -1 | cut -d: -f2)
 [ -z "$ssh_port" ] && ssh_port=22
 
-log "Démarrage du serveur SlowDNS..."
+log "Démarrage DNSTT..."
 exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
 EOF
 
 chmod +x /usr/local/bin/slowdns-start.sh
 
-# --- Service systemd ---
+# -------------------------------
+# SYSTEMD SERVICE
+# -------------------------------
 cat <<EOF > /etc/systemd/system/slowdns.service
 [Unit]
 Description=SlowDNS Server Tunnel (DNSTT)
@@ -205,11 +175,11 @@ Wants=network-online.target
 Type=simple
 User=root
 ExecStart=/usr/local/bin/slowdns-start.sh
-Restart=on-failure
-RestartSec=3
+Restart=always
+RestartSec=2
 LimitNOFILE=1048576
-StandardOutput=file:/var/log/slowdns.log
-StandardError=file:/var/log/slowdns.log
+StandardOutput=append:/var/log/slowdns.log
+StandardError=append:/var/log/slowdns.log
 
 [Install]
 WantedBy=multi-user.target
@@ -219,4 +189,4 @@ systemctl daemon-reload
 systemctl enable slowdns.service
 systemctl restart slowdns.service
 
-log "SlowDNS installé avec succès. NS utilisé : $NS"
+log "✅ SlowDNS installé et optimisé. NS : $NS"
