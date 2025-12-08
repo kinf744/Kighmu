@@ -15,7 +15,7 @@ SSH_PORT=22
 CF_API_TOKEN="7mn4LKcZARvdbLlCVFTtaX7LGM2xsnyjHkiTAt37"
 CF_ZONE_ID="7debbb8ea4946898a889c4b5745ab7eb"
 
-# Couleurs (vos préférences)
+# Couleurs
 RED='\u001B[0;31m'; GREEN='\u001B[0;32m'; YELLOW='\u001B[0;33m'; CYAN='\u001B[0;36m'; NC='\u001B[0m'
 log() { echo -e "[$(date '+%Y-%m-%d %H:%M:%S')] ${GREEN}$*${NC}"; }
 error() { echo -e "[$(date '+%Y-%m-%d %H:%M:%S')] ${RED}ERREUR: $*${NC}" >&2; exit 1; }
@@ -25,20 +25,20 @@ if [ "$EUID" -ne 0 ]; then error "Exécuter en root"; fi
 mkdir -p "$SLOWDNS_DIR"
 
 main() {
-    log "Installation SlowDNS (DNSTT) + nftables haute performance (PORT $PORT)"
+    log "✅ Installation SlowDNS + nftables (PORT $PORT)"
 
-    # 1. Dépendances (nftables remplace socat)
+    # Dépendances
     apt update -y
-    apt install -y nftables tcpdump curl jq python3 python3-pip netfilter-persistent
+    apt install -y nftables tcpdump curl jq python3 python3-pip
 
-    # 2. DNSTT officiel
+    # DNSTT
     [ -x "$SLOWDNS_BIN" ] || {
-        log "Téléchargement dnstt-server-linux-amd64..."
+        log "📥 dnstt-server-linux-amd64..."
         curl -L -o "$SLOWDNS_BIN" https://dnstt.network/dnstt-server-linux-amd64
         chmod +x "$SLOWDNS_BIN"
     }
 
-    # 3. Cloudflare NS (votre logique intacte)
+    # Cloudflare NS (votre logique)
     read -rp "${CYAN}Mode [auto/man]: ${NC}" MODE
     MODE=${MODE,,}
     
@@ -47,7 +47,7 @@ main() {
             generate_ns_auto
         else
             source "$ENV_FILE"
-            log "NS auto existant: $NS"
+            log "NS auto: $NS"
         fi
     elif [[ "$MODE" == "man" ]]; then
         read -rp "${CYAN}NS man: ${NC}" NS
@@ -81,15 +81,15 @@ ENV_MODE=man" > "$ENV_FILE"
         echo -e "NS=$NS
 ENV_MODE=auto" > "$ENV_FILE"
         chmod 600 "$ENV_FILE"
-        log "NS auto créé: $NS"
+        log "NS auto: $NS"
     }
 
-    # 4. Clés fixes (inchangées)
+    # Clés fixes
     echo "4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa" > "$SERVER_KEY"
     echo "2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c" > "$SERVER_PUB"
     chmod 600 "$SERVER_KEY" && chmod 644 "$SERVER_PUB"
 
-    # 5. Kernel tuning (votre config conservée)
+    # Kernel tuning
     cat <<EOF > /etc/sysctl.d/99-slowdns.conf
 net.core.rmem_max=16777216
 net.core.wmem_max=16777216
@@ -109,24 +109,27 @@ net.ipv4.tcp_wmem=4096 65536 16777216
 EOF
     sysctl -p /etc/sysctl.d/99-slowdns.conf
 
-    # 6. systemd-resolved off
+    # systemd-resolved off
     systemctl disable --now systemd-resolved || true
     rm -f /etc/resolv.conf
     echo "nameserver 8.8.8.8" > /etc/resolv.conf
 
-    # 7. NFTABLES (remplace socat53.service - UDP:53 → 127.0.0.1:5300)
+    # ✅ NFTABLES CORRIGÉ (ip6 family + dnat ip)
     cat > /etc/nftables.conf << 'NFT'
 #!/usr/sbin/nft -f
 flush ruleset
 
-table inet slowdns {
+table ip slowdns_nat {
     chain prerouting {
         type nat hook prerouting priority dstnat; policy accept;
-        udp dport 53 dnat to 127.0.0.1:5300
+        udp dport 53 dnat ip to 127.0.0.1:5300
     }
     chain postrouting {
         type nat hook postrouting priority srcnat; policy accept;
     }
+}
+
+table ip slowdns_filter {
     chain forward {
         type filter hook forward priority filter; policy drop;
         ct state {established,related} accept
@@ -142,12 +145,11 @@ table inet slowdns {
 }
 NFT
 
-    nft -f /etc/nftables.conf
+    nft -f /etc/nftables.conf && log "✅ nftables OK: UDP/53 → 127.0.0.1:$PORT"
     systemctl enable --now nftables
-    log "✅ nftables: UDP/53 → 127.0.0.1:$PORT (x1.5 perf vs socat)"
 
-    # 8. Wrapper SlowDNS (MTU + détection interface conservés)
-    cat <<EOF > /usr/local/bin/slowdns-start.sh
+    # Wrapper SlowDNS
+    cat <<'EOF' > /usr/local/bin/slowdns-start.sh
 #!/bin/bash
 set -euo pipefail
 SLOWDNS_DIR="/etc/slowdns"; SLOWDNS_BIN="/usr/local/bin/dnstt-server"
@@ -167,7 +169,7 @@ exec nice -n -5 "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0
 EOF
     chmod +x /usr/local/bin/slowdns-start.sh
 
-    # 9. Service SlowDNS (votre config)
+    # Service SlowDNS
     cat > /etc/systemd/system/slowdns.service <<EOF
 [Unit]
 Description=SlowDNS (DNSTT) + nftables
@@ -190,15 +192,14 @@ StandardError=file:/var/log/slowdns.log
 WantedBy=multi-user.target
 EOF
 
-    # 10. Activation
     systemctl daemon-reload
     systemctl enable nftables slowdns.service
     systemctl restart nftables slowdns.service
 
-    log "✅ Installation terminée! NS: $NS"
-    log "✅ nftables: nft list ruleset"
-    log "✅ Logs: tail -f /var/log/slowdns.log"
-    log "✅ Test: tcpdump -i any udp port 53 -c 10"
+    log "🚀 TERMINÉ! NS: $NS"
+    log "🔍 nft list ruleset"
+    log "📊 tail -f /var/log/slowdns.log"
+    log "🧪 tcpdump -i any udp port 53 -c 10"
 }
 
 main "$@"
