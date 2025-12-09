@@ -184,11 +184,7 @@ ssh_port=$(ss -tlnp | awk '/sshd/ {print $4; exit}' | sed -n 's/.*:([0-9]*)$/\u0
 [ -z "$ssh_port" ] && ssh_port=22
 
 log "Démarrage du serveur SlowDNS (priorité CPU augmentée, MTU dnstt fixée)..."
-exec nice -n -5 "$SLOWDNS_BIN" \
-  -udp :$PORT \
-  -privkey-file "$SERVER_KEY" \
-  -mtu 1300 \
-  "$NS" 0.0.0.0:$ssh_port
+exec nice -n 0 "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
 EOF
 
 chmod +x /usr/local/bin/slowdns-start.sh
