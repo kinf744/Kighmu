@@ -14,7 +14,7 @@ ENV_FILE="$SLOWDNS_DIR/slowdns.env"
 CF_API_TOKEN="7mn4LKcZARvdbLlCVFTtaX7LGM2xsnyjHkiTAt37"
 CF_ZONE_ID="7debbb8ea4946898a889c4b5745ab7eb"
 
-# DNS publics à utiliser pour le serveur lui-même
+# DNS publics pour le serveur lui-même
 LOCAL_DNS=("8.8.8.8" "1.1.1.1")
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
@@ -203,28 +203,28 @@ TasksMax=infinity
 WantedBy=multi-user.target
 EOF
 
-# --- Configuration nftables avec exceptions DNS ---
+# --- Configuration nftables SlowDNS ---
 log "Création règles nftables SlowDNS..."
 mkdir -p /etc/nftables.d
 NFT_FILE="/etc/nftables.d/slowdns.nft"
 
 cat > "$NFT_FILE" <<EOF
-flush table ip slowdns
-
 table ip slowdns {
     chain prerouting {
-        type nat hook prerouting priority -100;
+        type nat hook prerouting priority -100; policy accept;
         udp dport 53 redirect to 5300
     }
 
     chain output {
-        type nat hook output priority -100;
-$(for dns in "${LOCAL_DNS[@]}"; do echo "        ip daddr $dns udp dport 53 accept"; done)
+        type nat hook output priority -100; policy accept;
+        ip daddr 8.8.8.8 udp dport 53 accept
+        ip daddr 1.1.1.1 udp dport 53 accept
         udp dport 53 redirect to 5300
     }
 }
 EOF
 
+# Inclure les fichiers nftables si ce n'est pas déjà fait
 if ! grep -q "/etc/nftables.d/*.nft" /etc/nftables.conf 2>/dev/null; then
     echo "include \"/etc/nftables.d/*.nft\"" >> /etc/nftables.conf
 fi
