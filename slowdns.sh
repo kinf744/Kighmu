@@ -227,9 +227,9 @@ table ip slowdns {
 }
 EOF
 
-# Inclure les fichiers nftables si ce n'est pas déjà fait
-if ! grep -q "/etc/nftables.d/.nft" /etc/nftables.conf 2>/dev/null; then
-    echo 'include "/etc/nftables.d/.nft"' >> /etc/nftables.conf
+# Inclure slowdns.nft si pas déjà fait
+if ! grep -q "slowdns.nft" /etc/nftables.conf 2>/dev/null; then
+    echo 'include "/etc/nftables.d/slowdns.nft"' >> /etc/nftables.conf
 fi
 nft -f /etc/nftables.conf
 
