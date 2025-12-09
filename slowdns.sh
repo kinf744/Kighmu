@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
---- Configuration principale ---
+#--- Configuration principale ---
 
 SLOWDNS_DIR="/etc/slowdns"
 SLOWDNS_BIN="/usr/local/bin/dnstt-server"
@@ -11,7 +11,7 @@ SERVER_KEY="$SLOWDNS_DIR/server.key"
 SERVER_PUB="$SLOWDNS_DIR/server.pub"
 ENV_FILE="$SLOWDNS_DIR/slowdns.env"
 
---- Cloudflare API ---
+#--- Cloudflare API ---
 
 CF_API_TOKEN="7mn4LKcZARvdbLlCVFTtaX7LGM2xsnyjHkiTAt37"
 CF_ZONE_ID="7debbb8ea4946898a889c4b5745ab7eb"
@@ -22,18 +22,18 @@ LOCAL_DNS=("8.8.8.8" "1.1.1.1")
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
---- Vérification root ---
+#--- Vérification root ---
 
 if [ "$EUID" -ne 0 ]; then
 echo "Ce script doit être exécuté en root." >&2
 exit 1
 fi
 
---- Création dossier ---
+#--- Création dossier ---
 
 mkdir -p "$SLOWDNS_DIR"
 
---- Dépendances ---
+#--- Dépendances ---
 
 log "Installation des dépendances..."
 apt update -y || true
@@ -48,7 +48,7 @@ source "$SLOWDNS_DIR/venv/bin/activate"
 pip install --upgrade pip >/dev/null
 pip install cloudflare >/dev/null
 
---- DNSTT (binaire) ---
+#--- DNSTT (binaire) ---
 
 if [ ! -x "$SLOWDNS_BIN" ]; then
 log "Téléchargement du binaire DNSTT..."
@@ -56,7 +56,7 @@ curl -L -o "$SLOWDNS_BIN" https://dnstt.network/dnstt-server-linux-amd64
 chmod +x "$SLOWDNS_BIN"
 fi
 
---- Choix du mode ---
+#--- Choix du mode ---
 
 read -rp "Choisissez le mode d'installation [auto/man] : " MODE
 MODE=${MODE,,}
@@ -90,7 +90,7 @@ chmod 600 "$ENV_FILE"
 log "NS auto sauvegardé : $NS"
 }
 
---- Gestion du NS persistant ---
+#--- Gestion du NS persistant ---
 
 if [[ "$MODE" == "auto" ]]; then
 if [[ -f "$ENV_FILE" ]]; then
@@ -116,13 +116,13 @@ echo "Mode invalide." >&2
 exit 1
 fi
 
---- Écriture du NS dans la config ---
+#--- Écriture du NS dans la config ---
 
 echo "$NS" > "$CONFIG_FILE"
 chmod 644 "$CONFIG_FILE"
 log "NS utilisé : $NS"
 
---- Clés fixes ---
+#--- Clés fixes ---
 
 cat > "$SERVER_KEY" <<'KEY'
 4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa
@@ -133,7 +133,7 @@ PUB
 chmod 600 "$SERVER_KEY"
 chmod 644 "$SERVER_PUB"
 
---- Kernel tuning ---
+#--- Kernel tuning ---
 
 log "Application des optimisations réseau..."
 cat > /etc/sysctl.d/99-slowdns.conf <<'EOF'
@@ -149,7 +149,7 @@ net.ipv4.ip_forward=1
 EOF
 sysctl --system
 
---- Wrapper startup SlowDNS ---
+#--- Wrapper startup SlowDNS ---
 
 cat > /usr/local/bin/slowdns-start.sh <<'EOF'
 #!/bin/bash
@@ -196,7 +196,7 @@ exec nice -n 0 "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.
 EOF
 chmod +x /usr/local/bin/slowdns-start.sh
 
---- Service systemd SlowDNS ---
+#--- Service systemd SlowDNS ---
 
 cat > /etc/systemd/system/slowdns.service <<'EOF'
 [Unit]
@@ -218,7 +218,7 @@ TasksMax=infinity
 WantedBy=multi-user.target
 EOF
 
---- Configuration nftables SlowDNS ---
+#--- Configuration nftables SlowDNS ---
 
 log "Création règles nftables SlowDNS..."
 mkdir -p /etc/nftables.d
@@ -248,7 +248,7 @@ echo "include "/etc/nftables.d/.nft"" >> /etc/nftables.conf
 fi
 nft -f /etc/nftables.conf
 
---- Service systemd nftables ---
+#--- Service systemd nftables ---
 
 cat > /etc/systemd/system/nftables-redirect.service <<'EOF'
 [Unit]
@@ -265,7 +265,7 @@ RemainAfterExit=yes
 WantedBy=multi-user.target
 EOF
 
---- Activation services ---
+#--- Activation services ---
 
 systemctl daemon-reload
 systemctl enable nftables-redirect.service
@@ -273,7 +273,7 @@ systemctl start nftables-redirect.service
 systemctl enable slowdns.service
 systemctl restart slowdns.service
 
---- Résumé ---
+#--- Résumé ---
 
 log "Installation terminée. SlowDNS démarré avec nftables REDIRECT actif et exceptions DNS pour le serveur."
 
