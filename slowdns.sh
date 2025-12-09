@@ -28,8 +28,7 @@ mkdir -p "$SLOWDNS_DIR"
 # --- Dépendances ---
 log "Installation des dépendances..."
 apt update -y
-# installer iptables, net-tools, curl, jq, python et pip (sans interface interactive)
-DEBIAN_FRONTEND=noninteractive apt install -y iptables iptables-persistent curl tcpdump jq python3 python3-venv python3-pip
+DEBIAN_FRONTEND=noninteractive apt install -y curl jq python3 python3-venv python3-pip nftables tcpdump
 
 # --- Création venv et paquet Cloudflare python ---
 if [ ! -d "$SLOWDNS_DIR/venv" ]; then
@@ -42,7 +41,6 @@ pip install cloudflare >/dev/null
 # --- DNSTT (binaire) ---
 if [ ! -x "$SLOWDNS_BIN" ]; then
   log "Téléchargement du binaire DNSTT..."
-  # On conserve le lien officiel que tu utilisais ; change si tu veux une autre release
   curl -L -o "$SLOWDNS_BIN" https://dnstt.network/dnstt-server-linux-amd64
   chmod +x "$SLOWDNS_BIN"
 fi
@@ -110,7 +108,7 @@ echo "$NS" > "$CONFIG_FILE"
 chmod 644 "$CONFIG_FILE"
 log "NS utilisé : $NS"
 
-# --- Clés fixes (si tu veux utiliser les tiennes, remplace ces valeurs) ---
+# --- Clés fixes ---
 cat > "$SERVER_KEY" <<'KEY'
 4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa
 KEY
@@ -120,10 +118,9 @@ PUB
 chmod 600 "$SERVER_KEY"
 chmod 644 "$SERVER_PUB"
 
-# --- Kernel tuning propre (fichier /etc/sysctl.d pour éviter les duplications) ---
+# --- Kernel tuning ---
 log "Application des optimisations réseau (fichier /etc/sysctl.d/99-slowdns.conf)..."
 cat > /etc/sysctl.d/99-slowdns.conf <<'EOF'
-# SlowDNS tuned settings
 net.core.rmem_max=26214400
 net.core.wmem_max=26214400
 net.core.rmem_default=524288
@@ -134,15 +131,9 @@ net.ipv4.udp_rmem_min=8192
 net.ipv4.udp_wmem_min=8192
 net.ipv4.ip_forward=1
 EOF
-
-# Appliquer sysctl de façon propre
 sysctl --system
 
-# --- Laisser systemd-resolved (NE PAS le désactiver automatiquement)
-# Si tu veux plutôt override et forcer resolv.conf, on peut le faire, mais par défaut
-# on laisse systemd-resolved activé pour garder la résolution locale stable.
-
-# --- Wrapper startup SlowDNS (idempotent, MTU réglable) ---
+# --- Wrapper startup SlowDNS ---
 cat > /usr/local/bin/slowdns-start.sh <<'EOF'
 #!/bin/bash
 set -euo pipefail
@@ -157,7 +148,6 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
 wait_for_interface() {
   local iface=""
-  # attend la première interface non-lo et non-virtuelle
   while [ -z "$iface" ]; do
     iface=$(ip -o link show up | awk -F': ' '{print $2}' \
       | grep -v '^lo$' \
@@ -172,7 +162,6 @@ log "Détection interface réseau..."
 iface=$(wait_for_interface)
 log "Interface détectée : $iface"
 
-# Essayer MTU 1500 puis 1480 si échec
 log "Réglage MTU préféré à 1500 (fallback 1480)..."
 if ip link set dev "$iface" mtu 1500 2>/dev/null; then
   log "MTU réglée à 1500"
@@ -188,7 +177,6 @@ ssh_port=$(ss -tlnp | awk '/sshd/ {print $4; exit}' | sed -n 's/.*:\([0-9]*\)$/\
 log "Démarrage du serveur SlowDNS (nice 0)..."
 exec nice -n 0 "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
 EOF
-
 chmod +x /usr/local/bin/slowdns-start.sh
 
 # --- Service systemd SlowDNS ---
@@ -212,30 +200,43 @@ TasksMax=infinity
 WantedBy=multi-user.target
 EOF
 
-# --- Service systemd pour appliquer les règles iptables REDIRECT (remplace socat) ---
-cat > /etc/systemd/system/iptables-redirect.service <<'EOF'
+# --- Configuration nftables ---
+log "Création règles nftables SlowDNS..."
+mkdir -p /etc/nftables.d
+NFT_FILE="/etc/nftables.d/slowdns.nft"
+
+cat > "$NFT_FILE" <<'EOF'
+flush table ip slowdns
+
+table ip slowdns {
+    chain prerouting {
+        type nat hook prerouting priority -100;
+        udp dport 53 redirect to 5300
+    }
+
+    chain output {
+        type nat hook output priority -100;
+        udp dport 53 redirect to 5300
+    }
+}
+EOF
+
+if ! grep -q "/etc/nftables.d/*.nft" /etc/nftables.conf 2>/dev/null; then
+    echo "include \"/etc/nftables.d/*.nft\"" >> /etc/nftables.conf
+fi
+
+nft -f /etc/nftables.conf
+
+# --- Service systemd nftables ---
+cat > /etc/systemd/system/nftables-redirect.service <<'EOF'
 [Unit]
-Description=Redirect UDP port 53 -> 5300 for SlowDNS
+Description=SlowDNS nftables redirect (UDP 53 → 5300)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=oneshot
-RemainAfterExit=yes
-ExecStart=/bin/bash -c '\
-  # supprimer d'anciennes règles similaires si elles existent (ignorons les erreurs) ; puis ajouter \
-  iptables -t nat -D PREROUTING -p udp --dport 53 -j REDIRECT --to-port 5300 2>/dev/null || true ; \
-  iptables -t nat -D OUTPUT -p udp --dport 53 -j REDIRECT --to-port 5300 2>/dev/null || true ; \
-  iptables -t nat -C PREROUTING -p udp --dport 53 -j REDIRECT --to-port 5300 2>/dev/null || iptables -t nat -A PREROUTING -p udp --dport 53 -j REDIRECT --to-port 5300 ; \
-  iptables -t nat -C OUTPUT -p udp --dport 53 -j REDIRECT --to-port 5300 2>/dev/null || iptables -t nat -A OUTPUT -p udp --dport 53 -j REDIRECT --to-port 5300 ; \
-  # sauvegarder les règles persistantes (iptables-persistent)
-  iptables-save > /etc/iptables/rules.v4 \
-'
-ExecStop=/bin/bash -c '\
-  iptables -t nat -D PREROUTING -p udp --dport 53 -j REDIRECT --to-port 5300 2>/dev/null || true ; \
-  iptables -t nat -D OUTPUT -p udp --dport 53 -j REDIRECT --to-port 5300 2>/dev/null || true ; \
-  iptables-save > /etc/iptables/rules.v4 \
-'
+ExecStart=/usr/sbin/nft -f /etc/nftables.conf
 RemainAfterExit=yes
 
 [Install]
@@ -244,24 +245,17 @@ EOF
 
 # --- Activation services ---
 systemctl daemon-reload
-
-# Enable/Start iptables redirect (idempotent)
-systemctl enable iptables-redirect.service
-systemctl start iptables-redirect.service
-
-# Enable/Start slowdns
+systemctl enable nftables-redirect.service
+systemctl start nftables-redirect.service
 systemctl enable slowdns.service
 systemctl restart slowdns.service
 
-log "Installation terminée. SlowDNS démarré sans socat (iptables REDIRECT actif). NS utilisé : $NS"
+# --- Résumé ---
+log "Installation terminée. SlowDNS démarré avec nftables REDIRECT actif."
 
-# Afficher l'état sommaire
 echo
 echo "Résumé :"
 echo "- slowdns.service : $(systemctl is-active slowdns.service 2>/dev/null || echo inactive)"
-echo "- iptables-redirect.service : $(systemctl is-active iptables-redirect.service 2>/dev/null || echo inactive)"
-echo "- Règles iptables (nat PREROUTING/OUTPUT pour UDP 53 -> 5300) :"
-iptables -t nat -L PREROUTING -n --line-numbers | sed -n '1,200p'
-iptables -t nat -L OUTPUT -n --line-numbers | sed -n '1,200p'
-echo
-log "Si tu veux restaurer l'ancien comportement SOCAT, dis-le mais ce n'est pas recommandé pour la perf."
+echo "- nftables-redirect.service : $(systemctl is-active nftables-redirect.service 2>/dev/null || echo inactive)"
+echo "- Règles nftables NAT SlowDNS :"
+nft list table ip slowdns
