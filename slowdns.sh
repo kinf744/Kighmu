@@ -227,10 +227,15 @@ table ip slowdns {
 }
 EOF
 
-# Inclure slowdns.nft si pas déjà fait
-if ! grep -q "slowdns.nft" /etc/nftables.conf 2>/dev/null; then
+# --- Supprimer toute inclusion invalide existante ---
+sed -i '/\.nft/d' /etc/nftables.conf
+
+# --- Inclure slowdns.nft si pas déjà fait ---
+if ! grep -q "slowdns.nft" /etc/nftables.conf; then
     echo 'include "/etc/nftables.d/slowdns.nft"' >> /etc/nftables.conf
 fi
+
+# --- Appliquer règles nftables ---
 nft -f /etc/nftables.conf
 
 # --- Service systemd nftables ---
