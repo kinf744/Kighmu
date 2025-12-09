@@ -14,6 +14,9 @@ ENV_FILE="$SLOWDNS_DIR/slowdns.env"
 CF_API_TOKEN="7mn4LKcZARvdbLlCVFTtaX7LGM2xsnyjHkiTAt37"
 CF_ZONE_ID="7debbb8ea4946898a889c4b5745ab7eb"
 
+# DNS publics à utiliser pour le serveur lui-même
+LOCAL_DNS=("8.8.8.8" "1.1.1.1")
+
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
 # --- Vérification root ---
@@ -27,7 +30,7 @@ mkdir -p "$SLOWDNS_DIR"
 
 # --- Dépendances ---
 log "Installation des dépendances..."
-apt update -y
+apt update -y || true
 DEBIAN_FRONTEND=noninteractive apt install -y curl jq python3 python3-venv python3-pip nftables tcpdump
 
 # --- Création venv et paquet Cloudflare python ---
@@ -119,7 +122,7 @@ chmod 600 "$SERVER_KEY"
 chmod 644 "$SERVER_PUB"
 
 # --- Kernel tuning ---
-log "Application des optimisations réseau (fichier /etc/sysctl.d/99-slowdns.conf)..."
+log "Application des optimisations réseau..."
 cat > /etc/sysctl.d/99-slowdns.conf <<'EOF'
 net.core.rmem_max=26214400
 net.core.wmem_max=26214400
@@ -174,7 +177,7 @@ NS=$(cat "$CONFIG_FILE" 2>/dev/null || echo "")
 ssh_port=$(ss -tlnp | awk '/sshd/ {print $4; exit}' | sed -n 's/.*:\([0-9]*\)$/\1/p')
 [ -z "$ssh_port" ] && ssh_port=22
 
-log "Démarrage du serveur SlowDNS (nice 0)..."
+log "Démarrage du serveur SlowDNS..."
 exec nice -n 0 "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
 EOF
 chmod +x /usr/local/bin/slowdns-start.sh
@@ -200,12 +203,12 @@ TasksMax=infinity
 WantedBy=multi-user.target
 EOF
 
-# --- Configuration nftables ---
+# --- Configuration nftables avec exceptions DNS ---
 log "Création règles nftables SlowDNS..."
 mkdir -p /etc/nftables.d
 NFT_FILE="/etc/nftables.d/slowdns.nft"
 
-cat > "$NFT_FILE" <<'EOF'
+cat > "$NFT_FILE" <<EOF
 flush table ip slowdns
 
 table ip slowdns {
@@ -216,6 +219,7 @@ table ip slowdns {
 
     chain output {
         type nat hook output priority -100;
+$(for dns in "${LOCAL_DNS[@]}"; do echo "        ip daddr $dns udp dport 53 accept"; done)
         udp dport 53 redirect to 5300
     }
 }
@@ -224,7 +228,6 @@ EOF
 if ! grep -q "/etc/nftables.d/*.nft" /etc/nftables.conf 2>/dev/null; then
     echo "include \"/etc/nftables.d/*.nft\"" >> /etc/nftables.conf
 fi
-
 nft -f /etc/nftables.conf
 
 # --- Service systemd nftables ---
@@ -251,7 +254,7 @@ systemctl enable slowdns.service
 systemctl restart slowdns.service
 
 # --- Résumé ---
-log "Installation terminée. SlowDNS démarré avec nftables REDIRECT actif."
+log "Installation terminée. SlowDNS démarré avec nftables REDIRECT actif et exceptions DNS pour le serveur."
 
 echo
 echo "Résumé :"
