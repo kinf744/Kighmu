@@ -10,7 +10,7 @@ SERVER_KEY="$SLOWDNS_DIR/server.key"
 SERVER_PUB="$SLOWDNS_DIR/server.pub"
 ENV_FILE="$SLOWDNS_DIR/slowdns.env"
 
-# --- Cloudflare API (tu peux remplacer par tes valeurs) ---
+# --- Cloudflare API (actuel) ---
 CF_API_TOKEN="7mn4LKcZARvdbLlCVFTtaX7LGM2xsnyjHkiTAt37"
 CF_ZONE_ID="7debbb8ea4946898a889c4b5745ab7eb"
 
@@ -24,6 +24,17 @@ fi
 
 # --- Création dossier ---
 mkdir -p "$SLOWDNS_DIR"
+
+# --- Désactivation propre de systemd-resolved pour éviter blocages DNS ---
+systemctl disable --now systemd-resolved.service || true
+rm -f /etc/resolv.conf
+cat <<EOF > /etc/resolv.conf
+nameserver 1.1.1.1
+nameserver 8.8.8.8
+options timeout:1
+options attempts:1
+EOF
+chattr +i /etc/resolv.conf
 
 # --- Dépendances ---
 log "Installation des dépendances..."
@@ -39,7 +50,6 @@ systemctl start nftables
 if [ ! -d "$SLOWDNS_DIR/venv" ]; then
   python3 -m venv "$SLOWDNS_DIR/venv"
 fi
-# shellcheck disable=SC1090
 source "$SLOWDNS_DIR/venv/bin/activate"
 pip install --upgrade pip >/dev/null
 pip install cloudflare >/dev/null || log "pip install cloudflare failed (non fatal here)"
@@ -58,12 +68,10 @@ MODE=${MODE,,}
 generate_ns_auto() {
   DOMAIN="kingom.ggff.net"
   VPS_IP=$(curl -s ipv4.icanhazip.com || echo "127.0.0.1")
-
   SUB_A="vpn-$(date +%s | sha256sum | head -c 6)"
   FQDN_A="$SUB_A.$DOMAIN"
   log "Création du A : $FQDN_A -> $VPS_IP"
 
-  # Note: échoue proprement si Cloudflare refuse
   curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
     -H "Authorization: Bearer $CF_API_TOKEN" \
     -H "Content-Type: application/json" \
@@ -88,7 +96,6 @@ generate_ns_auto() {
 # --- Gestion du NS persistant ---
 if [[ "$MODE" == "auto" ]]; then
   if [[ -f "$ENV_FILE" ]]; then
-    # shellcheck disable=SC1090
     source "$ENV_FILE"
     if [[ "${ENV_MODE:-}" == "auto" && -n "${NS:-}" ]]; then
       log "NS auto existant détecté : $NS"
@@ -100,7 +107,6 @@ if [[ "$MODE" == "auto" ]]; then
     log "Aucun fichier NS existant → génération NS auto..."
     generate_ns_auto
   fi
-
 elif [[ "$MODE" == "man" ]]; then
   read -rp "Entrez le NameServer (NS) à utiliser : " NS
   echo -e "NS=$NS\nENV_MODE=man" > "$ENV_FILE"
@@ -116,7 +122,7 @@ echo "$NS" > "$CONFIG_FILE"
 chmod 644 "$CONFIG_FILE"
 log "NS utilisé : $NS"
 
-# --- Clés fixes (si tu veux les remplacer, mets tes propres clés) ---
+# --- Clés fixes ---
 cat > "$SERVER_KEY" <<'KEY'
 4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa
 KEY
@@ -126,10 +132,9 @@ PUB
 chmod 600 "$SERVER_KEY"
 chmod 644 "$SERVER_PUB"
 
-# --- Kernel tuning plus agressif (ajout des paramètres UDP importants) ---
-log "Application des optimisations réseau (fichier /etc/sysctl.d/99-slowdns.conf)..."
+# --- Kernel tuning optimisé pour tunnel UDP ---
+log "Application des optimisations réseau..."
 cat > /etc/sysctl.d/99-slowdns.conf <<'EOF'
-# SlowDNS tuned settings
 net.core.rmem_max=67108864
 net.core.wmem_max=67108864
 net.core.rmem_default=8192000
@@ -138,38 +143,28 @@ net.core.netdev_max_backlog=60000
 net.core.somaxconn=4096
 net.ipv4.udp_rmem_min=32768
 net.ipv4.udp_wmem_min=32768
-net.ipv4.ip_forward=1
-
-# UDP memory tuning
 net.ipv4.udp_mem=4096 87380 268435456
 net.core.optmem_max=65536
-
-# Avoid packet drops for tunneled traffic
+net.ipv4.ip_forward=1
 net.ipv4.conf.all.rp_filter=0
 net.ipv4.conf.default.rp_filter=0
-
-# ARP/neighbor thresholds (avoid GC pauses)
 net.ipv4.neigh.default.gc_thresh1=4096
 net.ipv4.neigh.default.gc_thresh2=8192
 net.ipv4.neigh.default.gc_thresh3=16384
 EOF
+sysctl --system >/dev/null || log "sysctl apply returned non-zero"
 
-sysctl --system >/dev/null || log "sysctl apply returned non-zero (check) "
-
-# --- Wrapper startup SlowDNS (MTU dynamique + dnstt optimisé) ---
+# --- Wrapper SlowDNS startup (MTU dynamique + optimisation CPU) ---
 cat > /usr/local/bin/slowdns-start.sh <<'EOF'
 #!/bin/bash
 set -euo pipefail
-
 SLOWDNS_DIR="/etc/slowdns"
 SLOWDNS_BIN="/usr/local/bin/dnstt-server"
 PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
-
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
-# Detect first non-loopback, non-virtual interface that is up
 wait_for_interface() {
   local iface=""
   while [ -z "$iface" ]; do
@@ -182,42 +177,28 @@ wait_for_interface() {
   echo "$iface"
 }
 
-log "Détection interface réseau..."
 iface=$(wait_for_interface)
 log "Interface détectée : $iface"
 
-# MTU test: try large MTU then fallback to smaller one
-log "Test MTU path MTU discovery..."
-if ping -M do -s 1472 -c 1 1.1.1.1 >/dev/null 2>&1; then
-  ip link set dev "$iface" mtu 1500 || true
-  log "MTU réglée à 1500"
-elif ping -M do -s 1412 -c 1 1.1.1.1 >/dev/null 2>&1; then
-  ip link set dev "$iface" mtu 1450 || true
-  log "MTU réglée à 1450"
-else
-  ip link set dev "$iface" mtu 1300 || true
-  log "MTU fallback 1300 appliquée"
-fi
+# MTU dynamique
+for mtu in 1500 1450 1400 1300; do
+  if ping -M do -s $((mtu-28)) -c 1 1.1.1.1 >/dev/null 2>&1; then
+    ip link set dev "$iface" mtu $mtu || true
+    log "MTU réglée à $mtu"
+    break
+  fi
+done
 
 NS=$(cat "$CONFIG_FILE" 2>/dev/null || echo "")
-# Détection port SSH: d'abord sshd_config, sinon ss
-ssh_port=""
-if [ -f /etc/ssh/sshd_config ]; then
-  ssh_port=$(awk '/^Port /{print $2; exit}' /etc/ssh/sshd_config || true)
-fi
-if [ -z "$ssh_port" ]; then
-  ssh_port=$(ss -tlnp 2>/dev/null | awk -F: '/sshd/ {print $NF; exit}' || true)
-fi
-[ -z "$ssh_port" ] && ssh_port=22
+ssh_port=$(awk '/^Port /{print $2; exit}' /etc/ssh/sshd_config || echo 22)
 
-log "Démarrage du serveur SlowDNS (priorité CPU augmentée, MTU dnstt fixée)..."
-# -mtu réduit la taille utile (évite fragmentation côté UDP)
+log "Démarrage SlowDNS..."
 exec nice -n 0 "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
 EOF
 
 chmod +x /usr/local/bin/slowdns-start.sh
 
-# --- Service systemd SlowDNS ---
+# --- Service systemd ---
 cat > /etc/systemd/system/slowdns.service <<'EOF'
 [Unit]
 Description=SlowDNS Server Tunnel (DNSTT)
@@ -238,34 +219,24 @@ TasksMax=infinity
 WantedBy=multi-user.target
 EOF
 
-# --- nftables : redirection DNS -> SlowDNS (optimisée) ---
+# --- nftables optimisée pour SlowDNS ---
 mkdir -p /etc/nftables.d
-
 cat > /etc/nftables.d/slowdns.nft <<'EOF'
 table ip nat-slowdns {
   chain prerouting {
     type nat hook prerouting priority -100;
     policy accept;
-    # Prioritize DNS-to-slowdns redirect to reduce jitter
-    udp dport 53 meta priority 0 redirect to :5300
-  }
-
-  chain output {
-    type nat hook output priority -100;
-    policy accept;
-    # Exception pour le DNS local systemd-resolved
-    ip daddr 127.0.0.53 udp dport 53 accept
-    udp dport 53 meta priority 0 redirect to :5300
+    udp dport 53 redirect to :5300
   }
 }
 EOF
 
-# Ensure nftables main config includes our file (persistent across reboots)
+# Ajout persistant
 if ! grep -q "/etc/nftables.d/slowdns.nft" /etc/nftables.conf 2>/dev/null; then
-  echo "include \"/etc/nftables.d/slowdns.nft\"" >> /etc/nftables.conf
-  log "Ajout de l'inclusion slowdns.nft dans /etc/nftables.conf"
+  echo 'include "/etc/nftables.d/slowdns.nft"' >> /etc/nftables.conf
 fi
 
+# --- systemd pour nftables SlowDNS ---
 cat > /etc/systemd/system/nftables-slowdns.service <<'EOF'
 [Unit]
 Description=nftables NAT redirect UDP 53 -> 5300 for SlowDNS
@@ -284,25 +255,10 @@ EOF
 
 # --- Activation services ---
 systemctl daemon-reload
-
 systemctl enable nftables-slowdns.service
-systemctl start nftables-slowdns.service || log "nftables-slowdns start failed"
-
+systemctl start nftables-slowdns.service
 systemctl enable slowdns.service
-systemctl restart slowdns.service || log "slowdns service restart failed"
+systemctl restart slowdns.service
 
-log "Installation terminée. SlowDNS démarré avec nftables (REDIRECT UDP 53 -> 5300). NS utilisé : $NS"
-
-echo
-echo "Résumé :"
-echo "- slowdns.service : $(systemctl is-active slowdns.service 2>/dev/null || echo inactive)"
-echo "- nftables-slowdns.service : $(systemctl is-active nftables-slowdns.service 2>/dev/null || echo inactive)"
-echo
-echo "Règles nftables actives (nat-slowdns) :"
-nft list table ip nat-slowdns || echo "Table nat-slowdns absente"
-echo
-
-log "Conseils finaux :"
-log " - Si tu constates encore des pertes, baisse -mtu (ex: 1100) ou augmente la mémoire UDP côté kernel."
-log " - Pense à régénérer ton token Cloudflare et tes clés privées si elles sont publiques."
-log " - Teste en premier sur une VM non critique."
+log "Installation terminée."
+log "SlowDNS démarré avec nftables (REDIRECT UDP 53 -> 5300). NS utilisé : $NS"
