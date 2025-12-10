@@ -212,7 +212,7 @@ fi
 
 log "Démarrage du serveur SlowDNS (priorité CPU augmentée, MTU dnstt fixée)..."
 # -mtu réduit la taille utile (évite fragmentation côté UDP)
-exec nice -n 0 "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" -mtu 1200 "$NS" 0.0.0.0:$ssh_port
+exec nice -n 0 "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
 EOF
 
 chmod +x /usr/local/bin/slowdns-start.sh
