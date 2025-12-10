@@ -96,9 +96,9 @@ configure_iptables() {
 }
 
 # --- Cloudflare NS auto ---
-CF_API_TOKEN="VOTRE_CLOUDFLARE_API_TOKEN_ICI"
-CF_ZONE_ID="VOTRE_CLOUDFLARE_ZONE_ID_ICI"
-DOMAIN="votredomaine.com" # domaine géré sur Cloudflare
+CF_API_TOKEN="7mn4LKcZARvdbLlCVFTtaX7LGM2xsnyjHkiTAt37"
+CF_ZONE_ID="7debbb8ea4946898a889c4b5745ab7eb"
+DOMAIN="kingom.ggff.net" # domaine géré sur Cloudflare
 
 generate_ns_cloudflare() {
     log "Génération automatique du NameServer via Cloudflare..."
