@@ -206,7 +206,7 @@ echo -e "${CYAN}+============================${WHITE_BOLD}[❖]${RESET}=========
   echo -e "${RED}[00] ➜ Quitter${RESET}"
   echo -e "${CYAN}+==========================================================+${RESET}"
 
-  echo -ne "${BOLD}${YELLOW} Entrez votre choix [1-12]: ${RESET}"
+  echo -ne "${BOLD}${YELLOW} Entrez votre choix [1-11]: ${RESET}"
   read -r choix
   echo -e "${CYAN}+----------------------------------------------------------+${RESET}"
 
