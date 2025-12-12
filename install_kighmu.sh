@@ -210,22 +210,6 @@ for file in "${FILES[@]}"; do
   fi
 done
 
-# Récupération dynamique du NS depuis la configuration DNS locale du système
-NS=$(awk '/^nameserver/ {print $2; exit}' /etc/resolv.conf)
-if [[ -z "$NS" ]]; then
-  echo "⚠️ Erreur : aucun serveur DNS trouvé dans /etc/resolv.conf, continuez prudemment."
-fi
-
-# Lecture et formatage de la clé publique SlowDNS
-SLOWDNS_PUBKEY="/etc/slowdns/server.pub"
-if [[ -f "$SLOWDNS_PUBKEY" ]]; then
-  PUBLIC_KEY=$(sed ':a;N;$!ba;s/
-/\
-/g' "$SLOWDNS_PUBKEY")
-else
-  PUBLIC_KEY="Clé publique SlowDNS non trouvée"
-fi
-
 # Création du fichier ~/.kighmu_info avec les infos globales nécessaires
 cat > ~/.kighmu_info <<EOF
 DOMAIN=$DOMAIN
