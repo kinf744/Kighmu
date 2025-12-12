@@ -130,11 +130,17 @@ fi
     DATA_MONTH_GB=0
 
 for iface in "${NET_INTERFACES[@]}"; do
-  DAY_TOTAL=$(vnstat -i "$iface" -d 2>/dev/null | grep "today" | awk '{print $NF}')
-  MONTH_TOTAL=$(vnstat -i "$iface" -m 2>/dev/null | grep "this month" | awk '{print $NF}')
+  ONELINE=$(vnstat -i "$iface" --oneline 2>/dev/null)
   
-  [[ -n "$DAY_TOTAL" ]] && day_gb=$(convert_to_gb "$DAY_TOTAL") && DATA_DAY_GB=$(echo "$DATA_DAY_GB + $day_gb" | bc 2>/dev/null || echo 0)
-  [[ -n "$MONTH_TOTAL" ]] && month_gb=$(convert_to_gb "$MONTH_TOTAL") && DATA_MONTH_GB=$(echo "$DATA_MONTH_GB + $month_gb" | bc 2>/dev/null || echo 0)
+  # Pour ta sortie exacte: f13=21.98 GiB (mois), f15=49.07 GiB (mois total)
+  # today n'existe pas dans --oneline compact, on prend le daily total (f6)
+  DAY_RAW=$(echo "$ONELINE" | cut -d';' -f6 2>/dev/null)   # 12.02 GiB  
+  MONTH_RAW=$(echo "$ONELINE" | cut -d';' -f15 2>/dev/null) # 49.07 GiB
+  
+  day_gb=$(convert_to_gb "$DAY_RAW")
+  month_gb=$(convert_to_gb "$MONTH_RAW")
+  DATA_DAY_GB=$(echo "$DATA_DAY_GB + $day_gb" | bc 2>/dev/null || echo 0)
+  DATA_MONTH_GB=$(echo "$DATA_MONTH_GB + $month_gb" | bc 2>/dev/null || echo 0)
 done
 
   echo -e "${CYAN}+============================${WHITE_BOLD}[❖]${RESET}============================+${RESET}"
