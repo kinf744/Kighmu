@@ -144,10 +144,10 @@ fi
 cols=$(tput cols)
 title="🚀 KIGHMU MANAGER 🇨🇲 🚀"
 
-TEXT_COLOR="e[34m"
-BG_BLUE="e[44m"
-BG_YELLOW="e[103m"
-RESET="e[0m"
+TEXT_COLOR="\e[34m"
+BG_BLUE="\e[44m"
+BG_YELLOW="\e[103m"
+RESET="\e[0m"
 
 padding_blue=10
 padding_yellow=2
@@ -166,27 +166,20 @@ for ((i=0; i<blue_total; i++)); do
     fi
 done
 
-printf "${RESET}
-"
+printf "${RESET}\n"
 
 echo -e "${CYAN}+============================${WHITE_BOLD}[❖]${RESET}============================+${RESET}"
 
-  printf " ${WHITE_BOLD}OS:${RESET} ${YELLOW}%-20s${RESET} | ${WHITE_BOLD}IP:${RESET} ${RED}%-15s${RESET}
-" "$OS_INFO" "$IP"
-  printf " ${WHITE_BOLD}Taille RAM totale:${RESET} ${GREEN}%-6s${RESET} | ${WHITE_BOLD}Nombre de cœurs CPU:${RESET} ${YELLOW}%-6s${RESET}
-" "$RAM_GB_ARR" "$CPU_CORES"
-  printf " ${WHITE_BOLD}RAM utilisée:${RESET} ${GREEN}%-6s${RESET} | ${WHITE_BOLD}CPU utilisé:${RESET} ${YELLOW}%-6s${RESET}
-" "$RAM_USAGE" "$CPU_USAGE"
+  printf " ${WHITE_BOLD}OS:${RESET} ${YELLOW}%-20s${RESET} | ${WHITE_BOLD}IP:${RESET} ${RED}%-15s${RESET}\n" "$OS_INFO" "$IP"
+  printf " ${WHITE_BOLD}Taille RAM totale:${RESET} ${GREEN}%-6s${RESET} | ${WHITE_BOLD}Nombre de cœurs CPU:${RESET} ${YELLOW}%-6s${RESET}\n" "$RAM_GB_ARR" "$CPU_CORES"
+  printf " ${WHITE_BOLD}RAM utilisée:${RESET} ${GREEN}%-6s${RESET} | ${WHITE_BOLD}CPU utilisé:${RESET} ${YELLOW}%-6s${RESET}\n" "$RAM_USAGE" "$CPU_USAGE"
 
   echo -e "${CYAN}+===========================================================+${RESET}"
 
-  printf " ${WHITE_BOLD}Consommation aujourd'hui:${RESET} ${MAGENTA_VIF}%.2f Go${RESET} | ${WHITE_BOLD}Ce mois-ci:${RESET} ${CYAN_VIF}%.2f Go${RESET}
-" "$DATA_DAY_GB" "$DATA_MONTH_GB"
+  printf " ${WHITE_BOLD}Consommation aujourd'hui:${RESET} ${MAGENTA_VIF}%.2f Go${RESET} | ${WHITE_BOLD}Ce mois-ci:${RESET} ${CYAN_VIF}%.2f Go${RESET}\n" "$DATA_DAY_GB" "$DATA_MONTH_GB"
 
-  printf " ${WHITE_BOLD}Utilisateurs SSH:${RESET} ${BLUE}%-4d${RESET} | ${WHITE_BOLD} Utilisateurs Xray:${RESET} ${MAGENTA}%-4d${RESET}
-" "$SSH_USERS_COUNT" "$XRAY_USERS_COUNT"
-  printf " ${WHITE_BOLD}Appareils connectés:${RESET} ${MAGENTA}%-4d${RESET} | ${WHITE_BOLD}Utilisateurs expirés:${RESET} ${RED}%-4d${RESET}
-" "$total_connected" "$TOTAL_EXPIRED"
+  printf " ${WHITE_BOLD}Utilisateurs SSH:${RESET} ${BLUE}%-4d${RESET} | ${WHITE_BOLD} Utilisateurs Xray:${RESET} ${MAGENTA}%-4d${RESET}\n" "$SSH_USERS_COUNT" "$XRAY_USERS_COUNT"
+  printf " ${WHITE_BOLD}Appareils connectés:${RESET} ${MAGENTA}%-4d${RESET} | ${WHITE_BOLD}Utilisateurs expirés:${RESET} ${RED}%-4d${RESET}\n" "$total_connected" "$TOTAL_EXPIRED"
 
   echo -e "${CYAN}+===========================================================+${RESET}"
 
@@ -206,7 +199,7 @@ echo -e "${CYAN}+============================${WHITE_BOLD}[❖]${RESET}=========
   echo -e "${RED}[00] ➜ Quitter${RESET}"
   echo -e "${CYAN}+==========================================================+${RESET}"
 
-  echo -ne "${BOLD}${YELLOW} Entrez votre choix [1-11]: ${RESET}"
+  echo -ne "${BOLD}${YELLOW} Entrez votre choix [1-12]: ${RESET}"
   read -r choix
   echo -e "${CYAN}+----------------------------------------------------------+${RESET}"
 
