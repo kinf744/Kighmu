@@ -12,22 +12,22 @@ DEBUG() {
 }
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo -e "\e[31m[ERREUR]\e[0m Veuillez exécuter ce script en root."
+    echo -e "e[31m[ERREUR]e[0m Veuillez exécuter ce script en root."
     exit 1
 fi
 
-RED="\e[31m"
-GREEN="\e[32m"
-YELLOW="\e[33m"
-BLUE="\e[34m"
-MAGENTA="\e[35m"
-MAGENTA_VIF="\e[1;35m"
-CYAN="\e[36m"
-CYAN_VIF="\e[1;36m"
-WHITE="\e[37m"
-WHITE_BOLD="\e[1;37m"
-BOLD="\e[1m"
-RESET="\e[0m"
+RED="e[31m"
+GREEN="e[32m"
+YELLOW="e[33m"
+BLUE="e[34m"
+MAGENTA="e[35m"
+MAGENTA_VIF="e[1;35m"
+CYAN="e[36m"
+CYAN_VIF="e[1;36m"
+WHITE="e[37m"
+WHITE_BOLD="e[1;37m"
+BOLD="e[1m"
+RESET="e[0m"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 USER_FILE="/etc/kighmu/users.list"
@@ -50,7 +50,7 @@ convert_to_gb() {
 }
 
 count_ssh_users() {
-  awk -F: '($3 >= 1000) && ($7 ~ /^\/(bin\/bash|bin\/sh|bin\/false)$/) {print $1}' /etc/passwd | wc -l
+  awk -F: '($3 >= 1000) && ($7 ~ /^/(bin/bash|bin/sh|bin/false)$/) {print $1}' /etc/passwd | wc -l
 }
 
 count_connected_devices() {
@@ -93,7 +93,8 @@ while true; do
     
     TOTAL_RAM_RAW=$(free -m | awk 'NR==2{print $2}')
     RAM_GB=$(echo "scale=2; $TOTAL_RAM_RAW/1024" | bc)
-    RAM_GB_ARR=$(echo "$RAM_GB" | awk '{printf "%d\n", ($1 == int($1)) ? $1 : int($1)+1}')
+    RAM_GB_ARR=$(echo "$RAM_GB" | awk '{printf "%d
+", ($1 == int($1)) ? $1 : int($1)+1}')
     
     CPU_CORES=$(nproc)
     RAM_USAGE=$(free -m | awk 'NR==2{printf "%.2f%%", $3*100/$2}')
@@ -130,12 +131,12 @@ fi
     DATA_MONTH_GB=0
 
     for iface in "${NET_INTERFACES[@]}"; do
-      day_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d';' -f9)
-      month_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d';' -f15)
-      day_gb=$(convert_to_gb "$day_raw")
-      month_gb=$(convert_to_gb "$month_raw")
-      DATA_DAY_GB=$(echo "$DATA_DAY_GB + $day_gb" | bc)
-      DATA_MONTH_GB=$(echo "$DATA_MONTH_GB + $month_gb" | bc)
+      # FIX: Utilise vnstat détaillé pour les vraies valeurs today/month
+      DAY_TOTAL=$(vnstat -i "$iface" -d 2>/dev/null | grep "today" | awk '{print $NF}')
+      MONTH_TOTAL=$(vnstat -i "$iface" -m 2>/dev/null | grep "this month" | awk '{print $NF}')
+      
+      [[ -n "$DAY_TOTAL" ]] && day_gb=$(convert_to_gb "$DAY_TOTAL") && DATA_DAY_GB=$(echo "$DATA_DAY_GB + $day_gb" | bc 2>/dev/null || echo 0)
+      [[ -n "$MONTH_TOTAL" ]] && month_gb=$(convert_to_gb "$MONTH_TOTAL") && DATA_MONTH_GB=$(echo "$DATA_MONTH_GB + $month_gb" | bc 2>/dev/null || echo 0)
     done
 
   echo -e "${CYAN}+============================${WHITE_BOLD}[❖]${RESET}============================+${RESET}"
@@ -143,10 +144,10 @@ fi
 cols=$(tput cols)
 title="🚀 KIGHMU MANAGER 🇨🇲 🚀"
 
-TEXT_COLOR="\e[34m"
-BG_BLUE="\e[44m"
-BG_YELLOW="\e[103m"
-RESET="\e[0m"
+TEXT_COLOR="e[34m"
+BG_BLUE="e[44m"
+BG_YELLOW="e[103m"
+RESET="e[0m"
 
 padding_blue=10
 padding_yellow=2
@@ -165,20 +166,27 @@ for ((i=0; i<blue_total; i++)); do
     fi
 done
 
-printf "${RESET}\n"
+printf "${RESET}
+"
 
 echo -e "${CYAN}+============================${WHITE_BOLD}[❖]${RESET}============================+${RESET}"
 
-  printf " ${WHITE_BOLD}OS:${RESET} ${YELLOW}%-20s${RESET} | ${WHITE_BOLD}IP:${RESET} ${RED}%-15s${RESET}\n" "$OS_INFO" "$IP"
-  printf " ${WHITE_BOLD}Taille RAM totale:${RESET} ${GREEN}%-6s${RESET} | ${WHITE_BOLD}Nombre de cœurs CPU:${RESET} ${YELLOW}%-6s${RESET}\n" "$RAM_GB_ARR" "$CPU_CORES"
-  printf " ${WHITE_BOLD}RAM utilisée:${RESET} ${GREEN}%-6s${RESET} | ${WHITE_BOLD}CPU utilisé:${RESET} ${YELLOW}%-6s${RESET}\n" "$RAM_USAGE" "$CPU_USAGE"
+  printf " ${WHITE_BOLD}OS:${RESET} ${YELLOW}%-20s${RESET} | ${WHITE_BOLD}IP:${RESET} ${RED}%-15s${RESET}
+" "$OS_INFO" "$IP"
+  printf " ${WHITE_BOLD}Taille RAM totale:${RESET} ${GREEN}%-6s${RESET} | ${WHITE_BOLD}Nombre de cœurs CPU:${RESET} ${YELLOW}%-6s${RESET}
+" "$RAM_GB_ARR" "$CPU_CORES"
+  printf " ${WHITE_BOLD}RAM utilisée:${RESET} ${GREEN}%-6s${RESET} | ${WHITE_BOLD}CPU utilisé:${RESET} ${YELLOW}%-6s${RESET}
+" "$RAM_USAGE" "$CPU_USAGE"
 
   echo -e "${CYAN}+===========================================================+${RESET}"
 
-  printf " ${WHITE_BOLD}Consommation aujourd'hui:${RESET} ${MAGENTA_VIF}%.2f Go${RESET} | ${WHITE_BOLD}Ce mois-ci:${RESET} ${CYAN_VIF}%.2f Go${RESET}\n" "$DATA_DAY_GB" "$DATA_MONTH_GB"
+  printf " ${WHITE_BOLD}Consommation aujourd'hui:${RESET} ${MAGENTA_VIF}%.2f Go${RESET} | ${WHITE_BOLD}Ce mois-ci:${RESET} ${CYAN_VIF}%.2f Go${RESET}
+" "$DATA_DAY_GB" "$DATA_MONTH_GB"
 
-  printf " ${WHITE_BOLD}Utilisateurs SSH:${RESET} ${BLUE}%-4d${RESET} | ${WHITE_BOLD} Utilisateurs Xray:${RESET} ${MAGENTA}%-4d${RESET}\n" "$SSH_USERS_COUNT" "$XRAY_USERS_COUNT"
-  printf " ${WHITE_BOLD}Appareils connectés:${RESET} ${MAGENTA}%-4d${RESET} | ${WHITE_BOLD}Utilisateurs expirés:${RESET} ${RED}%-4d${RESET}\n" "$total_connected" "$TOTAL_EXPIRED"
+  printf " ${WHITE_BOLD}Utilisateurs SSH:${RESET} ${BLUE}%-4d${RESET} | ${WHITE_BOLD} Utilisateurs Xray:${RESET} ${MAGENTA}%-4d${RESET}
+" "$SSH_USERS_COUNT" "$XRAY_USERS_COUNT"
+  printf " ${WHITE_BOLD}Appareils connectés:${RESET} ${MAGENTA}%-4d${RESET} | ${WHITE_BOLD}Utilisateurs expirés:${RESET} ${RED}%-4d${RESET}
+" "$total_connected" "$TOTAL_EXPIRED"
 
   echo -e "${CYAN}+===========================================================+${RESET}"
 
