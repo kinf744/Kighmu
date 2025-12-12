@@ -89,7 +89,7 @@ while true; do
     clear
 
     OS_INFO=$(if [ -f /etc/os-release ]; then . /etc/os-release; echo "$NAME $VERSION_ID"; else uname -s; fi)
-    IP=$(hostname -I | awk '{print $1}')
+    IP=$(get_main_ip)
     
     TOTAL_RAM_RAW=$(free -m | awk 'NR==2{print $2}')
     RAM_GB=$(echo "scale=2; $TOTAL_RAM_RAW/1024" | bc)
