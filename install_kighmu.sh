@@ -211,6 +211,9 @@ for file in "${FILES[@]}"; do
 done
 
 # Création du fichier ~/.kighmu_info avec les infos globales nécessaires
+: "${NS:=}"
+: "${PUBLIC_KEY:=}"
+
 cat > ~/.kighmu_info <<EOF
 DOMAIN=$DOMAIN
 NS=$NS
