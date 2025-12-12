@@ -40,13 +40,53 @@ if [[ -z "$DOMAIN" ]]; then
   exit 1
 fi
 
-IP_PUBLIC=$(curl -s https://api.ipify.org)
-echo "Votre IP publique détectée est : $IP_PUBLIC"
+# ==== Détection IPv4 / IPv6 publique ====
+IPV4_PUBLIC=$(curl -4 -s https://api.ipify.org || true)
+IPV6_PUBLIC=$(curl -6 -s https://api6.ipify.org || true)
 
-DOMAIN_IP=$(dig +short "$DOMAIN" | tail -n1)
-if [[ "$DOMAIN_IP" != "$IP_PUBLIC" ]]; then
-  echo "Attention : le domaine $DOMAIN ne pointe pas vers l’IP $IP_PUBLIC."
-  echo "Assurez-vous que le domaine est correctement configuré avant de continuer."
+if [[ -n "$IPV4_PUBLIC" ]]; then
+  echo "IPv4 publique détectée : $IPV4_PUBLIC"
+else
+  echo "Aucune IPv4 publique détectée (serveur peut être IPv6-only)."
+fi
+
+if [[ -n "$IPV6_PUBLIC" ]]; then
+  echo "IPv6 publique détectée : $IPV6_PUBLIC"
+else
+  echo "Aucune IPv6 publique détectée (serveur peut être IPv4-only)."
+fi
+
+if [[ -z "$IPV4_PUBLIC" && -z "$IPV6_PUBLIC" ]]; then
+  echo "Erreur : impossible de détecter une IP publique (ni IPv4 ni IPv6)."
+  exit 1
+fi
+
+# ==== Vérification DNS du domaine (A / AAAA) ====
+DOMAIN_A=$(dig +short A "$DOMAIN" | tail -n1 || true)
+DOMAIN_AAAA=$(dig +short AAAA "$DOMAIN" | tail -n1 || true)
+
+echo "Enregistrement A    (IPv4)  du domaine : ${DOMAIN_A:-aucun}"
+echo "Enregistrement AAAA (IPv6)  du domaine : ${DOMAIN_AAAA:-aucun}"
+
+MISMATCH=true
+
+# Cas IPv4 : si le serveur a une IPv4 publique, on vérifie le A
+if [[ -n "$IPV4_PUBLIC" ]]; then
+  if [[ "$DOMAIN_A" == "$IPV4_PUBLIC" ]]; then
+    MISMATCH=false
+  fi
+fi
+
+# Cas IPv6 : si le serveur a une IPv6 publique, on vérifie le AAAA
+if [[ -n "$IPV6_PUBLIC" ]]; then
+  if [[ "$DOMAIN_AAAA" == "$IPV6_PUBLIC" ]]; then
+    MISMATCH=false
+  fi
+fi
+
+if [[ "$MISMATCH" == true ]]; then
+  echo "Attention : le domaine $DOMAIN ne pointe pas vers l'IP de ce serveur."
+  echo "Vérifiez les enregistrements A (IPv4) et/ou AAAA (IPv6) selon votre configuration."
   read -r -p "Voulez-vous continuer quand même ? [oui/non] : " choix
   if [[ ! "$choix" =~ ^(o|oui)$ ]]; then
     echo "Installation arrêtée."
@@ -179,7 +219,9 @@ fi
 # Lecture et formatage de la clé publique SlowDNS
 SLOWDNS_PUBKEY="/etc/slowdns/server.pub"
 if [[ -f "$SLOWDNS_PUBKEY" ]]; then
-  PUBLIC_KEY=$(sed ':a;N;$!ba;s/\n/\\n/g' "$SLOWDNS_PUBKEY")
+  PUBLIC_KEY=$(sed ':a;N;$!ba;s/
+/\
+/g' "$SLOWDNS_PUBKEY")
 else
   PUBLIC_KEY="Clé publique SlowDNS non trouvée"
 fi
@@ -230,11 +272,11 @@ cat > /usr/local/bin/kighmu-panel.sh << 'EOF'
 
 clear
 
-RED='\033[0;31m'
-YELLOW='\033[0;33m'
-GREEN='\033[0;32m'
-CYAN='\033[0;36m'
-NC='\033[0m'
+RED='\u001B[0;31m'
+YELLOW='\u001B[0;33m'
+GREEN='\u001B[0;32m'
+CYAN='\u001B[0;36m'
+NC='\u001B[0m'
 
 echo -e "${RED}
 K   K  III  GGG  H   H M   M U   U     V   V PPPP   SSS
@@ -258,7 +300,11 @@ chmod +x /usr/local/bin/kighmu-panel.sh
 
 # Ajout automatique au démarrage du shell du panneau avec nettoyage écran
 if ! grep -q "kighmu-panel.sh" ~/.bashrc; then
-  echo -e "\n# Affichage automatique du panneau KIGHMU au démarrage\nclear\n/usr/local/bin/kighmu-panel.sh\n" >> ~/.bashrc
+  echo -e "
+# Affichage automatique du panneau KIGHMU au démarrage
+clear
+/usr/local/bin/kighmu-panel.sh
+" >> ~/.bashrc
 fi
 
 # Lancement immédiat une fois après installation
