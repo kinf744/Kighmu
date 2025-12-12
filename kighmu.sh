@@ -85,6 +85,28 @@ count_xray_expired() {
   awk -F'|' -v today="$today" '$2 < today {count++} END {print count+0}' "$expiry_file"
 }
 
+get_main_ip() {
+  # Priorité IPv4
+  local ip4
+  ip4=$(ip -4 addr show scope global | awk '/inet /{print $2}' | cut -d/ -f1 | head -n1)
+
+  if [[ -n "$ip4" ]]; then
+    echo "$ip4"
+    return
+  fi
+
+  # Sinon IPv6 globale
+  local ip6
+  ip6=$(ip -6 addr show scope global | awk '/inet6 /{print $2}' | cut -d/ -f1 | head -n1)
+
+  if [[ -n "$ip6" ]]; then
+    echo "$ip6"
+    return
+  fi
+
+  echo "N/A"
+}
+
 while true; do
     clear
 
