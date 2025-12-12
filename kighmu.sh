@@ -129,14 +129,13 @@ fi
     DATA_DAY_GB=0
     DATA_MONTH_GB=0
 
-    for iface in "${NET_INTERFACES[@]}"; do
-      day_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d';' -f9)
-      month_raw=$(vnstat -i "$iface" --oneline 2>/dev/null | cut -d';' -f15)
-      day_gb=$(convert_to_gb "$day_raw")
-      month_gb=$(convert_to_gb "$month_raw")
-      DATA_DAY_GB=$(echo "$DATA_DAY_GB + $day_gb" | bc)
-      DATA_MONTH_GB=$(echo "$DATA_MONTH_GB + $month_gb" | bc)
-    done
+for iface in "${NET_INTERFACES[@]}"; do
+  DAY_TOTAL=$(vnstat -i "$iface" -d 2>/dev/null | grep "today" | awk '{print $NF}')
+  MONTH_TOTAL=$(vnstat -i "$iface" -m 2>/dev/null | grep "this month" | awk '{print $NF}')
+  
+  [[ -n "$DAY_TOTAL" ]] && day_gb=$(convert_to_gb "$DAY_TOTAL") && DATA_DAY_GB=$(echo "$DATA_DAY_GB + $day_gb" | bc 2>/dev/null || echo 0)
+  [[ -n "$MONTH_TOTAL" ]] && month_gb=$(convert_to_gb "$MONTH_TOTAL") && DATA_MONTH_GB=$(echo "$DATA_MONTH_GB + $month_gb" | bc 2>/dev/null || echo 0)
+done
 
   echo -e "${CYAN}+============================${WHITE_BOLD}[❖]${RESET}============================+${RESET}"
 
