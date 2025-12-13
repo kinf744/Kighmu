@@ -11,6 +11,36 @@ SERVER_PUB="$SLOWDNS_DIR/server.pub"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
+# --- Détection IP automatique IPv4/IPv6 ---
+detect_ip_addresses() {
+    local ipv4="" ipv6=""
+    
+    # Détection IPv4 globale
+    ipv4=$(ip -4 addr show scope global | awk '/inet /{print $2}' | cut -d/ -f1 | head -n1)
+    
+    # Détection IPv6 globale
+    ipv6=$(ip -6 addr show scope global | awk '/inet6 /{print $2}' | cut -d/ -f1 | head -n1 | grep -v '^fe80')
+    
+    echo "ipv4=$ipv4"
+    echo "ipv6=$ipv6"
+}
+
+get_main_ip() {
+    local ipv4 ipv6
+    eval $(detect_ip_addresses)
+    
+    if [[ -n "$ipv4" ]]; then
+        echo "$ipv4"
+        return 0
+    elif [[ -n "$ipv6" ]]; then
+        echo "$ipv6"
+        return 0
+    else
+        echo "127.0.0.1"
+        return 1
+    fi
+}
+
 # --- Vérification root ---
 check_root() {
     if [ "$EUID" -ne 0 ]; then
@@ -23,7 +53,7 @@ check_root() {
 install_dependencies() {
     log "Installation des dépendances..."
     apt-get update -q
-    apt-get install -y iptables iptables-persistent wget tcpdump curl jq
+    apt-get install -y iptables iptables-persistent wget tcpdump curl jq iproute2
 }
 
 # --- Installation SlowDNS binaire ---
@@ -67,6 +97,8 @@ net.ipv4.tcp_fin_timeout=10
 net.ipv4.tcp_tw_reuse=1
 net.ipv4.tcp_mtu_probing=1
 net.ipv4.ip_forward=1
+net.ipv6.conf.all.forwarding=1
+net.ipv6.conf.default.forwarding=1
 EOF
     sysctl -p
 }
@@ -81,6 +113,8 @@ disable_systemd_resolved() {
         cat <<EOF > /etc/resolv.conf
 nameserver 8.8.8.8
 nameserver 1.1.1.1
+nameserver 2606:4700:4700::1111
+nameserver 2606:4700:4700::1001
 options timeout:1 attempts:1
 EOF
         log "/etc/resolv.conf mis à jour avec succès"
@@ -89,40 +123,67 @@ EOF
     fi
 }
 
-# --- IPTables ---
+# --- IPTables IPv4/IPv6 ---
 configure_iptables() {
-    log "Configuration du pare-feu via iptables..."
+    log "Configuration du pare-feu via iptables (IPv4)..."
     if ! iptables -C INPUT -p udp --dport 53 -j ACCEPT &>/dev/null; then
         iptables -I INPUT -p udp --dport 53 -j ACCEPT
     fi
     if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
         iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
     fi
-    iptables-save > /etc/iptables/rules.v4
+    
+    log "Configuration du pare-feu via ip6tables (IPv6)..."
+    if command -v ip6tables >/dev/null 2>&1; then
+        if ! ip6tables -C INPUT -p udp --dport 53 -j ACCEPT &>/dev/null; then
+            ip6tables -I INPUT -p udp --dport 53 -j ACCEPT
+        fi
+        if ! ip6tables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
+            ip6tables -I INPUT -p udp --dport "$PORT" -j ACCEPT
+        fi
+    fi
+    
+    iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
+    ip6tables-save > /etc/iptables/rules.v6 2>/dev/null || true
     systemctl enable netfilter-persistent
     systemctl restart netfilter-persistent
-    log "Persistance iptables activée via netfilter-persistent."
+    log "Persistance iptables/ip6tables activée."
 }
 
-# --- Cloudflare NS auto ---
+# --- Cloudflare NS auto IPv4/IPv6 ---
 CF_API_TOKEN="7mn4LKcZARvdbLlCVFTtaX7LGM2xsnyjHkiTAt37"
 CF_ZONE_ID="7debbb8ea4946898a889c4b5745ab7eb"
-DOMAIN="kingom.ggff.net" # domaine géré sur Cloudflare
+DOMAIN="kingom.ggff.net"
 
 generate_ns_cloudflare() {
     log "Génération automatique du NameServer via Cloudflare..."
-    VPS_IP=$(curl -s ipv4.icanhazip.com || echo "127.0.0.1")
+    eval $(detect_ip_addresses)
+    
+    # Priorité IPv4, fallback IPv6
+    if [[ -n "$ipv4" ]]; then
+        VPS_IP="$ipv4"
+        RECORD_TYPE="A"
+        log "IPv4 détectée : $VPS_IP"
+    elif [[ -n "$ipv6" ]]; then
+        VPS_IP="$ipv6"
+        RECORD_TYPE="AAAA"
+        log "IPv6 détectée : $VPS_IP"
+    else
+        log "Aucune IP publique détectée"
+        exit 1
+    fi
+    
     SUB_A="vpn-$(date +%s | sha256sum | head -c 6)"
     FQDN_A="$SUB_A.$DOMAIN"
 
-    log "Création du A record : $FQDN_A -> $VPS_IP"
+    log "Création du $RECORD_TYPE record : $FQDN_A -> $VPS_IP"
     RESPONSE=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
       -H "Authorization: Bearer $CF_API_TOKEN" \
       -H "Content-Type: application/json" \
-      --data "{\"type\":\"A\",\"name\":\"$FQDN_A\",\"content\":\"$VPS_IP\",\"ttl\":120,\"proxied\":false}")
+      --data "{"type":"$RECORD_TYPE","name":"$FQDN_A","content":"$VPS_IP","ttl":120,"proxied":false}")
 
     if ! echo "$RESPONSE" | grep -q '"success":true'; then
-        log "Erreur lors de la création de l'A record Cloudflare"
+        log "Erreur lors de la création de l'$RECORD_TYPE record Cloudflare"
         exit 1
     fi
 
@@ -133,7 +194,7 @@ generate_ns_cloudflare() {
     RESPONSE_NS=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
       -H "Authorization: Bearer $CF_API_TOKEN" \
       -H "Content-Type: application/json" \
-      --data "{\"type\":\"NS\",\"name\":\"$NS\",\"content\":\"$FQDN_A\",\"ttl\":120}")
+      --data "{"type":"NS","name":"$NS","content":"$FQDN_A","ttl":120}")
 
     if ! echo "$RESPONSE_NS" | grep -q '"success":true'; then
         log "Erreur lors de la création du NS record Cloudflare"
@@ -145,12 +206,14 @@ generate_ns_cloudflare() {
 NS=$NS
 PUB_KEY=$(cat "$SERVER_PUB")
 PRIV_KEY=$(cat "$SERVER_KEY")
+VPS_IP=$VPS_IP
+RECORD_TYPE=$RECORD_TYPE
 EOF
     chmod 600 "$CONFIG_FILE" "$SLOWDNS_DIR/slowdns.env"
-    log "NameServer Cloudflare généré automatiquement : $NS"
+    log "NameServer Cloudflare généré automatiquement : $NS ($RECORD_TYPE)"
 }
 
-# --- Wrapper SlowDNS ---
+# --- Wrapper SlowDNS IPv4/IPv6 ---
 create_wrapper_script() {
     cat <<'EOF' > /usr/local/bin/slowdns-start.sh
 #!/bin/bash
@@ -183,6 +246,16 @@ setup_iptables() {
     if ! iptables -t nat -C PREROUTING -i "$interface" -p udp --dport 53 -j REDIRECT --to-ports "$PORT" &>/dev/null; then
         iptables -t nat -I PREROUTING -i "$interface" -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
     fi
+    
+    # IPv6 si disponible
+    if command -v ip6tables >/dev/null 2>&1; then
+        if ! ip6tables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
+            ip6tables -I INPUT -p udp --dport "$PORT" -j ACCEPT
+        fi
+        if ! ip6tables -t nat -C PREROUTING -i "$interface" -p udp --dport 53 -j REDIRECT --to-ports "$PORT" &>/dev/null; then
+            ip6tables -t nat -I PREROUTING -i "$interface" -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
+        fi
+    fi
 }
 
 log "Attente de l'interface réseau..."
@@ -192,7 +265,7 @@ log "Interface détectée : $interface"
 log "Réglage MTU à 1400 pour éviter la fragmentation DNS..."
 ip link set dev "$interface" mtu 1400 || log "Échec réglage MTU, continuer"
 
-log "Application des règles iptables..."
+log "Application des règles iptables/ip6tables..."
 setup_iptables "$interface"
 
 log "Démarrage du serveur SlowDNS..."
@@ -200,7 +273,8 @@ NS=$(cat "$CONFIG_FILE")
 ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
 [ -z "$ssh_port" ] && ssh_port=22
 
-exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
+# Écoute IPv4 + IPv6 si disponibles
+exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port ::$ssh_port
 EOF
     chmod +x /usr/local/bin/slowdns-start.sh
 }
@@ -209,7 +283,7 @@ EOF
 create_systemd_service() {
     cat <<EOF > /etc/systemd/system/slowdns.service
 [Unit]
-Description=SlowDNS Server Tunnel
+Description=SlowDNS Server Tunnel (IPv4/IPv6)
 After=network-online.target
 Wants=network-online.target
 Documentation=https://github.com/fisabiliyusri/SLDNS
@@ -261,10 +335,12 @@ main() {
             exit 1
         fi
         echo "$NAMESERVER" > "$CONFIG_FILE"
+        eval $(detect_ip_addresses)
         cat <<EOF > "$SLOWDNS_DIR/slowdns.env"
 NS=$NAMESERVER
 PUB_KEY=$(cat "$SERVER_PUB")
 PRIV_KEY=$(cat "$SERVER_KEY")
+VPS_IP=${ipv4:-$ipv6}
 EOF
         chmod 600 "$CONFIG_FILE" "$SLOWDNS_DIR/slowdns.env"
         log "NameServer enregistré manuellement : $NAMESERVER"
@@ -276,13 +352,15 @@ EOF
     create_systemd_service
 
     PUB_KEY=$(cat "$SERVER_PUB")
+    VPS_IP=$(get_main_ip)
     echo ""
     echo "+--------------------------------------------+"
     echo "|          CONFIGURATION SLOWDNS             |"
     echo "+--------------------------------------------+"
     echo ""
+    echo "IP publique  : $VPS_IP"
     echo "Clé publique : $PUB_KEY"
-    echo "NameServer  : $NAMESERVER"
+    echo "NameServer   : $NAMESERVER"
     echo ""
     echo "MTU du tunnel : 1400"
     log "Installation et configuration SlowDNS terminées."
