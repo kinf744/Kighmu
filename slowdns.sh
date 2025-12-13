@@ -180,7 +180,7 @@ generate_ns_cloudflare() {
     RESPONSE=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
       -H "Authorization: Bearer $CF_API_TOKEN" \
       -H "Content-Type: application/json" \
-      --data "{"type":"$RECORD_TYPE","name":"$FQDN_A","content":"$VPS_IP","ttl":120,"proxied":false}"
+      --data "{"type":"$RECORD_TYPE","name":"$FQDN_A","content":"$VPS_IP","ttl":120,"proxied":false}")
 
     if ! echo "$RESPONSE" | grep -q '"success":true'; then
         log "Erreur lors de la création de l'$RECORD_TYPE record Cloudflare"
