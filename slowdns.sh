@@ -274,7 +274,12 @@ ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
 [ -z "$ssh_port" ] && ssh_port=22
 
 # Écoute IPv4 + IPv6 si disponibles
-exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
+exec "$SLOWDNS_BIN" \
+  -udp :$PORT \
+  -privkey-file "$SERVER_KEY" \
+  "$NS" \
+  0.0.0.0:$ssh_port \
+  [::]:$ssh_port
 EOF
     chmod +x /usr/local/bin/slowdns-start.sh
 }
