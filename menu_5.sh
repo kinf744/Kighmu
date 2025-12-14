@@ -199,7 +199,7 @@ installer_v2ray() {
   },
   "inbounds": [
     {
-      "port": 5401,
+      "port": 5402,
       "protocol": "dokodemo-door",
       "settings": {
         "address": "127.0.0.1",
