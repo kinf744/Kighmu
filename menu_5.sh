@@ -1,14 +1,16 @@
 #!/bin/bash
 
-# Fichier stockage utilisateurs
-if ! jq empty "$USER_DB" 2>/dev/null; then
-    echo "[]" > "$USER_DB"
-fi
+# Fichier stockage utilisateurs (V2Ray)
+USER_DB="/etc/v2ray/utilisateurs.json"
 
 mkdir -p /etc/v2ray
-touch /etc/v2ray/utilisateurs.json
-chmod 600 /etc/v2ray/utilisateurs.json
-USER_DB="/etc/v2ray/utilisateurs.json"
+touch "$USER_DB"
+chmod 600 "$USER_DB"
+
+# Initialiser JSON si corrompu ou vide
+if ! jq empty "$USER_DB" >/dev/null 2>&1; then
+    echo "[]" > "$USER_DB"
+fi
 
 # Couleurs ANSI pour mise en forme
 CYAN="\u001B[1;36m"
