@@ -223,10 +223,6 @@ log "Interface détectée : $interface"
 log "Réglage MTU à 1180 pour éviter la fragmentation DNS..."
 ip link set dev "$interface" mtu 1180 || log "Échec réglage MTU, continuer"
 
-log "Application du traffic shaping pour le streaming..."
-tc qdisc del dev "$interface" root 2>/dev/null || true
-tc qdisc add dev "$interface" root fq maxrate 3mbit
-
 log "Application des règles iptables..."
 setup_iptables "$interface"
 
