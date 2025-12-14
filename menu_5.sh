@@ -4,7 +4,6 @@
 mkdir -p /etc/v2ray
 touch /etc/v2ray/utilisateurs.json
 chmod 600 /etc/v2ray/utilisateurs.json
-
 USER_DB="/etc/v2ray/utilisateurs.json"
 
 # Couleurs ANSI pour mise en forme
