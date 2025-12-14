@@ -327,7 +327,7 @@ EOF
     echo "Clé publique : $PUB_KEY"
     echo "NameServer  : $NAMESERVER"
     echo ""
-    echo "MTU du tunnel : 1400"
+    echo "MTU du tunnel : 1180"
     log "Installation et configuration SlowDNS terminées."
 }
 
