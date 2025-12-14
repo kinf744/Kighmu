@@ -268,12 +268,18 @@ main() {
         generate_ns_cloudflare
         NAMESERVER=$(cat "$CONFIG_FILE")
     else
-        read -rp "Entrez le NameServer (NS) (ex: ns.example.com) : " NAMESERVER
-        if [[ -z "$NAMESERVER" ]]; then
-            echo "NameServer invalide." >&2
-            exit 1
-        fi
-        echo "$NAMESERVER" > "$CONFIG_FILE"
+        read -rp "Entrez le NameServer (NS) manuel : " NAMESERVER
+[[ -z "$NAMESERVER" ]] && { echo "NS invalide"; exit 1; }
+
+# Sauvegarde du NS manuel
+echo "$NAMESERVER" > "$SLOWDNS_DIR/ns.manual"
+chmod 600 "$SLOWDNS_DIR/ns.manual"
+
+# NS utilisé par le tunnel
+echo "$NAMESERVER" > "$CONFIG_FILE"
+
+log "NS manuel utilisé : $NAMESERVER"
+log "NS auto conservé (si existant)"
         cat <<EOF > "$SLOWDNS_DIR/slowdns.env"
 NS=$NAMESERVER
 PUB_KEY=$(cat "$SERVER_PUB")
