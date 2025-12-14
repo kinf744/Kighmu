@@ -263,7 +263,6 @@ CPUSchedulingPolicy=other
 IOSchedulingClass=best-effort
 IOSchedulingPriority=4
 TimeoutStartSec=20
-NoNewPrivileges=yes
 
 [Install]
 WantedBy=multi-user.target
