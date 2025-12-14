@@ -30,7 +30,7 @@ install_dependencies() {
 install_slowdns_bin() {
     if [ ! -x "$SLOWDNS_BIN" ]; then
         log "Téléchargement du binaire DNSTT..."
-        wget -O "$SLOWDNS_BIN" https://github.com/XTLS/Xray-core/releases/latest/download/dnstt-server
+        wget -O "$SLOWDNS_BIN" https://dnstt.network/dnstt-server-linux-amd64
         chmod +x "$SLOWDNS_BIN"
 
         if ! file "$SLOWDNS_BIN" | grep -q ELF; then
