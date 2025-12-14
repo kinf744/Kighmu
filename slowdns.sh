@@ -55,18 +55,25 @@ configure_sysctl() {
     cat <<EOF >> /etc/sysctl.conf
 
 # Optimisations SlowDNS
-net.core.rmem_max=8388608
-net.core.wmem_max=8388608
-net.core.rmem_default=262144
-net.core.wmem_default=262144
+net.core.rmem_max=16777216
+net.core.wmem_max=16777216
+net.core.rmem_default=524288
+net.core.wmem_default=524288
 net.core.optmem_max=25165824
-net.ipv4.udp_rmem_min=16384
-net.ipv4.udp_wmem_min=16384
+
+net.ipv4.udp_rmem_min=32768
+net.ipv4.udp_wmem_min=32768
+net.ipv4.udp_mem=262144 524288 1048576
+
 net.ipv4.tcp_fastopen=3
 net.ipv4.tcp_fin_timeout=10
 net.ipv4.tcp_tw_reuse=1
 net.ipv4.tcp_mtu_probing=1
+net.ipv4.tcp_low_latency=1
+
 net.ipv4.ip_forward=1
+net.core.default_qdisc=fq
+net.ipv4.tcp_congestion_control=bbr
 EOF
     sysctl -p
 }
@@ -189,8 +196,12 @@ log "Attente de l'interface réseau..."
 interface=$(wait_for_interface)
 log "Interface détectée : $interface"
 
-log "Réglage MTU à 1400 pour éviter la fragmentation DNS..."
-ip link set dev "$interface" mtu 1400 || log "Échec réglage MTU, continuer"
+log "Réglage MTU à 1180 pour éviter la fragmentation DNS..."
+ip link set dev "$interface" mtu 1180 || log "Échec réglage MTU, continuer"
+
+log "Application du traffic shaping pour le streaming..."
+tc qdisc del dev "$interface" root 2>/dev/null || true
+tc qdisc add dev "$interface" root fq maxrate 3mbit
 
 log "Application des règles iptables..."
 setup_iptables "$interface"
