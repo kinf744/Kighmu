@@ -213,13 +213,14 @@ ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
 
 V2RAY_PORT=5401
 SSH_PORT=5402
+
 # Lancer DNSTT pour V2Ray
 log "Démarrage DNSTT pour V2Ray WS (UDP $UDP_V2RAY → TCP $V2RAY_PORT)"
-nice -n 0 "$SLOWDNS_BIN" -udp ":$UDP_V2RAY" -privkey-file "$SERVER_KEY" "$NS" "127.0.0.1:$V2RAY_PORT" &
+nice -n 0 "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NS" "127.0.0.1:$V2RAY_PORT" &
 
 # Lancer DNSTT pour SSH
 log "Démarrage DNSTT pour SSH (UDP $UDP_SSH → TCP $SSH_PORT)"
-nice -n 0 "$SLOWDNS_BIN" -udp ":$UDP_SSH" -privkey-file "$SERVER_KEY" "$NS" "127.0.0.1:$SSH_PORT" &
+nice -n 0 "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NS" "127.0.0.1:$SSH_PORT" &
 
 # Attendre les deux processus
 wait
