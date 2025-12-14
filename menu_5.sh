@@ -75,68 +75,48 @@ ajouter_client_v2ray() {
     local config="/etc/v2ray/config.json"
     local tmpfile
 
-    # Vérification que le fichier de configuration existe
+    # Vérifier que le fichier de configuration existe
     if [[ ! -f "$config" ]]; then
         echo "❌ config.json introuvable"
         return 1
     fi
 
-    # Vérification du JSON existant
-    if ! jq empty "$config" >/dev/null 2>&1; then
-        echo "❌ config.json invalide AVANT modification"
-        return 1
-    fi
-
     # Vérifier doublon UUID
-    if jq -e --arg uuid "$uuid" \
-        '.inbounds[] | select(.protocol=="vmess") | .settings.clients[]? | select(.id==$uuid)' \
-        "$config" >/dev/null; then
+    if jq -e --arg uuid "$uuid" '.inbounds[] | select(.protocol=="vmess") | .settings.clients[]? | select(.id==$uuid)' "$config" >/dev/null; then
         echo "⚠️ UUID déjà existant dans V2Ray"
         return 0
     fi
 
     tmpfile=$(mktemp)
 
-    # Ajouter le client en toute sécurité même si clients n'existe pas
-    jq --arg uuid "$uuid" --arg email "$nom" '
-      .inbounds[] |= (
-        if .protocol=="vmess" then
-          .settings.clients |= (. // []) + [{"id": $uuid, "alterId": 0, "email": $email, "level": 1}]
-        else
-          .
-        end
-      )
-    ' "$config" > "$tmpfile"
+    # Ajouter le client
+    jq --arg uuid "$uuid" --arg email "$nom" \
+       '(.inbounds[] | select(.protocol=="vmess") | .settings.clients) += [{"id": $uuid, "alterId": 0, "email": $email, "level": 1}]' \
+       "$config" > "$tmpfile"
 
     # Vérifier que le JSON modifié est valide
     if ! jq empty "$tmpfile" >/dev/null 2>&1; then
-        echo "❌ JSON cassé APRÈS modification"
-        cat "$tmpfile"
+        echo "❌ JSON cassé après modification"
         rm -f "$tmpfile"
         return 1
     fi
 
-    # Test avant remplacement
-    if ! /usr/local/bin/v2ray -test -config "$tmpfile" >/dev/null 2>&1; then
-        echo "❌ V2Ray ne peut pas démarrer avec cette config"
-        cat "$tmpfile"
+    # Test V2Ray avec la nouvelle config
+    if ! /usr/local/bin/v2ray test -config "$tmpfile" >/dev/null 2>&1; then
+        echo "❌ V2Ray ne peut pas démarrer avec ce client UUID"
         rm -f "$tmpfile"
         return 1
     fi
 
-    # Remplacer l'ancien config par le nouveau
+    # Remplacer config et redémarrer service
     mv "$tmpfile" "$config"
-
-    # Redémarrage sécurisé
     systemctl restart v2ray
-    sleep 2
 
     if systemctl is-active --quiet v2ray; then
         echo "✅ Utilisateur V2Ray ajouté et service redémarré avec succès"
         return 0
     else
         echo "❌ V2Ray n’a pas redémarré correctement"
-        journalctl -u v2ray -n 20 --no-pager
         return 1
     fi
 }
