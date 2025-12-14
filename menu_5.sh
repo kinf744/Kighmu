@@ -1,6 +1,10 @@
 #!/bin/bash
 
 # Fichier stockage utilisateurs
+if ! jq empty "$USER_DB" 2>/dev/null; then
+    echo "[]" > "$USER_DB"
+fi
+
 mkdir -p /etc/v2ray
 touch /etc/v2ray/utilisateurs.json
 chmod 600 /etc/v2ray/utilisateurs.json
