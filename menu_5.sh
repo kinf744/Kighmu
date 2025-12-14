@@ -73,65 +73,52 @@ ajouter_client_v2ray() {
     local uuid="$1"
     local nom="$2"
     local config="/etc/v2ray/config.json"
-    local tmpfile
 
-    # Vérification que le fichier de configuration existe  
-    if [[ ! -f "$config" ]]; then  
-        echo "❌ config.json introuvable"  
-        return 1  
-    fi  
+    # Vérification que le fichier de configuration existe
+    [[ ! -f "$config" ]] && { echo "❌ config.json introuvable"; return 1; }
 
-    # Vérifier que le JSON est valide  
-    if ! jq empty "$config" >/dev/null 2>&1; then  
-        echo "❌ config.json invalide AVANT modification"  
-        return 1  
-    fi  
+    # Vérifier que le JSON est valide
+    if ! jq empty "$config" >/dev/null 2>&1; then
+        echo "❌ config.json invalide AVANT modification"
+        return 1
+    fi
 
-    # Vérifier doublon UUID  
-    if jq -e --arg uuid "$uuid" \
-        '.inbounds[] | select(.protocol=="vmess") | .settings.clients[]? | select(.id==$uuid)' \
-        "$config" >/dev/null; then  
-        echo "⚠️ UUID déjà existant dans V2Ray"  
-        return 0  
-    fi  
+    # Vérifier doublon UUID
+    if jq -e --arg uuid "$uuid" '.inbounds[] | select(.protocol=="vmess") | .settings.clients[]? | select(.id==$uuid)' "$config" >/dev/null; then
+        echo "⚠️ UUID déjà existant"
+        return 0
+    fi
 
+    # Ajouter le client dans le JSON
     tmpfile=$(mktemp)
-
-    # Ajout du client correctement
     jq --arg uuid "$uuid" --arg email "$nom" '
-      .inbounds |= map(
-        if .protocol == "vmess" then
-          .settings.clients += [{"id": $uuid, "alterId": 0, "email": $email, "level": 1}]
-        else
-          .
-        end
-      )
+        (.inbounds[] | select(.protocol=="vmess") | .settings.clients) += [{"id": $uuid, "alterId": 0, "email": $email, "level": 1}]
     ' "$config" > "$tmpfile"
 
-    # Vérifier que le JSON modifié est valide  
-    if ! jq empty "$tmpfile" >/dev/null 2>&1; then  
-        echo "❌ JSON cassé APRÈS modification"  
-        rm -f "$tmpfile"  
-        return 1  
-    fi  
+    # Vérifier JSON valide après modification
+    if ! jq empty "$tmpfile" >/dev/null 2>&1; then
+        echo "❌ JSON cassé APRÈS modification"
+        rm -f "$tmpfile"
+        return 1
+    fi
 
     # Remplacer l'ancien config par le nouveau
     mv "$tmpfile" "$config"
 
-    # Vérifier que V2Ray peut démarrer avant de relancer le service
-    if ! /usr/local/bin/v2ray test -config "$config" >/dev/null 2>&1; then  
-        echo "❌ V2Ray ne peut pas démarrer avec cette config, service NON redémarré"  
-        return 1  
-    fi  
+    # Test V2Ray
+    if ! /usr/local/bin/v2ray test -config "$config" >/dev/null 2>&1; then
+        echo "❌ V2Ray ne peut pas démarrer avec cette config"
+        return 1
+    fi
 
-    # Redémarrage sécurisé  
-    systemctl restart v2ray  
-    if systemctl is-active --quiet v2ray; then  
-        echo "✅ Utilisateur V2Ray ajouté et service redémarré avec succès"  
-        return 0  
-    else  
-        echo "❌ V2Ray n’a pas redémarré correctement"  
-        return 1  
+    # Redémarrage sécurisé
+    systemctl restart v2ray
+    if systemctl is-active --quiet v2ray; then
+        echo "✅ Utilisateur ajouté et V2Ray redémarré"
+        return 0
+    else
+        echo "❌ V2Ray n’a pas redémarré correctement"
+        return 1
     fi
 }
 
