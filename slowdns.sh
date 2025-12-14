@@ -29,11 +29,12 @@ install_dependencies() {
 # --- Installation SlowDNS binaire ---
 install_slowdns_bin() {
     if [ ! -x "$SLOWDNS_BIN" ]; then
-        log "Téléchargement du binaire SlowDNS..."
-        wget -q -O "$SLOWDNS_BIN" https://github.com/dnstt/dnstt/releases/latest/download/dnstt-server-linux-amd64
+        log "Téléchargement du binaire DNSTT..."
+        wget -O "$SLOWDNS_BIN" https://github.com/XTLS/Xray-core/releases/latest/download/dnstt-server
         chmod +x "$SLOWDNS_BIN"
-        if [ ! -x "$SLOWDNS_BIN" ]; then
-            echo "ERREUR : Échec du téléchargement du binaire SlowDNS." >&2
+
+        if ! file "$SLOWDNS_BIN" | grep -q ELF; then
+            echo "ERREUR : binaire DNSTT invalide" >&2
             exit 1
         fi
     fi
