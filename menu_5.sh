@@ -81,7 +81,7 @@ ajouter_client_v2ray() {
         return 1
     fi
 
-    # Vérifier que le JSON est valide
+    # Vérification du JSON existant
     if ! jq empty "$config" >/dev/null 2>&1; then
         echo "❌ config.json invalide AVANT modification"
         return 1
@@ -97,15 +97,29 @@ ajouter_client_v2ray() {
 
     tmpfile=$(mktemp)
 
-    # Ajouter le client sans casser le JSON
+    # Ajouter le client en toute sécurité même si clients n'existe pas
     jq --arg uuid "$uuid" --arg email "$nom" '
-      (.inbounds[] | select(.protocol=="vmess") | .settings.clients) +=
-      [{"id": $uuid, "alterId": 0, "email": $email, "level": 1}]
+      .inbounds[] |= (
+        if .protocol=="vmess" then
+          .settings.clients |= (. // []) + [{"id": $uuid, "alterId": 0, "email": $email, "level": 1}]
+        else
+          .
+        end
+      )
     ' "$config" > "$tmpfile"
 
     # Vérifier que le JSON modifié est valide
     if ! jq empty "$tmpfile" >/dev/null 2>&1; then
         echo "❌ JSON cassé APRÈS modification"
+        cat "$tmpfile"
+        rm -f "$tmpfile"
+        return 1
+    fi
+
+    # Test avant remplacement
+    if ! /usr/local/bin/v2ray -test -config "$tmpfile" >/dev/null 2>&1; then
+        echo "❌ V2Ray ne peut pas démarrer avec cette config"
+        cat "$tmpfile"
         rm -f "$tmpfile"
         return 1
     fi
@@ -113,19 +127,16 @@ ajouter_client_v2ray() {
     # Remplacer l'ancien config par le nouveau
     mv "$tmpfile" "$config"
 
-    # Vérifier que V2Ray peut démarrer avant de relancer le service
-    if ! /usr/local/bin/v2ray -test -config "$config" >/dev/null 2>&1; then
-        echo "❌ V2Ray ne peut pas démarrer avec cette config, service NON redémarré"
-        return 1
-    fi
-
     # Redémarrage sécurisé
     systemctl restart v2ray
+    sleep 2
+
     if systemctl is-active --quiet v2ray; then
         echo "✅ Utilisateur V2Ray ajouté et service redémarré avec succès"
         return 0
     else
         echo "❌ V2Ray n’a pas redémarré correctement"
+        journalctl -u v2ray -n 20 --no-pager
         return 1
     fi
 }
