@@ -75,12 +75,13 @@ ajouter_client_v2ray() {
     local config="/etc/v2ray/config.json"
     local tmpfile
 
+    # Vérification que le fichier de configuration existe
     if [[ ! -f "$config" ]]; then
         echo "❌ config.json introuvable"
         return 1
     fi
 
-    # Vérifier JSON valide
+    # Vérifier que le JSON est valide
     if ! jq empty "$config" >/dev/null 2>&1; then
         echo "❌ config.json invalide AVANT modification"
         return 1
@@ -96,25 +97,35 @@ ajouter_client_v2ray() {
 
     tmpfile=$(mktemp)
 
+    # Ajouter le client sans casser le JSON
     jq --arg uuid "$uuid" --arg email "$nom" '
       (.inbounds[] | select(.protocol=="vmess") | .settings.clients) +=
       [{"id": $uuid, "alterId": 0, "email": $email, "level": 1}]
     ' "$config" > "$tmpfile"
 
+    # Vérifier que le JSON modifié est valide
     if ! jq empty "$tmpfile" >/dev/null 2>&1; then
         echo "❌ JSON cassé APRÈS modification"
         rm -f "$tmpfile"
         return 1
     fi
 
+    # Remplacer l'ancien config par le nouveau
     mv "$tmpfile" "$config"
-    systemctl restart v2ray
 
+    # Vérifier que V2Ray peut démarrer avant de relancer le service
+    if ! /usr/local/bin/v2ray -test -config "$config" >/dev/null 2>&1; then
+        echo "❌ V2Ray ne peut pas démarrer avec cette config, service NON redémarré"
+        return 1
+    fi
+
+    # Redémarrage sécurisé
+    systemctl restart v2ray
     if systemctl is-active --quiet v2ray; then
-        echo "✅ Utilisateur V2Ray ajouté et service redémarré"
+        echo "✅ Utilisateur V2Ray ajouté et service redémarré avec succès"
         return 0
     else
-        echo "❌ V2Ray n’a pas redémarré"
+        echo "❌ V2Ray n’a pas redémarré correctement"
         return 1
     fi
 }
