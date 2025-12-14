@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Fichier stockage utilisateurs
-USER_DB="./utilisateurs.json"
+USER_DB="/etc/v2ray/utilisateurs.json"
 
 # Couleurs ANSI pour mise en forme
 CYAN="\u001B[1;36m"
