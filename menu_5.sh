@@ -164,36 +164,51 @@ installer_v2ray() {
   "log": {
     "loglevel": "info"
   },
-  "inbounds": [{
-    "port": 5401,
-    "protocol": "vmess",
-    "settings": {
-      "clients": [
-        {
-          "id": "00000000-0000-0000-0000-000000000001",
-          "alterId": 0,
-          "level": 1,
-          "email": "default@admin"
+  "inbounds": [
+    {
+      "port": 5401,
+      "protocol": "dokodemo-door",
+      "settings": {
+        "address": "127.0.0.1",
+        "port": 22,
+        "network": "tcp"
+      },
+      "tag": "ssh"
+    },
+    {
+      "port": 5401,
+      "protocol": "vmess",
+      "settings": {
+        "clients": [
+          {
+            "id": "00000000-0000-0000-0000-000000000001",
+            "alterId": 0,
+            "level": 1,
+            "email": "default@admin"
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "wsSettings": {
+          "path": "/vmess-ws"
         }
-      ]
-    },
-    "streamSettings": {
-      "network": "ws",
-      "wsSettings": {
-        "path": "/vmess-ws"
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls"]
+      },
+      "tag": "v2ray"
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "freedom",
+      "settings": {
+        "domainStrategy": "UseIP"
       }
-    },
-    "sniffing": {
-      "enabled": true,
-      "destOverride": ["http", "tls"]
     }
-  }],
-  "outbounds": [{
-    "protocol": "freedom",
-    "settings": {
-      "domainStrategy": "UseIP"
-    }
-  }]
+  ]
 }
 EOF
 
