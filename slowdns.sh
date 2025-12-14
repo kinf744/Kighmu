@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- Configuration principale ---
 SLOWDNS_DIR="/etc/slowdns"
-SLOWDNS_BIN="/usr/local/bin/sldns-server"
+SLOWDNS_BIN="/usr/local/bin/dnstt-server"
 PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
@@ -30,7 +30,7 @@ install_dependencies() {
 install_slowdns_bin() {
     if [ ! -x "$SLOWDNS_BIN" ]; then
         log "Téléchargement du binaire SlowDNS..."
-        wget -q -O "$SLOWDNS_BIN" https://raw.githubusercontent.com/fisabiliyusri/SLDNS/main/slowdns/sldns-server
+        wget -q -O "$SLOWDNS_BIN" https://github.com/dnstt/dnstt/releases/latest/download/dnstt-server-linux-amd64
         chmod +x "$SLOWDNS_BIN"
         if [ ! -x "$SLOWDNS_BIN" ]; then
             echo "ERREUR : Échec du téléchargement du binaire SlowDNS." >&2
@@ -211,7 +211,7 @@ NS=$(cat "$CONFIG_FILE")
 ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
 [ -z "$ssh_port" ] && ssh_port=22
 
-exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
+exec nice -n 0 "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
 EOF
     chmod +x /usr/local/bin/slowdns-start.sh
 }
