@@ -435,7 +435,7 @@ while true; do
     echo -e "${CYAN}+======================================================+${RESET}"
     echo -e "${GREEN}${BOLD}[01]${RESET} ${YELLOW}OpenSSH${RESET}"
     echo -e "${GREEN}${BOLD}[02]${RESET} ${YELLOW}Dropbear${RESET}"
-    echo -e "${GREEN}${BOLD}[03]${RESET} ${YELLOW}SlowDNS${RESET}"
+    echo -e "${GREEN}${BOLD}[03]${RESET} ${YELLOW}Fastdns (DNSTT)${RESET}"
     echo -e "${GREEN}${BOLD}[04]${RESET} ${YELLOW}UDP Custom${RESET}"
     echo -e "${GREEN}${BOLD}[05]${RESET} ${YELLOW}SOCKS/Python${RESET}"
     echo -e "${GREEN}${BOLD}[06]${RESET} ${YELLOW}SSL/TLS${RESET}"
@@ -450,7 +450,7 @@ while true; do
     case $choix in
         1) manage_mode "OpenSSH" install_openssh uninstall_openssh ;;
         2) manage_mode "Dropbear" install_dropbear uninstall_dropbear ;;
-        3) manage_mode "SlowDNS" install_slowdns uninstall_slowdns ;;
+        3) manage_mode "Fastdns (DNSTT)" install_slowdns uninstall_slowdns ;;
         4) manage_mode "UDP Custom" install_udp_custom uninstall_udp_custom ;;
         5) manage_mode "SOCKS/Python" install_socks_python uninstall_socks_python ;;
         6) manage_mode "SSL/TLS" install_ssl_tls uninstall_ssl_tls ;;
