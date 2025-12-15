@@ -217,24 +217,42 @@ setup_iptables() {
     fi
 }
 
+restart_dnstt() {
+    [ -n "${DNSTT_PID-}" ] && kill "$DNSTT_PID" 2>/dev/null || true
+    NS=$(cat "$CONFIG_FILE")
+    log "Démarrage DNSTT sur 127.0.0.1:$TCP_PORT"
+    nice -n 0 "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NS" "127.0.0.1:$TCP_PORT" &
+    DNSTT_PID=$!
+}
+
 log "Attente de l'interface réseau..."
 interface=$(wait_for_interface)
 log "Interface détectée : $interface"
 
-log "Réglage MTU à 1180 pour éviter la fragmentation DNS..."
-ip link set dev "$interface" mtu 1180 || log "Échec réglage MTU, continuer"
+log "Réglage MTU à 1180..."
+ip link set dev "$interface" mtu 1180 || log "Échec réglage MTU"
 
 log "Application des règles iptables..."
 setup_iptables "$interface"
 
-log "Démarrage du serveur SlowDNS..."
-NS=$(cat "$CONFIG_FILE")
-ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
-[ -z "$ssh_port" ] && ssh_port=22
+CURRENT_PORT=0
+DNSTT_PID=""
 
-# Si tu veux que DNSTT serve V2Ray WS (port 5401)
-V2RAY_PORT=5401
-exec nice -n 0 "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NS" "127.0.0.1:$V2RAY_PORT"
+# Boucle de détection dynamique du port
+while true; do
+    if ss -tlnp | grep -q ":5401"; then
+        TCP_PORT=5401
+    else
+        TCP_PORT=22
+    fi
+
+    if [ "$TCP_PORT" -ne "$CURRENT_PORT" ]; then
+        CURRENT_PORT=$TCP_PORT
+        restart_dnstt
+    fi
+
+    sleep 10
+done
 EOF
     chmod +x /usr/local/bin/slowdns-start.sh
 }
