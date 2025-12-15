@@ -51,7 +51,7 @@
 ```
 
 
-**Kighmu Manager** est un panneau de contrôle pour VPS permettant de gérer des utilisateurs SSH, SOCKS/Python, Dropbear, SlowDNS, BadVPN, SSL/TLS, UDP-Custom et plus encore.  
+**Kighmu Manager** est un panneau de contrôle pour VPS permettant de gérer des utilisateurs SSH, SOCKS/Python, Dropbear, SlowDNS, BadVPN, SSL/TLS, UDP-Custom XRAY WS (VMESS, VLESS, TROJAN), V2RAY_DNSTT et plus encore.  
 Il offre une interface simple et des scripts automatisés pour créer, supprimer et surveiller les utilisateurs.
 
 ---
@@ -66,6 +66,8 @@ Il offre une interface simple et des scripts automatisés pour créer, supprimer
 - DNSTT, BadVPN,
 - SSL/TLS,
 - UDP-Custom
+- XRAY WS (VMESS, VLESS, TROJAN)
+- V2RAY_DNSTT
 - Statistiques du VPS : IP, RAM, CPU
 - Installation et désinstallation simplifiées
 - Affichage de configurations pour applications comme HTTP Injector, SSH Custom, etc.
