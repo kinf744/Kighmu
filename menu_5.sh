@@ -277,33 +277,28 @@ creer_utilisateur() {
     echo -n "Durée de validité (en jours) : "
     read duree
 
-    # Charger base utilisateurs (sécurisé)
+    # Charger base utilisateurs
     if [[ -f "$USER_DB" && -s "$USER_DB" ]]; then
         utilisateurs=$(cat "$USER_DB")
     else
         utilisateurs="[]"
     fi
 
-    # Génération
+    # Génération UUID + date d'expiration
     uuid=$(generer_uuid)
     date_exp=$(date -d "+${duree} days" +%Y-%m-%d)
 
-    # Ajout sécurisé dans JSON
+    # Ajout utilisateur au JSON
     utilisateurs=$(echo "$utilisateurs" | jq --arg n "$nom" --arg u "$uuid" --arg d "$date_exp" \
         '. += [{"nom": $n, "uuid": $u, "expire": $d}]')
-
     echo "$utilisateurs" > "$USER_DB"
 
-    # Mise à jour V2Ray
+    # Mise à jour V2Ray si config existe
     if [[ -f /etc/v2ray/config.json ]]; then
-        if ! ajouter_client_v2ray "$uuid" "$nom"; then
-            echo "❌ Erreur ajout utilisateur dans V2Ray"
-        fi
-    else
-        echo "⚠️ V2Ray non installé – option 1 obligatoire"
+        ajouter_client_v2ray "$uuid" "$nom" || echo "❌ Erreur ajout dans V2Ray"
     fi
 
-    # Domaine
+    # Domaine VPS
     if [[ -f /.v2ray_domain ]]; then
         domaine=$(cat /.v2ray_domain)
     else
@@ -313,22 +308,19 @@ creer_utilisateur() {
     # Ports
     local V2RAY_INTER_PORT="5401"
 
-    # Clé publique SlowDNS
-    if [[ -f "$SLOWDNS_DIR/server.pub" ]]; then
-        PUB_KEY=$(cat "$SLOWDNS_DIR/server.pub")
+    # 🔹 Récupération NS et clé publique depuis slowdns.env
+    if [[ -f "$SLOWDNS_DIR/slowdns.env" ]]; then
+        source "$SLOWDNS_DIR/slowdns.env"
+        # NS=$NS et PUB_KEY=$PUB_KEY sont maintenant définis
     else
+        NS="NS_non_defini"
         PUB_KEY="clé_non_disponible"
     fi
 
-    # NS
-    if [[ -f /etc/slowdns_v2ray/ns.conf ]]; then
-        NAMESERVER=$(cat /etc/slowdns_v2ray/ns.conf)
-    else
-        NAMESERVER="NS_non_defini"
-    fi
-
+    # Générer le lien VLESS
     generer_lien_vless "$nom" "$domaine" "$V2RAY_INTER_PORT" "$uuid"
 
+    # Affichage clair
     clear
     echo -e "${GREEN}=============================="
     echo -e "🧩 VLESS + SLOWDNS"
@@ -341,14 +333,14 @@ creer_utilisateur() {
     echo -e "   V2Ray TCP  : ${GREEN}$V2RAY_INTER_PORT${RESET}"
     echo -e "➤ UUID      : ${GREEN}$uuid${RESET}"
     echo -e "➤ Path      : /vless-ws"
-    echo -e "➤ Validité  : ${YELLOW}$duree${RESET} jours expire: $date_exp"
+    echo -e "➤ Validité  : ${YELLOW}$duree${RESET} jours (expire: $date_exp)"
     echo ""
     echo -e "${CYAN}Clé publique SlowDNS:${RESET} $PUB_KEY"
-    echo -e "${CYAN}NameServer:${RESET} $NAMESERVER"
+    echo -e "${CYAN}NameServer:${RESET} $NS"
     echo ""
     echo -e "${GREEN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
     echo ""
-    echo -e "${YELLOW}┃ Lien Vless : $lien_vless${RESET}"
+    echo -e "${YELLOW}┃ Lien VLESS : $lien_vless${RESET}"
     echo -e "${GREEN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
     echo ""
     read -p "Appuyez sur Entrée pour continuer..."
