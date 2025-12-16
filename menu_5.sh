@@ -92,7 +92,7 @@ ajouter_client_v2ray() {
     # Ajouter le client dans le JSON
     tmpfile=$(mktemp)
     jq --arg uuid "$uuid" --arg email "$nom" '
-        (.inbounds[] | select(.protocol=="vmess") | .settings.clients) += [{"id": $uuid, "alterId": 0, "email": $email, "level": 1}]
+        (.inbounds[] | select(.protocol=="vless") | .settings.clients) += [{"id": $uuid, "email": $email}]
     ' "$config" > "$tmpfile"
 
     # Vérifier JSON valide après modification
