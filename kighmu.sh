@@ -218,7 +218,7 @@ echo -e "${CYAN}+============================${WHITE_BOLD}[❖]${RESET}=========
   echo -e "${GREEN}${BOLD}[05]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Supprimer un utilisateur${RESET}"
   echo -e "${GREEN}${BOLD}[06]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Message du serveur${RESET}"
   echo -e "${GREEN}${BOLD}[07]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Installation de mode${RESET}"
-  echo -e "${GREEN}${BOLD}[08]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}V2ray slowdns mode${RESET}"
+  echo -e "${GREEN}${BOLD}[08]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}V2ray Fastdns mode${RESET}"
   echo -e "${GREEN}${BOLD}[09]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Xray All mode${RESET}"
   echo -e "${GREEN}${BOLD}[10]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Désinstaller le script${RESET}"
   echo -e "${GREEN}${BOLD}[11]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Blocage de torrents${RESET}"
