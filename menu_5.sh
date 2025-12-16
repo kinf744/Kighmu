@@ -312,14 +312,17 @@ creer_utilisateur() {
     # Ports
     local V2RAY_INTER_PORT="5401"
 
-    # 🔹 Clé publique SlowDNS et NS depuis le bon répertoire
-    SLOWDNS_DIR="/etc/slowdns"
-    if [[ -f "$SLOWDNS_DIR/slowdns.env" ]]; then
-        source "$SLOWDNS_DIR/slowdns.env"
-    else
-        PUB_KEY=$( [[ -f "$SLOWDNS_DIR/server.pub" ]] && cat "$SLOWDNS_DIR/server.pub" || echo "clé_non_disponible" )
-        NAMESERVER=$( [[ -f "$SLOWDNS_DIR/ns.conf" ]] && cat "$SLOWDNS_DIR/ns.conf" || echo "NS_non_defini" )
-    fi
+    # 🔹 Clé publique et NS
+SLOWDNS_DIR="/etc/slowdns"
+
+# Lire .env si présent
+if [[ -f "$SLOWDNS_DIR/slowdns.env" ]]; then
+    source "$SLOWDNS_DIR/slowdns.env"
+fi
+
+# Assigner les valeurs avec fallback
+PUB_KEY=${PUB_KEY:-$( [[ -f "$SLOWDNS_DIR/server.pub" ]] && cat "$SLOWDNS_DIR/server.pub" || echo "clé_non_disponible" )}
+NAMESERVER=${NS:-$( [[ -f "$SLOWDNS_DIR/ns.conf" ]] && cat "$SLOWDNS_DIR/ns.conf" || echo "NS_non_defini" )}
 
     # Génération du lien VLESS
     generer_lien_vless "$nom" "$domaine" "$V2RAY_INTER_PORT" "$uuid"
