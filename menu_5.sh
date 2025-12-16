@@ -357,7 +357,7 @@ creer_utilisateur() {
     echo -e "   SlowDNS UDP: ${GREEN}5400${RESET}"
     echo -e "   V2Ray TCP  : ${GREEN}$V2RAY_INTER_PORT${RESET}"
     echo -e "➤ UUID      : ${GREEN}$uuid${RESET}"
-    echo -e "➤ Path      : /vmess-ws"
+    echo -e "➤ Path      : /vless-ws"
     echo -e "➤ Validité  : ${YELLOW}$duree${RESET} jours expire: $date_exp"
     echo ""
     echo -e "${CYAN}Clé publique SlowDNS:${RESET} $PUB_KEY"
