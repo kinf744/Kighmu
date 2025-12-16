@@ -408,11 +408,11 @@ desinstaller_v2ray() {
         sudo systemctl daemon-reload
         sudo rm -f /etc/systemd/system/slowdns-v2ray.service
 
-        echo -e "${GREEN}✅ V2Ray + SlowDNS V2Ray désinstallé.${RESET}"
-        echo -e "${GREEN}✅ Tunnel SSH SlowDNS préservé !${RESET}"
+        echo -e "${GREEN}✅ V2Ray + FastDNS V2Ray désinstallé.${RESET}"
+        echo -e "${GREEN}✅ Tunnel SSH FastDNS préservé !${RESET}"
         echo -e "${CYAN}📊 Vérification ports fermés:${RESET}"
         ss -tuln | grep -E "(:5400|:5401)" || echo "✅ Ports 5400/5401 libres"
-        echo -e "${GREEN}✅ SSH SlowDNS toujours actif: $(systemctl is-active slowdns.service 2>/dev/null || echo "non installé")${RESET}"
+        echo -e "${GREEN}✅ SSH FastDNS toujours actif: $(systemctl is-active slowdns.service 2>/dev/null || echo "non installé")${RESET}"
     else
         echo "Annulé."
     fi
