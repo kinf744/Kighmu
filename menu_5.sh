@@ -187,53 +187,52 @@ installer_v2ray() {
     cat <<EOF | sudo tee /etc/v2ray/config.json > /dev/null
 {
   "log": {
-    "loglevel": "info"
-  },
-  "inbounds": [
-    {
-      "port": 5401,
-      "protocol": "dokodemo-door",
-      "settings": {
-        "address": "127.0.0.1",
-        "port": 22,
-        "network": "tcp"
-      },
-      "tag": "ssh"
+  "loglevel": "info"
+},
+"inbounds": [
+  {
+    "port": 5401,
+    "protocol": "dokodemo-door",
+    "settings": {
+      "address": "127.0.0.1",
+      "port": 22,
+      "network": "tcp"
     },
-    {
-      "port": 5401,
-      "protocol": "vmess",
-      "settings": {
-        "clients": [
-          {
-            "id": "00000000-0000-0000-0000-000000000001",
-            "alterId": 0,
-            "level": 1,
-            "email": "default@admin"
-          }
-        ]
-      },
-      "streamSettings": {
-        "network": "ws",
-        "wsSettings": {
-          "path": "/vmess-ws"
+    "tag": "ssh"
+  },
+  {
+    "port": 5401,
+    "protocol": "vless",
+    "settings": {
+      "clients": [
+        {
+          "id": "00000000-0000-0000-0000-000000000001",
+          "email": "default@admin"
         }
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": ["http", "tls"]
-      },
-      "tag": "v2ray"
-    }
-  ],
-  "outbounds": [
-    {
-      "protocol": "freedom",
-      "settings": {
-        "domainStrategy": "UseIP"
+      ],
+      "decryption": "none"
+    },
+    "streamSettings": {
+      "network": "ws",
+      "wsSettings": {
+        "path": "/vless-ws"
       }
+    },
+    "sniffing": {
+      "enabled": true,
+      "destOverride": ["http", "tls"]
+    },
+    "tag": "vless"
+  }
+],
+"outbounds": [
+  {
+    "protocol": "freedom",
+    "settings": {
+      "domainStrategy": "UseIP"
     }
-  ]
+  }
+]
 }
 EOF
 
