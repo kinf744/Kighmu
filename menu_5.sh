@@ -47,10 +47,8 @@ generer_lien_vless() {
     local port="$3"
     local uuid="$4"
 
-    # Création du lien VLESS WS
-    local lien_vless="vless://${uuid}@${domaine}:${port}?type=ws&encryption=none&host=${domaine}&path=/vless-ws#${nom}"
-
-    echo -n "$lien_vless"
+    # On assigne directement le lien à la variable globale lien_vless
+    lien_vless="vless://${uuid}@${domaine}:${port}?type=ws&encryption=none&host=${domaine}&path=/vless-ws#${nom}"
 }
 
 # ✅ AJOUTÉ: Fonction pour ajouter UUID dans V2Ray
