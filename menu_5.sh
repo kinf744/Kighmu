@@ -333,7 +333,7 @@ creer_utilisateur() {
 
     clear
     echo -e "${GREEN}=============================="
-    echo -e "🧩 VMESS + SLOWDNS"
+    echo -e "🧩 VLESS + SLOWDNS"
     echo -e "=============================="
     echo -e "📄 Configuration pour : ${YELLOW}$nom${RESET}"
     echo -e "--------------------------------------------------"
@@ -350,7 +350,7 @@ creer_utilisateur() {
     echo ""
     echo -e "${GREEN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
     echo ""
-    echo -e "${YELLOW}┃ Lien VMess copiez-collez : $lien_vless${RESET}"
+    echo -e "${YELLOW}┃ Lien Vless : $lien_vless${RESET}"
     echo -e "${GREEN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
     echo ""
     read -p "Appuyez sur Entrée pour continuer..."
