@@ -327,7 +327,7 @@ creer_utilisateur() {
         NAMESERVER="NS_non_defini"
     fi
 
-    lien_vmess=$(generer_lien_vmess "$nom" "$domaine" "$V2RAY_INTER_PORT" "$uuid")
+    lien_vless=$(generer_lien_vless "$nom" "$domaine" "$V2RAY_INTER_PORT" "$uuid")
 
     clear
     echo -e "${GREEN}=============================="
