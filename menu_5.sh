@@ -262,8 +262,8 @@ EOF
     sudo systemctl restart v2ray.service &
 
     # LOGS TEMPS RÉEL 10s
-    echo -e "${CYAN}📊 SUIVI LOGS V2Ray (10s)...${RESET}"
-    timeout 10 sudo journalctl -u v2ray.service -f --no-pager | grep -E "(listener|transport|started|error)" || true
+    echo -e "${CYAN}📊 SUIVI LOGS V2Ray (5s)...${RESET}"
+    timeout 5 sudo journalctl -u v2ray.service -f --no-pager | grep -E "(listener|transport|started|error)" || true
 
     # VÉRIFICATION FINALE
     sleep 2
