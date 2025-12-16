@@ -40,7 +40,7 @@ sauvegarder_utilisateurs() {
     echo "$utilisateurs" > "$USER_DB"
 }
 
-# Générer lien vmess au format base64 JSON
+# Générer lien vless au format adapter
 generer_lien_vless() {
     local nom="$1"
     local domaine="$2"
