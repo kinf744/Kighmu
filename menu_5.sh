@@ -277,18 +277,18 @@ creer_utilisateur() {
     echo -n "Durée de validité (en jours) : "
     read duree
 
-    # Charger base utilisateurs (sécurisé)
+    # Charger base utilisateurs
     if [[ -f "$USER_DB" && -s "$USER_DB" ]]; then
         utilisateurs=$(cat "$USER_DB")
     else
         utilisateurs="[]"
     fi
 
-    # Génération
+    # Génération UUID et date d'expiration
     uuid=$(generer_uuid)
     date_exp=$(date -d "+${duree} days" +%Y-%m-%d)
 
-    # Ajout sécurisé dans JSON
+    # Ajout dans JSON
     utilisateurs=$(echo "$utilisateurs" | jq --arg n "$nom" --arg u "$uuid" --arg d "$date_exp" \
         '. += [{"nom": $n, "uuid": $u, "expire": $d}]')
     echo "$utilisateurs" > "$USER_DB"
@@ -312,18 +312,16 @@ creer_utilisateur() {
     # Ports
     local V2RAY_INTER_PORT="5401"
 
-    # 🔹 Lecture NS et clé publique SlowDNS (robuste)
+    # 🔹 Clé publique SlowDNS et NS depuis le bon répertoire
+    SLOWDNS_DIR="/etc/slowdns"
     if [[ -f "$SLOWDNS_DIR/slowdns.env" ]]; then
         source "$SLOWDNS_DIR/slowdns.env"
-    elif [[ -f "$SLOWDNS_DIR/server.pub" ]]; then
-        PUB_KEY=$(cat "$SLOWDNS_DIR/server.pub")
-        NAMESERVER=$(cat "$SLOWDNS_DIR/ns.conf" 2>/dev/null || echo "NS_non_defini")
     else
-        PUB_KEY="clé_non_disponible"
-        NAMESERVER="NS_non_defini"
+        PUB_KEY=$( [[ -f "$SLOWDNS_DIR/server.pub" ]] && cat "$SLOWDNS_DIR/server.pub" || echo "clé_non_disponible" )
+        NAMESERVER=$( [[ -f "$SLOWDNS_DIR/ns.conf" ]] && cat "$SLOWDNS_DIR/ns.conf" || echo "NS_non_defini" )
     fi
 
-    # Générer le lien VLESS
+    # Génération du lien VLESS
     generer_lien_vless "$nom" "$domaine" "$V2RAY_INTER_PORT" "$uuid"
 
     # Affichage clair
