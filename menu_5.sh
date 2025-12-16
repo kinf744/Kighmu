@@ -84,7 +84,7 @@ ajouter_client_v2ray() {
     fi
 
     # Vérifier doublon UUID
-    if jq -e --arg uuid "$uuid" '.inbounds[] | select(.protocol=="vmess") | .settings.clients[]? | select(.id==$uuid)' "$config" >/dev/null; then
+    if jq -e --arg uuid "$uuid" '.inbounds[] | select(.protocol=="vless") | .settings.clients[]? | select(.id==$uuid)' "$config" >/dev/null; then
         echo "⚠️ UUID déjà existant"
         return 0
     fi
