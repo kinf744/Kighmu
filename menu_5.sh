@@ -41,31 +41,16 @@ sauvegarder_utilisateurs() {
 }
 
 # Générer lien vmess au format base64 JSON
-generer_lien_vmess() {
+generer_lien_vless() {
     local nom="$1"
     local domaine="$2"
     local port="$3"
     local uuid="$4"
 
-    local json=$(cat <<EOF
-{
-  "v": "2",
-  "ps": "$nom",
-  "add": "$domaine",
-  "port": "$port",
-  "id": "$uuid",
-  "aid": "0",
-  "net": "ws",
-  "type": "none",
-  "host": "$domaine",
-  "path": "/vmess-ws",
-  "tls": "none"
-}
-EOF
-)
+    # Création du lien VLESS WS
+    local lien_vless="vless://${uuid}@${domaine}:${port}?type=ws&encryption=none&host=${domaine}&path=/vless-ws#${nom}"
 
-    # encodage base64 propre (sans retour à la ligne)
-    echo -n "vmess://$(echo -n "$json" | base64 -w 0)"
+    echo -n "$lien_vless"
 }
 
 # ✅ AJOUTÉ: Fonction pour ajouter UUID dans V2Ray
@@ -365,7 +350,7 @@ creer_utilisateur() {
     echo ""
     echo -e "${GREEN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
     echo ""
-    echo -e "${YELLOW}┃ Lien VMess copiez-collez : $lien_vmess${RESET}"
+    echo -e "${YELLOW}┃ Lien VMess copiez-collez : $lien_vless${RESET}"
     echo -e "${GREEN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
     echo ""
     read -p "Appuyez sur Entrée pour continuer..."
