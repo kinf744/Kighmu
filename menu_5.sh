@@ -151,7 +151,7 @@ show_menu() {
     echo -e "${YELLOW}║ 4) Désinstaller V2Ray + SlowDNS${RESET}"
     echo -e "${RED}║ 0) Quitter${RESET}"
     echo -e "${CYAN}╚═════════════════════════════════════════════════════╝${RESET}"
-    echo -n "Choisissez une option : "
+    echo -n "${WHITE}Choisissez une option :${RESET} "
 }
 
 # Générer UUID v4
