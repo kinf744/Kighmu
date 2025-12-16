@@ -114,17 +114,32 @@ afficher_menu() {
 }
 
 afficher_mode_v2ray_ws() {
+    # Affichage du statut du tunnel V2Ray
     if systemctl is-active --quiet v2ray.service; then
         local v2ray_port
         v2ray_port=$(jq -r '.inbounds[0].port' /etc/v2ray/config.json 2>/dev/null || echo "5401")
         echo -e "${CYAN}Tunnel V2Ray actif:${RESET}"
         echo -e "  - V2Ray WS sur le port TCP ${GREEN}$v2ray_port${RESET}"
+    else
+        echo -e "${RED}Tunnel V2Ray inactif${RESET}"
     fi
 
+    # Affichage du statut du tunnel SlowDNS
     if systemctl is-active --quiet slowdns-v2ray.service; then
         echo -e "${CYAN}Tunnel SlowDNS actif:${RESET}"
         echo -e "  - SlowDNS sur le port UDP ${GREEN}5400${RESET} → V2Ray 5401"
+    else
+        echo -e "${RED}Tunnel SlowDNS inactif${RESET}"
     fi
+
+    # 🔹 Affichage du nombre total d'utilisateurs
+    if [[ -f "$USER_DB" && -s "$USER_DB" ]]; then
+        nb_utilisateurs=$(jq length "$USER_DB" 2>/dev/null)
+        nb_utilisateurs=${nb_utilisateurs:-0}
+    else
+        nb_utilisateurs=0
+    fi
+    echo -e "${CYAN}Nombre total d'utilisateurs créés : ${GREEN}$nb_utilisateurs${RESET}"
 }
 
 # Affiche les options du menu
