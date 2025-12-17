@@ -155,7 +155,7 @@ ajouter_client_v2ray() {
 afficher_menu() {
     clear
     echo -e "${CYAN}╔═════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${YELLOW}║       V2RAY + SLOWDNS TUNNEL${RESET}"
+    echo -e "${YELLOW}║       V2RAY + FASTDNS TUNNEL${RESET}"
     echo -e "${YELLOW}║--------------------------------------------------${RESET}"
 }
 
