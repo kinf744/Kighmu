@@ -380,31 +380,27 @@ EOF
     
 # ✅ CORRIGÉ: Création utilisateur avec UUID auto-ajouté
 creer_utilisateur() {
+    local nom duree uuid date_exp domaine
     echo -n "Entrez un nom d'utilisateur : "
     read nom
     echo -n "Durée de validité (en jours) : "
     read duree
 
     # Charger base utilisateurs
-    if [[ -f "$USER_DB" && -s "$USER_DB" ]]; then
-        utilisateurs=$(cat "$USER_DB")
-    else
-        utilisateurs="[]"
-    fi
+    charger_utilisateurs
 
     # Génération UUID et date d'expiration
     uuid=$(generer_uuid)
     date_exp=$(date -d "+${duree} days" +%Y-%m-%d)
 
     # Sauvegarde utilisateur (UUID UNIQUE) en sécurité
-utilisateurs=$(echo "$utilisateurs" | jq --arg n "$nom" --arg u "$uuid" --arg d "$date_exp" \
-    '. += [{"nom": $n, "uuid": $u, "expire": $d}]')
+    utilisateurs=$(echo "$utilisateurs" | jq --arg n "$nom" --arg u "$uuid" --arg d "$date_exp" \
+        '. += [{"nom": $n, "uuid": $u, "expire": $d}]')
 
-tmpfile=$(mktemp)          # créer fichier temporaire
-echo "$utilisateurs" > "$tmpfile"
-
-mv "$tmpfile" "$USER_DB"   # déplacer temp → utilisateur.json
-chmod 600 "$USER_DB"       # sécuriser
+    local tmpfile=$(mktemp)          # créer fichier temporaire
+    echo "$utilisateurs" > "$tmpfile"
+    mv "$tmpfile" "$USER_DB"         # déplacer temp → utilisateur.json
+    chmod 600 "$USER_DB"             # sécuriser
 
     # Ajout VLESS + VMESS + TROJAN (UUID = password)
     if [[ -f /etc/v2ray/config.json ]]; then
@@ -427,6 +423,7 @@ chmod 600 "$USER_DB"       # sécuriser
     fi
 
     local V2RAY_INTER_PORT="5401"
+    local FASTDNS_PORT="${PORT:-5400}"
 
     # 🔹 FastDNS / SlowDNS
     SLOWDNS_DIR="/etc/slowdns"
@@ -434,8 +431,8 @@ chmod 600 "$USER_DB"       # sécuriser
         source "$SLOWDNS_DIR/slowdns.env"
     fi
 
-    PUB_KEY=${PUB_KEY:-$( [[ -f "$SLOWDNS_DIR/server.pub" ]] && cat "$SLOWDNS_DIR/server.pub" || echo "clé_non_disponible" )}
-    NAMESERVER=${NS:-$( [[ -f "$SLOWDNS_DIR/ns.conf" ]] && cat "$SLOWDNS_DIR/ns.conf" || echo "NS_non_defini" )}
+    local PUB_KEY=${PUB_KEY:-$( [[ -f "$SLOWDNS_DIR/server.pub" ]] && cat "$SLOWDNS_DIR/server.pub" || echo "clé_non_disponible" )}
+    local NAMESERVER=${NS:-$( [[ -f "$SLOWDNS_DIR/ns.conf" ]] && cat "$SLOWDNS_DIR/ns.conf" || echo "NS_non_defini" )}
 
     # Génération DES 3 LIENS (UUID UNIQUE)
     generer_liens_v2ray "$nom" "$domaine" "$V2RAY_INTER_PORT" "$uuid"
@@ -449,7 +446,7 @@ chmod 600 "$USER_DB"       # sécuriser
     echo -e "--------------------------------------------------"
     echo -e "➤ DOMAINE : ${GREEN}$domaine${RESET}"
     echo -e "➤ PORTS :"
-    echo -e "   FastDNS UDP: ${GREEN}5300${RESET}"
+    echo -e "   FastDNS UDP: ${GREEN}$FASTDNS_PORT${RESET}"
     echo -e "   V2Ray TCP  : ${GREEN}$V2RAY_INTER_PORT${RESET}"
     echo -e "➤ UUID / Password : ${GREEN}$uuid${RESET}"
     echo -e "➤ Paths : /vless-ws | /vmess-ws | /trojan-ws"
