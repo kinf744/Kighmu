@@ -439,11 +439,11 @@ creer_utilisateur() {
 
     # AFFICHAGE
     clear
-    echo -e "${GREEN}=============================="
+    echo -e "${GREEN}====================================================="
     echo -e "🧩 VLESS / VMESS / TROJAN + FASTDNS"
-    echo -e "=============================="
+    echo -e "============================================================="
     echo -e "📄 Configuration pour : ${YELLOW}$nom${RESET}"
-    echo -e "--------------------------------------------------"
+    echo -e "-------------------------------------------------------------"
     echo -e "➤ DOMAINE : ${GREEN}$domaine${RESET}"
     echo -e "➤ PORTS :"
     echo -e "   FastDNS UDP: ${GREEN}$FASTDNS_PORT${RESET}"
@@ -452,7 +452,7 @@ creer_utilisateur() {
     echo -e "➤ Paths : /vless-ws | /vmess-ws | /trojan-ws"
     echo -e "➤ Validité : ${YELLOW}$duree${RESET} jours (expire: $date_exp)"
     echo ""
-    echo -e "${GREEN}━━━━━━━━━━━━━━  CONFIGS SLOWDNS PORT 5300 ━━━━━━━━━━━━━━●"
+    echo -e "${GREEN}━━━━━━━━━━━━━  CONFIGS SLOWDNS PORT 5400 ━━━━━━━━━━━━━●"
     echo -e "${CYAN}Clé publique FastDNS:${RESET}"
     echo -e "$PUB_KEY"
     echo -e "${CYAN}NameServer:${RESET} $NAMESERVER"
