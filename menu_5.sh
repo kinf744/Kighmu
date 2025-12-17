@@ -348,7 +348,12 @@ installer_v2ray() {
         "domainStrategy": "UseIP"
       }
     }
-  ]
+  ],
+  "api": {
+    "tag": "api",
+    "services": ["StatsService"]
+  },
+  "stats": {}
 }
 EOF
 
