@@ -433,14 +433,14 @@ PUB_KEY=${PUB_KEY:-$( [[ -f "$SLOWDNS_DIR/server.pub" ]] && cat "$SLOWDNS_DIR/se
 NAMESERVER=${NS:-$( [[ -f "$SLOWDNS_DIR/ns.conf" ]] && cat "$SLOWDNS_DIR/ns.conf" || echo "NS_non_defini" )}
 
     # Génération du lien VMESS, VLESS, TROJAN 
-    generer_lien_vmess "$nom" "$domaine" "$V2RAY_INTER_PORT" "$uuid"
     generer_lien_vless "$nom" "$domaine" "$V2RAY_INTER_PORT" "$uuid"
+    generer_lien_vmess "$nom" "$domaine" "$V2RAY_INTER_PORT" "$uuid"
     generer_lien_trojan "$nom" "$domaine" "$V2RAY_INTER_PORT" "$password"
 
     # Affichage clair
     clear
     echo -e "${GREEN}=============================="
-    echo -e "🧩 VMESS, VLESS, TROJAN + FASTDNS"
+    echo -e "🧩 VLESS, VMESS, TROJAN + FASTDNS"
     echo -e "=============================="
     echo -e "📄 Configuration pour : ${YELLOW}$nom${RESET}"
     echo -e "--------------------------------------------------"
@@ -448,8 +448,8 @@ NAMESERVER=${NS:-$( [[ -f "$SLOWDNS_DIR/ns.conf" ]] && cat "$SLOWDNS_DIR/ns.conf
     echo -e "➤ PORTS :"
     echo -e "   FastDNS UDP: ${GREEN}5300${RESET}"
     echo -e "   V2Ray TCP  : ${GREEN}$V2RAY_INTER_PORT${RESET}"
-    echo -e "➤ UUID      : ${GREEN}$uuid${RESET}"
-    echo -e "➤ Path      : /vless-ws"
+    echo -e "➤ UUID, Password      : ${GREEN}$uuid${RESET}"
+    echo -e "➤ Path      : /vless-ws /vmess-ws /trojan-ws"
     echo -e "➤ Validité  : ${YELLOW}$duree${RESET} jours expire: $date_exp"
     echo ""
     echo -e "${CYAN}Clé publique FastDNS:${RESET} $PUB_KEY"
@@ -457,8 +457,8 @@ NAMESERVER=${NS:-$( [[ -f "$SLOWDNS_DIR/ns.conf" ]] && cat "$SLOWDNS_DIR/ns.conf
     echo ""
     echo -e "${GREEN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
     echo ""
-    echo -e "${YELLOW}┃ Lien VMESS  : $lien_vmess${RESET}"
     echo -e "${YELLOW}┃ Lien VLESS  : $lien_vless${RESET}"
+    echo -e "${YELLOW}┃ Lien VMESS  : $lien_vmess${RESET}"
     echo -e "${YELLOW}┃ Lien TROJAN : $lien_trojan${RESET}"
     echo -e "${GREEN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
     echo ""
