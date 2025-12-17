@@ -442,10 +442,7 @@ installer_slowdns() {
 #!/bin/bash
 set -euo pipefail
 
-exec $DNSTT_BIN \
-  -udp :$DNSTT_PORT \
-  -privkey-file $SERVER_KEY \
-  $NAMESERVER 127.0.0.1:$V2RAY_PORT
+exec nice -n 0 "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NS" "127.0.0.1:$V2RAY_PORT"
 EOF
 
     chmod +x /usr/local/bin/dnstt-start.sh
