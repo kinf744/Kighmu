@@ -396,10 +396,15 @@ creer_utilisateur() {
     uuid=$(generer_uuid)
     date_exp=$(date -d "+${duree} days" +%Y-%m-%d)
 
-    # Sauvegarde utilisateur (UUID UNIQUE)
-    utilisateurs=$(echo "$utilisateurs" | jq --arg n "$nom" --arg u "$uuid" --arg d "$date_exp" \
-        '. += [{"nom": $n, "uuid": $u, "expire": $d}]')
-    echo "$utilisateurs" > "$USER_DB"
+    # Sauvegarde utilisateur (UUID UNIQUE) en sécurité
+utilisateurs=$(echo "$utilisateurs" | jq --arg n "$nom" --arg u "$uuid" --arg d "$date_exp" \
+    '. += [{"nom": $n, "uuid": $u, "expire": $d}]')
+
+tmpfile=$(mktemp)          # créer fichier temporaire
+echo "$utilisateurs" > "$tmpfile"
+
+mv "$tmpfile" "$USER_DB"   # déplacer temp → utilisateur.json
+chmod 600 "$USER_DB"       # sécuriser
 
     # Ajout VLESS + VMESS + TROJAN (UUID = password)
     if [[ -f /etc/v2ray/config.json ]]; then
