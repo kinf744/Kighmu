@@ -178,7 +178,7 @@ afficher_mode_v2ray_ws() {
         echo -e "${RED}Tunnel FastDNS inactif${RESET}"
     fi
 
-    # 🔹 Affichage du nombre total d'utilisateurs
+    # 🔹 Nombre total d'utilisateurs créés
     if [[ -f "$USER_DB" && -s "$USER_DB" ]]; then
         nb_utilisateurs=$(jq length "$USER_DB" 2>/dev/null)
         nb_utilisateurs=${nb_utilisateurs:-0}
@@ -186,6 +186,31 @@ afficher_mode_v2ray_ws() {
         nb_utilisateurs=0
     fi
     echo -e "${CYAN}Nombre total d'utilisateurs créés : ${GREEN}$nb_utilisateurs${RESET}"
+
+    # 🔹 Nombre d'utilisateurs V2Ray en ligne
+    nb_en_ligne=0
+    if [[ -f /etc/v2ray/config.json ]]; then
+        # Récupérer tous les UUIDs connus (VLESS/VMESS/TROJAN)
+        uuids=$(jq -r '[.inbounds[] | select(.protocol=="vless" or .protocol=="vmess" or .protocol=="trojan") | .settings.clients[]?.id // .settings.clients[]?.password] | .[]' /etc/v2ray/config.json)
+        
+        # Tableau associatif pour stocker les UUIDs en ligne
+        declare -A uuids_en_ligne=()
+
+        # Utiliser les logs V2Ray pour détecter les connexions actives
+        # On lit les 100 dernières lignes avec les connexions WebSocket
+        logs=$(journalctl -u v2ray.service -n 100 --no-pager)
+        
+        for uuid in $uuids; do
+            # Vérifie si l'UUID apparaît dans les logs récents (connexion WS)
+            if echo "$logs" | grep -q "$uuid"; then
+                uuids_en_ligne["$uuid"]=1
+            fi
+        done
+
+        nb_en_ligne=${#uuids_en_ligne[@]}
+    fi
+
+    echo -e "${CYAN}Utilisateurs V2Ray en ligne : ${GREEN}${nb_en_ligne:-0}${RESET}"
 }
 
 # Affiche les options du menu
