@@ -337,7 +337,12 @@ installer_v2ray() {
         "domainStrategy": "UseIP"
       }
     }
-  ]
+  ],
+  "api": {
+    "tag": "api",
+    "services": ["StatsService"],
+    "listen": "127.0.0.1:10085"
+  }
 }
 EOF
 
