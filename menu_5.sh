@@ -396,18 +396,22 @@ creer_utilisateur() {
     uuid=$(generer_uuid)
     date_exp=$(date -d "+${duree} days" +%Y-%m-%d)
 
-    # Ajout dans JSON
+    # Sauvegarde utilisateur (UUID UNIQUE)
     utilisateurs=$(echo "$utilisateurs" | jq --arg n "$nom" --arg u "$uuid" --arg d "$date_exp" \
         '. += [{"nom": $n, "uuid": $u, "expire": $d}]')
     echo "$utilisateurs" > "$USER_DB"
 
-    # Mise à jour V2Ray
+    # Ajout VLESS + VMESS + TROJAN (UUID = password)
     if [[ -f /etc/v2ray/config.json ]]; then
-        if ! ajouter_client_v2ray "$uuid" "$nom" "$password"; then
+        if ! ajouter_client_v2ray "$uuid" "$nom"; then
             echo "❌ Erreur ajout utilisateur dans V2Ray"
+            read -p "Entrée pour continuer..."
+            return
         fi
     else
         echo "⚠️ V2Ray non installé – option 1 obligatoire"
+        read -p "Entrée pour continuer..."
+        return
     fi
 
     # Domaine
@@ -417,30 +421,24 @@ creer_utilisateur() {
         domaine="votre-domaine.com"
     fi
 
-    # Ports
     local V2RAY_INTER_PORT="5401"
 
-    # 🔹 Clé publique et NS
-SLOWDNS_DIR="/etc/slowdns"
+    # 🔹 FastDNS / SlowDNS
+    SLOWDNS_DIR="/etc/slowdns"
+    if [[ -f "$SLOWDNS_DIR/slowdns.env" ]]; then
+        source "$SLOWDNS_DIR/slowdns.env"
+    fi
 
-# Lire .env si présent
-if [[ -f "$SLOWDNS_DIR/slowdns.env" ]]; then
-    source "$SLOWDNS_DIR/slowdns.env"
-fi
+    PUB_KEY=${PUB_KEY:-$( [[ -f "$SLOWDNS_DIR/server.pub" ]] && cat "$SLOWDNS_DIR/server.pub" || echo "clé_non_disponible" )}
+    NAMESERVER=${NS:-$( [[ -f "$SLOWDNS_DIR/ns.conf" ]] && cat "$SLOWDNS_DIR/ns.conf" || echo "NS_non_defini" )}
 
-# Assigner les valeurs avec fallback
-PUB_KEY=${PUB_KEY:-$( [[ -f "$SLOWDNS_DIR/server.pub" ]] && cat "$SLOWDNS_DIR/server.pub" || echo "clé_non_disponible" )}
-NAMESERVER=${NS:-$( [[ -f "$SLOWDNS_DIR/ns.conf" ]] && cat "$SLOWDNS_DIR/ns.conf" || echo "NS_non_defini" )}
+    # Génération DES 3 LIENS (UUID UNIQUE)
+    generer_liens_v2ray "$nom" "$domaine" "$V2RAY_INTER_PORT" "$uuid"
 
-    # Génération du lien VMESS, VLESS, TROJAN 
-    generer_lien_vless "$nom" "$domaine" "$V2RAY_INTER_PORT" "$uuid"
-    generer_lien_vmess "$nom" "$domaine" "$V2RAY_INTER_PORT" "$uuid"
-    generer_lien_trojan "$nom" "$domaine" "$V2RAY_INTER_PORT" "$password"
-
-    # Affichage clair
+    # AFFICHAGE
     clear
     echo -e "${GREEN}=============================="
-    echo -e "🧩 VLESS, VMESS, TROJAN + FASTDNS"
+    echo -e "🧩 VLESS / VMESS / TROJAN + FASTDNS"
     echo -e "=============================="
     echo -e "📄 Configuration pour : ${YELLOW}$nom${RESET}"
     echo -e "--------------------------------------------------"
@@ -448,15 +446,14 @@ NAMESERVER=${NS:-$( [[ -f "$SLOWDNS_DIR/ns.conf" ]] && cat "$SLOWDNS_DIR/ns.conf
     echo -e "➤ PORTS :"
     echo -e "   FastDNS UDP: ${GREEN}5300${RESET}"
     echo -e "   V2Ray TCP  : ${GREEN}$V2RAY_INTER_PORT${RESET}"
-    echo -e "➤ UUID, Password      : ${GREEN}$uuid${RESET}"
-    echo -e "➤ Path      : /vless-ws /vmess-ws /trojan-ws"
-    echo -e "➤ Validité  : ${YELLOW}$duree${RESET} jours expire: $date_exp"
+    echo -e "➤ UUID / Password : ${GREEN}$uuid${RESET}"
+    echo -e "➤ Paths : /vless-ws | /vmess-ws | /trojan-ws"
+    echo -e "➤ Validité : ${YELLOW}$duree${RESET} jours (expire: $date_exp)"
     echo ""
     echo -e "${CYAN}Clé publique FastDNS:${RESET} $PUB_KEY"
     echo -e "${CYAN}NameServer:${RESET} $NAMESERVER"
     echo ""
     echo -e "${GREEN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
-    echo ""
     echo -e "${YELLOW}┃ Lien VLESS  : $lien_vless${RESET}"
     echo -e "${YELLOW}┃ Lien VMESS  : $lien_vmess${RESET}"
     echo -e "${YELLOW}┃ Lien TROJAN : $lien_trojan${RESET}"
