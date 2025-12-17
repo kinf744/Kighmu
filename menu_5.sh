@@ -178,7 +178,7 @@ afficher_mode_v2ray_ws() {
         echo -e "${RED}Tunnel FastDNS inactif${RESET}"
     fi
 
-    # 🔹 Affichage du nombre total d'utilisateurs créés
+    # 🔹 Nombre total d'utilisateurs créés
     if [[ -f "$USER_DB" && -s "$USER_DB" ]]; then
         nb_utilisateurs=$(jq length "$USER_DB" 2>/dev/null)
         nb_utilisateurs=${nb_utilisateurs:-0}
@@ -187,23 +187,18 @@ afficher_mode_v2ray_ws() {
     fi
     echo -e "${CYAN}Nombre total d'utilisateurs créés : ${GREEN}$nb_utilisateurs${RESET}"
 
-    # 🔹 Affichage du nombre d'utilisateurs en ligne
+    # 🔹 Nombre d'utilisateurs en ligne via StatsService
     nb_en_ligne=0
     if [[ -f /etc/v2ray/config.json ]]; then
-        # Récupère les UUIDs de tous les clients
         uuids=$(jq -r '[.inbounds[] | select(.protocol=="vless" or .protocol=="vmess" or .protocol=="trojan") | .settings.clients[]?.id // .settings.clients[]?.password] | .[]' /etc/v2ray/config.json)
-        
         for uuid in $uuids; do
-            # Vérifie via l'API Stats si l'utilisateur a des connexions actives
-            connexions=$(v2ctl api --server=127.0.0.1:10085 StatsService.QueryStats \
-                '{"name": "user>>> '"$uuid"'>>>traffic>>>down", "reset": false}' 2>/dev/null)
-            
-            if [[ "$connexions" != *"error"* && "$connexions" != "null" ]]; then
+            rx=$(v2ctl api StatsService.QueryStats "inbound>>>$uuid>>>traffic>>>downlink" 2>/dev/null || echo 0)
+            tx=$(v2ctl api StatsService.QueryStats "inbound>>>$uuid>>>traffic>>>uplink" 2>/dev/null || echo 0)
+            if [[ "$rx" -gt 0 || "$tx" -gt 0 ]]; then
                 nb_en_ligne=$((nb_en_ligne+1))
             fi
         done
     fi
-
     echo -e "${CYAN}Utilisateurs V2Ray en ligne : ${GREEN}${nb_en_ligne:-0}${RESET}"
 }
 
