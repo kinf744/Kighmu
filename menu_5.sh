@@ -365,10 +365,10 @@ EOF
         echo -e "${GREEN}✅ Service: $(systemctl is-active v2ray.service)${RESET}"
         echo -e "${GREEN}✅ Port: $(ss -tuln | grep :5401 | awk '{print $4" → "$5}')${RESET}"
         echo ""
-        echo -e "${YELLOW}📱 CLIENT VLESS:${RESET}"
+        echo -e "${YELLOW}📱 CLIENT VLESS, VMESS, TROJAN :${RESET}"
         echo -e "${GREEN}IP:${RESET} $domaine:5401"
         echo -e "${GREEN}UUID:${RESET} 00000000-0000-0000-0000-000000000001"
-        echo -e "${GREEN}Path:${RESET} /vless-ws"
+        echo -e "${GREEN}Path:${RESET} /vless-ws | /vmess-ws | /trojan-ws"
         echo -e "${RED}⚠️ → TCP 5401 ALLOW !${RESET}"
     else
         echo -e "${RED}❌ V2Ray ÉCHEC !${RESET}"
