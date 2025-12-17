@@ -252,7 +252,7 @@ installer_v2ray() {
       "settings": {
         "clients": [
           {
-            "password": "default_password",
+            "password": "00000000-0000-0000-0000-000000000001",
             "email": "default@admin"
           }
         ]
