@@ -394,56 +394,54 @@ installer_slowdns() {
 
     SERVICE_FILE="/etc/systemd/system/dnstt.service"
 
+    # --- CLÉS FIXES DNSTT ---
+    DNSTT_PRIVATE_KEY="4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa"
+    DNSTT_PUBLIC_KEY="2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c"
+
     echo "📁 Préparation des dossiers..."
     mkdir -p "$SLOWDNS_DIR"
 
-    # --- Téléchargement du VRAI binaire DNSTT ---
+    # --- Téléchargement du vrai binaire DNSTT ---
     echo "📥 Téléchargement du binaire officiel DNSTT..."
     if [ ! -x "$DNSTT_BIN" ]; then
-        wget -q -O "$DNSTT_BIN" \
-          https://dnstt.network/dnstt-server-linux-amd64
+        wget -q -O "$DNSTT_BIN" https://dnstt.network/dnstt-server-linux-amd64
         chmod +x "$DNSTT_BIN"
     fi
 
-    # --- Génération des clés ---
-    if [ ! -f "$SERVER_KEY" ]; then
-        echo "🔐 Génération des clés DNSTT..."
-        "$DNSTT_BIN" -gen-key \
-          -privkey-file "$SERVER_KEY" \
-          -pubkey-file "$SERVER_PUB"
-        chmod 600 "$SERVER_KEY"
-        chmod 644 "$SERVER_PUB"
-    fi
+    # --- Écriture des clés FIXES ---
+    echo "🔐 Installation des clés DNSTT fixes..."
+    echo "$DNSTT_PRIVATE_KEY" > "$SERVER_KEY"
+    echo "$DNSTT_PUBLIC_KEY"  > "$SERVER_PUB"
+
+    chmod 600 "$SERVER_KEY"
+    chmod 644 "$SERVER_PUB"
 
     # --- NameServer ---
     read -rp "NameServer NS (ex: ns.example.com) : " NAMESERVER
     echo "$NAMESERVER" > "$CONFIG_FILE"
     chmod 600 "$CONFIG_FILE"
 
-    # --- nftables (NAT DNS intelligent) ---
-    echo "🔥 Configuration nftables (UDP 53 → $DNSTT_PORT)..."
+    # --- nftables (UDP 53 → DNSTT_PORT) ---
+    echo "🔥 Configuration nftables..."
 
     nft list table ip dnstt >/dev/null 2>&1 || nft add table ip dnstt
     nft list chain ip dnstt prerouting >/dev/null 2>&1 || \
         nft add chain ip dnstt prerouting { type nat hook prerouting priority -100 \; }
 
-    nft add rule ip dnstt prerouting udp dport 53 redirect to $DNSTT_PORT 2>/dev/null || true
+    nft add rule ip dnstt prerouting udp dport 53 redirect to "$DNSTT_PORT" 2>/dev/null || true
 
-    if ! grep -q 'include "/etc/nftables.d/\*.nft"' /etc/nftables.conf 2>/dev/null; then
-        mkdir -p /etc/nftables.d
-        echo 'include "/etc/nftables.d/*.nft"' >> /etc/nftables.conf
-    fi
-
+    mkdir -p /etc/nftables.d
     nft list ruleset > /etc/nftables.d/dnstt.nft
+
     systemctl enable nftables
     systemctl restart nftables
 
-    # --- Script de démarrage DNSTT ---
+    # --- Script de démarrage ---
     cat <<EOF > /usr/local/bin/dnstt-start.sh
 #!/bin/bash
-set -euo pipefail
-
-exec nice -n 0 "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NS" "127.0.0.1:$V2RAY_PORT"
+exec "$DNSTT_BIN" -udp ":$DNSTT_PORT" \
+    -privkey-file "$SERVER_KEY" \
+    "$NAMESERVER" 127.0.0.1:$V2RAY_PORT
 EOF
 
     chmod +x /usr/local/bin/dnstt-start.sh
@@ -456,12 +454,10 @@ After=network-online.target nftables.service
 Wants=network-online.target
 
 [Service]
-Type=simple
 ExecStart=/usr/local/bin/dnstt-start.sh
 Restart=always
 RestartSec=3
 
-# Sécurité
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
@@ -471,13 +467,11 @@ ReadWritePaths=$SLOWDNS_DIR
 LimitNOFILE=1048576
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=dnstt
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-    # --- Activation ---
     systemctl daemon-reload
     systemctl enable dnstt
     systemctl restart dnstt
@@ -486,12 +480,11 @@ EOF
     echo "🎉 INSTALLATION TERMINÉE"
     echo "------------------------------------"
     echo "NS          : $NAMESERVER"
-    echo "Clé publique: $(cat "$SERVER_PUB")"
+    echo "Clé publique: $DNSTT_PUBLIC_KEY"
     echo "DNS UDP     : 53 → $DNSTT_PORT"
     echo "V2Ray TCP   : $V2RAY_PORT"
     echo ""
     echo "Logs        : journalctl -u dnstt -f"
-    echo "Statut      : systemctl status dnstt"
 }
     
 # ✅ CORRIGÉ: Création utilisateur avec UUID auto-ajouté
