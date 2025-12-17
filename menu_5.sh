@@ -160,7 +160,7 @@ afficher_menu() {
 }
 
 afficher_mode_v2ray_ws() {
-    # Affichage du statut du tunnel V2Ray
+    # 🔹 Statut du tunnel V2Ray
     if systemctl is-active --quiet v2ray.service; then
         local v2ray_port
         v2ray_port=$(jq -r '.inbounds[0].port' /etc/v2ray/config.json 2>/dev/null || echo "5401")
@@ -170,7 +170,7 @@ afficher_mode_v2ray_ws() {
         echo -e "${RED}Tunnel V2Ray inactif${RESET}"
     fi
 
-    # Affichage du statut du tunnel SlowDNS
+    # 🔹 Statut du tunnel SlowDNS
     if systemctl is-active --quiet slowdns.service; then
         echo -e "${CYAN}Tunnel FastDNS actif:${RESET}"
         echo -e "  - FastDNS sur le port UDP ${GREEN}5400${RESET} → V2Ray 5401"
@@ -187,14 +187,13 @@ afficher_mode_v2ray_ws() {
     fi
     echo -e "${CYAN}Nombre total d'utilisateurs créés : ${GREEN}$nb_utilisateurs${RESET}"
 
-    # 🔹 Nombre total d'appareils connectés
+    # 🔹 Nombre total d'appareils connectés via StatsService
     nb_appareils=0
     if command -v v2ctl >/dev/null 2>&1; then
         # Récupère toutes les statistiques des clients
-        stats_json=$(v2ctl api --server=127.0.0.1:10085 StatsService.QueryStats 'pattern: "inbound>>>.*>>>traffic"')
-        # On additionne toutes les connexions actives
-        # Chaque clé "inbound>>>vless>>>clientUUID>>>conns" contient le nombre de connexions actives
-        nb_appareils=$(echo "$stats_json" | jq '[.stats[] | select(.value|tonumber>0) | .value|tonumber] | add')
+        stats_json=$(v2ctl api --server=127.0.0.1:10085 StatsService.QueryStats 'pattern: "inbound>>>.*>>>conns"')
+        # Additionne toutes les connexions actives pour tous les clients
+        nb_appareils=$(echo "$stats_json" | jq '[.stats[]?.value // 0 | tonumber] | add')
         nb_appareils=${nb_appareils:-0}
     fi
     echo -e "${CYAN}Nombre total d'appareils connectés : ${GREEN}${nb_appareils}${RESET}"
