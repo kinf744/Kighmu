@@ -465,28 +465,66 @@ creer_utilisateur() {
 supprimer_utilisateur() {
     charger_utilisateurs
     count=$(echo "$utilisateurs" | jq length)
+
     if [ "$count" -eq 0 ]; then
         echo "Aucun utilisateur à supprimer."
         read -p "Appuyez sur Entrée pour continuer..."
         return
     fi
+
     echo "Utilisateurs actuels :"
     for i in $(seq 0 $((count - 1))); do
         nom=$(echo "$utilisateurs" | jq -r ".[$i].nom")
         expire=$(echo "$utilisateurs" | jq -r ".[$i].expire")
-        echo "$((i+1)) $nom expire le $expire"
+        uuid=$(echo "$utilisateurs" | jq -r ".[$i].uuid")
+        echo "$((i+1))) $nom | expire le $expire | UUID: $uuid"
     done
+
     echo -n "Numéro à supprimer : "
     read choix
+
     if (( choix < 1 || choix > count )); then
         echo "Choix invalide."
         read -p "Appuyez sur Entrée pour continuer..."
         return
     fi
+
     index=$((choix - 1))
+    uuid_supprime=$(echo "$utilisateurs" | jq -r ".[$index].uuid")
+    nom_supprime=$(echo "$utilisateurs" | jq -r ".[$index].nom")
+
+    # 🔴 Suppression dans la base utilisateurs
     utilisateurs=$(echo "$utilisateurs" | jq "del(.[${index}])")
     sauvegarder_utilisateurs
-    echo "✅ Utilisateur supprimé."
+
+    # 🔴 Suppression dans V2Ray (VLESS + VMESS + TROJAN)
+    if [[ -f /etc/v2ray/config.json ]]; then
+        tmpfile=$(mktemp)
+
+        jq --arg uuid "$uuid_supprime" '
+        .inbounds |= map(
+            if .protocol=="vless" then
+                .settings.clients |= map(select(.id != $uuid))
+            elif .protocol=="vmess" then
+                .settings.clients |= map(select(.id != $uuid))
+            elif .protocol=="trojan" then
+                .settings.clients |= map(select(.password != $uuid))
+            else .
+            end
+        )
+        ' /etc/v2ray/config.json > "$tmpfile"
+
+        if jq empty "$tmpfile" >/dev/null 2>&1; then
+            mv "$tmpfile" /etc/v2ray/config.json
+            systemctl restart v2ray
+            echo "✅ Utilisateur supprimé de V2Ray (VLESS / VMESS / TROJAN)"
+        else
+            echo "❌ Erreur JSON après suppression V2Ray"
+            rm -f "$tmpfile"
+        fi
+    fi
+
+    echo "✅ Utilisateur « $nom_supprime » supprimé complètement."
     read -p "Appuyez sur Entrée pour continuer..."
 }
 
