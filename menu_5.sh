@@ -339,13 +339,15 @@ fi
 PUB_KEY=${PUB_KEY:-$( [[ -f "$SLOWDNS_DIR/server.pub" ]] && cat "$SLOWDNS_DIR/server.pub" || echo "clé_non_disponible" )}
 NAMESERVER=${NS:-$( [[ -f "$SLOWDNS_DIR/ns.conf" ]] && cat "$SLOWDNS_DIR/ns.conf" || echo "NS_non_defini" )}
 
-    # Génération du lien VLESS
+    # Génération du lien VMESS, VLESS, TROJAN 
+    generer_lien_vmess "$nom" "$domaine" "$V2RAY_INTER_PORT" "$uuid"
     generer_lien_vless "$nom" "$domaine" "$V2RAY_INTER_PORT" "$uuid"
+    generer_lien_trojan "$nom" "$domaine" "$V2RAY_INTER_PORT" "$password"
 
     # Affichage clair
     clear
     echo -e "${GREEN}=============================="
-    echo -e "🧩 VLESS + FASTDNS"
+    echo -e "🧩 VMESS, VLESS, TROJAN + FASTDNS"
     echo -e "=============================="
     echo -e "📄 Configuration pour : ${YELLOW}$nom${RESET}"
     echo -e "--------------------------------------------------"
@@ -362,7 +364,9 @@ NAMESERVER=${NS:-$( [[ -f "$SLOWDNS_DIR/ns.conf" ]] && cat "$SLOWDNS_DIR/ns.conf
     echo ""
     echo -e "${GREEN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
     echo ""
-    echo -e "${YELLOW}┃ Lien Vless : $lien_vless${RESET}"
+    echo -e "${YELLOW}┃ Lien VMESS  : $lien_vmess${RESET}"
+    echo -e "${YELLOW}┃ Lien VLESS  : $lien_vless${RESET}"
+    echo -e "${YELLOW}┃ Lien TROJAN : $lien_trojan${RESET}"
     echo -e "${GREEN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
     echo ""
     read -p "Appuyez sur Entrée pour continuer..."
