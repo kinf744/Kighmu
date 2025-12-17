@@ -41,14 +41,47 @@ sauvegarder_utilisateurs() {
 }
 
 # Générer lien vless au format adapter
-generer_lien_vless() {
+generer_liens_v2ray() {
     local nom="$1"
     local domaine="$2"
     local port="$3"
     local uuid="$4"
 
-    # On assigne directement le lien à la variable globale lien_vless
-    lien_vless="vless://${uuid}@${domaine}:${port}?type=ws&encryption=none&host=${domaine}&path=/vless-ws#${nom}"
+    # VLESS
+    lien_vless="vless://${uuid}@${domaine}:${port}?type=ws&encryption=none&host=${domaine}&path=/vless-ws#${nom}-VLESS"
+
+    # VMESS (Base64 JSON)
+    local vmess_json
+    vmess_json=$(jq -nc \
+        --arg v "2" \
+        --arg ps "${nom}-VMESS" \
+        --arg add "$domaine" \
+        --arg port "$port" \
+        --arg id "$uuid" \
+        --arg aid "0" \
+        --arg net "ws" \
+        --arg type "none" \
+        --arg host "$domaine" \
+        --arg path "/vmess-ws" \
+        '{
+            v: $v,
+            ps: $ps,
+            add: $add,
+            port: $port,
+            id: $id,
+            aid: $aid,
+            net: $net,
+            type: $type,
+            host: $host,
+            path: $path,
+            tls: ""
+        }'
+    )
+
+    lien_vmess="vmess://$(echo -n "$vmess_json" | base64 -w 0)"
+
+    # TROJAN (UUID comme password)
+    lien_trojan="trojan://${uuid}@${domaine}:${port}?type=ws&host=${domaine}&path=/trojan-ws#${nom}-TROJAN"
 }
 
 # ✅ AJOUTÉ: Fonction pour ajouter UUID dans V2Ray
