@@ -310,7 +310,7 @@ creer_utilisateur() {
 
     # Mise à jour V2Ray
     if [[ -f /etc/v2ray/config.json ]]; then
-        if ! ajouter_client_v2ray "$uuid" "$nom"; then
+        if ! ajouter_client_v2ray "$uuid" "$nom" "$password"; then
             echo "❌ Erreur ajout utilisateur dans V2Ray"
         fi
     else
