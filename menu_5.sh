@@ -387,77 +387,62 @@ installer_slowdns_v2ray() {
     SLOWDNS_BIN="/usr/local/bin/dnstt-server"
     SLOWDNS_PORT=5600
     V2RAY_PORT=5401
-
     SERVER_KEY="$SLOWDNS_DIR/server.key"
     SERVER_PUB="$SLOWDNS_DIR/server.pub"
     CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
+    LOG_FILE="/var/log/slowdns_v2ray.log"
     SERVICE_FILE="/etc/systemd/system/slowdns_v2ray.service"
 
     # --- Clés fixes ---
-    SLOWDNS_PRIVATE_KEY="4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa"
-    SLOWDNS_PUBLIC_KEY="2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c"
+    DNSTT_PRIVATE_KEY="4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa"
+    DNSTT_PUBLIC_KEY="2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c"
 
-    echo "📁 Préparation des dossiers..."
+    echo "📁 Création des dossiers..."
     mkdir -p "$SLOWDNS_DIR"
+    touch "$LOG_FILE" && chmod 644 "$LOG_FILE"
 
     # --- Téléchargement du vrai binaire DNSTT ---
+    echo "📥 Téléchargement DNSTT..."
     if [ ! -x "$SLOWDNS_BIN" ]; then
-        echo "📥 Téléchargement du binaire officiel DNSTT..."
         wget -q -O "$SLOWDNS_BIN" https://dnstt.network/dnstt-server-linux-amd64
         chmod +x "$SLOWDNS_BIN"
     fi
 
-    # --- Écriture des clés fixes ---
-    echo "$SLOWDNS_PRIVATE_KEY" > "$SERVER_KEY"
-    echo "$SLOWDNS_PUBLIC_KEY"  > "$SERVER_PUB"
+    # --- Installation des clés fixes ---
+    echo "$DNSTT_PRIVATE_KEY" > "$SERVER_KEY"
+    echo "$DNSTT_PUBLIC_KEY"  > "$SERVER_PUB"
     chmod 600 "$SERVER_KEY"
     chmod 644 "$SERVER_PUB"
 
-    # --- Saisie du NameServer ---
+    # --- NameServer ---
     read -rp "NameServer NS (ex: ns.example.com) : " NAMESERVER
     echo "$NAMESERVER" > "$CONFIG_FILE"
     chmod 600 "$CONFIG_FILE"
 
     # --- nftables : NAT intelligent 53 → 5600 ---
-    echo "🔥 Configuration nftables (NAT intelligent 53 → 5600)..."
-
-    # Création table + chain si inexistants
-    nft list table ip slowdns >/dev/null 2>&1 || nft add table ip slowdns
-    nft list chain ip slowdns prerouting >/dev/null 2>&1 || \
-        nft add chain ip slowdns prerouting { type nat hook prerouting priority -100 \; }
-
-    # Ajouter règle NAT intelligent
-    nft add rule ip slowdns prerouting udp dport 53 redirect to "$SLOWDNS_PORT" 2>/dev/null || true
-
-    # Persistance
+    echo "🔥 Configuration nftables (NAT intelligent 53 → $SLOWDNS_PORT)..."
+    nft list table ip slowdns_v2ray >/dev/null 2>&1 || nft add table ip slowdns_v2ray
+    nft list chain ip slowdns_v2ray prerouting >/dev/null 2>&1 || \
+        nft add chain ip slowdns_v2ray prerouting { type nat hook prerouting priority -100 \; }
+    nft add rule ip slowdns_v2ray prerouting udp dport 53 redirect to "$SLOWDNS_PORT" 2>/dev/null || true
     mkdir -p /etc/nftables.d
-    nft list ruleset > /etc/nftables.d/slowdns.nft
+    nft list ruleset > /etc/nftables.d/slowdns_v2ray.nft
     grep -q 'include "/etc/nftables.d/*.nft"' /etc/nftables.conf || echo 'include "/etc/nftables.d/*.nft"' >> /etc/nftables.conf
-
     systemctl enable nftables
     systemctl restart nftables
 
-    # --- Script de démarrage ---
+    # --- Script de démarrage avec log puissant ---
     cat <<EOF > /usr/local/bin/slowdns_v2ray-start.sh
 #!/bin/bash
-set -euo pipefail
-
-SLOWDNS_BIN="$SLOWDNS_BIN"
-PORT=$SLOWDNS_PORT
-V2RAY_PORT=$V2RAY_PORT
-SERVER_KEY="$SERVER_KEY"
-NS="$(cat $CONFIG_FILE)"
-
-exec nice -n 0 "\$SLOWDNS_BIN" -udp ":\$PORT" -privkey-file "\$SERVER_KEY" "\$NS" 127.0.0.1:\$V2RAY_PORT
+exec nice -n 0 "$SLOWDNS_BIN" -udp ":$SLOWDNS_PORT" -privkey-file "$SERVER_KEY" "$NAMESERVER" "127.0.0.1:$V2RAY_PORT" >> "$LOG_FILE" 2>&1
 EOF
-
     chmod +x /usr/local/bin/slowdns_v2ray-start.sh
 
     # --- Service systemd ---
     cat <<EOF > "$SERVICE_FILE"
 [Unit]
-Description=SlowDNS → V2Ray Tunnel
-After=network.target nftables.service
+Description=SlowDNS V2Ray Tunnel
+After=network-online.target nftables.service
 Wants=network-online.target
 
 [Service]
@@ -470,7 +455,6 @@ PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=yes
 ReadWritePaths=$SLOWDNS_DIR
-
 LimitNOFILE=1048576
 StandardOutput=journal
 StandardError=journal
@@ -489,9 +473,9 @@ EOF
     echo "🎉 INSTALLATION TERMINÉE"
     echo "------------------------------------"
     echo "NS          : $NAMESERVER"
-    echo "Clé publique: $SLOWDNS_PUBLIC_KEY"
-    echo "SlowDNS UDP : $SLOWDNS_PORT → V2Ray TCP: $V2RAY_PORT"
-    echo ""
+    echo "Clé publique: $DNSTT_PUBLIC_KEY"
+    echo "DNS UDP     : 53 → $SLOWDNS_PORT"
+    echo "V2Ray TCP   : $V2RAY_PORT"
     echo "Logs        : journalctl -u slowdns_v2ray -f"
 }
     
