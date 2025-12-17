@@ -277,8 +277,7 @@ installer_v2ray() {
         "enabled": true,
         "destOverride": ["http", "tls"]
       },
-      "tag": "vless",
-      "statistics": {}
+      "tag": "vless"
     },
     {
       "port": 5401,
@@ -302,8 +301,7 @@ installer_v2ray() {
         "enabled": true,
         "destOverride": ["http", "tls"]
       },
-      "tag": "vmess",
-      "statistics": {}
+      "tag": "vmess"
     },
     {
       "port": 5401,
@@ -326,8 +324,7 @@ installer_v2ray() {
         "enabled": true,
         "destOverride": ["http", "tls"]
       },
-      "tag": "trojan",
-      "statistics": {}
+      "tag": "trojan"
     }
   ],
   "outbounds": [
@@ -337,12 +334,7 @@ installer_v2ray() {
         "domainStrategy": "UseIP"
       }
     }
-  ],
-  "api": {
-    "tag": "api",
-    "services": ["StatsService"],
-    "listen": "127.0.0.1:10085"
-  }
+  ]
 }
 EOF
 
