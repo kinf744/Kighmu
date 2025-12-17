@@ -194,7 +194,7 @@ show_menu() {
     echo -e "${YELLOW}║ 1) Installer tunnel V2Ray WS${RESET}"
     echo -e "${YELLOW}║ 2) Créer nouvel utilisateur${RESET}"
     echo -e "${YELLOW}║ 3) Supprimer un utilisateur${RESET}"
-    echo -e "${YELLOW}║ 4) Désinstaller V2Ray + SlowDNS${RESET}"
+    echo -e "${YELLOW}║ 4) Désinstaller V2Ray+FastDNS${RESET}"
     echo -e "${RED}║ 0) Quitter${RESET}"
     echo -e "${CYAN}╚═════════════════════════════════════════════════════╝${RESET}"
     echo -n "Choisissez une option : "
