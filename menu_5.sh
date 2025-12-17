@@ -57,50 +57,63 @@ ajouter_client_v2ray() {
     local nom="$2"
     local config="/etc/v2ray/config.json"
 
-    # Vérification que le fichier de configuration existe
     [[ ! -f "$config" ]] && { echo "❌ config.json introuvable"; return 1; }
 
-    # Vérifier que le JSON est valide
+    # Vérification JSON avant
     if ! jq empty "$config" >/dev/null 2>&1; then
         echo "❌ config.json invalide AVANT modification"
         return 1
     fi
 
-    # Vérifier doublon UUID
-    if jq -e --arg uuid "$uuid" '.inbounds[] | select(.protocol=="vless") | .settings.clients[]? | select(.id==$uuid)' "$config" >/dev/null; then
+    # Vérifier doublon (VLESS suffit car UUID commun)
+    if jq -e --arg uuid "$uuid" '
+        .inbounds[] 
+        | select(.protocol=="vless") 
+        | .settings.clients[]? 
+        | select(.id==$uuid)
+    ' "$config" >/dev/null; then
         echo "⚠️ UUID déjà existant"
         return 0
     fi
 
-    # Ajouter le client dans le JSON
     tmpfile=$(mktemp)
+
+    # Ajout VLESS + VMESS + TROJAN
     jq --arg uuid "$uuid" --arg email "$nom" '
-        (.inbounds[] | select(.protocol=="vless") | .settings.clients) += [{"id": $uuid, "email": $email}]
+    .inbounds |= map(
+        if .protocol=="vless" then
+            .settings.clients += [{"id": $uuid, "email": $email}]
+        elif .protocol=="vmess" then
+            .settings.clients += [{"id": $uuid, "alterId": 0, "email": $email}]
+        elif .protocol=="trojan" then
+            .settings.clients += [{"password": $uuid, "email": $email}]
+        else .
+        end
+    )
     ' "$config" > "$tmpfile"
 
-    # Vérifier JSON valide après modification
+    # Vérification JSON après
     if ! jq empty "$tmpfile" >/dev/null 2>&1; then
         echo "❌ JSON cassé APRÈS modification"
         rm -f "$tmpfile"
         return 1
     fi
 
-    # Remplacer l'ancien config par le nouveau
     mv "$tmpfile" "$config"
 
     # Test V2Ray
     if ! /usr/local/bin/v2ray test -config "$config" >/dev/null 2>&1; then
-        echo "❌ V2Ray ne peut pas démarrer avec cette config"
+        echo "❌ V2Ray refuse la configuration"
         return 1
     fi
 
-    # Redémarrage sécurisé
     systemctl restart v2ray
+
     if systemctl is-active --quiet v2ray; then
-        echo "✅ Utilisateur ajouté et V2Ray redémarré"
+        echo "✅ Utilisateur ajouté (VLESS + VMESS + TROJAN)"
         return 0
     else
-        echo "❌ V2Ray n’a pas redémarré correctement"
+        echo "❌ V2Ray n’a pas redémarré"
         return 1
     fi
 }
