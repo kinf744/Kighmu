@@ -178,7 +178,7 @@ afficher_mode_v2ray_ws() {
         echo -e "${RED}Tunnel FastDNS inactif${RESET}"
     fi
 
-    # 🔹 Affichage du nombre total d'utilisateurs créés
+    # 🔹 Nombre total d'utilisateurs créés
     if [[ -f "$USER_DB" && -s "$USER_DB" ]]; then
         nb_utilisateurs=$(jq length "$USER_DB" 2>/dev/null)
         nb_utilisateurs=${nb_utilisateurs:-0}
@@ -187,13 +187,17 @@ afficher_mode_v2ray_ws() {
     fi
     echo -e "${CYAN}Nombre total d'utilisateurs créés : ${GREEN}$nb_utilisateurs${RESET}"
 
-    # 🔹 Comptage des connexions actives sur le port V2Ray
-    if systemctl is-active --quiet v2ray.service; then
-        nb_en_ligne=$(ss -tn state established '( sport = :5401 or dport = :5401 )' | grep -c ESTAB || echo 0)
-    else
-        nb_en_ligne=0
+    # 🔹 Nombre total d'appareils connectés
+    nb_appareils=0
+    if command -v v2ctl >/dev/null 2>&1; then
+        # Récupère toutes les statistiques des clients
+        stats_json=$(v2ctl api --server=127.0.0.1:10085 StatsService.QueryStats 'pattern: "inbound>>>.*>>>traffic"')
+        # On additionne toutes les connexions actives
+        # Chaque clé "inbound>>>vless>>>clientUUID>>>conns" contient le nombre de connexions actives
+        nb_appareils=$(echo "$stats_json" | jq '[.stats[] | select(.value|tonumber>0) | .value|tonumber] | add')
+        nb_appareils=${nb_appareils:-0}
     fi
-    echo -e "${CYAN}Utilisateurs V2Ray en ligne (approx.) : ${GREEN}${nb_en_ligne}${RESET}"
+    echo -e "${CYAN}Nombre total d'appareils connectés : ${GREEN}${nb_appareils}${RESET}"
 }
 
 # Affiche les options du menu
