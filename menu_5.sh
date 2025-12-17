@@ -186,17 +186,6 @@ afficher_mode_v2ray_ws() {
         nb_utilisateurs=0
     fi
     echo -e "${CYAN}Nombre total d'utilisateurs créés : ${GREEN}$nb_utilisateurs${RESET}"
-
-    # 🔹 Nombre total d'appareils connectés via StatsService
-    nb_appareils=0
-    if command -v v2ctl >/dev/null 2>&1; then
-        # Récupère toutes les statistiques des clients
-        stats_json=$(v2ctl api --server=127.0.0.1:10085 StatsService.QueryStats 'pattern: "inbound>>>.*>>>conns"')
-        # Additionne toutes les connexions actives pour tous les clients
-        nb_appareils=$(echo "$stats_json" | jq '[.stats[]?.value // 0 | tonumber] | add')
-        nb_appareils=${nb_appareils:-0}
-    fi
-    echo -e "${CYAN}Nombre total d'appareils connectés : ${GREEN}${nb_appareils}${RESET}"
 }
 
 # Affiche les options du menu
