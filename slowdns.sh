@@ -160,8 +160,9 @@ EOF
 # --- Wrapper SlowDNS ---
 create_wrapper_script() {
     cat <<'EOF' > /usr/local/bin/slowdns-start.sh
-#!/bin/bash
+    #!/bin/bash
 set -euo pipefail
+
 SLOWDNS_DIR="/etc/slowdns"
 SLOWDNS_BIN="/usr/local/bin/sldns-server"
 PORT=5300
@@ -170,6 +171,7 @@ SERVER_KEY="$SLOWDNS_DIR/server.key"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
+# Détection interface principale
 wait_for_interface() {
     interface=""
     while [ -z "$interface" ]; do
@@ -182,36 +184,27 @@ wait_for_interface() {
     echo "$interface"
 }
 
-setup_iptables() {
-    interface="$1"
-    if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
-        iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
-    fi
-    if ! iptables -t nat -C PREROUTING -i "$interface" -p udp --dport 53 -j REDIRECT --to-ports "$PORT" &>/dev/null; then
-        iptables -t nat -I PREROUTING -i "$interface" -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
-    fi
+# Configuration nftables SlowDNS classique
+setup_nftables() {
+    nft list table ip slowdns_classic >/dev/null 2>&1 || nft add table ip slowdns_classic
+    nft list chain ip slowdns_classic prerouting >/dev/null 2>&1 || \
+        nft add chain ip slowdns_classic prerouting { type nat hook prerouting priority -100 \; }
+    nft add rule ip slowdns_classic prerouting udp dport 53 redirect to "$PORT" 2>/dev/null || true
 }
 
 log "Attente de l'interface réseau..."
 interface=$(wait_for_interface)
 log "Interface détectée : $interface"
 
-log "Réglage MTU à 1180 pour éviter la fragmentation DNS..."
+log "Réglage MTU à 1180..."
 ip link set dev "$interface" mtu 1180 || log "Échec réglage MTU, continuer"
 
-log "Application du traffic shaping pour le streaming..."
-tc qdisc del dev "$interface" root 2>/dev/null || true
-tc qdisc add dev "$interface" root fq maxrate 3mbit
+log "Application des règles nftables..."
+setup_nftables
 
-log "Application des règles iptables..."
-setup_iptables "$interface"
-
-log "Démarrage du serveur SlowDNS..."
+log "Démarrage du serveur SlowDNS classique..."
 NS=$(cat "$CONFIG_FILE")
-ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
-[ -z "$ssh_port" ] && ssh_port=22
-
-exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
+exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:22
 EOF
     chmod +x /usr/local/bin/slowdns-start.sh
 }
