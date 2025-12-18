@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- Configuration principale ---
 SLOWDNS_DIR="/etc/slowdns"
-SLOWDNS_BIN="/usr/local/bin/dns-server"
+SLOWDNS_BIN="/usr/local/bin/dnstt-server"
 PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
@@ -30,7 +30,7 @@ install_dependencies() {
 install_slowdns_bin() {
     if [ ! -x "$SLOWDNS_BIN" ]; then
         log "Téléchargement du binaire DNSTT..."
-        wget -O "$SLOWDNS_BIN" https://raw.githubusercontent.com/sbatrow/DARKSSH-MANAGER/main/Modulos/dns-server
+        wget -O "$SLOWDNS_BIN" https://dnstt.network/dnstt-server-linux-amd64
         chmod +x "$SLOWDNS_BIN"
 
         if ! file "$SLOWDNS_BIN" | grep -q ELF; then
@@ -188,7 +188,7 @@ create_wrapper_script() {
 #!/bin/bash
 set -euo pipefail
 SLOWDNS_DIR="/etc/slowdns"
-SLOWDNS_BIN="/usr/local/bin/dns-server"
+SLOWDNS_BIN="/usr/local/bin/dnstt-server"
 PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
