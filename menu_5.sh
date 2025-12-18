@@ -379,7 +379,7 @@ EOF
     read -p "Entrée pour continuer..."
 }
 
-installer_slowdns_v2ray() {
+installer_slowdns() {
     set -euo pipefail
 
     # --- Configuration ---
@@ -400,13 +400,6 @@ installer_slowdns_v2ray() {
     echo "📁 Création des dossiers..."
     mkdir -p "$SLOWDNS_DIR"
     touch "$LOG_FILE" && chmod 644 "$LOG_FILE"
-
-    # --- Vérification port 53 libre pour NAT ---
-    if nft list chain ip slowdns_v2ray prerouting >/dev/null 2>&1 || ss -u -ltnp | grep -q ":53"; then
-        echo "⚠️ Attention : le port 53 semble déjà utilisé ou NAT existant"
-        echo "Désactivez l'autre SlowDNS avant d'installer slowdns_v2ray."
-        exit 1
-    fi
 
     # --- Téléchargement binaire DNSTT ---
     echo "📥 Téléchargement DNSTT..."
