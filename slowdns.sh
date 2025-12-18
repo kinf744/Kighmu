@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- Configuration principale ---
 SLOWDNS_DIR="/etc/slowdns"
-SLOWDNS_BIN="/usr/local/bin/sldns-server"
+SLOWDNS_BIN="/usr/local/bin/dnstt-server"
 PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
@@ -30,7 +30,7 @@ install_dependencies() {
 install_slowdns_bin() {
     if [ ! -x "$SLOWDNS_BIN" ]; then
         log "Téléchargement du binaire DNSTT..."
-        wget -O "$SLOWDNS_BIN" https://raw.githubusercontent.com/fisabiliyusri/SLDNS/main/slowdns/sldns-server
+        wget -O "$SLOWDNS_BIN" https://dnstt.network/dnstt-server-linux-amd64
         chmod +x "$SLOWDNS_BIN"
 
         if ! file "$SLOWDNS_BIN" | grep -q ELF; then
@@ -188,7 +188,7 @@ create_wrapper_script() {
 #!/bin/bash
 set -euo pipefail
 SLOWDNS_DIR="/etc/slowdns"
-SLOWDNS_BIN="/usr/local/bin/sldns-server"
+SLOWDNS_BIN="/usr/local/bin/dnstt-server"
 PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
@@ -229,8 +229,8 @@ log "Attente de l'interface réseau..."
 interface=$(wait_for_interface)
 log "Interface détectée : $interface"
 
-log "Réglage MTU à 1400..."
-ip link set dev "$interface" mtu 1400 || log "Échec réglage MTU"
+log "Réglage MTU à 1180..."
+ip link set dev "$interface" mtu 1180 || log "Échec réglage MTU"
 
 log "Application des règles iptables..."
 setup_iptables "$interface"
