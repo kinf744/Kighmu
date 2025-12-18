@@ -217,7 +217,12 @@ setup_iptables() {
         iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
     fi
     if ! iptables -t nat -C PREROUTING -i "$interface" -p udp --dport 53 -j REDIRECT --to-ports "$PORT" &>/dev/null; then
-        iptables -t nat -I PREROUTING -i "$interface" -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
+        iptables -t nat -C PREROUTING -i "$interface" -p udp --dport 53 \
+  -m length --length 40:512 \
+  -j REDIRECT --to-ports "$PORT" 2>/dev/null || \
+iptables -t nat -A PREROUTING -i "$interface" -p udp --dport 53 \
+  -m length --length 40:512 \
+  -j REDIRECT --to-ports "$PORT"
     fi
 }
 
