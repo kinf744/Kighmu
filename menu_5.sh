@@ -237,16 +237,6 @@ installer_v2ray() {
   "inbounds": [
     {
       "port": 5401,
-      "protocol": "dokodemo-door",
-      "settings": {
-        "address": "127.0.0.1",
-        "port": 22,
-        "network": "tcp"
-      },
-      "tag": "ssh"
-    },
-    {
-      "port": 5401,
       "protocol": "vless",
       "settings": {
         "clients": [
