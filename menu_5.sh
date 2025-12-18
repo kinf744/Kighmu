@@ -171,9 +171,9 @@ afficher_mode_v2ray_ws() {
     fi
 
     # 🔹 Statut du tunnel SlowDNS
-    if systemctl is-active --quiet slowdns_v2ray.service; then
+    if systemctl is-active --quiet slowdns.service; then
         echo -e "${CYAN}Tunnel FastDNS actif:${RESET}"
-        echo -e "  - FastDNS sur le port UDP ${GREEN}5600${RESET} → V2Ray 5401"
+        echo -e "  - FastDNS sur le port UDP ${GREEN}5400${RESET} → V2Ray 5401"
     else
         echo -e "${RED}Tunnel FastDNS inactif${RESET}"
     fi
@@ -195,7 +195,6 @@ show_menu() {
     echo -e "${YELLOW}║ 2) Créer nouvel utilisateur${RESET}"
     echo -e "${YELLOW}║ 3) Supprimer un utilisateur${RESET}"
     echo -e "${YELLOW}║ 4) Désinstaller V2Ray+FastDNS${RESET}"
-    echo -e "${YELLOW}║ 5) Installer tunnel SlowDNS${RESET}"
     echo -e "${RED}║ 0) Quitter${RESET}"
     echo -e "${CYAN}╚═════════════════════════════════════════════════════╝${RESET}"
     echo -n "Choisissez une option : "
@@ -235,6 +234,16 @@ installer_v2ray() {
     "loglevel": "info"
   },
   "inbounds": [
+    {
+      "port": 5401,
+      "protocol": "dokodemo-door",
+      "settings": {
+        "address": "127.0.0.1",
+        "port": 22,
+        "network": "tcp"
+      },
+      "tag": "ssh"
+    },
     {
       "port": 5401,
       "protocol": "vless",
@@ -367,112 +376,6 @@ EOF
     fi
 
     read -p "Entrée pour continuer..."
-}
-
-installer_slowdns() {
-    set -euo pipefail
-
-    # --- Configuration ---
-    SLOWDNS_DIR="/etc/slowdns_v2ray"
-    SLOWDNS_BIN="/usr/local/bin/dnstt-server"
-    SLOWDNS_PORT=5600
-    V2RAY_PORT=5401
-    SERVER_KEY="$SLOWDNS_DIR/server.key"
-    SERVER_PUB="$SLOWDNS_DIR/server.pub"
-    CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
-    LOG_FILE="/var/log/slowdns_v2ray.log"
-    SERVICE_FILE="/etc/systemd/system/slowdns_v2ray.service"
-
-    # --- Clés fixes ---
-    DNSTT_PRIVATE_KEY="4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa"
-    DNSTT_PUBLIC_KEY="2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c"
-
-    echo "📁 Création des dossiers..."
-    mkdir -p "$SLOWDNS_DIR"
-    touch "$LOG_FILE" && chmod 644 "$LOG_FILE"
-
-    # --- Téléchargement binaire DNSTT ---
-    echo "📥 Téléchargement DNSTT..."
-    if [ ! -x "$SLOWDNS_BIN" ]; then
-        wget -q -O "$SLOWDNS_BIN" https://dnstt.network/dnstt-server-linux-amd64
-        chmod +x "$SLOWDNS_BIN"
-    fi
-
-    # --- Installation clés fixes ---
-    echo "$DNSTT_PRIVATE_KEY" > "$SERVER_KEY"
-    echo "$DNSTT_PUBLIC_KEY"  > "$SERVER_PUB"
-    chmod 600 "$SERVER_KEY"
-    chmod 644 "$SERVER_PUB"
-
-    # --- NameServer persistant ---
-    if [ -f "$CONFIG_FILE" ]; then
-        NAMESERVER=$(cat "$CONFIG_FILE")
-        echo "🌐 NameServer existant : $NAMESERVER (persistance OK)"
-    else
-        read -rp "NameServer NS (ex: ns.example.com) : " NAMESERVER
-        echo "$NAMESERVER" > "$CONFIG_FILE"
-        chmod 600 "$CONFIG_FILE"
-    fi
-
-    # --- nftables NAT intelligent 53 → 5600 ---
-    echo "🔥 Configuration nftables (NAT intelligent 53 → $SLOWDNS_PORT)..."
-    nft list table ip slowdns_v2ray >/dev/null 2>&1 || nft add table ip slowdns_v2ray
-    nft list chain ip slowdns_v2ray prerouting >/dev/null 2>&1 || \
-        nft add chain ip slowdns_v2ray prerouting { type nat hook prerouting priority -100 \; }
-    nft add rule ip slowdns_v2ray prerouting udp dport 53 redirect to "$SLOWDNS_PORT" 2>/dev/null || true
-    mkdir -p /etc/nftables.d
-    nft list ruleset > /etc/nftables.d/slowdns_v2ray.nft
-    grep -q 'include "/etc/nftables.d/*.nft"' /etc/nftables.conf || \
-        echo 'include "/etc/nftables.d/*.nft"' >> /etc/nftables.conf
-    systemctl enable nftables
-    systemctl restart nftables
-
-    # --- Script de démarrage ---
-    cat <<EOF > /usr/local/bin/slowdns_v2ray-start.sh
-#!/bin/bash
-exec nice -n 0 "$SLOWDNS_BIN" -udp ":$SLOWDNS_PORT" -privkey-file "$SERVER_KEY" "$NAMESERVER" "127.0.0.1:$V2RAY_PORT" >> "$LOG_FILE" 2>&1
-EOF
-    chmod +x /usr/local/bin/slowdns_v2ray-start.sh
-
-    # --- Service systemd ---
-    cat <<EOF > "$SERVICE_FILE"
-[Unit]
-Description=SlowDNS V2Ray Tunnel
-After=network-online.target nftables.service
-Wants=network-online.target
-
-[Service]
-ExecStart=/usr/local/bin/slowdns_v2ray-start.sh
-Restart=always
-RestartSec=3
-
-NoNewPrivileges=yes
-PrivateTmp=yes
-ProtectSystem=strict
-ProtectHome=yes
-ReadWritePaths=$SLOWDNS_DIR
-LimitNOFILE=1048576
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=slowdns_v2ray
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-    # --- Activation ---
-    systemctl daemon-reload
-    systemctl enable slowdns_v2ray
-    systemctl restart slowdns_v2ray
-
-    echo ""
-    echo "🎉 INSTALLATION TERMINÉE"
-    echo "------------------------------------"
-    echo "NS          : $NAMESERVER"
-    echo "Clé publique: $DNSTT_PUBLIC_KEY"
-    echo "DNS UDP     : 53 → $SLOWDNS_PORT"
-    echo "V2Ray TCP   : $V2RAY_PORT"
-    echo "Logs        : journalctl -u slowdns_v2ray -f"
 }
     
 # ✅ CORRIGÉ: Création utilisateur avec UUID auto-ajouté
@@ -687,7 +590,6 @@ while true; do
         2) creer_utilisateur ;;
         3) supprimer_utilisateur ;;
         4) desinstaller_v2ray ;;
-        5) installer_slowdns ;;
         0) echo "Au revoir"; exit 0 ;;
         *) echo "Option invalide."
            sleep 1 
