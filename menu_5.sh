@@ -379,7 +379,7 @@ EOF
     read -p "Entrée pour continuer..."
 }
 
-installer_slowdns() {
+installer_slowdns_v2ray() {
     set -euo pipefail
 
     # --- Configuration ---
@@ -401,25 +401,37 @@ installer_slowdns() {
     mkdir -p "$SLOWDNS_DIR"
     touch "$LOG_FILE" && chmod 644 "$LOG_FILE"
 
-    # --- Téléchargement du vrai binaire DNSTT ---
+    # --- Vérification port 53 libre pour NAT ---
+    if nft list chain ip slowdns_v2ray prerouting >/dev/null 2>&1 || ss -u -ltnp | grep -q ":53"; then
+        echo "⚠️ Attention : le port 53 semble déjà utilisé ou NAT existant"
+        echo "Désactivez l'autre SlowDNS avant d'installer slowdns_v2ray."
+        exit 1
+    fi
+
+    # --- Téléchargement binaire DNSTT ---
     echo "📥 Téléchargement DNSTT..."
     if [ ! -x "$SLOWDNS_BIN" ]; then
         wget -q -O "$SLOWDNS_BIN" https://dnstt.network/dnstt-server-linux-amd64
         chmod +x "$SLOWDNS_BIN"
     fi
 
-    # --- Installation des clés fixes ---
+    # --- Installation clés fixes ---
     echo "$DNSTT_PRIVATE_KEY" > "$SERVER_KEY"
     echo "$DNSTT_PUBLIC_KEY"  > "$SERVER_PUB"
     chmod 600 "$SERVER_KEY"
     chmod 644 "$SERVER_PUB"
 
-    # --- NameServer ---
-    read -rp "NameServer NS (ex: ns.example.com) : " NAMESERVER
-    echo "$NAMESERVER" > "$CONFIG_FILE"
-    chmod 600 "$CONFIG_FILE"
+    # --- NameServer persistant ---
+    if [ -f "$CONFIG_FILE" ]; then
+        NAMESERVER=$(cat "$CONFIG_FILE")
+        echo "🌐 NameServer existant : $NAMESERVER (persistance OK)"
+    else
+        read -rp "NameServer NS (ex: ns.example.com) : " NAMESERVER
+        echo "$NAMESERVER" > "$CONFIG_FILE"
+        chmod 600 "$CONFIG_FILE"
+    fi
 
-    # --- nftables : NAT intelligent 53 → 5600 ---
+    # --- nftables NAT intelligent 53 → 5600 ---
     echo "🔥 Configuration nftables (NAT intelligent 53 → $SLOWDNS_PORT)..."
     nft list table ip slowdns_v2ray >/dev/null 2>&1 || nft add table ip slowdns_v2ray
     nft list chain ip slowdns_v2ray prerouting >/dev/null 2>&1 || \
@@ -427,11 +439,12 @@ installer_slowdns() {
     nft add rule ip slowdns_v2ray prerouting udp dport 53 redirect to "$SLOWDNS_PORT" 2>/dev/null || true
     mkdir -p /etc/nftables.d
     nft list ruleset > /etc/nftables.d/slowdns_v2ray.nft
-    grep -q 'include "/etc/nftables.d/*.nft"' /etc/nftables.conf || echo 'include "/etc/nftables.d/*.nft"' >> /etc/nftables.conf
+    grep -q 'include "/etc/nftables.d/*.nft"' /etc/nftables.conf || \
+        echo 'include "/etc/nftables.d/*.nft"' >> /etc/nftables.conf
     systemctl enable nftables
     systemctl restart nftables
 
-    # --- Script de démarrage avec log puissant ---
+    # --- Script de démarrage ---
     cat <<EOF > /usr/local/bin/slowdns_v2ray-start.sh
 #!/bin/bash
 exec nice -n 0 "$SLOWDNS_BIN" -udp ":$SLOWDNS_PORT" -privkey-file "$SERVER_KEY" "$NAMESERVER" "127.0.0.1:$V2RAY_PORT" >> "$LOG_FILE" 2>&1
