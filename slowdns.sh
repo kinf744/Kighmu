@@ -222,10 +222,10 @@ setup_iptables() {
 
     # Redirection DNS → SlowDNS (uniquement paquets DNS valides)
     iptables -t nat -C PREROUTING -i "$interface" -p udp --dport 53 \
-        -m length --length 40:512 \
+        -m length --length 40:1232 \
         -j REDIRECT --to-ports "$PORT" 2>/dev/null || \
     iptables -t nat -A PREROUTING -i "$interface" -p udp --dport 53 \
-        -m length --length 40:512 \
+        -m length --length 40:1232 \
         -j REDIRECT --to-ports "$PORT"
 }
     
