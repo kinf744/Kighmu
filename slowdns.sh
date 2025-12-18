@@ -2,23 +2,28 @@
 set -euo pipefail
 
 # ================================
-#  CONFIGURATION PRINCIPALE
+# CONFIGURATION PRINCIPALE
 # ================================
-SLOWDNS_DIR="/etc/slowdns"
-SLOWDNS_BIN="/usr/local/bin/sldns-server"
-PORT=53
+CLASSIC_PORT=5300
+V2RAY_PORT=5600
+MUX_PORT=53
 
-CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
-SERVER_KEY="$SLOWDNS_DIR/server.key"
-SERVER_PUB="$SLOWDNS_DIR/server.pub"
-LOG_FILE="/var/log/slowdns.log"
+SLOWDNS_CLASSIC_DIR="/etc/slowdns"
+SLOWDNS_CLASSIC_BIN="/usr/local/bin/sldns-server"
+SLOWDNS_V2RAY_DIR="/etc/slowdns_v2ray"
+SLOWDNS_V2RAY_BIN="/usr/local/bin/dnstt-server"
+
+CONFIG_CLASSIC="$SLOWDNS_CLASSIC_DIR/ns.conf"
+CONFIG_V2RAY="$SLOWDNS_V2RAY_DIR/ns.conf"
+SUBDOMAIN_V2RAY="$SLOWDNS_V2RAY_DIR/subdomain.conf"
+
+LOG_CLASSIC="/var/log/slowdns.log"
+LOG_V2RAY="/var/log/slowdns_v2ray.log"
+LOG_MUX="/var/log/slowdns_mux.log"
 
 # ================================
-log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
-}
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
-# ================================
 check_root() {
     if [ "$EUID" -ne 0 ]; then
         echo "❌ Ce script doit être exécuté en root"
@@ -26,168 +31,174 @@ check_root() {
     fi
 }
 
-# ================================
 install_dependencies() {
     log "Installation des dépendances..."
     apt-get update -q
-    apt-get install -y wget curl iptables iptables-persistent jq
+    apt-get install -y wget curl iptables iptables-persistent socat jq
 }
 
 # ================================
-install_slowdns_bin() {
-    if [ ! -x "$SLOWDNS_BIN" ]; then
-        log "Téléchargement du binaire SlowDNS..."
-        wget -q -O "$SLOWDNS_BIN" \
-            https://raw.githubusercontent.com/fisabiliyusri/SLDNS/main/slowdns/sldns-server
-        chmod +x "$SLOWDNS_BIN"
-    fi
-}
+install_classic() {
+    log "Installation SlowDNS classique..."
+    mkdir -p "$SLOWDNS_CLASSIC_DIR"
+    wget -q -O "$SLOWDNS_CLASSIC_BIN" https://raw.githubusercontent.com/fisabiliyusri/SLDNS/main/slowdns/sldns-server
+    chmod +x "$SLOWDNS_CLASSIC_BIN"
 
-# ================================
-install_fixed_keys() {
-    log "Installation des clés DNSTT fixes..."
-    mkdir -p "$SLOWDNS_DIR"
+    echo "4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa" > "$SLOWDNS_CLASSIC_DIR/server.key"
+    echo "2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c" > "$SLOWDNS_CLASSIC_DIR/server.pub"
+    chmod 600 "$SLOWDNS_CLASSIC_DIR/server.key"
+    chmod 644 "$SLOWDNS_CLASSIC_DIR/server.pub"
 
-    echo "4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa" > "$SERVER_KEY"
-    echo "2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c" > "$SERVER_PUB"
-
-    chmod 600 "$SERVER_KEY"
-    chmod 644 "$SERVER_PUB"
-}
-
-# ================================
-disable_systemd_resolved() {
-    log "Désactivation de systemd-resolved..."
-    systemctl stop systemd-resolved || true
-    systemctl disable systemd-resolved || true
-
-    chattr -i /etc/resolv.conf 2>/dev/null || true
-    cat <<EOF > /etc/resolv.conf
-nameserver 8.8.8.8
-nameserver 1.1.1.1
-options timeout:1 attempts:1
-EOF
-}
-
-# ================================
-configure_iptables() {
-    log "Ouverture du port UDP 53 (iptables)..."
-
-    if ! iptables -C INPUT -p udp --dport 53 -j ACCEPT &>/dev/null; then
-        iptables -I INPUT -p udp --dport 53 -j ACCEPT
+    if [ ! -f "$CONFIG_CLASSIC" ]; then
+        read -rp "Entrez le NameServer SlowDNS classique (ex: ns.example.com) : " NS
+        echo "$NS" > "$CONFIG_CLASSIC"
+        chmod 600 "$CONFIG_CLASSIC"
     fi
 
-    iptables-save > /etc/iptables/rules.v4
-    systemctl enable netfilter-persistent
-    systemctl restart netfilter-persistent
-}
-
-# ================================
-generate_ns_manual() {
-    read -rp "Entrez le NameServer (ex: ns.example.com) : " NS
-    if [[ -z "$NS" ]]; then
-        echo "❌ NameServer invalide"
-        exit 1
-    fi
-
-    echo "$NS" > "$CONFIG_FILE"
-    chmod 600 "$CONFIG_FILE"
-}
-
-# ================================
-create_wrapper_script() {
-    log "Création du script de démarrage SlowDNS..."
-
-    cat <<'EOF' > /usr/local/bin/slowdns-start.sh
+    # Wrapper
+    cat <<EOF > /usr/local/bin/slowdns_classic_start.sh
 #!/bin/bash
-set -euo pipefail
-
-SLOWDNS_DIR="/etc/slowdns"
-SLOWDNS_BIN="/usr/local/bin/sldns-server"
-PORT=53
-
-CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
-SERVER_KEY="$SLOWDNS_DIR/server.key"
-
-log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
-}
-
-# Détection interface principale
-detect_interface() {
-    ip -o link show up | awk -F': ' '{print $2}' \
-        | grep -vE '^(lo|docker|veth|br|virbr|tun|tap|wl|vmnet)' \
-        | head -n1
-}
-
-iface=""
-while [ -z "$iface" ]; do
-    iface=$(detect_interface)
-    sleep 1
-done
-
-log "Interface détectée : $iface"
-log "Réglage MTU à 1180..."
-ip link set dev "$iface" mtu 1180 || true
-
-NS=$(cat "$CONFIG_FILE")
-
-log "Démarrage SlowDNS sur UDP 53..."
-exec "$SLOWDNS_BIN" -udp :53 -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:22
+exec "$SLOWDNS_CLASSIC_BIN" -udp :$CLASSIC_PORT -privkey-file "$SLOWDNS_CLASSIC_DIR/server.key" \$(cat "$CONFIG_CLASSIC") 0.0.0.0:22 >> "$LOG_CLASSIC" 2>&1
 EOF
+    chmod +x /usr/local/bin/slowdns_classic_start.sh
 
-    chmod +x /usr/local/bin/slowdns-start.sh
-}
-
-# ================================
-create_systemd_service() {
-    log "Création du service systemd..."
-
-    cat <<EOF > /etc/systemd/system/slowdns.service
+    # systemd
+    cat <<EOF > /etc/systemd/system/slowdns_classic.service
 [Unit]
-Description=SlowDNS Classique (UDP 53)
+Description=SlowDNS Classique
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=simple
-ExecStart=/usr/local/bin/slowdns-start.sh
+ExecStart=/usr/local/bin/slowdns_classic_start.sh
 Restart=always
 RestartSec=3
-StandardOutput=append:$LOG_FILE
-StandardError=append:$LOG_FILE
+StandardOutput=append:$LOG_CLASSIC
+StandardError=append:$LOG_CLASSIC
 LimitNOFILE=1048576
-NoNewPrivileges=yes
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
     systemctl daemon-reload
-    systemctl enable slowdns
-    systemctl restart slowdns
+    systemctl enable slowdns_classic
+    systemctl restart slowdns_classic
+}
+
+# ================================
+install_v2ray() {
+    log "Installation SlowDNS V2Ray..."
+    mkdir -p "$SLOWDNS_V2RAY_DIR"
+    wget -q -O "$SLOWDNS_V2RAY_BIN" https://dnstt.network/dnstt-server-linux-amd64
+    chmod +x "$SLOWDNS_V2RAY_BIN"
+
+    echo "4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa" > "$SLOWDNS_V2RAY_DIR/server.key"
+    echo "2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c" > "$SLOWDNS_V2RAY_DIR/server.pub"
+    chmod 600 "$SLOWDNS_V2RAY_DIR/server.key"
+    chmod 644 "$SLOWDNS_V2RAY_DIR/server.pub"
+
+    if [ ! -f "$CONFIG_V2RAY" ]; then
+        read -rp "Entrez le NameServer SlowDNS V2Ray (ex: ns.example.com) : " NS
+        echo "$NS" > "$CONFIG_V2RAY"
+        chmod 600 "$CONFIG_V2RAY"
+    fi
+
+    if [ ! -f "$SUBDOMAIN_V2RAY" ]; then
+        read -rp "Entrez le sous-domaine V2Ray (ex: v2ray.ns.example.com) : " SUB
+        echo "$SUB" > "$SUBDOMAIN_V2RAY"
+        chmod 600 "$SUBDOMAIN_V2RAY"
+    fi
+
+    # Wrapper
+    cat <<EOF > /usr/local/bin/slowdns_v2ray_start.sh
+#!/bin/bash
+exec "$SLOWDNS_V2RAY_BIN" -udp ":$V2RAY_PORT" -privkey-file "$SLOWDNS_V2RAY_DIR/server.key" \$(cat "$CONFIG_V2RAY") 127.0.0.1:5401 >> "$LOG_V2RAY" 2>&1
+EOF
+    chmod +x /usr/local/bin/slowdns_v2ray_start.sh
+
+    # systemd
+    cat <<EOF > /etc/systemd/system/slowdns_v2ray.service
+[Unit]
+Description=SlowDNS V2Ray
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/slowdns_v2ray_start.sh
+Restart=always
+RestartSec=3
+StandardOutput=append:$LOG_V2RAY
+StandardError=append:$LOG_V2RAY
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable slowdns_v2ray
+    systemctl restart slowdns_v2ray
+}
+
+# ================================
+install_mux() {
+    log "Installation du multiplexeur UDP 53..."
+    cat <<'EOF' > /usr/local/bin/slowdns_mux.sh
+#!/bin/bash
+CLASSIC_PORT=5300
+V2RAY_PORT=5600
+SUBDOMAIN_V2RAY_FILE="/etc/slowdns_v2ray/subdomain.conf"
+LOG_MUX="/var/log/slowdns_mux.log"
+
+SUBDOMAIN_V2RAY=$(cat "$SUBDOMAIN_V2RAY_FILE")
+
+exec socat -v UDP-LISTEN:53,fork SYSTEM:"awk '{if (\$4 ~ /'$SUBDOMAIN_V2RAY'/) print \"UDP:127.0.0.1:'$V2RAY_PORT'\"; else print \"UDP:127.0.0.1:'$CLASSIC_PORT'\"}' | socat - UDP-DATAGRAM:localhost:\$1" >> "$LOG_MUX" 2>&1
+EOF
+    chmod +x /usr/local/bin/slowdns_mux.sh
+
+    # systemd
+    cat <<EOF > /etc/systemd/system/slowdns_mux.service
+[Unit]
+Description=Multiplexeur SlowDNS UDP 53
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/slowdns_mux.sh
+Restart=always
+RestartSec=3
+StandardOutput=append:$LOG_MUX
+StandardError=append:$LOG_MUX
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable slowdns_mux
+    systemctl restart slowdns_mux
 }
 
 # ================================
 main() {
     check_root
     install_dependencies
-    install_slowdns_bin
-    install_fixed_keys
-    disable_systemd_resolved
-    configure_iptables
-    generate_ns_manual
-    create_wrapper_script
-    create_systemd_service
+    install_classic
+    install_v2ray
+    install_mux
 
     echo ""
     echo "======================================"
-    echo "  SLOWDNS CLASSIQUE INSTALLÉ"
+    echo "  INSTALLATION TERMINÉE"
     echo "======================================"
-    echo "Port UDP     : 53"
-    echo "NameServer   : $(cat "$CONFIG_FILE")"
-    echo "Clé publique : $(cat "$SERVER_PUB")"
-    echo "Logs         : journalctl -u slowdns -f"
+    echo "SlowDNS classique  : UDP $CLASSIC_PORT"
+    echo "SlowDNS V2Ray     : UDP $V2RAY_PORT -> TCP 5401"
+    echo "Multiplexeur      : UDP $MUX_PORT"
+    echo "Logs classiques   : journalctl -u slowdns_classic -f"
+    echo "Logs V2Ray        : journalctl -u slowdns_v2ray -f"
+    echo "Logs multiplexeur : journalctl -u slowdns_mux -f"
     echo "======================================"
 }
 
