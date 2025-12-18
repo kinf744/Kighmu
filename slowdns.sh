@@ -212,20 +212,25 @@ wait_for_interface() {
 }
 
 setup_iptables() {
-    interface="$1"
-    if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
-        iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
-    fi
-    if ! iptables -t nat -C PREROUTING -i "$interface" -p udp --dport 53 -j REDIRECT --to-ports "$PORT" &>/dev/null; then
-        iptables -t nat -C PREROUTING -i "$interface" -p udp --dport 53 \
-  -m length --length 40:512 \
-  -j REDIRECT --to-ports "$PORT" 2>/dev/null || \
-iptables -t nat -A PREROUTING -i "$interface" -p udp --dport 53 \
-  -m length --length 40:512 \
-  -j REDIRECT --to-ports "$PORT"
-    fi
-}
+    local interface="$1"
 
+    # Autoriser le port SlowDNS réel
+    iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || \
+    iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
+
+    # Autoriser DNS entrant
+    iptables -C INPUT -p udp --dport 53 -j ACCEPT 2>/dev/null || \
+    iptables -I INPUT -p udp --dport 53 -j ACCEPT
+
+    # Redirection DNS → SlowDNS (uniquement paquets DNS valides)
+    iptables -t nat -C PREROUTING -i "$interface" -p udp --dport 53 \
+        -m length --length 40:512 \
+        -j REDIRECT --to-ports "$PORT" 2>/dev/null || \
+    iptables -t nat -A PREROUTING -i "$interface" -p udp --dport 53 \
+        -m length --length 40:512 \
+        -j REDIRECT --to-ports "$PORT"
+}
+    
 log "Attente de l'interface réseau..."
 interface=$(wait_for_interface)
 log "Interface détectée : $interface"
