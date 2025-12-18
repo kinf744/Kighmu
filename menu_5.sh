@@ -379,7 +379,7 @@ EOF
     read -p "Entrée pour continuer..."
 }
 
-installer_slowdns_v2ray() {
+installer_slowdns() {
     set -euo pipefail
 
     # --- Configuration ---
