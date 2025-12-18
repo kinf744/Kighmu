@@ -81,20 +81,27 @@ EOF
 
 # --- Désactivation systemd-resolved ---
 disable_systemd_resolved() {
-    log "Tentative de désactivation du stub DNS systemd-resolved..."
-    systemctl stop systemd-resolved || true
-    systemctl disable systemd-resolved || true
+    log "Configuration du DNS système..."
 
-    if [ -w /etc/resolv.conf ] || chattr -i /etc/resolv.conf 2>/dev/null; then
-        cat <<EOF > /etc/resolv.conf
+    if systemctl list-unit-files | grep -q '^systemd-resolved.service'; then
+        log "systemd-resolved détecté, désactivation..."
+        systemctl stop systemd-resolved
+        systemctl disable systemd-resolved
+    else
+        log "systemd-resolved non présent, aucune action nécessaire"
+    fi
+
+    # Déverrouillage si immutable
+    chattr -i /etc/resolv.conf 2>/dev/null || true
+
+    cat <<EOF > /etc/resolv.conf
 nameserver 8.8.8.8
 nameserver 1.1.1.1
 options timeout:1 attempts:1
 EOF
-        log "/etc/resolv.conf mis à jour avec succès"
-    else
-        log "Impossible de modifier /etc/resolv.conf, continuer l'installation"
-    fi
+
+    chmod 644 /etc/resolv.conf
+    log "/etc/resolv.conf mis à jour avec succès"
 }
 
 # --- IPTables ---
