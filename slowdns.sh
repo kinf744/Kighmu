@@ -229,8 +229,8 @@ log "Attente de l'interface réseau..."
 interface=$(wait_for_interface)
 log "Interface détectée : $interface"
 
-log "Réglage MTU à 1180..."
-ip link set dev "$interface" mtu 1180 || log "Échec réglage MTU"
+log "Réglage MTU à 1400..."
+ip link set dev "$interface" mtu 1400 || log "Échec réglage MTU"
 
 log "Application des règles iptables..."
 setup_iptables "$interface"
@@ -341,7 +341,7 @@ EOF
     echo "Clé publique : $PUB_KEY"
     echo "NameServer  : $NAMESERVER"
     echo ""
-    echo "MTU du tunnel : 1180"
+    echo "MTU du tunnel : 1400"
     log "Installation et configuration SlowDNS terminées."
 }
 
