@@ -99,17 +99,21 @@ EOF
 
 # --- IPTables ---
 configure_iptables() {
-    log "Configuration du pare-feu via iptables..."
-    if ! iptables -C INPUT -p udp --dport 53 -j ACCEPT &>/dev/null; then
-        iptables -I INPUT -p udp --dport 53 -j ACCEPT
-    fi
-    if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
+    log "Configuration du pare-feu iptables (DNS filtré)..."
+
+    # Autoriser DNSTT interne
+    iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || \
         iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
-    fi
+
+    # Bloquer tout DNS direct (53)
+    iptables -C INPUT -p udp --dport 53 -j DROP 2>/dev/null || \
+        iptables -A INPUT -p udp --dport 53 -j DROP
+
     iptables-save > /etc/iptables/rules.v4
     systemctl enable netfilter-persistent
     systemctl restart netfilter-persistent
-    log "Persistance iptables activée via netfilter-persistent."
+
+    log "iptables configuré : DNS façade uniquement"
 }
 
 # --- Cloudflare NS auto ---
