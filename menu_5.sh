@@ -171,7 +171,7 @@ afficher_mode_v2ray_ws() {
     fi
 
     # 🔹 Statut du tunnel SlowDNS
-    if systemctl is-active --quiet slowdns46.service; then
+    if systemctl is-active --quiet slowdns.service; then
         echo -e "${CYAN}Tunnel FastDNS actif:${RESET}"
         echo -e "  - FastDNS sur le port UDP ${GREEN}5400${RESET} → V2Ray 5401"
     else
