@@ -373,31 +373,34 @@ uninstall_hysteria() {
 
 # --- AJOUT WS/WSS SSH ---
 install_ws_wss() {
-    echo ">>> Installation du tunnel WS/WSS SSH..."
-    if [ -f /usr/local/bin/ws_wssr.sh ]; then
-        bash /usr/local/bin/ws_wssr.sh
-    elif [ -f "$HOME/Kighmu/ws_wssr.sh" ]; then
-        bash "$HOME/Kighmu/ws_wssr.sh"
-    else
-        echo "❌ Script ws_wssr.sh introuvable."
-        return 1
-    fi
-    echo -e "${GREEN}[OK] Tunnel WS/WSS SSH installé et lancé.${RESET}"
+    echo ">>> Installation WS Tunnels (HTTP + HTTPS)..."
+    
+    # Vérif script
+    WS_SCRIPT="$HOME/Kighmu/ws_tt_ssl.sh"
+    [ -f "$WS_SCRIPT" ] || { echo "❌ $WS_SCRIPT introuvable"; return 1; }
+    
+    # Lancement
+    bash "$WS_SCRIPT"
+    echo -e "${GREEN}[OK] WS Tunnels installés.${RESET}"
 }
 
 uninstall_ws_wss() {
-    echo ">>> Désinstallation complète du tunnel WS/WSS SSH..."
-    systemctl stop ws_wss_server.service 2>/dev/null || true
-    systemctl disable ws_wss_server.service 2>/dev/null || true
-    rm -f /etc/systemd/system/ws_wss_server.service
-    rm -f /usr/local/bin/ws_wss_server.py /usr/local/bin/ws_wssr.sh
+    echo ">>> Désinstallation WS Tunnels..."
+    
+    # Services
+    systemctl stop ws-dropbear ws-stunnel 2>/dev/null || true
+    systemctl disable ws-dropbear ws-stunnel 2>/dev/null || true
+    
+    # Fichiers
+    rm -f /etc/systemd/system/ws-{dropbear,stunnel}.service
+    rm -f /usr/local/bin/ws-{dropbear,stunnel}
+    rm -f /etc/nginx/conf.d/kighmu-ws.conf
+    
+    # Systemd + Ports
     systemctl daemon-reload
-    # Suppression ports sans UFW
-    iptables -D INPUT -p tcp --dport 8880 -j ACCEPT 2>/dev/null || true
-    iptables -D INPUT -p tcp --dport 443 -j ACCEPT 2>/dev/null || true
-    iptables -D OUTPUT -p tcp --sport 8880 -j ACCEPT 2>/dev/null || true
-    iptables -D OUTPUT -p tcp --sport 443 -j ACCEPT 2>/dev/null || true
-    echo -e "${GREEN}[OK] Tunnel WS/WSS SSH désinstallé.${RESET}"
+    fuser -k 700/tcp 2095/tcp 2>/dev/null || true
+    
+    echo -e "${GREEN}[OK] WS Tunnels supprimés.${RESET}"
 }
 
 # --- Interface utilisateur ---
