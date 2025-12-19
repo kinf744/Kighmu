@@ -238,7 +238,7 @@ installer_v2ray() {
       "port": 5401,
       "protocol": "dokodemo-door",
       "settings": {
-        "address": "127.0.0.1",
+        "address": "192.168.186.189",
         "port": 22,
         "network": "tcp"
       },
