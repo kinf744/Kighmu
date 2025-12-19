@@ -118,7 +118,7 @@ PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 NS=$(cat "$CONFIG_FILE")
-ssh_port=22
+ssh_port=5401
 exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
 EOF
 chmod +x /usr/local/bin/slowdns-start.sh
