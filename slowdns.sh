@@ -155,7 +155,6 @@ create_systemd_service() {
 Description=SlowDNS Server Tunnel
 After=network-online.target
 Wants=network-online.target
-Documentation=https://github.com/fisabiliyusri/SLDNS
 
 [Service]
 Type=simple
@@ -172,7 +171,6 @@ CPUSchedulingPolicy=other
 IOSchedulingClass=best-effort
 IOSchedulingPriority=4
 TimeoutStartSec=20
-NoNewPrivileges=yes
 
 [Install]
 WantedBy=multi-user.target
