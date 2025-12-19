@@ -40,15 +40,32 @@ sauvegarder_utilisateurs() {
     echo "$utilisateurs" > "$USER_DB"
 }
 
-# Générer lien vless au format adapter
-generer_lien_vless() {
+# Générer lien vmess au format base64 JSON
+generer_lien_vmess() {
     local nom="$1"
     local domaine="$2"
     local port="$3"
     local uuid="$4"
 
-    # On assigne directement le lien à la variable globale lien_vless
-    lien_vless="vless://${uuid}@${domaine}:${port}?type=ws&encryption=none&host=${domaine}&path=/vless-ws#${nom}"
+    local json=$(cat <<EOF
+{
+  "v": "2",
+  "ps": "$nom",
+  "add": "$domaine",
+  "port": "$port",
+  "id": "$uuid",
+  "aid": "0",
+  "net": "ws",
+  "type": "none",
+  "host": "$domaine",
+  "path": "/vmess-ws",
+  "tls": "none"
+}
+EOF
+)
+
+    # encodage base64 propre (sans retour à la ligne)
+    echo -n "vmess://$(echo -n "$json" | base64 -w 0)"
 }
 
 # ✅ AJOUTÉ: Fonction pour ajouter UUID dans V2Ray
@@ -56,9 +73,13 @@ ajouter_client_v2ray() {
     local uuid="$1"
     local nom="$2"
     local config="/etc/v2ray/config.json"
+    local tmpfile
 
     # Vérification que le fichier de configuration existe
-    [[ ! -f "$config" ]] && { echo "❌ config.json introuvable"; return 1; }
+    if [[ ! -f "$config" ]]; then
+        echo "❌ config.json introuvable"
+        return 1
+    fi
 
     # Vérifier que le JSON est valide
     if ! jq empty "$config" >/dev/null 2>&1; then
@@ -67,18 +88,22 @@ ajouter_client_v2ray() {
     fi
 
     # Vérifier doublon UUID
-    if jq -e --arg uuid "$uuid" '.inbounds[] | select(.protocol=="vless") | .settings.clients[]? | select(.id==$uuid)' "$config" >/dev/null; then
-        echo "⚠️ UUID déjà existant"
+    if jq -e --arg uuid "$uuid" \
+        '.inbounds[] | select(.protocol=="vmess") | .settings.clients[]? | select(.id==$uuid)' \
+        "$config" >/dev/null; then
+        echo "⚠️ UUID déjà existant dans V2Ray"
         return 0
     fi
 
-    # Ajouter le client dans le JSON
     tmpfile=$(mktemp)
+
+    # Ajouter le client sans casser le JSON
     jq --arg uuid "$uuid" --arg email "$nom" '
-        (.inbounds[] | select(.protocol=="vless") | .settings.clients) += [{"id": $uuid, "email": $email}]
+      (.inbounds[] | select(.protocol=="vmess") | .settings.clients) +=
+      [{"id": $uuid, "alterId": 0, "email": $email, "level": 1}]
     ' "$config" > "$tmpfile"
 
-    # Vérifier JSON valide après modification
+    # Vérifier que le JSON modifié est valide
     if ! jq empty "$tmpfile" >/dev/null 2>&1; then
         echo "❌ JSON cassé APRÈS modification"
         rm -f "$tmpfile"
@@ -88,16 +113,16 @@ ajouter_client_v2ray() {
     # Remplacer l'ancien config par le nouveau
     mv "$tmpfile" "$config"
 
-    # Test V2Ray
-    if ! /usr/local/bin/v2ray test -config "$config" >/dev/null 2>&1; then
-        echo "❌ V2Ray ne peut pas démarrer avec cette config"
+    # Vérifier que V2Ray peut démarrer avant de relancer le service
+    if ! /usr/local/bin/v2ray -test -config "$config" >/dev/null 2>&1; then
+        echo "❌ V2Ray ne peut pas démarrer avec cette config, service NON redémarré"
         return 1
     fi
 
     # Redémarrage sécurisé
     systemctl restart v2ray
     if systemctl is-active --quiet v2ray; then
-        echo "✅ Utilisateur ajouté et V2Ray redémarré"
+        echo "✅ Utilisateur V2Ray ajouté et service redémarré avec succès"
         return 0
     else
         echo "❌ V2Ray n’a pas redémarré correctement"
@@ -114,32 +139,17 @@ afficher_menu() {
 }
 
 afficher_mode_v2ray_ws() {
-    # Affichage du statut du tunnel V2Ray
     if systemctl is-active --quiet v2ray.service; then
         local v2ray_port
         v2ray_port=$(jq -r '.inbounds[0].port' /etc/v2ray/config.json 2>/dev/null || echo "5401")
         echo -e "${CYAN}Tunnel V2Ray actif:${RESET}"
         echo -e "  - V2Ray WS sur le port TCP ${GREEN}$v2ray_port${RESET}"
-    else
-        echo -e "${RED}Tunnel V2Ray inactif${RESET}"
     fi
 
-    # Affichage du statut du tunnel SlowDNS
-    if systemctl is-active --quiet slowdns.service; then
-        echo -e "${CYAN}Tunnel FastDNS actif:${RESET}"
-        echo -e "  - FastDNS sur le port UDP ${GREEN}5400${RESET} → V2Ray 5401"
-    else
-        echo -e "${RED}Tunnel FastDNS inactif${RESET}"
+    if systemctl is-active --quiet slowdns-v2ray.service; then
+        echo -e "${CYAN}Tunnel SlowDNS actif:${RESET}"
+        echo -e "  - SlowDNS sur le port UDP ${GREEN}5400${RESET} → V2Ray 5401"
     fi
-
-    # 🔹 Affichage du nombre total d'utilisateurs
-    if [[ -f "$USER_DB" && -s "$USER_DB" ]]; then
-        nb_utilisateurs=$(jq length "$USER_DB" 2>/dev/null)
-        nb_utilisateurs=${nb_utilisateurs:-0}
-    else
-        nb_utilisateurs=0
-    fi
-    echo -e "${CYAN}Nombre total d'utilisateurs créés : ${GREEN}$nb_utilisateurs${RESET}"
 }
 
 # Affiche les options du menu
@@ -185,52 +195,53 @@ installer_v2ray() {
     cat <<EOF | sudo tee /etc/v2ray/config.json > /dev/null
 {
   "log": {
-  "loglevel": "info"
-},
-"inbounds": [
-  {
-    "port": 5401,
-    "protocol": "dokodemo-door",
-    "settings": {
-      "address": "127.0.0.1",
-      "port": 22,
-      "network": "tcp"
-    },
-    "tag": "ssh"
+    "loglevel": "info"
   },
-  {
-    "port": 5401,
-    "protocol": "vless",
-    "settings": {
-      "clients": [
-        {
-          "id": "00000000-0000-0000-0000-000000000001",
-          "email": "default@admin"
+  "inbounds": [
+    {
+      "port": 5401,
+      "protocol": "dokodemo-door",
+      "settings": {
+        "address": "127.0.0.1",
+        "port": 22,
+        "network": "tcp"
+      },
+      "tag": "ssh"
+    },
+    {
+      "port": 5401,
+      "protocol": "vmess",
+      "settings": {
+        "clients": [
+          {
+            "id": "00000000-0000-0000-0000-000000000001",
+            "alterId": 0,
+            "level": 1,
+            "email": "default@admin"
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "wsSettings": {
+          "path": "/vmess-ws"
         }
-      ],
-      "decryption": "none"
-    },
-    "streamSettings": {
-      "network": "ws",
-      "wsSettings": {
-        "path": "/vless-ws"
-      }
-    },
-    "sniffing": {
-      "enabled": true,
-      "destOverride": ["http", "tls"]
-    },
-    "tag": "vless"
-  }
-],
-"outbounds": [
-  {
-    "protocol": "freedom",
-    "settings": {
-      "domainStrategy": "UseIP"
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls"]
+      },
+      "tag": "v2ray"
     }
-  }
-]
+  ],
+  "outbounds": [
+    {
+      "protocol": "freedom",
+      "settings": {
+        "domainStrategy": "UseIP"
+      }
+    }
+  ]
 }
 EOF
 
@@ -262,8 +273,8 @@ EOF
     sudo systemctl restart v2ray.service &
 
     # LOGS TEMPS RÉEL 10s
-    echo -e "${CYAN}📊 SUIVI LOGS V2Ray (5s)...${RESET}"
-    timeout 5 sudo journalctl -u v2ray.service -f --no-pager | grep -E "(listener|transport|started|error)" || true
+    echo -e "${CYAN}📊 SUIVI LOGS V2Ray (10s)...${RESET}"
+    timeout 10 sudo journalctl -u v2ray.service -f --no-pager | grep -E "(listener|transport|started|error)" || true
 
     # VÉRIFICATION FINALE
     sleep 2
@@ -272,10 +283,10 @@ EOF
         echo -e "${GREEN}✅ Service: $(systemctl is-active v2ray.service)${RESET}"
         echo -e "${GREEN}✅ Port: $(ss -tuln | grep :5401 | awk '{print $4" → "$5}')${RESET}"
         echo ""
-        echo -e "${YELLOW}📱 CLIENT VLESS:${RESET}"
+        echo -e "${YELLOW}📱 CLIENT VMESS:${RESET}"
         echo -e "${GREEN}IP:${RESET} $domaine:5401"
         echo -e "${GREEN}UUID:${RESET} 00000000-0000-0000-0000-000000000001"
-        echo -e "${GREEN}Path:${RESET} /vless-ws"
+        echo -e "${GREEN}Path:${RESET} /vmess-ws"
         echo -e "${RED}⚠️ → TCP 5401 ALLOW !${RESET}"
     else
         echo -e "${RED}❌ V2Ray ÉCHEC !${RESET}"
@@ -292,20 +303,21 @@ creer_utilisateur() {
     echo -n "Durée de validité (en jours) : "
     read duree
 
-    # Charger base utilisateurs
+    # Charger base utilisateurs (sécurisé)
     if [[ -f "$USER_DB" && -s "$USER_DB" ]]; then
         utilisateurs=$(cat "$USER_DB")
     else
         utilisateurs="[]"
     fi
 
-    # Génération UUID et date d'expiration
+    # Génération
     uuid=$(generer_uuid)
     date_exp=$(date -d "+${duree} days" +%Y-%m-%d)
 
-    # Ajout dans JSON
+    # Ajout sécurisé dans JSON
     utilisateurs=$(echo "$utilisateurs" | jq --arg n "$nom" --arg u "$uuid" --arg d "$date_exp" \
         '. += [{"nom": $n, "uuid": $u, "expire": $d}]')
+
     echo "$utilisateurs" > "$USER_DB"
 
     # Mise à jour V2Ray
@@ -327,42 +339,42 @@ creer_utilisateur() {
     # Ports
     local V2RAY_INTER_PORT="5401"
 
-    # 🔹 Clé publique et NS
-SLOWDNS_DIR="/etc/slowdns"
+    # Clé publique SlowDNS
+    if [[ -f "$SLOWDNS_DIR/server.pub" ]]; then
+        PUB_KEY=$(cat "$SLOWDNS_DIR/server.pub")
+    else
+        PUB_KEY="clé_non_disponible"
+    fi
 
-# Lire .env si présent
-if [[ -f "$SLOWDNS_DIR/slowdns.env" ]]; then
-    source "$SLOWDNS_DIR/slowdns.env"
-fi
+    # NS
+    if [[ -f /etc/slowdns_v2ray/ns.conf ]]; then
+        NAMESERVER=$(cat /etc/slowdns_v2ray/ns.conf)
+    else
+        NAMESERVER="NS_non_defini"
+    fi
 
-# Assigner les valeurs avec fallback
-PUB_KEY=${PUB_KEY:-$( [[ -f "$SLOWDNS_DIR/server.pub" ]] && cat "$SLOWDNS_DIR/server.pub" || echo "clé_non_disponible" )}
-NAMESERVER=${NS:-$( [[ -f "$SLOWDNS_DIR/ns.conf" ]] && cat "$SLOWDNS_DIR/ns.conf" || echo "NS_non_defini" )}
+    lien_vmess=$(generer_lien_vmess "$nom" "$domaine" "$V2RAY_INTER_PORT" "$uuid")
 
-    # Génération du lien VLESS
-    generer_lien_vless "$nom" "$domaine" "$V2RAY_INTER_PORT" "$uuid"
-
-    # Affichage clair
     clear
     echo -e "${GREEN}=============================="
-    echo -e "🧩 VLESS + FASTDNS"
+    echo -e "🧩 VMESS + SLOWDNS"
     echo -e "=============================="
     echo -e "📄 Configuration pour : ${YELLOW}$nom${RESET}"
     echo -e "--------------------------------------------------"
     echo -e "➤ DOMAINE : ${GREEN}$domaine${RESET}"
     echo -e "➤ PORTS :"
-    echo -e "   FastDNS UDP: ${GREEN}5300${RESET}"
+    echo -e "   SlowDNS UDP: ${GREEN}5400${RESET}"
     echo -e "   V2Ray TCP  : ${GREEN}$V2RAY_INTER_PORT${RESET}"
     echo -e "➤ UUID      : ${GREEN}$uuid${RESET}"
-    echo -e "➤ Path      : /vless-ws"
+    echo -e "➤ Path      : /vmess-ws"
     echo -e "➤ Validité  : ${YELLOW}$duree${RESET} jours expire: $date_exp"
     echo ""
-    echo -e "${CYAN}Clé publique FastDNS:${RESET} $PUB_KEY"
+    echo -e "${CYAN}Clé publique SlowDNS:${RESET} $PUB_KEY"
     echo -e "${CYAN}NameServer:${RESET} $NAMESERVER"
     echo ""
     echo -e "${GREEN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
     echo ""
-    echo -e "${YELLOW}┃ Lien Vless : $lien_vless${RESET}"
+    echo -e "${YELLOW}┃ Lien VMess copiez-collez : $lien_vmess${RESET}"
     echo -e "${GREEN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
     echo ""
     read -p "Appuyez sur Entrée pour continuer..."
@@ -430,11 +442,11 @@ desinstaller_v2ray() {
         sudo systemctl daemon-reload
         sudo rm -f /etc/systemd/system/slowdns-v2ray.service
 
-        echo -e "${GREEN}✅ V2Ray + FastDNS V2Ray désinstallé.${RESET}"
-        echo -e "${GREEN}✅ Tunnel SSH FastDNS préservé !${RESET}"
+        echo -e "${GREEN}✅ V2Ray + SlowDNS V2Ray désinstallé.${RESET}"
+        echo -e "${GREEN}✅ Tunnel SSH SlowDNS préservé !${RESET}"
         echo -e "${CYAN}📊 Vérification ports fermés:${RESET}"
         ss -tuln | grep -E "(:5400|:5401)" || echo "✅ Ports 5400/5401 libres"
-        echo -e "${GREEN}✅ SSH FastDNS toujours actif: $(systemctl is-active slowdns.service 2>/dev/null || echo "non installé")${RESET}"
+        echo -e "${GREEN}✅ SSH SlowDNS toujours actif: $(systemctl is-active slowdns.service 2>/dev/null || echo "non installé")${RESET}"
     else
         echo "Annulé."
     fi
