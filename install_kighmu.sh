@@ -180,6 +180,7 @@ FILES=(
   "badvpn.sh"
   "ws-stunnel"
   "ws-dropbear"
+  "proxy3.js"
   "system_dns.sh"
   "install_modes.sh"
   "show_resources.sh"
