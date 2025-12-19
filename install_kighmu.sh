@@ -178,6 +178,8 @@ FILES=(
   "ssl.sh"
   "badvpn-udpgw"
   "badvpn.sh"
+  "ws-stunnel"
+  "ws-dropbear"
   "system_dns.sh"
   "install_modes.sh"
   "show_resources.sh"
