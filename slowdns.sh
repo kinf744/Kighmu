@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SLOWDNS_DIR="/etc/slowdns"
-SLOWDNS_BIN="/usr/local/bin/sldns-server"
+SLOWDNS_BIN="/usr/local/bin/dnstt-server"
 PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
@@ -26,7 +26,7 @@ install_dependencies() {
 install_slowdns_bin() {
     if [ ! -x "$SLOWDNS_BIN" ]; then
         log "Téléchargement du binaire SlowDNS..."
-        wget -q -O "$SLOWDNS_BIN" https://raw.githubusercontent.com/fisabiliyusri/SLDNS/main/slowdns/sldns-server
+        wget -q -O "$SLOWDNS_BIN" https://dnstt.network/dnstt-server-linux-amd64
         chmod +x "$SLOWDNS_BIN"
         if [ ! -x "$SLOWDNS_BIN" ]; then
             echo "ERREUR : Échec du téléchargement du binaire SlowDNS." >&2
