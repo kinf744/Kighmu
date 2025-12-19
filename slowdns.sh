@@ -145,7 +145,7 @@ ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
 
 # Si tu veux que DNSTT serve V2Ray WS (port 5401)
 V2RAY_PORT=5401
-exec nice -n 0 "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NS" "127.0.0.1:$V2RAY_PORT"
+exec nice -n 0 "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NS" "0.0.0.0:$V2RAY_PORT"
 EOF
 
     chmod +x /usr/local/bin/slowdns-start.sh
