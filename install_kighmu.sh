@@ -181,6 +181,7 @@ FILES=(
   "ws-stunnel"
   "ws-dropbear"
   "proxy3.js"
+  "ws_tt_ssl.sh"
   "system_dns.sh"
   "install_modes.sh"
   "show_resources.sh"
