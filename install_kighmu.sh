@@ -181,7 +181,7 @@ FILES=(
   "system_dns.sh"
   "install_modes.sh"
   "show_resources.sh"
-  "nginx.sh"
+  "nginx.conf"
   "setup_ssh_config.sh"
   "create_ssh_user.sh"
   "menu4_2.sh"
