@@ -29,12 +29,11 @@ install_dependencies() {
 # --- Installation SlowDNS binaire ---
 install_slowdns_bin() {
     if [ ! -x "$SLOWDNS_BIN" ]; then
-        log "Téléchargement du binaire DNSTT..."
-        wget -O "$SLOWDNS_BIN" https://dnstt.network/dnstt-server-linux-amd64
+        log "Téléchargement du binaire SlowDNS..."
+        wget -q -O "$SLOWDNS_BIN" https://github.com/dnstt/dnstt/releases/latest/download/dnstt-server-linux-amd64
         chmod +x "$SLOWDNS_BIN"
-
-        if ! file "$SLOWDNS_BIN" | grep -q ELF; then
-            echo "ERREUR : binaire DNSTT invalide" >&2
+        if [ ! -x "$SLOWDNS_BIN" ]; then
+            echo "ERREUR : Échec du téléchargement du binaire SlowDNS." >&2
             exit 1
         fi
     fi
@@ -99,19 +98,17 @@ EOF
 
 # --- IPTables ---
 configure_iptables() {
-    log "Configuration du pare-feu iptables..."
-
-    # Autoriser DNSTT
-    iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || \
-        iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
-
-    # Autoriser DNS (nécessaire pour la redirection)
-    iptables -C INPUT -p udp --dport 53 -j ACCEPT 2>/dev/null || \
+    log "Configuration du pare-feu via iptables..."
+    if ! iptables -C INPUT -p udp --dport 53 -j ACCEPT &>/dev/null; then
         iptables -I INPUT -p udp --dport 53 -j ACCEPT
-
+    fi
+    if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
+        iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
+    fi
     iptables-save > /etc/iptables/rules.v4
     systemctl enable netfilter-persistent
     systemctl restart netfilter-persistent
+    log "Persistance iptables activée via netfilter-persistent."
 }
 
 # --- Cloudflare NS auto ---
@@ -120,23 +117,8 @@ CF_ZONE_ID="7debbb8ea4946898a889c4b5745ab7eb"
 DOMAIN="kingom.ggff.net" # domaine géré sur Cloudflare
 
 generate_ns_cloudflare() {
-
-    # 🔒 Si un NS auto existe déjà, on le réutilise
-    if [[ -f "$SLOWDNS_DIR/ns.auto" ]]; then
-        NS=$(cat "$SLOWDNS_DIR/ns.auto")
-        log "NS auto existant détecté, réutilisation : $NS"
-
-        echo "$NS" > "$CONFIG_FILE"
-        chmod 600 "$CONFIG_FILE"
-
-        return 0
-    fi
-
-    # 🚀 Sinon, création Cloudflare
-    log "Aucun NS auto trouvé, génération Cloudflare..."
-
+    log "Génération automatique du NameServer via Cloudflare..."
     VPS_IP=$(curl -s ipv4.icanhazip.com || echo "127.0.0.1")
-
     SUB_A="vpn-$(date +%s | sha256sum | head -c 6)"
     FQDN_A="$SUB_A.$DOMAIN"
 
@@ -146,42 +128,33 @@ generate_ns_cloudflare() {
       -H "Content-Type: application/json" \
       --data "{\"type\":\"A\",\"name\":\"$FQDN_A\",\"content\":\"$VPS_IP\",\"ttl\":120,\"proxied\":false}")
 
-    echo "$RESPONSE" | jq -e '.success == true' >/dev/null || {
-        log "Erreur création A record Cloudflare"
+    if ! echo "$RESPONSE" | grep -q '"success":true'; then
+        log "Erreur lors de la création de l'A record Cloudflare"
         exit 1
-    }
+    fi
 
     SUB_NS="ns-$(date +%s | sha256sum | head -c 6)"
     NS="$SUB_NS.$DOMAIN"
-
     log "Création du NS record : $NS -> $FQDN_A"
+
     RESPONSE_NS=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
       -H "Authorization: Bearer $CF_API_TOKEN" \
       -H "Content-Type: application/json" \
       --data "{\"type\":\"NS\",\"name\":\"$NS\",\"content\":\"$FQDN_A\",\"ttl\":120}")
 
-    echo "$RESPONSE_NS" | jq -e '.success == true' >/dev/null || {
-        log "Erreur création NS record Cloudflare"
+    if ! echo "$RESPONSE_NS" | grep -q '"success":true'; then
+        log "Erreur lors de la création du NS record Cloudflare"
         exit 1
-    }
+    fi
 
-    # 💾 Sauvegarde persistante
-    echo "$NS" > "$SLOWDNS_DIR/ns.auto"
-    chmod 600 "$SLOWDNS_DIR/ns.auto"
-
-    # 🔄 NS actif
     echo "$NS" > "$CONFIG_FILE"
-    chmod 600 "$CONFIG_FILE"
-
-    # 🌍 ENV
     cat <<EOF > "$SLOWDNS_DIR/slowdns.env"
 NS=$NS
 PUB_KEY=$(cat "$SERVER_PUB")
 PRIV_KEY=$(cat "$SERVER_KEY")
 EOF
-    chmod 600 "$SLOWDNS_DIR/slowdns.env"
-
-    log "NS Cloudflare auto généré et sauvegardé : $NS"
+    chmod 600 "$CONFIG_FILE" "$SLOWDNS_DIR/slowdns.env"
+    log "NameServer Cloudflare généré automatiquement : $NS"
 }
 
 # --- Wrapper SlowDNS ---
@@ -190,7 +163,7 @@ create_wrapper_script() {
 #!/bin/bash
 set -euo pipefail
 SLOWDNS_DIR="/etc/slowdns"
-SLOWDNS_BIN="/usr/local/bin/dnstt-server"
+SLOWDNS_BIN="/usr/local/bin/sldns-server"
 PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
@@ -210,31 +183,25 @@ wait_for_interface() {
 }
 
 setup_iptables() {
-    local interface="$1"
-
-    # Autoriser le port SlowDNS réel
-    iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || \
-    iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
-
-    # Autoriser DNS entrant
-    iptables -C INPUT -p udp --dport 53 -j ACCEPT 2>/dev/null || \
-    iptables -I INPUT -p udp --dport 53 -j ACCEPT
-
-    # Redirection DNS → SlowDNS (uniquement paquets DNS valides)
-    iptables -t nat -C PREROUTING -i "$interface" -p udp --dport 53 \
-        -m length --length 40:1232 \
-        -j REDIRECT --to-ports "$PORT" 2>/dev/null || \
-    iptables -t nat -A PREROUTING -i "$interface" -p udp --dport 53 \
-        -m length --length 40:1232 \
-        -j REDIRECT --to-ports "$PORT"
+    interface="$1"
+    if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
+        iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
+    fi
+    if ! iptables -t nat -C PREROUTING -i "$interface" -p udp --dport 53 -j REDIRECT --to-ports "$PORT" &>/dev/null; then
+        iptables -t nat -I PREROUTING -i "$interface" -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
+    fi
 }
-    
+
 log "Attente de l'interface réseau..."
 interface=$(wait_for_interface)
 log "Interface détectée : $interface"
 
-log "Réglage MTU à 930 pour éviter la fragmentation DNS..."
-ip link set dev "$interface" mtu 930 || log "Échec réglage MTU, continuer"
+log "Réglage MTU à 1180 pour éviter la fragmentation DNS..."
+ip link set dev "$interface" mtu 1180 || log "Échec réglage MTU, continuer"
+
+log "Application du traffic shaping pour le streaming..."
+tc qdisc del dev "$interface" root 2>/dev/null || true
+tc qdisc add dev "$interface" root fq maxrate 3mbit
 
 log "Application des règles iptables..."
 setup_iptables "$interface"
@@ -275,6 +242,7 @@ CPUSchedulingPolicy=other
 IOSchedulingClass=best-effort
 IOSchedulingPriority=4
 TimeoutStartSec=20
+NoNewPrivileges=yes
 
 [Install]
 WantedBy=multi-user.target
@@ -300,18 +268,12 @@ main() {
         generate_ns_cloudflare
         NAMESERVER=$(cat "$CONFIG_FILE")
     else
-        read -rp "Entrez le NameServer (NS) manuel : " NAMESERVER
-[[ -z "$NAMESERVER" ]] && { echo "NS invalide"; exit 1; }
-
-# Sauvegarde du NS manuel
-echo "$NAMESERVER" > "$SLOWDNS_DIR/ns.manual"
-chmod 600 "$SLOWDNS_DIR/ns.manual"
-
-# NS utilisé par le tunnel
-echo "$NAMESERVER" > "$CONFIG_FILE"
-
-log "NS manuel utilisé : $NAMESERVER"
-log "NS auto conservé (si existant)"
+        read -rp "Entrez le NameServer (NS) (ex: ns.example.com) : " NAMESERVER
+        if [[ -z "$NAMESERVER" ]]; then
+            echo "NameServer invalide." >&2
+            exit 1
+        fi
+        echo "$NAMESERVER" > "$CONFIG_FILE"
         cat <<EOF > "$SLOWDNS_DIR/slowdns.env"
 NS=$NAMESERVER
 PUB_KEY=$(cat "$SERVER_PUB")
@@ -335,7 +297,7 @@ EOF
     echo "Clé publique : $PUB_KEY"
     echo "NameServer  : $NAMESERVER"
     echo ""
-    echo "MTU du tunnel : 930"
+    echo "MTU du tunnel : 1400"
     log "Installation et configuration SlowDNS terminées."
 }
 
