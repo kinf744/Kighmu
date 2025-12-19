@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # ==============================================
-# Kighmu WS Tunnels Installer COMPLET
+# Kighmu WS Tunnels Installer COMPLET: ws_tt_ssl.sh
 # Logs + Nettoyage + Paquets + IPTables + SSL
 # Copyright (c) 2025 Kinf744
 # ==============================================
