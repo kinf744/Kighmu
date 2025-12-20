@@ -187,15 +187,14 @@ server {
     location /ws-dropbear {
         proxy_pass http://127.0.0.1:2095;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "Upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_read_timeout 86400;
     }
 
-    # Refuser tout autre trafic HTTP non WS
     location / {
         return 444;
     }
@@ -204,17 +203,22 @@ server {
 server {
     listen 443 ssl http2;
     server_name $DOMAIN;
+
     ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
+
     location /ws-stunnel {
         proxy_pass http://127.0.0.1:700;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection "Upgrade";
         proxy_set_header Host \$host;
         proxy_read_timeout 86400;
     }
-    location / { return 444; }
+
+    location / {
+        return 444;
+    }
 }
 EOF
 
