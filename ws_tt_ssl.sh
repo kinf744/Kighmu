@@ -51,7 +51,7 @@ Description=WS Dropbear HTTP
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/python3 $INSTALL_DIR/ws-dropbear 2095
+ExecStart=/usr/bin/python2 $INSTALL_DIR/ws-dropbear 2095
 Restart=always
 LimitNOFILE=65536
 NoNewPrivileges=true
@@ -67,7 +67,7 @@ Description=WS Stunnel HTTPS
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/python3 $INSTALL_DIR/ws-stunnel 700
+ExecStart=/usr/bin/python2 $INSTALL_DIR/ws-stunnel 700
 Restart=always
 LimitNOFILE=65536
 NoNewPrivileges=true
