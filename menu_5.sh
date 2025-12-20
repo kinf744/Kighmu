@@ -195,6 +195,8 @@ show_menu() {
     echo -e "${YELLOW}║ 2) Créer nouvel utilisateur${RESET}"
     echo -e "${YELLOW}║ 3) Supprimer un utilisateur${RESET}"
     echo -e "${YELLOW}║ 4) Désinstaller V2Ray+FastDNS${RESET}"
+    echo -e "${YELLOW}║ 5) Mode MIX (SSH + V2Ray)${RESET}"
+    echo -e "${YELLOW}║ 6) Mode V2RAY ONLY${RESET}"
     echo -e "${RED}║ 0) Quitter${RESET}"
     echo -e "${CYAN}╚═════════════════════════════════════════════════════╝${RESET}"
     echo -n "Choisissez une option : "
@@ -731,6 +733,8 @@ while true; do
         2) creer_utilisateur ;;
         3) supprimer_utilisateur ;;
         4) desinstaller_v2ray ;;
+        5) basculer_mode_mix ;;
+        6) basculer_mode_v2only ;;
         0) echo "Au revoir"; exit 0 ;;
         *) echo "Option invalide."
            sleep 1 
