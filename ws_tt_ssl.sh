@@ -79,13 +79,16 @@ cp "$HOME/Kighmu/ws-dropbear" /usr/local/bin/ws-dropbear
 cp "$HOME/Kighmu/ws-stunnel" /usr/local/bin/ws-stunnel
 chmod 755 /usr/local/bin/ws-{dropbear,stunnel}
 
-log "🔧 Correction automatique Python2 → Python3..."
+# LIGNE 1
 sed -i 's/^print log$/print(log)/' /usr/local/bin/ws-dropbear
+# LIGNE 2  
 sed -i 's/^print log$/print(log)/' /usr/local/bin/ws-stunnel
+# LIGNE 3
 sed -i 's/^print "/print("/' /usr/local/bin/ws-dropbear
+# LIGNE 4
 sed -i 's/^print "/print("/' /usr/local/bin/ws-stunnel
+# LIGNE 5
 sed -i 's/except Exception, e:/except Exception as e:/' /usr/local/bin/ws-{dropbear,stunnel}
-success "Backends Python3 corrigés et prêts"
 
 success "Backends Python3 corrigés et prêts"
 
