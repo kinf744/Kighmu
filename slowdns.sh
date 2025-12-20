@@ -8,6 +8,9 @@ CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 SERVER_PUB="$SLOWDNS_DIR/server.pub"
 
+# Backend par défaut (sera redéfini par le choix utilisateur)
+BACKEND_MODE=""   # ssh | v2ray | mix
+
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
 check_root() {
@@ -67,8 +70,8 @@ EOF
 
 disable_systemd_resolved() {
     log "Désactivation non-destructive du stub DNS systemd-resolved (libère le port 53 localement)..."
-    systemctl stop systemd-resolved
-    systemctl disable systemd-resolved
+    systemctl stop systemd-resolved || true
+    systemctl disable systemd-resolved || true
     rm -f /etc/resolv.conf
     echo "nameserver 8.8.8.8" > /etc/resolv.conf
 }
@@ -90,6 +93,26 @@ configure_iptables() {
     log "Persistance iptables activée via netfilter-persistent."
 }
 
+# Choix du backend (SSH / V2Ray / MIX)
+choose_backend() {
+    echo ""
+    echo "+--------------------------------------------+"
+    echo "|      CHOIX DU MODE BACKEND SLOWDNS         |"
+    echo "+--------------------------------------------+"
+    echo "1) SSH direct (DNSTT → 127.0.0.1:22)"
+    echo "2) V2Ray direct (DNSTT → 127.0.0.1:5401)"
+    echo "3) MIX (DNSTT → 127.0.0.1:5401, V2Ray gère SSH + VLESS/VMESS/Trojan)"
+    echo ""
+    read -rp "Sélectionnez le mode [1-3] : " mode
+    case "$mode" in
+        1) BACKEND_MODE="ssh" ;;
+        2) BACKEND_MODE="v2ray" ;;
+        3) BACKEND_MODE="mix" ;;
+        *) echo "Mode invalide."; exit 1 ;;
+    esac
+    echo "BACKEND_MODE=$BACKEND_MODE" > /etc/slowdns/backend.conf
+}
+
 create_wrapper_script() {
     cat <<'EOF' > /usr/local/bin/slowdns-start.sh
 #!/bin/bash
@@ -100,6 +123,7 @@ SLOWDNS_BIN="/usr/local/bin/dnstt-server"
 PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
+BACKEND_CONF="$SLOWDNS_DIR/backend.conf"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
@@ -127,6 +151,43 @@ setup_iptables() {
     fi
 }
 
+select_backend_target() {
+    local mode target
+    mode="ssh"
+    if [ -f "$BACKEND_CONF" ]; then
+        # shellcheck disable=SC1090
+        source "$BACKEND_CONF"
+        mode="${BACKEND_MODE:-ssh}"
+    fi
+
+    case "$mode" in
+        ssh)
+            # SSH direct
+            ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
+            [ -z "$ssh_port" ] && ssh_port=22
+            target="127.0.0.1:$ssh_port"
+            log "Mode backend : SSH ($target)"
+            ;;
+        v2ray)
+            # V2Ray direct uniquement
+            target="127.0.0.1:5401"
+            log "Mode backend : V2Ray ($target)"
+            ;;
+        mix)
+            # MIX : V2Ray 5401 (qui pourra gérer SSH, VLESS, VMESS, TROJAN)
+            target="127.0.0.1:5401"
+            log "Mode backend : MIX (via V2Ray $target)"
+            ;;
+        *)
+            # fallback
+            target="127.0.0.1:22"
+            log "Mode backend inconnu, fallback SSH ($target)"
+            ;;
+    esac
+
+    echo "$target"
+}
+
 log "Attente de l'interface réseau..."
 interface=$(wait_for_interface)
 log "Interface détectée : $interface"
@@ -140,12 +201,9 @@ setup_iptables "$interface"
 log "Démarrage du serveur SlowDNS..."
 
 NS=$(cat "$CONFIG_FILE")
-ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
-[ -z "$ssh_port" ] && ssh_port=22
+backend_target=$(select_backend_target)
 
-# Si tu veux que DNSTT serve V2Ray WS (port 5401)
-V2RAY_PORT=5401
-exec nice -n 0 "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NS" "0.0.0.0:$V2RAY_PORT"
+exec nice -n 0 "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NS" "$backend_target"
 EOF
 
     chmod +x /usr/local/bin/slowdns-start.sh
@@ -154,7 +212,7 @@ EOF
 create_systemd_service() {
     cat <<EOF > /etc/systemd/system/slowdns.service
 [Unit]
-Description=SlowDNS Server Tunnel
+Description=SlowDNS Server Tunnel (multi-backend)
 After=network-online.target
 Wants=network-online.target
 
@@ -195,8 +253,11 @@ main() {
         echo "NameServer invalide." >&2
         exit 1
     fi
+    mkdir -p "$SLOWDNS_DIR"
     echo "$NAMESERVER" > "$CONFIG_FILE"
     log "NameServer enregistré dans $CONFIG_FILE"
+
+    choose_backend
 
     configure_sysctl
     configure_iptables
@@ -219,6 +280,12 @@ EOF
     echo ""
     echo "Clé publique : $PUB_KEY"
     echo "NameServer  : $NAMESERVER"
+    echo "Port UDP    : $PORT"
+    echo ""
+    echo "Mode backend sélectionné : $BACKEND_MODE"
+    echo "  - ssh   : DNSTT → SSH (port 22 détecté)"
+    echo "  - v2ray : DNSTT → 127.0.0.1:5401"
+    echo "  - mix   : DNSTT → 127.0.0.1:5401 (V2Ray gère SSH + VLESS/VMESS/TROJAN)"
     echo ""
     echo "IMPORTANT : Pour améliorer le débit SSH, modifiez manuellement /etc/ssh/sshd_config en ajoutant :"
     echo "Ciphers aes128-ctr,aes192-ctr,aes128-gcm@openssh.com"
