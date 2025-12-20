@@ -80,13 +80,12 @@ cp "$HOME/Kighmu/ws-stunnel" /usr/local/bin/ws-stunnel
 chmod 755 /usr/local/bin/ws-{dropbear,stunnel}
 
 log "🔧 Correction automatique Python2 → Python3..."
-sed -i \
-    -e "s/^print log/print(log)/" \
-    -e "s/^print '/print('/" \
-    -e "s/^print "/print("/" \
-    -e "s/self.log += ' - error: ' + e.strerror/self.log += ' - error: ' + str(e)/" \
-    -e "s/except Exception, e:/except Exception as e:/" \
-    /usr/local/bin/ws-{dropbear,stunnel}
+sed -i 's/^print log/print(log)/' /usr/local/bin/ws-{dropbear,stunnel}
+sed -i 's/^print "/print("/' /usr/local/bin/ws-{dropbear,stunnel}
+sed -i "s/^print '/print('/" /usr/local/bin/ws-{dropbear,stunnel}
+sed -i "s/self.log += ' - error: ' + e.strerror/self.log += ' - error: ' + str(e)/" /usr/local/bin/ws-{dropbear,stunnel}
+sed -i 's/except Exception, e:/except Exception as e:/' /usr/local/bin/ws-{dropbear,stunnel}
+success "Backends Python3 corrigés et prêts"
 
 success "Backends Python3 corrigés et prêts"
 
