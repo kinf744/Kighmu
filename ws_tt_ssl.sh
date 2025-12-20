@@ -49,16 +49,14 @@ cat > /etc/systemd/system/ws-dropbear.service <<EOF
 # ws-dropbear.service
 [Unit]
 Description=Websocket-Dropbear
-After=network.target nss-lookup.target
+After=network.target
 
 [Service]
 Type=simple
 User=root
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
-AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
-NoNewPrivileges=true
-ExecStart=/usr/bin/python -O /usr/local/bin/ws-dropbear 2095
-Restart=on-failure
+ExecStart=/usr/bin/python3 -O /usr/local/bin/ws-dropbear 2095
+Restart=always
+RestartSec=3s
 
 [Install]
 WantedBy=multi-user.target
@@ -69,16 +67,14 @@ cat > /etc/systemd/system/ws-stunnel.service <<EOF
 # ws-stunnel.service
 [Unit]
 Description=WS Stunnel HTTPS
-After=network.target nss-lookup.target
+After=network.target
 
 [Service]
 Type=simple
 User=root
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
-AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
-NoNewPrivileges=true
-ExecStart=/usr/bin/python -O /usr/local/bin/ws-stunnel 700
-Restart=on-failure
+ExecStart=/usr/bin/python3 -O /usr/local/bin/ws-stunnel 700
+Restart=always
+RestartSec=3s
 
 [Install]
 WantedBy=multi-user.target
