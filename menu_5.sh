@@ -470,6 +470,54 @@ EOF
 
     read -p "Entrée pour continuer..."
 }
+
+basculer_mode_mix() {
+    if [[ ! -f /etc/v2ray/config-mix.json ]]; then
+        echo "❌ config-mix.json introuvable (réinstalle V2Ray)."
+        read -p "Entrée pour continuer..."
+        return
+    fi
+
+    sudo cp /etc/v2ray/config-mix.json /etc/v2ray/config.json
+
+    if ! /usr/local/bin/v2ray test -config /etc/v2ray/config.json >/dev/null 2>&1; then
+        echo "❌ V2Ray refuse la config MIX"
+        read -p "Entrée pour continuer..."
+        return
+    fi
+
+    sudo systemctl restart v2ray
+    if systemctl is-active --quiet v2ray; then
+        echo "✅ Mode MIX activé (SSH + V2Ray sur 5401)"
+    else
+        echo "❌ V2Ray n’a pas démarré en mode MIX"
+    fi
+    read -p "Entrée pour continuer..."
+}
+
+basculer_mode_v2only() {
+    if [[ ! -f /etc/v2ray/config-v2only.json ]]; then
+        echo "❌ config-v2only.json introuvable (réinstalle V2Ray)."
+        read -p "Entrée pour continuer..."
+        return
+    fi
+
+    sudo cp /etc/v2ray/config-v2only.json /etc/v2ray/config.json
+
+    if ! /usr/local/bin/v2ray test -config /etc/v2ray/config.json >/dev/null 2>&1; then
+        echo "❌ V2Ray refuse la config V2ONLY"
+        read -p "Entrée pour continuer..."
+        return
+    fi
+
+    sudo systemctl restart v2ray
+    if systemctl is-active --quiet v2ray; then
+        echo "✅ Mode V2RAY ONLY activé (sans SSH sur 5401)"
+    else
+        echo "❌ V2Ray n’a pas démarré en mode V2ONLY"
+    fi
+    read -p "Entrée pour continuer..."
+}
     
 # ✅ CORRIGÉ: Création utilisateur avec UUID auto-ajouté
 creer_utilisateur() {
