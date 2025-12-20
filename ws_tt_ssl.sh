@@ -46,15 +46,19 @@ echo "🔧 Création services systemd..."
 
 # WS Dropbear
 cat > /etc/systemd/system/ws-dropbear.service <<EOF
+# ws-dropbear.service
 [Unit]
-Description=WS Dropbear HTTP
-After=network.target
+Description=Websocket-Dropbear
+After=network.target nss-lookup.target
 
 [Service]
-ExecStart=/usr/bin/python $INSTALL_DIR/ws-dropbear 2095
-Restart=always
-LimitNOFILE=65536
+Type=simple
+User=root
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
 NoNewPrivileges=true
+ExecStart=/usr/bin/python -O /usr/local/bin/ws-dropbear 2095
+Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
@@ -62,15 +66,19 @@ EOF
 
 # WS Stunnel
 cat > /etc/systemd/system/ws-stunnel.service <<EOF
+# ws-stunnel.service
 [Unit]
 Description=WS Stunnel HTTPS
-After=network.target
+After=network.target nss-lookup.target
 
 [Service]
-ExecStart=/usr/bin/python $INSTALL_DIR/ws-stunnel 700
-Restart=always
-LimitNOFILE=65536
+Type=simple
+User=root
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
 NoNewPrivileges=true
+ExecStart=/usr/bin/python -O /usr/local/bin/ws-stunnel 700
+Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
