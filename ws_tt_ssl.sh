@@ -25,9 +25,16 @@ log "🌐 Domaine : $DOMAIN"
 ### PAQUETS
 ### ===============================
 apt-get update -qq
-apt-get install -y nginx python3 python3-pip iptables iptables-persistent certbot python3-certbot-nginx curl net-tools dnsutils
+apt-get install -y nginx python3 iptables iptables-persistent certbot python3-certbot-nginx curl net-tools dnsutils python3-pip
 apt-get autoremove -yqq
 success "Paquets installés"
+
+### ===============================
+### PYTHON PIP + WEBSOCKETS
+### ===============================
+python3 -m pip install --upgrade pip
+python3 -m pip install websockets
+success "Module Python3 websockets installé"
 
 ### ===============================
 ### IPTABLES
