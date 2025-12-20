@@ -5,7 +5,7 @@ set -euo pipefail
 ### VARIABLES
 ### ===============================
 LOG_DIR="/var/log/kighmu"
-LOG_FILE="$LOG_DIR/ws_tt_split_$(date +%Y%m%d_%H%M%S).log"
+LOG_FILE="$LOG_DIR/ws_tt_auto_$(date +%Y%m%d_%H%M%S).log"
 mkdir -p "$LOG_DIR" && chmod 755 "$LOG_DIR"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
@@ -14,7 +14,7 @@ error(){ log "❌ ERREUR : $1"; exit 1; }
 success(){ log "✅ SUCCÈS : $1"; }
 
 ### ===============================
-### DOMAIN
+### DOMAINE
 ### ===============================
 [ -f "$HOME/.kighmu_info" ] || error "~/.kighmu_info manquant"
 source "$HOME/.kighmu_info"
@@ -58,18 +58,13 @@ fuser -k 2095/tcp 700/tcp 2>/dev/null || true
 sleep 2
 
 ### ===============================
-### BACKENDS WS (PYTHON3 SAFE)
+### BACKENDS WS PYTHON3 NATIVE
 ### ===============================
+# Copier les scripts fournis par Kighmu
 install -m 755 "$HOME/Kighmu/ws-dropbear" /usr/local/bin/ws-dropbear
 install -m 755 "$HOME/Kighmu/ws-stunnel" /usr/local/bin/ws-stunnel
 
-# Correction Python2 → Python3
-sed -i -E \
- -e 's/^[[:space:]]*print[[:space:]]+(.*)$/print(\1)/' \
- -e 's/except ([^,]+), ([^:]+):/except \1 as \2:/' \
- /usr/local/bin/ws-{dropbear,stunnel}
-
-# Vérification compilation
+# Vérification syntaxe Python3
 python3 -m py_compile /usr/local/bin/ws-dropbear
 python3 -m py_compile /usr/local/bin/ws-stunnel
 success "Backends Python3 OK"
@@ -79,7 +74,7 @@ success "Backends Python3 OK"
 ### ===============================
 cat > /etc/systemd/system/ws-dropbear.service <<EOF
 [Unit]
-Description=WS-Dropbear HTTP (Port 80)
+Description=WS-Dropbear HTTP (Port local 2095)
 After=network.target
 
 [Service]
@@ -94,7 +89,7 @@ EOF
 
 cat > /etc/systemd/system/ws-stunnel.service <<EOF
 [Unit]
-Description=WS-Stunnel WSS HTTPS (Port 443)
+Description=WS-Stunnel WSS HTTPS (Port local 700)
 After=network.target
 
 [Service]
@@ -187,4 +182,4 @@ echo
 echo "DROPBEAR WS : ws://$DOMAIN/ws-dropbear  (HTTP 80)"
 echo "STUNNEL WSS : wss://$DOMAIN/ws-stunnel (HTTPS 443)"
 echo
-log "INSTALLATION TERMINÉE — SYSTÈME STABLE ✅"
+log "INSTALLATION TERMINÉE — STABLE ✅"
