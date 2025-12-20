@@ -227,8 +227,98 @@ installer_v2ray() {
     sudo mkdir -p /etc/v2ray
     echo "$domaine" | sudo tee /.v2ray_domain > /dev/null
 
-    # ✅ VOTRE CONFIG EXACTE (copiée-collée)
-    cat <<EOF | sudo tee /etc/v2ray/config.json > /dev/null
+        # ✅ CONFIG V2RAY ONLY (SANS SSH)
+    cat <<EOF | sudo tee /etc/v2ray/config-v2only.json > /dev/null
+{
+  "log": {
+    "loglevel": "info"
+  },
+  "inbounds": [
+    {
+      "port": 5401,
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "00000000-0000-0000-0000-000000000001",
+            "email": "default@admin"
+          }
+        ],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "ws",
+        "wsSettings": {
+          "path": "/vless-ws"
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls"]
+      },
+      "tag": "vless"
+    },
+    {
+      "port": 5401,
+      "protocol": "vmess",
+      "settings": {
+        "clients": [
+          {
+            "id": "00000000-0000-0000-0000-000000000001",
+            "alterId": 0,
+            "email": "default@admin"
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "wsSettings": {
+          "path": "/vmess-ws"
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls"]
+      },
+      "tag": "vmess"
+    },
+    {
+      "port": 5401,
+      "protocol": "trojan",
+      "settings": {
+        "clients": [
+          {
+            "password": "00000000-0000-0000-0000-000000000001",
+            "email": "default@admin"
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "wsSettings": {
+          "path": "/trojan-ws"
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls"]
+      },
+      "tag": "trojan"
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "freedom",
+      "settings": {
+        "domainStrategy": "UseIP"
+      }
+    }
+  ]
+}
+EOF
+
+    # ✅ CONFIG MIX (AVEC SSH dokodemo-door)
+    cat <<EOF | sudo tee /etc/v2ray/config-mix.json > /dev/null
 {
   "log": {
     "loglevel": "info"
@@ -326,6 +416,9 @@ installer_v2ray() {
   ]
 }
 EOF
+
+    # ✅ PAR DÉFAUT : V2RAY ONLY
+    sudo cp /etc/v2ray/config-v2only.json /etc/v2ray/config.json
 
     # ✅ SERVICE SYSTEMD MODERNE
     sudo tee /etc/systemd/system/v2ray.service > /dev/null <<EOF
