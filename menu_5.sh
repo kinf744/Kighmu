@@ -330,7 +330,7 @@ EOF
       "port": 5401,
       "protocol": "dokodemo-door",
       "settings": {
-        "address": "0.0.0.0",
+        "address": "127.0.0.1",
         "port": 22,
         "network": "tcp"
       },
