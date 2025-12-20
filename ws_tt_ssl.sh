@@ -58,17 +58,20 @@ fuser -k 2095/tcp 700/tcp 2>/dev/null || true
 sleep 2
 
 ### ===============================
-### BACKENDS WS
+### BACKENDS WS (PYTHON3 SAFE)
 ### ===============================
 install -m 755 "$HOME/Kighmu/ws-dropbear" /usr/local/bin/ws-dropbear
 install -m 755 "$HOME/Kighmu/ws-stunnel" /usr/local/bin/ws-stunnel
 
-sed -i \
- -e 's/^print \(.*\)$/print(\1)/' \
- -e 's/except \(.*\), \(.*\):/except \1 as \2:/' \
+sed -i -E \
+ -e 's/^[[:space:]]*print[[:space:]]+(.*)$/print(\1)/' \
+ -e 's/except ([^,]+), ([^:]+):/except \1 as \2:/' \
  /usr/local/bin/ws-{dropbear,stunnel}
 
-success "Backends Python3 OK"
+python3 -m py_compile /usr/local/bin/ws-dropbear
+python3 -m py_compile /usr/local/bin/ws-stunnel
+
+success "Backends Python3 corrigés et validés"
 
 ### ===============================
 ### SYSTEMD
@@ -76,10 +79,13 @@ success "Backends Python3 OK"
 cat > /etc/systemd/system/ws-dropbear.service <<EOF
 [Unit]
 After=network.target
+
 [Service]
 ExecStart=/usr/bin/python3 /usr/local/bin/ws-dropbear 2095
 Restart=always
 LimitNOFILE=65536
+NoNewPrivileges=true
+
 [Install]
 WantedBy=multi-user.target
 EOF
@@ -87,10 +93,13 @@ EOF
 cat > /etc/systemd/system/ws-stunnel.service <<EOF
 [Unit]
 After=network.target
+
 [Service]
 ExecStart=/usr/bin/python3 /usr/local/bin/ws-stunnel 700
 Restart=always
 LimitNOFILE=65536
+NoNewPrivileges=true
+
 [Install]
 WantedBy=multi-user.target
 EOF
@@ -101,12 +110,13 @@ systemctl start ws-dropbear ws-stunnel
 success "Services WS actifs"
 
 ### ===============================
-### NGINX HTTP (CERTBOT)
+### NGINX HTTP TEMP (CERTBOT)
 ### ===============================
 cat > /etc/nginx/conf.d/kighmu-ws.conf <<EOF
 server {
     listen 80;
     server_name $DOMAIN;
+
     location /.well-known/ {
         root /var/www/html;
     }
@@ -172,7 +182,7 @@ success "Nginx WS/WSS OK"
 ### FIN
 ### ===============================
 echo
-echo "DROPBEAR WS  : ws://$DOMAIN/ws-dropbear  (80)"
-echo "STUNNEL WSS  : wss://$DOMAIN/ws-stunnel (443)"
+echo "DROPBEAR WS : ws://$DOMAIN/ws-dropbear  (80)"
+echo "STUNNEL WSS : wss://$DOMAIN/ws-stunnel (443)"
 echo
 log "INSTALLATION TERMINÉE — OK"
