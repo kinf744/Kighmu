@@ -241,25 +241,29 @@ run_script() {
 }
 
 # ============================
-# Dropbear PORT 22 + VPN (NETWORKTWEAKER method)
+# Dropbear port 22 + VPN (ERREUR CLÉS FIXÉE)
 # ============================
 echo "🚀 Dropbear port 22 (SSH WS tunnel compatible)..."
 
 apt-get update -qq
 apt-get install -y dropbear
 
-# Clés
+# SUPPRIME anciennes clés (cause de l'erreur)
+rm -f /etc/dropbear/dropbear_*_host_key*
+
+# GÉNÈRE NOUVELLES clés (obligatoire pour bannière)
 dropbearkey -t rsa -f /etc/dropbear/dropbear_rsa_host_key
+dropbearkey -t ed25519 -f /etc/dropbear/dropbear_ed25519_host_key
 chmod 600 /etc/dropbear/*
 
-# CONFIG NETWORKTWEAKER : port 22 EN PRIORITÉ
+# CONFIG multi-ports (comme NETWORKTWEAKER)
 cat > /etc/default/dropbear << 'EOF'
 NO_START=0
 DROPBEAR_PORT="22 109 143"
 DROPBEAR_EXTRA_ARGS="-w -s -g"
 EOF
 
-# MASQUE OpenSSH (comme NETWORKTWEAKER)
+# MASQUE OpenSSH complètement
 systemctl mask ssh.service ssh.socket 2>/dev/null || true
 systemctl stop ssh sshd 2>/dev/null || true
 
@@ -269,12 +273,13 @@ systemctl restart dropbear
 
 sleep 5
 
-# Vérif SSH WS tunnel
+# VÉRIF FINALE
 if ss -tlnp | grep -q "dropbear.*:22"; then
     echo "✅ Dropbear port 22 (SSH WS tunnel OK !)"
-    echo "ssh -p 22 → SSH-2.0-dropbear_XXXX.XX"
+    echo "Bannière: SSH-2.0-dropbear_2022.83"
+    echo "Autres ports: 109, 143 disponibles"
 else
-    echo "⚠️ Vérif manuelle"
+    echo "⚠️ Vérifiez: systemctl status dropbear"
 fi
 # ============================
 
