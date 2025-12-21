@@ -4,7 +4,7 @@ set -euo pipefail
 # ==============================
 # VARIABLES
 # ==============================
-DROPBEAR_BIN="/usr/sbin/dropbear"
+DROPBEAR_BIN="/usr/bin/dropbear"
 DROPBEAR_CONF="/etc/default/dropbear"
 DROPBEAR_LOG="/var/log/dropbear_custom.log"
 DROPBEAR_PORTS=(22 109)
