@@ -1,6 +1,7 @@
 #!/bin/bash
 # menu1.sh
 # Créer un utilisateur normal et sauvegarder ses infos
+set -euo pipefail
 
 # Définition des couleurs (comme dans le panneau principal)
 RED="\e[31m"
@@ -67,8 +68,8 @@ fi
 # Calculer la date d'expiration
 expire_date=$(date -d "+$days days" '+%Y-%m-%d')
 
-# Création utilisateur sans home et shell bloqué
-useradd -M -s /bin/false "$username" || { echo -e "${RED}Erreur lors de la création${RESET}"; read -p "Appuyez sur Entrée pour revenir au menu..."; exit 1; }
+# Création utilisateur compatible OpenSSH / Dropbear
+useradd -m -s /bin/bash "$username" || { echo -e "${RED}Erreur lors de la création${RESET}"; read -p "Appuyez sur Entrée pour revenir au menu..."; exit 1; }
 echo "$username:$password" | chpasswd
 
 # Appliquer la date d'expiration du compte
@@ -86,9 +87,9 @@ HOST_IP=$(hostname -I | awk '{print $1}')
 echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
 
 # Ajout automatique de l'affichage du banner personnalisé au login shell
-BANNER_PATH="/etc/ssh/sshd_banner"  # Chemin vers le fichier banner, à adapter
+BANNER_PATH="/etc/ssh/sshd_banner"
 
-# Comme pas de home créé (avec -M), .bashrc n'existe pas => créer dossier home minimal et fichier .bashrc pour banner
+# Home minimal pour Dropbear / OpenSSH
 USER_HOME="/home/$username"
 if [ ! -d "$USER_HOME" ]; then
     mkdir -p "$USER_HOME"
