@@ -241,47 +241,40 @@ run_script() {
 }
 
 # ============================
-# Dropbear RACKNERD-SPECIFIC
+# Dropbear PORT 22 + VPN (NETWORKTWEAKER method)
 # ============================
-echo "🚀 Installation Dropbear (RackNerd compatible)..."
+echo "🚀 Dropbear port 22 (SSH WS tunnel compatible)..."
 
-# 1. Tue SSH RackNerd init (PID 1 gère port 22)
-systemctl stop ssh sshd 2>/dev/null || true
-pkill -f sshd 2>/dev/null || true
-fuser -k 22/tcp 2>/dev/null || true
-sleep 5
-
-# 2. Désactive systemd + masque service
-systemctl disable ssh sshd 2>/dev/null || true
-systemctl mask ssh sshd 2>/dev/null || true
-
-# 3. Purge paquets OpenSSH (force)
-apt-get purge -y openssh-server openssh-client openssh-sftp-server 2>/dev/null || true
-apt-get autoremove -y 2>/dev/null || true
-
-# 4. Dropbear sur port 22
 apt-get update -qq
 apt-get install -y dropbear
 
+# Clés
+dropbearkey -t rsa -f /etc/dropbear/dropbear_rsa_host_key
+chmod 600 /etc/dropbear/*
+
+# CONFIG NETWORKTWEAKER : port 22 EN PRIORITÉ
 cat > /etc/default/dropbear << 'EOF'
 NO_START=0
-DROPBEAR_PORT=22
+DROPBEAR_PORT="22 109 143"
 DROPBEAR_EXTRA_ARGS="-w -s -g"
 EOF
 
-# Génère clés
-dropbearkey -t rsa -f /etc/dropbear/dropbear_rsa_host_key 2>/dev/null || true
-chmod 600 /etc/dropbear/*
+# MASQUE OpenSSH (comme NETWORKTWEAKER)
+systemctl mask ssh.service ssh.socket 2>/dev/null || true
+systemctl stop ssh sshd 2>/dev/null || true
 
 systemctl daemon-reload
 systemctl enable dropbear
 systemctl restart dropbear
 
 sleep 5
-if ss -tlnp | grep -q :22 && ! pgrep -f sshd > /dev/null; then
-    echo "✅ Dropbear sur port 22 (OpenSSH supprimé) !"
+
+# Vérif SSH WS tunnel
+if ss -tlnp | grep -q "dropbear.*:22"; then
+    echo "✅ Dropbear port 22 (SSH WS tunnel OK !)"
+    echo "ssh -p 22 → SSH-2.0-dropbear_XXXX.XX"
 else
-    echo "⚠️ Vérifiez manuellement"
+    echo "⚠️ Vérif manuelle"
 fi
 # ============================
 
