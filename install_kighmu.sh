@@ -241,46 +241,36 @@ run_script() {
 }
 
 # ============================
-# Dropbear - FIX CLÉS UBUNTU 2022.83
+# Dropbear KIGHMU (NETWORKTWEAKER exact)
 # ============================
-echo "🚀 Dropbear port 22 (clés forcées)..."
+echo "🚀 Dropbear Kighmu ports 109+143 (VPN bannière OK)..."
 
-apt-get update -qq
 apt-get install -y dropbear
 
-# SUPPRESSION COMPLÈTE + permissions (FIX Ubuntu)
+# Clés (supprime anciennes)
 rm -rf /etc/dropbear/
-mkdir -p /etc/dropbear
-chmod 755 /etc/dropbear
+mkdir -p /etc/dropbear && chmod 755 /etc/dropbear
 
-# GÉNÉRATION CLÉS avec umask strict (fix dropbearkey bug)
-umask 077
 dropbearkey -t rsa -f /etc/dropbear/dropbear_rsa_host_key
-dropbearkey -t ed25519 -f /etc/dropbear/dropbear_ed25519_host_key
-chmod 600 /etc/dropbear/dropbear_*_host_key
-chown root:root /etc/dropbear/dropbear_*_host_key
+chmod 600 /etc/dropbear/*
 
-# CONFIG multi-ports (SSH WS tunnel)
+# CONFIG IDENTIQUE NETWORKTWEAKER
 cat > /etc/default/dropbear << 'EOF'
 NO_START=0
-DROPBEAR_PORT="22 109 143"
+DROPBEAR_PORT="109 143"
 DROPBEAR_EXTRA_ARGS="-w -s -g"
 EOF
-
-# MASQUE OpenSSH
-systemctl mask ssh.service ssh.socket 2>/dev/null || true
-systemctl stop ssh sshd 2>/dev/null || true
 
 systemctl daemon-reload
 systemctl enable dropbear
 systemctl restart dropbear
 
-sleep 5
-
-if ss -tlnp | grep -q "dropbear.*:22"; then
-    echo "✅ Dropbear port 22 OK ! Bannière SSH-2.0-dropbear_2022.83"
+sleep 3
+if ss -tlnp | grep -q "dropbear.*:109"; then
+    echo "✅ Dropbear ports 109+143 (SSH WS VPN OK !)"
+    echo "Tunnel: ssh -p 109 → SSH-2.0-dropbear_2022.83"
 else
-    echo "❌ Erreur - vérifiez journalctl -u dropbear"
+    echo "❌ Erreur Dropbear"
 fi
 # ============================
 
