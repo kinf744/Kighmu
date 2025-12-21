@@ -240,6 +240,36 @@ run_script() {
   set -e
 }
 
+# ============================
+# Bloc Dropbear intégré
+# ============================
+echo "🚀 Installation et configuration Dropbear sur le port 22..."
+
+# Suppression d'OpenSSH si présent
+if dpkg -l | grep -q openssh-server; then
+    echo "⚡ Désinstallation d'OpenSSH..."
+    apt-get remove --purge -y openssh-server openssh-client
+    apt autoremove -y
+    echo "OpenSSH désinstallé."
+fi
+
+# Installation de Dropbear
+apt-get update -y
+apt-get install -y dropbear
+
+# Configuration de Dropbear sur le port 22
+sed -i 's/^#\?NO_START=.*/NO_START=0/' /etc/default/dropbear
+sed -i 's/^#\?DROPBEAR_PORT=.*/DROPBEAR_PORT=22/' /etc/default/dropbear
+sed -i 's/^#\?DROPBEAR_EXTRA_ARGS=.*/DROPBEAR_EXTRA_ARGS="-w -s -g"/' /etc/default/dropbear
+
+# Activation et démarrage
+systemctl enable dropbear
+systemctl restart dropbear
+
+echo "✅ Dropbear installé et configuré sur le port 22 avec succès."
+
+# ============================
+
 echo "🚀 Application de la configuration SSH personnalisée..."
 chmod +x "$INSTALL_DIR/setup_ssh_config.sh"
 run_script "sudo $INSTALL_DIR/setup_ssh_config.sh"
