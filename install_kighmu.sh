@@ -241,65 +241,31 @@ run_script() {
 }
 
 # ============================
-# Bloc Dropbear ULTRA-SAFE
+# Bloc Dropbear SIMPLE - SANS NETTOYAGE AGRESSIF
 # ============================
-echo "🚀 Installation Dropbear ULTRA-SAFE (zéro reboot)..."
+echo "🚀 Installation Dropbear sur port 22 (version safe)..."
 
-# 1. DESACTIVE errexit TEMPORAIREMENT pour ce bloc critique
-set +e
+# Installation Dropbear UNIQUEMENT (pas de nettoyage OpenSSH)
+apt-get update -y
+apt-get install -y dropbear
 
-# 2. Nettoyage OpenSSH MAXIMUM SAFE
-echo "🧹 Nettoyage OpenSSH ultra-safe..."
-systemctl is-active --quiet ssh.service 2>/dev/null && systemctl stop ssh.service || true
-systemctl is-active --quiet ssh.socket 2>/dev/null && systemctl stop ssh.socket || true
-sleep 2
+# Configuration Dropbear
+sed -i 's/^#?NO_START=.*/NO_START=0/' /etc/default/dropbear
+sed -i 's/^#?DROPBEAR_PORT=.*/DROPBEAR_PORT=22/' /etc/default/dropbear
+sed -i 's/^#?DROPBEAR_EXTRA_ARGS=.*/DROPBEAR_EXTRA_ARGS="-w -s -g"/' /etc/default/dropbear
 
-# Kill SEULEMENT sshd orphelins (jamais la session courante)
-ps aux | grep '[s]shd' | grep -v "grep" | awk '{print $2}' | xargs -r kill -TERM 2>/dev/null || true
-sleep 3
-
-# Paquets
-dpkg -l | grep -q openssh-server && {
-    apt-get purge -y openssh-server openssh-client openssh-sftp-server 2>/dev/null || true
-    apt-get autoremove -y 2>/dev/null || true
-}
-
-# Fichiers résiduels
-rm -f /var/run/sshd.pid /run/sshd.pid 2>/dev/null || true
-rm -rf /etc/ssh/ssh_host_* 2>/dev/null || true
-
-# 3. Installation Dropbear sur PORT 2222 d'abord (évite conflit)
-apt-get update -qq 2>/dev/null || true
-apt-get install -y dropbear 2>/dev/null || true
-
-sed -i 's/^#*DROPBEAR_PORT=.*/DROPBEAR_PORT=2222/' /etc/default/dropbear
-sed -i 's/^#*NO_START=.*/NO_START=0/' /etc/default/dropbear
-sed -i 's/^#*DROPBEAR_EXTRA_ARGS=.*/DROPBEAR_EXTRA_ARGS="-w -s -g"/' /etc/default/dropbear
-
+# Démarrage
 systemctl daemon-reload
 systemctl enable dropbear
 systemctl restart dropbear
 
-# Test connexion Dropbear 2222
-timeout 5 nc -z 127.0.0.1 2222 && echo "✅ Dropbear OK sur 2222" || echo "⚠️ Dropbear en cours de démarrage..."
-
-# 4. SEULEMENT APRÈS → bascule vers port 22
-sleep 5
-fuser -k 22/tcp 2>/dev/null || true
-sleep 2
-sed -i 's/^DROPBEAR_PORT=2222/DROPBEAR_PORT=22/' /etc/default/dropbear
-systemctl restart dropbear
-sleep 5
-
-# Vérif finale
-if systemctl is-active --quiet dropbear && timeout 3 nc -z 127.0.0.1 22; then
-    echo "✅ Dropbear 100% opérationnel port 22 !"
+# Vérification
+sleep 3
+if systemctl is-active --quiet dropbear && ss -tlnp | grep -q :22; then
+    echo "✅ Dropbear installé et actif sur port 22 !"
 else
-    echo "⚠️ Dropbear partiellement installé - reprise manuelle nécessaire"
+    echo "⚠️ Dropbear installé mais vérifiez manuellement"
 fi
-
-set -e  # Réactive errexit après bloc safe
-
 # ============================
 
 echo "🚀 Application de la configuration SSH personnalisée..."
