@@ -452,31 +452,27 @@ while true; do
     echo -e "${CYAN} IP: ${GREEN}$HOST_IP${RESET} | ${CYAN}Up: ${GREEN}$UPTIME${RESET}"
     afficher_modes_ports
     echo -e "${CYAN}+======================================================+${RESET}"
-    echo -e "${GREEN}${BOLD}[01]${RESET} ${YELLOW}OpenSSH${RESET}"
-    echo -e "${GREEN}${BOLD}[02]${RESET} ${YELLOW}Dropbear${RESET}"
-    echo -e "${GREEN}${BOLD}[03]${RESET} ${YELLOW}Fastdns (DNSTT)${RESET}"
-    echo -e "${GREEN}${BOLD}[04]${RESET} ${YELLOW}UDP Custom${RESET}"
-    echo -e "${GREEN}${BOLD}[05]${RESET} ${YELLOW}SOCKS/Python${RESET}"
-    echo -e "${GREEN}${BOLD}[06]${RESET} ${YELLOW}SSL/TLS${RESET}"
-    echo -e "${GREEN}${BOLD}[07]${RESET} ${YELLOW}BadVPN${RESET}"
-    echo -e "${GREEN}${BOLD}[08]${RESET} ${YELLOW}proxy ws${RESET}"
-    echo -e "${GREEN}${BOLD}[09]${RESET} ${YELLOW}Hysteria${RESET}"
-    echo -e "${GREEN}${BOLD}[10]${RESET} ${YELLOW}Tunnel WS/WSS SSH${RESET}"
+    echo -e "${GREEN}${BOLD}[01]${RESET} ${YELLOW}Fastdns (DNSTT)${RESET}"
+    echo -e "${GREEN}${BOLD}[02]${RESET} ${YELLOW}UDP Custom${RESET}"
+    echo -e "${GREEN}${BOLD}[03]${RESET} ${YELLOW}SOCKS/Python${RESET}"
+    echo -e "${GREEN}${BOLD}[04]${RESET} ${YELLOW}SSL/TLS${RESET}"
+    echo -e "${GREEN}${BOLD}[05]${RESET} ${YELLOW}BadVPN${RESET}"
+    echo -e "${GREEN}${BOLD}[06]${RESET} ${YELLOW}proxy ws${RESET}"
+    echo -e "${GREEN}${BOLD}[07]${RESET} ${YELLOW}Hysteria${RESET}"
+    echo -e "${GREEN}${BOLD}[08]${RESET} ${YELLOW}Tunnel WS/WSS SSH${RESET}"
     echo -e "${GREEN}${BOLD}[00]${RESET} ${YELLOW}Quitter${RESET}"
     echo -e "${CYAN}+======================================================+${RESET}"
     echo -ne "${BOLD}${YELLOW}👉 Choisissez un mode : ${RESET}"
     read choix
     case $choix in
-        1) manage_mode "OpenSSH" install_openssh uninstall_openssh ;;
-        2) manage_mode "Dropbear" install_dropbear uninstall_dropbear ;;
-        3) manage_mode "Fastdns (DNSTT)" install_slowdns uninstall_slowdns ;;
-        4) manage_mode "UDP Custom" install_udp_custom uninstall_udp_custom ;;
-        5) manage_mode "SOCKS/Python" install_socks_python uninstall_socks_python ;;
-        6) manage_mode "SSL/TLS" install_ssl_tls uninstall_ssl_tls ;;
-        7) manage_mode "BadVPN" install_badvpn uninstall_badvpn ;;
-        8) manage_mode "proxy ws" install_proxy_ws uninstall_proxy_ws ;;
-        9) manage_mode "Hysteria" install_hysteria uninstall_hysteria ;;
-        10) manage_mode "Tunnel WS/WSS SSH" install_ws_wss uninstall_ws_wss ;;
+        1) manage_mode "Fastdns (DNSTT)" install_slowdns uninstall_slowdns ;;
+        2) manage_mode "UDP Custom" install_udp_custom uninstall_udp_custom ;;
+        3) manage_mode "SOCKS/Python" install_socks_python uninstall_socks_python ;;
+        4) manage_mode "SSL/TLS" install_ssl_tls uninstall_ssl_tls ;;
+        5) manage_mode "BadVPN" install_badvpn uninstall_badvpn ;;
+        6) manage_mode "proxy ws" install_proxy_ws uninstall_proxy_ws ;;
+        7) manage_mode "Hysteria" install_hysteria uninstall_hysteria ;;
+        8) manage_mode "Tunnel WS/WSS SSH" install_ws_wss uninstall_ws_wss ;;
         0) echo -e "${RED}🚪 Sortie du panneau de contrôle.${RESET}" ; exit 0 ;;
         *) echo -e "${RED}❌ Option invalide, réessayez.${RESET}" ;;
     esac
