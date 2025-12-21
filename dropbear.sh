@@ -1,25 +1,70 @@
 #!/bin/bash
-# dropbear.sh
-# Script pour installer et configurer Dropbear SSH sur VPS
+set -euo pipefail
 
-set -e
+PORT=109
+LOG_DIR="/var/log/dropbear"
+LOG_FILE="$LOG_DIR/dropbear-109.log"
+CONF_FILE="/etc/dropbear/dropbear_109.conf"
+SERVICE_FILE="/etc/systemd/system/dropbear-109.service"
 
-echo "Mise à jour des paquets..."
-apt-get update -y
+echo "[+] Installation de Dropbear"
+apt update -y
+apt install -y dropbear
 
-echo "Installation de Dropbear..."
-apt-get install -y dropbear
+echo "[+] Création du dossier de logs"
+mkdir -p "$LOG_DIR"
+touch "$LOG_FILE"
+chmod 640 "$LOG_FILE"
+chown root:adm "$LOG_FILE"
 
-echo "Activation du service Dropbear au démarrage..."
-systemctl enable dropbear
+echo "[+] Configuration Dropbear (port $PORT)"
+mkdir -p /etc/dropbear
+cat > "$CONF_FILE" <<EOF
+DROPBEAR_PORT=$PORT
+DROPBEAR_EXTRA_ARGS="-w -g -E"
+EOF
 
-echo "Démarrage du service Dropbear..."
-systemctl restart dropbear
+echo "[+] Création du service systemd dédié"
+cat > "$SERVICE_FILE" <<EOF
+[Unit]
+Description=Dropbear SSH Server (VPN) - Port $PORT
+After=network.target
+Wants=network.target
 
-echo "Vérification du statut du service Dropbear..."
-if systemctl is-active --quiet dropbear; then
-    echo "Dropbear est installé et en cours d'exécution."
-else
-    echo "Échec du démarrage de Dropbear."
-    exit 1
-fi
+[Service]
+Type=simple
+ExecStart=/usr/sbin/dropbear -F -p $PORT -w -g -E
+StandardOutput=append:$LOG_FILE
+StandardError=append:$LOG_FILE
+Restart=on-failure
+RestartSec=3
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+echo "[+] Désactivation du service dropbear par défaut (sécurité)"
+systemctl stop dropbear 2>/dev/null || true
+systemctl disable dropbear 2>/dev/null || true
+
+echo "[+] Activation du service dropbear-109"
+systemctl daemon-reexec
+systemctl daemon-reload
+systemctl enable dropbear-109
+systemctl restart dropbear-109
+
+echo "[+] Vérification des ports"
+ss -tlnp | grep ":$PORT" || {
+  echo "[ERREUR] Dropbear n'écoute pas sur le port $PORT"
+  exit 1
+}
+
+echo
+echo "======================================"
+echo " Dropbear VPN actif"
+echo " Port           : $PORT"
+echo " Bannière       : SSH-2.0-dropbear_XXXX.XX"
+echo " Logs           : $LOG_FILE"
+echo " Service        : dropbear-109.service"
+echo "======================================"
