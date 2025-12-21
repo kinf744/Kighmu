@@ -27,6 +27,23 @@ else
     exit 1
 fi
 
+# ==============================
+# AUTO-DÉTECTION OpenSSH / Dropbear
+# ==============================
+detect_ssh_shell() {
+    if pgrep -x dropbear >/dev/null 2>&1 || systemctl is-active --quiet dropbear 2>/dev/null; then
+        echo "/usr/sbin/nologin"
+        return
+    fi
+
+    if pgrep -x sshd >/dev/null 2>&1 || systemctl is-active --quiet ssh 2>/dev/null; then
+        echo "/bin/bash"
+        return
+    fi
+
+    echo "/usr/sbin/nologin"
+}
+
 # Charger la clé publique SlowDNS
 if [ -f /etc/slowdns/server.pub ]; then
     SLOWDNS_KEY=$(< /etc/slowdns/server.pub)
@@ -69,7 +86,6 @@ if id "$username" &>/dev/null; then
     exit 1
 fi
 
-# Lecture sécurisée du mot de passe (sans affichage)
 read -sp "Mot de passe : " password
 echo
 if [[ -z "$password" ]]; then
@@ -89,8 +105,12 @@ if ! [[ "$minutes" =~ ^[0-9]+$ ]]; then
     exit 1
 fi
 
-# Création utilisateur
-if ! useradd -M -s /bin/false "$username"; then
+# ==============================
+# Création utilisateur (AUTO)
+# ==============================
+USER_SHELL=$(detect_ssh_shell)
+
+if ! useradd -M -s "$USER_SHELL" "$username"; then
   echo -e "${RED}Erreur lors de la création du compte.${RESET}"
   exit 1
 fi
@@ -104,59 +124,61 @@ fi
 expire_date=$(date -d "+$minutes minutes" '+%Y-%m-%d %H:%M:%S')
 HOST_IP=$(curl -s https://api.ipify.org)
 
-# Écriture avec verrouillage pour éviter corruption en cas de multi-exécution
+# Écriture sécurisée avec verrou
 (
   flock -x 200 || { echo -e "${RED}Impossible d'obtenir le verrou sur $USER_FILE.${RESET}"; exit 1; }
   echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
 ) 200>"$LOCK_FILE"
 
-# Création du script de suppression automatique
+# ==============================
+# Script de suppression automatique
+# ==============================
 CLEAN_SCRIPT="$TEST_DIR/$username-clean.sh"
 cat > "$CLEAN_SCRIPT" <<EOF
 #!/bin/bash
-# Arrêter tous les processus liés à l'utilisateur
 pkill -u "$username"
-# Suppression forcée de l'utilisateur
 userdel --force "$username"
-# Nettoyage du fichier utilisateur avec verrouillage
 (
   flock -x 200 || exit 1
   grep -v "^$username|" $USER_FILE > /tmp/users.tmp
   mv /tmp/users.tmp $USER_FILE
 ) 200>"$LOCK_FILE"
-# Suppression du script clean lui-même
 rm -f "$CLEAN_SCRIPT"
 exit 0
 EOF
 chmod +x "$CLEAN_SCRIPT"
 
-# Planification suppression automatique via at
+# Planification suppression
 if command -v at >/dev/null 2>&1; then
     echo "bash $CLEAN_SCRIPT" | at now + "$minutes" min 2>/dev/null || \
       echo -e "${YELLOW}Échec de la planification avec at.${RESET}"
 else
-    echo -e "${YELLOW}La commande 'at' n'est pas installée. Veuillez l'installer pour la suppression automatique.${RESET}"
+    echo -e "${YELLOW}La commande 'at' n'est pas installée.${RESET}"
 fi
 
-# Création du home customisé minimal (bannière etc)
+# ==============================
+# Home minimal + bannière
+# ==============================
 BANNER_PATH="/etc/ssh/sshd_banner"
 USER_HOME="/home/$username"
+
 if [ ! -d "$USER_HOME" ]; then
     mkdir -p "$USER_HOME"
-    chown "$username":"$username" "$USER_HOME"
+    chown "$username:$username" "$USER_HOME"
 fi
 
 cat > "$USER_HOME/.bashrc" <<EOF
-# Affichage du banner Kighmu VPS Manager
 if [ -f $BANNER_PATH ]; then
     cat $BANNER_PATH
 fi
 EOF
 
-chown "$username":"$username" "$USER_HOME/.bashrc"
+chown "$username:$username" "$USER_HOME/.bashrc"
 chmod 644 "$USER_HOME/.bashrc"
 
-# Affichage récapitulatif
+# ==============================
+# Affichage final
+# ==============================
 echo -e "${CYAN}+==================================================+${RESET}"
 echo -e "*NOUVEAU UTILISATEUR CRÉÉ*"
 echo -e "${CYAN}──────────────────────────────────────────────────────${RESET}"
@@ -169,10 +191,10 @@ echo -e "${YELLOW}Date d'expire :${RESET} $expire_date"
 echo -e "${CYAN}──────────────────────────────────────────────────────${RESET}"
 echo "En APPS comme HTTP Injector, Netmod, SSC, etc."
 echo ""
-echo -e "🙍 HTTP-Direct  : ${GREEN}$HOST_IP:90@$username:$password${RESET}"
-echo -e "🙍 SSL/TLS(SNI) : ${GREEN}$HOST_IP:443@$username:$password${RESET}"
-echo -e "🙍 Proxy(WS)    : ${GREEN}$DOMAIN:8080@$username:$password${RESET}"
-echo -e "🙍 SSH UDP     : ${GREEN}$HOST_IP:1-65535@$username:$password${RESET}"
+echo -e "🙍 HTTP-Direct   : ${GREEN}$HOST_IP:90@$username:$password${RESET}"
+echo -e "🙍 SSL/TLS(SNI)  : ${GREEN}$HOST_IP:443@$username:$password${RESET}"
+echo -e "🙍 Proxy(WS)     : ${GREEN}$DOMAIN:8080@$username:$password${RESET}"
+echo -e "🙍 SSH UDP       : ${GREEN}$HOST_IP:1-65535@$username:$password${RESET}"
 echo -e "🙍 Hysteria (UDP): ${GREEN}$DOMAIN:22000@$username:$password${RESET}"
 echo ""
 echo -e "${CYAN}───────────── CONFIG SLOWDNS 5300 ───────────────${RESET}"
