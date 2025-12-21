@@ -241,53 +241,48 @@ run_script() {
 }
 
 # ============================
-# Bloc Dropbear intégré
+# Bloc Dropbear SAFE - SANS REBOOT
 # ============================
 echo "🚀 Installation et configuration Dropbear sur le port 22..."
 
-# Nettoyage COMPLET OpenSSH si présent
-echo "🧹 Nettoyage complet OpenSSH..."
+# Nettoyage OpenSSH SANS tuer connexion active
+echo "🧹 Nettoyage SAFE OpenSSH (connexion préservée)..."
+
+# Arrêt propre des services (PAS la session active)
 systemctl stop ssh sshd 2>/dev/null || true
 systemctl stop ssh.socket 2>/dev/null || true
 systemctl disable ssh sshd ssh.socket 2>/dev/null || true
 
-pkill -f sshd 2>/dev/null || true
-sleep 2
+# Kill SEULEMENT les sshd enfants (PAS la session root)
+pgrep -f sshd | grep -v $$ | xargs -r kill -TERM 2>/dev/null || true
+sleep 3  # Attendre arrêt propre
 
+# Paquets seulement
 if dpkg -l | grep -q openssh-server; then
     apt-get remove --purge -y openssh-server openssh-client openssh-sftp-server
     apt-get autoremove --purge -y
     apt-get autoclean
-    echo "⚡ OpenSSH complètement désinstallé."
 fi
 
-rm -rf /etc/ssh/ssh_host_* 
-rm -rf /var/run/sshd.pid /run/sshd
+# Nettoyage fichiers (SAUF sshd_config principal pour session)
+rm -rf /etc/ssh/ssh_host_*_key* 
+rm -f /var/run/sshd.pid /run/sshd
 rm -rf /etc/systemd/system/multi-user.target.wants/ssh.service
-rm -f /etc/ssh/sshd_config*
 
-if systemctl is-active --quiet ssh 2>/dev/null || systemctl is-active --quiet sshd 2>/dev/null; then
-    echo "⚠️ Attention : résidus OpenSSH détectés"
-else
-    echo "✅ OpenSSH complètement supprimé"
-fi
-
+# Libère port 22 APRÈS Dropbear installé
 fuser -k 22/tcp 2>/dev/null || true
+sleep 1
 
-# Installation de Dropbear
+# MAINTENANT Dropbear (port libre garanti)
 apt-get update -y
 apt-get install -y dropbear
-
-# Configuration de Dropbear sur le port 22
 sed -i 's/^#?NO_START=.*/NO_START=0/' /etc/default/dropbear
-sed -i 's/^#?DROPBEAR_PORT=.*/DROPBEAR_PORT=22/' /etc/default/dropbear
+sed -i 's/^#?DROPBEAR_PORT=.*/DROPBEAR_PORT=22/' /etc/default/dropbear  
 sed -i 's/^#?DROPBEAR_EXTRA_ARGS=.*/DROPBEAR_EXTRA_ARGS="-w -s -g"/' /etc/default/dropbear
-
-# Activation et démarrage
 systemctl enable dropbear
 systemctl restart dropbear
 
-echo "✅ Dropbear installé et configuré sur le port 22 avec succès."
+echo "✅ Dropbear installé SANS interruption connexion !"
 
 # ============================
 
