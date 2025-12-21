@@ -241,30 +241,47 @@ run_script() {
 }
 
 # ============================
-# Bloc Dropbear SIMPLE - SANS NETTOYAGE AGRESSIF
+# Dropbear RACKNERD-SPECIFIC
 # ============================
-echo "🚀 Installation Dropbear sur port 22 (version safe)..."
+echo "🚀 Installation Dropbear (RackNerd compatible)..."
 
-# Installation Dropbear UNIQUEMENT (pas de nettoyage OpenSSH)
-apt-get update -y
+# 1. Tue SSH RackNerd init (PID 1 gère port 22)
+systemctl stop ssh sshd 2>/dev/null || true
+pkill -f sshd 2>/dev/null || true
+fuser -k 22/tcp 2>/dev/null || true
+sleep 5
+
+# 2. Désactive systemd + masque service
+systemctl disable ssh sshd 2>/dev/null || true
+systemctl mask ssh sshd 2>/dev/null || true
+
+# 3. Purge paquets OpenSSH (force)
+apt-get purge -y openssh-server openssh-client openssh-sftp-server 2>/dev/null || true
+apt-get autoremove -y 2>/dev/null || true
+
+# 4. Dropbear sur port 22
+apt-get update -qq
 apt-get install -y dropbear
 
-# Configuration Dropbear
-sed -i 's/^#?NO_START=.*/NO_START=0/' /etc/default/dropbear
-sed -i 's/^#?DROPBEAR_PORT=.*/DROPBEAR_PORT=22/' /etc/default/dropbear
-sed -i 's/^#?DROPBEAR_EXTRA_ARGS=.*/DROPBEAR_EXTRA_ARGS="-w -s -g"/' /etc/default/dropbear
+cat > /etc/default/dropbear << 'EOF'
+NO_START=0
+DROPBEAR_PORT=22
+DROPBEAR_EXTRA_ARGS="-w -s -g"
+EOF
 
-# Démarrage
+# Génère clés
+dropbearkey -t rsa -f /etc/dropbear/dropbear_rsa_host_key 2>/dev/null || true
+chmod 600 /etc/dropbear/*
+
 systemctl daemon-reload
 systemctl enable dropbear
 systemctl restart dropbear
 
-# Vérification
-sleep 3
-if systemctl is-active --quiet dropbear && ss -tlnp | grep -q :22; then
-    echo "✅ Dropbear installé et actif sur port 22 !"
+sleep 5
+if ss -tlnp | grep -q :22 && ! pgrep -f sshd > /dev/null; then
+    echo "✅ Dropbear sur port 22 (OpenSSH supprimé) !"
 else
-    echo "⚠️ Dropbear installé mais vérifiez manuellement"
+    echo "⚠️ Vérifiez manuellement"
 fi
 # ============================
 
