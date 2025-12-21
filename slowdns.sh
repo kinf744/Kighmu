@@ -152,7 +152,7 @@ setup_iptables() {
 }
 
 select_backend_target() {
-    local mode target
+    local mode target ssh_port
     mode="ssh"
     if [ -f "$BACKEND_CONF" ]; then
         # shellcheck disable=SC1090
@@ -166,25 +166,30 @@ select_backend_target() {
             ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
             [ -z "$ssh_port" ] && ssh_port=22
             target="127.0.0.1:$ssh_port"
-            log "Mode backend : SSH ($target)"
+            printf '[%s] Mode backend : SSH (%s)
+' "$(date '+%Y-%m-%d %H:%M:%S')" "$target" >&2
             ;;
         v2ray)
             # V2Ray direct uniquement
             target="127.0.0.1:5401"
-            log "Mode backend : V2Ray ($target)"
+            printf '[%s] Mode backend : V2Ray (%s)
+' "$(date '+%Y-%m-%d %H:%M:%S')" "$target" >&2
             ;;
         mix)
             # MIX : V2Ray 5401 (qui pourra gérer SSH, VLESS, VMESS, TROJAN)
             target="127.0.0.1:5401"
-            log "Mode backend : MIX (via V2Ray $target)"
+            printf '[%s] Mode backend : MIX (via V2Ray %s)
+' "$(date '+%Y-%m-%d %H:%M:%S')" "$target" >&2
             ;;
         *)
             # fallback
             target="127.0.0.1:22"
-            log "Mode backend inconnu, fallback SSH ($target)"
+            printf '[%s] Mode backend inconnu, fallback SSH (%s)
+' "$(date '+%Y-%m-%d %H:%M:%S')" "$target" >&2
             ;;
     esac
 
+    # UNIQUEMENT l'adresse sur stdout (pas de log)
     echo "$target"
 }
 
