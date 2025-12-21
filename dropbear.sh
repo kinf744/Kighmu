@@ -1,70 +1,73 @@
 #!/bin/bash
 set -euo pipefail
 
-PORT=109
-LOG_DIR="/var/log/dropbear"
-LOG_FILE="$LOG_DIR/dropbear-109.log"
-CONF_FILE="/etc/dropbear/dropbear_109.conf"
-SERVICE_FILE="/etc/systemd/system/dropbear-109.service"
+# --- VARIABLES ---
+DROPBEAR_BIN="/usr/sbin/dropbear"
+DROPBEAR_CONF="/etc/default/dropbear"
+DROPBEAR_LOG="/var/log/dropbear_custom.log"
+DROPBEAR_PORTS=(22 109) # Ports où Dropbear va écouter
+SYSTEMD_SERVICE="/etc/systemd/system/dropbear-custom.service"
 
-echo "[+] Installation de Dropbear"
-apt update -y
-apt install -y dropbear
+# --- DETECTION VERSION UBUNTU ---
+UBUNTU_VERSION=$(lsb_release -rs)
+case "$UBUNTU_VERSION" in
+  "20.04") DROPBEAR_VER="2019.78" ;;
+  "22.04") DROPBEAR_VER="2020.81" ;;
+  "24.04") DROPBEAR_VER="2024.84" ;;
+  *) DROPBEAR_VER="2024.84" ;; # fallback
+esac
+BANNER="SSH-2.0-dropbear_$DROPBEAR_VER"
 
-echo "[+] Création du dossier de logs"
-mkdir -p "$LOG_DIR"
-touch "$LOG_FILE"
-chmod 640 "$LOG_FILE"
-chown root:adm "$LOG_FILE"
+# --- INSTALLATION DROPBEAR ---
+if ! command -v dropbear >/dev/null 2>&1; then
+    echo "[INFO] Installation de Dropbear..."
+    apt-get update -q
+    apt-get install -y dropbear
+fi
 
-echo "[+] Configuration Dropbear (port $PORT)"
+# --- DESACTIVER OPENSSH ---
+if systemctl is-active --quiet ssh; then
+    echo "[INFO] Désactivation de OpenSSH..."
+    systemctl stop ssh
+    systemctl disable ssh
+fi
+
+# --- CONFIG DROPBEAR ---
 mkdir -p /etc/dropbear
-cat > "$CONF_FILE" <<EOF
-DROPBEAR_PORT=$PORT
-DROPBEAR_EXTRA_ARGS="-w -g -E"
-EOF
+echo "DROPBEAR_PORT=${DROPBEAR_PORTS[0]}" > $DROPBEAR_CONF
+echo "DROPBEAR_EXTRA_ARGS='$(printf " -p %s" "${DROPBEAR_PORTS[@]}") -F -E -m'" >> $DROPBEAR_CONF
 
-echo "[+] Création du service systemd dédié"
-cat > "$SERVICE_FILE" <<EOF
+# --- SYSTEMD SERVICE PERSONNALISE ---
+cat <<EOF > $SYSTEMD_SERVICE
 [Unit]
-Description=Dropbear SSH Server (VPN) - Port $PORT
+Description=Dropbear SSH Custom
 After=network.target
-Wants=network.target
 
 [Service]
-Type=simple
-ExecStart=/usr/sbin/dropbear -F -p $PORT -w -g -E
-StandardOutput=append:$LOG_FILE
-StandardError=append:$LOG_FILE
+ExecStart=$DROPBEAR_BIN -F -E -m $(printf " -p %s" "${DROPBEAR_PORTS[@]}")
 Restart=on-failure
-RestartSec=3
-LimitNOFILE=65535
+StandardOutput=syslog
+StandardError=syslog
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-echo "[+] Désactivation du service dropbear par défaut (sécurité)"
-systemctl stop dropbear 2>/dev/null || true
-systemctl disable dropbear 2>/dev/null || true
+# --- LOG FILE ---
+touch $DROPBEAR_LOG
+chmod 600 $DROPBEAR_LOG
 
-echo "[+] Activation du service dropbear-109"
-systemctl daemon-reexec
+# --- IPTABLES (OPTIONNEL) ---
+# Bloquer OpenSSH si jamais il revient sur port 22
+iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+iptables -A INPUT -p tcp --dport 109 -j ACCEPT
+
+# --- ACTIVER SERVICE ---
 systemctl daemon-reload
-systemctl enable dropbear-109
-systemctl restart dropbear-109
+systemctl enable dropbear-custom
+systemctl restart dropbear-custom
 
-echo "[+] Vérification des ports"
-ss -tlnp | grep ":$PORT" || {
-  echo "[ERREUR] Dropbear n'écoute pas sur le port $PORT"
-  exit 1
-}
-
-echo
-echo "======================================"
-echo " Dropbear VPN actif"
-echo " Port           : $PORT"
-echo " Bannière       : SSH-2.0-dropbear_XXXX.XX"
-echo " Logs           : $LOG_FILE"
-echo " Service        : dropbear-109.service"
-echo "======================================"
+# --- BANNIERE ---
+echo "[INFO] Dropbear actif sur ports: ${DROPBEAR_PORTS[*]}"
+echo "[INFO] BANNIERE: $BANNER"
+echo "[INFO] Logs: $DROPBEAR_LOG"
