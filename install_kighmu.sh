@@ -240,40 +240,6 @@ run_script() {
   set -e
 }
 
-# ============================
-# Dropbear KIGHMU (NETWORKTWEAKER exact)
-# ============================
-echo "🚀 Dropbear Kighmu ports 109+143 (VPN bannière OK)..."
-
-apt-get install -y dropbear
-
-# Clés (supprime anciennes)
-rm -rf /etc/dropbear/
-mkdir -p /etc/dropbear && chmod 755 /etc/dropbear
-
-dropbearkey -t rsa -f /etc/dropbear/dropbear_rsa_host_key
-chmod 600 /etc/dropbear/*
-
-# CONFIG IDENTIQUE NETWORKTWEAKER
-cat > /etc/default/dropbear << 'EOF'
-NO_START=0
-DROPBEAR_PORT="109 143"
-DROPBEAR_EXTRA_ARGS="-w -s -g"
-EOF
-
-systemctl daemon-reload
-systemctl enable dropbear
-systemctl restart dropbear
-
-sleep 3
-if ss -tlnp | grep -q "dropbear.*:109"; then
-    echo "✅ Dropbear ports 109+143 (SSH WS VPN OK !)"
-    echo "Tunnel: ssh -p 109 → SSH-2.0-dropbear_2022.83"
-else
-    echo "❌ Erreur Dropbear"
-fi
-# ============================
-
 echo "🚀 Application de la configuration SSH personnalisée..."
 chmod +x "$INSTALL_DIR/setup_ssh_config.sh"
 run_script "sudo $INSTALL_DIR/setup_ssh_config.sh"
