@@ -133,9 +133,25 @@ install_dropbear() {
 
 uninstall_dropbear() {
     echo ">>> Désinstallation de Dropbear..."
+
+    if systemctl is-active --quiet dropbear || systemctl is-active --quiet dropbear-custom; then
+        systemctl stop dropbear dropbear-custom 2>/dev/null || true
+    fi
+    systemctl disable dropbear dropbear-custom 2>/dev/null || true
+
+    if [[ -f /etc/systemd/system/dropbear-custom.service ]]; then
+        rm -f /etc/systemd/system/dropbear-custom.service
+        systemctl daemon-reload
+    fi
+
     apt-get remove -y dropbear
-    systemctl disable dropbear
-    echo -e "${GREEN}[OK] Dropbear supprimé.${RESET}"
+    apt-get autoremove -y
+
+    [[ -f /etc/default/dropbear ]] && rm -f /etc/default/dropbear
+    [[ -d /etc/dropbear ]] && rm -rf /etc/dropbear
+    [[ -f /var/log/dropbear_custom.log ]] && rm -f /var/log/dropbear_custom.log
+
+    echo -e "${GREEN}[OK] Dropbear supprimé proprement.${RESET}"
 }
 
 install_udp_custom() {
