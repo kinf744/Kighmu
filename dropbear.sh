@@ -102,3 +102,7 @@ echo "[OK] Dropbear est actif sur les ports: ${DROPBEAR_PORTS[*]}"
 echo "[OK] Bannière: $BANNER"
 echo "[OK] Logs: $DROPBEAR_LOG"
 echo "[INFO] Vérifiez la bannière: nc 127.0.0.1 ${DROPBEAR_PORTS[0]}"
+
+echo "[INFO] Le VPS va redémarrer dans 5 secondes pour appliquer Dropbear..."
+sleep 5
+reboot
