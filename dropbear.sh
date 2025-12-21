@@ -5,7 +5,7 @@ set -euo pipefail
 DROPBEAR_BIN="/usr/sbin/dropbear"
 DROPBEAR_CONF="/etc/default/dropbear"
 DROPBEAR_LOG="/var/log/dropbear_custom.log"
-DROPBEAR_PORTS=(22 109) # Ports où Dropbear va écouter
+DROPBEAR_PORTS=(22 109)
 SYSTEMD_SERVICE="/etc/systemd/system/dropbear-custom.service"
 
 # --- DETECTION VERSION UBUNTU ---
@@ -14,7 +14,7 @@ case "$UBUNTU_VERSION" in
   "20.04") DROPBEAR_VER="2019.78" ;;
   "22.04") DROPBEAR_VER="2020.81" ;;
   "24.04") DROPBEAR_VER="2024.84" ;;
-  *) DROPBEAR_VER="2024.84" ;; # fallback
+  *) DROPBEAR_VER="2024.84" ;;
 esac
 BANNER="SSH-2.0-dropbear_$DROPBEAR_VER"
 
@@ -22,7 +22,7 @@ BANNER="SSH-2.0-dropbear_$DROPBEAR_VER"
 if ! command -v dropbear >/dev/null 2>&1; then
     echo "[INFO] Installation de Dropbear..."
     apt-get update -q
-    apt-get install -y dropbear
+    DEBIAN_FRONTEND=noninteractive apt-get install -y dropbear
 fi
 
 # --- DESACTIVER OPENSSH ---
@@ -57,15 +57,22 @@ EOF
 touch $DROPBEAR_LOG
 chmod 600 $DROPBEAR_LOG
 
-# --- IPTABLES (OPTIONNEL) ---
-# Bloquer OpenSSH si jamais il revient sur port 22
-iptables -A INPUT -p tcp --dport 22 -j ACCEPT
-iptables -A INPUT -p tcp --dport 109 -j ACCEPT
+# --- IPTABLES ---
+# Autoriser uniquement les ports Dropbear et bloquer tout conflit potentiel
+for port in "${DROPBEAR_PORTS[@]}"; do
+    if ! iptables -C INPUT -p tcp --dport "$port" -j ACCEPT 2>/dev/null; then
+        iptables -A INPUT -p tcp --dport "$port" -j ACCEPT
+    fi
+done
 
 # --- ACTIVER SERVICE ---
 systemctl daemon-reload
 systemctl enable dropbear-custom
-systemctl restart dropbear-custom
+systemctl restart dropbear-custom || {
+    echo "[ERREUR] Impossible de démarrer Dropbear. Vérifiez les logs:"
+    echo "journalctl -xeu dropbear-custom.service"
+    exit 1
+}
 
 # --- BANNIERE ---
 echo "[INFO] Dropbear actif sur ports: ${DROPBEAR_PORTS[*]}"
