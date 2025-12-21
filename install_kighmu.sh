@@ -245,22 +245,43 @@ run_script() {
 # ============================
 echo "🚀 Installation et configuration Dropbear sur le port 22..."
 
-# Suppression d'OpenSSH si présent
+# Nettoyage COMPLET OpenSSH si présent
+echo "🧹 Nettoyage complet OpenSSH..."
+systemctl stop ssh sshd 2>/dev/null || true
+systemctl stop ssh.socket 2>/dev/null || true
+systemctl disable ssh sshd ssh.socket 2>/dev/null || true
+
+pkill -f sshd 2>/dev/null || true
+sleep 2
+
 if dpkg -l | grep -q openssh-server; then
-    echo "⚡ Désinstallation d'OpenSSH..."
-    apt-get remove --purge -y openssh-server openssh-client
-    apt autoremove -y
-    echo "OpenSSH désinstallé."
+    apt-get remove --purge -y openssh-server openssh-client openssh-sftp-server
+    apt-get autoremove --purge -y
+    apt-get autoclean
+    echo "⚡ OpenSSH complètement désinstallé."
 fi
+
+rm -rf /etc/ssh/ssh_host_* 
+rm -rf /var/run/sshd.pid /run/sshd
+rm -rf /etc/systemd/system/multi-user.target.wants/ssh.service
+rm -f /etc/ssh/sshd_config*
+
+if systemctl is-active --quiet ssh 2>/dev/null || systemctl is-active --quiet sshd 2>/dev/null; then
+    echo "⚠️ Attention : résidus OpenSSH détectés"
+else
+    echo "✅ OpenSSH complètement supprimé"
+fi
+
+fuser -k 22/tcp 2>/dev/null || true
 
 # Installation de Dropbear
 apt-get update -y
 apt-get install -y dropbear
 
 # Configuration de Dropbear sur le port 22
-sed -i 's/^#\?NO_START=.*/NO_START=0/' /etc/default/dropbear
-sed -i 's/^#\?DROPBEAR_PORT=.*/DROPBEAR_PORT=22/' /etc/default/dropbear
-sed -i 's/^#\?DROPBEAR_EXTRA_ARGS=.*/DROPBEAR_EXTRA_ARGS="-w -s -g"/' /etc/default/dropbear
+sed -i 's/^#?NO_START=.*/NO_START=0/' /etc/default/dropbear
+sed -i 's/^#?DROPBEAR_PORT=.*/DROPBEAR_PORT=22/' /etc/default/dropbear
+sed -i 's/^#?DROPBEAR_EXTRA_ARGS=.*/DROPBEAR_EXTRA_ARGS="-w -s -g"/' /etc/default/dropbear
 
 # Activation et démarrage
 systemctl enable dropbear
