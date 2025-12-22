@@ -88,7 +88,7 @@ configure_nftables() {
 
     # Créer chaîne prerouting pour NAT si inexistante
     nft list chain inet slowdns prerouting &>/dev/null || \
-        nft add chain inet slowdns prerouting { type nat hook prerouting priority 0 \; }
+        nft add chain inet slowdns prerouting { type nat hook prerouting priority 0; }
 
     # Redirection UDP 53 vers le port SlowDNS
     nft list rule inet slowdns prerouting &>/dev/null || \
@@ -99,14 +99,14 @@ configure_nftables() {
 
     # Créer chaîne input si inexistante
     nft list chain inet filter input &>/dev/null || \
-        nft add chain inet filter input { type filter hook input priority 0 \; policy accept }
+        nft add chain inet filter input { type filter hook input priority 0; policy accept; }
 
     # Autoriser le port SlowDNS
-    nft list rule inet filter input &>/dev/null || \
+    nft list rule inet filter input udp dport $PORT &>/dev/null || \
         nft add rule inet filter input udp dport $PORT accept
 
     # Autoriser le port V2Ray
-    nft list rule inet filter input &>/dev/null || \
+    nft list rule inet filter input udp dport 5401 &>/dev/null || \
         nft add rule inet filter input udp dport 5401 accept
 
     log "nftables configuré : port $PORT (SlowDNS) et 5401 (V2Ray) ouverts, redirection UDP 53 active."
