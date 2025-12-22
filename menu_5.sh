@@ -62,7 +62,6 @@ generer_liens_v2ray() {
         --arg net "kcp" \
         --arg type "none" \
         --arg host "$domaine" \
-        --arg path "/vmess-kcp" \
         '{
             v: $v,
             ps: $ps,
@@ -73,14 +72,13 @@ generer_liens_v2ray() {
             net: $net,
             type: $type,
             host: $host,
-            path: $path,
             tls: ""
         }'
     )
     lien_vmess="vmess://$(echo -n "$vmess_json" | base64 -w 0)"
 
     # TROJAN (UUID comme password)
-    lien_trojan="trojan://${uuid}@${domaine}:${port}?type=kcp&host=${domaine}&headerType=none#${nom}-TROJAN"
+    lien_trojan="trojan://${uuid}@${domaine}:${port}?type=kcp&headerType=none&host=${domaine}#${nom}-TROJAN"
 }
 
 # ✅ AJOUTÉ: Fonction pour ajouter UUID dans V2Ray
