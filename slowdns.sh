@@ -114,6 +114,7 @@ generate_ns_auto() {
 ENV_MODE=auto" > "$ENV_FILE"
   chmod 600 "$ENV_FILE"
   log "NS auto sauvegardé : $NS"
+  echo "$NS"
 }
 
 # --- Gestion du NS persistant ---
@@ -124,11 +125,11 @@ if [[ "$MODE" == "auto" ]]; then
       log "NS auto existant détecté : $NS"
     else
       log "NS manuel existant → génération d'un nouveau NS auto..."
-      generate_ns_auto
+      NS=$(generate_ns_auto)
     fi
   else
     log "Aucun fichier NS existant → génération NS auto..."
-    generate_ns_auto
+    NS=$(generate_ns_auto)
   fi
 elif [[ "$MODE" == "man" ]]; then
   read -rp "Entrez le NameServer (NS) à utiliser : " NS
@@ -181,49 +182,44 @@ net.ipv4.neigh.default.gc_thresh3=16384
 EOF
 sysctl --system >/dev/null || log "sysctl apply returned non-zero"
 
-# --- Fonction select_backend_target pour le wrapper ---
+# --- Fonction select_backend_target ---
 select_backend_target() {
     local mode target ssh_port
     mode="ssh"
     if [ -f "$BACKEND_CONF" ]; then
-        # shellcheck disable=SC1090
         source "$BACKEND_CONF"
         mode="${BACKEND_MODE:-ssh}"
     fi
 
     case "$mode" in
         ssh)
-            # SSH direct
-            ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
+            ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2 || echo 22)
             [ -z "$ssh_port" ] && ssh_port=22
             target="0.0.0.0:$ssh_port"
             printf '[%s] Mode backend : SSH (%s)
-' "$(date '+%Y-%m-%d %H:%M:%S')" "$target" >&2
+' "$(date '+%Y-%m-%d %H:%M:%S')" "$target"
             ;;
         v2ray)
-            # V2Ray direct uniquement
             target="0.0.0.0:5401"
             printf '[%s] Mode backend : V2Ray (%s)
-' "$(date '+%Y-%m-%d %H:%M:%S')" "$target" >&2
+' "$(date '+%Y-%m-%d %H:%M:%S')" "$target"
             ;;
         mix)
-            # MIX : V2Ray 5401 (qui pourra gérer SSH, VLESS, VMESS, TROJAN)
             target="0.0.0.0:5401"
             printf '[%s] Mode backend : MIX (via V2Ray %s)
-' "$(date '+%Y-%m-%d %H:%M:%S')" "$target" >&2
+' "$(date '+%Y-%m-%d %H:%M:%S')" "$target"
             ;;
         *)
-            # fallback
             target="0.0.0.0:22"
             printf '[%s] Mode backend inconnu, fallback SSH (%s)
-' "$(date '+%Y-%m-%d %H:%M:%S')" "$target" >&2
+' "$(date '+%Y-%m-%d %H:%M:%S')" "$target"
             ;;
     esac
     echo "$target"
 }
 
-# --- Wrapper SlowDNS startup (MTU dynamique + backend multi-mode) ---
-cat > /usr/local/bin/slowdns-start.sh <<EOF
+# --- Wrapper SlowDNS startup CORRIGÉ (pas d'expansion $ dans heredoc) ---
+cat > /usr/local/bin/slowdns-start.sh << 'EOF'
 #!/bin/bash
 set -euo pipefail
 SLOWDNS_DIR="/etc/slowdns"
@@ -248,7 +244,38 @@ wait_for_interface() {
 }
 
 select_backend_target() {
-$(declare -f select_backend_target)
+    local mode target ssh_port
+    mode="ssh"
+    if [ -f "$BACKEND_CONF" ]; then
+        source "$BACKEND_CONF"
+        mode="${BACKEND_MODE:-ssh}"
+    fi
+
+    case "$mode" in
+        ssh)
+            ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2 || echo 22)
+            [ -z "$ssh_port" ] && ssh_port=22
+            target="0.0.0.0:$ssh_port"
+            printf '[%s] Mode backend : SSH (%s)
+' "$(date '+%Y-%m-%d %H:%M:%S')" "$target" >&2
+            ;;
+        v2ray)
+            target="0.0.0.0:5401"
+            printf '[%s] Mode backend : V2Ray (%s)
+' "$(date '+%Y-%m-%d %H:%M:%S')" "$target" >&2
+            ;;
+        mix)
+            target="0.0.0.0:5401"
+            printf '[%s] Mode backend : MIX (via V2Ray %s)
+' "$(date '+%Y-%m-%d %H:%M:%S')" "$target" >&2
+            ;;
+        *)
+            target="0.0.0.0:22"
+            printf '[%s] Mode backend inconnu, fallback SSH (%s)
+' "$(date '+%Y-%m-%d %H:%M:%S')" "$target" >&2
+            ;;
+    esac
+    echo "$target"
 }
 
 iface=$(wait_for_interface)
