@@ -76,21 +76,40 @@ disable_systemd_resolved() {
     echo "nameserver 8.8.8.8" > /etc/resolv.conf
 }
 
-configure_iptables() {
-    log "Configuration du pare-feu via iptables..."
-    if ! iptables -C INPUT -p udp --dport 53 -j ACCEPT &>/dev/null; then
-        iptables -I INPUT -p udp --dport 53 -j ACCEPT
-    else
-        log "Rule exists: ACCEPT udp dport 53"
-    fi
-    if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
-        iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
-        log "Rule added: ACCEPT udp dport $PORT"
-    fi
-    iptables-save > /etc/iptables/rules.v4
-    systemctl enable netfilter-persistent
-    systemctl restart netfilter-persistent
-    log "Persistance iptables activée via netfilter-persistent."
+configure_nftables() {
+    log "Configuration du pare-feu via nftables..."
+
+    # Détecter l'interface principale (non loopback)
+    interface=$(ip -o link show up | awk -F': ' '{print $2}' | grep -v '^lo$' | head -n1)
+    log "Interface détectée pour nftables : $interface"
+
+    # Créer table slowdns si inexistante
+    nft list table inet slowdns &>/dev/null || nft add table inet slowdns
+
+    # Créer chaîne prerouting pour NAT si inexistante
+    nft list chain inet slowdns prerouting &>/dev/null || \
+        nft add chain inet slowdns prerouting { type nat hook prerouting priority 0 \; }
+
+    # Redirection UDP 53 vers le port SlowDNS
+    nft list rule inet slowdns prerouting &>/dev/null || \
+        nft add rule inet slowdns prerouting udp dport 53 counter redirect to :$PORT
+
+    # Créer table filter si inexistante
+    nft list table inet filter &>/dev/null || nft add table inet filter
+
+    # Créer chaîne input si inexistante
+    nft list chain inet filter input &>/dev/null || \
+        nft add chain inet filter input { type filter hook input priority 0 \; policy accept }
+
+    # Autoriser le port SlowDNS
+    nft list rule inet filter input &>/dev/null || \
+        nft add rule inet filter input udp dport $PORT accept
+
+    # Autoriser le port V2Ray
+    nft list rule inet filter input &>/dev/null || \
+        nft add rule inet filter input udp dport 5401 accept
+
+    log "nftables configuré : port $PORT (SlowDNS) et 5401 (V2Ray) ouverts, redirection UDP 53 active."
 }
 
 # Choix du backend (SSH / V2Ray / MIX)
@@ -301,8 +320,8 @@ EOF
     echo ""
     echo "Mode backend sélectionné : $BACKEND_MODE"
     echo "  - ssh   : DNSTT → SSH (port 22 détecté)"
-    echo "  - v2ray : DNSTT → 0.0.0.0:5401"
-    echo "  - mix   : DNSTT → 0.0.0.0:5401 (V2Ray gère SSH + VLESS/VMESS/TROJAN)"
+    echo "  - v2ray : DNSTT → 127.0.0.1:5401"
+    echo "  - mix   : DNSTT → 127.0.0.1:5401 (V2Ray gère SSH + VLESS/VMESS/TROJAN)"
     echo ""
     echo "IMPORTANT : Pour améliorer le débit SSH, modifiez manuellement /etc/ssh/sshd_config en ajoutant :"
     echo "Ciphers aes128-ctr,aes192-ctr,aes128-gcm@openssh.com"
