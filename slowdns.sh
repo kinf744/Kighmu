@@ -72,9 +72,9 @@ choose_backend() {
     echo "+--------------------------------------------+"
     echo "|      CHOIX DU MODE BACKEND SLOWDNS         |"
     echo "+--------------------------------------------+"
-    echo "1) SSH direct (DNSTT → 0.0.0.0:22)"
-    echo "2) V2Ray direct (DNSTT → 0.0.0.0:5401)"
-    echo "3) MIX (DNSTT → 0.0.0.0:5401, V2Ray gère SSH + VLESS/VMESS/Trojan)"
+    echo "1) SSH direct (DNSTT → 127.0.0.1:22)"
+    echo "2) V2Ray direct (DNSTT → 127.0.0.1:5401)"
+    echo "3) MIX (DNSTT → 127.0.0.1:5401, V2Ray gère SSH + VLESS/VMESS/Trojan)"
     echo ""
     read -rp "Sélectionnez le mode [1-3] : " mode
     case "$mode" in
@@ -223,22 +223,22 @@ select_backend_target() {
         ssh)
             ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2 || echo 22)
             [ -z "$ssh_port" ] && ssh_port=22
-            target="0.0.0.0:$ssh_port"
+            target="127.0.0.1:$ssh_port"
             printf '[%s] Mode backend : SSH (%s)
 ' "$(date '+%Y-%m-%d %H:%M:%S')" "$target" >&2
             ;;
         v2ray)
-            target="0.0.0.0:5401"
+            target="127.0.0.1:5401"
             printf '[%s] Mode backend : V2Ray (%s)
 ' "$(date '+%Y-%m-%d %H:%M:%S')" "$target" >&2
             ;;
         mix)
-            target="0.0.0.0:5401"
+            target="127.0.0.1:5401"
             printf '[%s] Mode backend : MIX (via V2Ray %s)
 ' "$(date '+%Y-%m-%d %H:%M:%S')" "$target" >&2
             ;;
         *)
-            target="0.0.0.0:22"
+            target="127.0.0.1:22"
             printf '[%s] Mode backend inconnu, fallback SSH (%s)
 ' "$(date '+%Y-%m-%d %H:%M:%S')" "$target" >&2
             ;;
@@ -250,7 +250,7 @@ iface=$(wait_for_interface)
 log "Interface détectée : $iface"
 
 # MTU dynamique
-for mtu in 1500 1450 1400 1300 932; do
+for mtu in 1500 1450 1400 1350 932; do
   if ping -M do -s $((mtu-28)) -c 1 1.1.1.1 >/dev/null 2>&1; then
     ip link set dev "$iface" mtu $mtu || true
     log "MTU réglée à $mtu"
