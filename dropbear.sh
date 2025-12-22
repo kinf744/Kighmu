@@ -4,7 +4,7 @@ set -euo pipefail
 # ==============================
 # VARIABLES
 # ==============================
-DROPBEAR_BIN="/usr/sbin/dropbear"
+DROPBEAR_BIN="/usr/bin/dropbear"
 DROPBEAR_CONF="/etc/default/dropbear"
 DROPBEAR_DIR="/etc/dropbear"
 BACKUP_DIR="/root/kighmu_dropbear_backup_$(date +%Y%m%d_%H%M%S)"
