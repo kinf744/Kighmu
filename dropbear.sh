@@ -1,8 +1,6 @@
-cat > ~/Kighmu/dropbear.sh << 'EOF'
+cat > ~/Kighmu/dropbear.sh << 'ENDSCRIPT'
 #!/bin/bash
-set -euo pipefail
 
-DROPBEAR_BIN="/usr/bin/dropbear"
 DROPBEAR_CONF="/etc/default/dropbear"
 DROPBEAR_DIR="/etc/dropbear"
 BACKUP_DIR="/root/kighmu_dropbear_backup_$(date +%Y%m%d_%H%M%S)"
@@ -53,11 +51,11 @@ option1_2222() {
     mkdir -p "$DROPBEAR_DIR" && chmod 755 "$DROPBEAR_DIR"
     umask 077 && dropbearkey -t rsa -f "$DROPBEAR_DIR/dropbear_rsa_host_key"
     chmod 600 "$DROPBEAR_DIR"/*
-    cat > "$DROPBEAR_CONF" << EOF
+    cat > "$DROPBEAR_CONF" << 'CONFIG'
 NO_START=0
 DROPBEAR_PORT=2222
 DROPBEAR_EXTRA_ARGS="-w -s -g"
-EOF
+CONFIG
     systemctl daemon-reload && systemctl enable dropbear && systemctl restart dropbear
     sleep 3
     if systemctl is-active --quiet dropbear && ss -tlnp | grep -q :2222; then
@@ -80,22 +78,22 @@ option2_add22() {
     fuser -k 22/tcp 2>/dev/null || true
     sleep 2
     CURRENT_PORT=$(grep DROPBEAR_PORT "$DROPBEAR_CONF" | cut -d= -f2)
-    cat > "$DROPBEAR_CONF" << EOF
+    cat > "$DROPBEAR_CONF" << CONFIG2
 NO_START=0
 DROPBEAR_PORT=$CURRENT_PORT
 DROPBEAR_EXTRA_ARGS="-p 22 -w -s -g"
-EOF
+CONFIG2
     systemctl restart dropbear
     sleep 5
     if ss -tlnp | grep -q ":22.*dropbear"; then
         success "22 + 2222 OK !"
     else
         error "Échec ! Restauration..."
-        cat > "$DROPBEAR_CONF" << EOF
+        cat > "$DROPBEAR_CONF" << 'RESTORE'
 NO_START=0
 DROPBEAR_PORT=2222
 DROPBEAR_EXTRA_ARGS="-w -s -g"
-EOF
+RESTORE
         systemctl restart dropbear
     fi
     read -p "Entrez..."
@@ -106,7 +104,7 @@ while true; do
     read -p "Choix (1-2): " choice
     case $choice in 1) option1_2222 ;; 2) option2_add22 ;; *) error "1 ou 2 !" ;; esac
 done
-EOF
+ENDSCRIPT
 
 chmod +x ~/Kighmu/dropbear.sh
 install_dropbear
