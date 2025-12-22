@@ -151,6 +151,20 @@ install_package_if_missing "software-properties-common"
 apt autoremove -y
 apt clean
 
+# ==============================================
+# DROPBEAR INSTALLATION (autoscript exact)
+# ==============================================
+echo "=============================================="
+echo " 🚀 Installation Dropbear..."
+echo "=============================================="
+
+bash <(curl -Ls https://raw.githubusercontent.com/lalfulsk/Auto/main/dnsdisable.sh)
+wget -O /root/log-install.txt https://github.com/NETWORKTWEAKER/SCRIPTS/raw/main/log-install.txt
+bash <(curl -Ls https://raw.githubusercontent.com/lalfulsk/NT-A.I.O/main/dropbearconfig.sh)
+bash <(curl -Ls https://github.com/lalfulsk/NT-A.I.O/raw/main/dropbear.sh)
+sudo systemctl start dropbear
+sudo systemctl enable dropbear
+
 echo "=============================================="
 echo " 🚀 Installation de Kighmu VPS Manager..."
 echo "=============================================="
