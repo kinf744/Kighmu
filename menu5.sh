@@ -117,10 +117,37 @@ install_openssh() {
 }
 
 uninstall_openssh() {
-    echo ">>> Désinstallation d'OpenSSH..."
-    apt-get remove -y openssh-server
-    systemctl disable ssh
-    echo -e "${GREEN}[OK] OpenSSH supprimé.${RESET}"
+    local RED='\u001B[0;31m' GREEN='\u001B[0;32m' YELLOW='\u001B[1;33m' NC='\u001B[0m'
+    
+    echo -e "${YELLOW}[!]${NC} Désinstallation COMPLÈTE OpenSSH..."
+    
+    pkill -9 -f "sshd|ssh-agent" 2>/dev/null || true
+    sleep 1
+    
+    systemctl stop ssh sshd ssh.socket 2>/dev/null || true
+    systemctl disable ssh sshd ssh.socket 2>/dev/null || true
+    systemctl mask ssh sshd ssh.socket 2>/dev/null || true
+    
+    apt-get purge -y openssh-server openssh-client openssh-sftp-server 2>/dev/null || true
+    apt-get autoremove --purge -y 2>/dev/null || true
+    apt-get autoclean 2>/dev/null || true
+    
+    rm -rf /etc/ssh/ssh_host_* /etc/ssh/sshd_config* /run/sshd* /var/run/sshd*
+    rm -f /var/run/sshd.pid /run/sshd.pid
+    
+    fuser -k 22/tcp 2>/dev/null || true
+    while ss -tlnp | grep -q ":22 "; do fuser -k 22/tcp; sleep 0.5; done
+    
+    rm -f /etc/systemd/system/multi-user.target.wants/ssh.service
+    rm -f /lib/systemd/system/ssh.service.d/override.conf
+    systemctl daemon-reload
+    
+    if ! pgrep -f sshd >/dev/null 2>&1 && ! ss -tlnp | grep -q ":22.*sshd" && ! dpkg -l | grep -q openssh-server; then
+        echo -e "${GREEN}[✓]${NC} OpenSSH COMPLÈTEMENT supprimé !"
+        echo -e "${GREEN}[✓]${NC} Port 22 libre: $(ss -tlnp | grep ":22 " || echo "LIBRE")"
+    else
+        echo -e "${YELLOW}[!]${NC} Résidus détectés - vérifiez manuellement"
+    fi
 }
 
 install_dropbear() {
