@@ -26,8 +26,12 @@ fi
 # --- Création dossier ---
 mkdir -p "$SLOWDNS_DIR"
 
-# --- Désactivation propre de systemd-resolved pour éviter blocages DNS ---
+# --- Désactivation propre de systemd-resolved + gestion resolv.conf SANS chattr ---
+log "Désactivation systemd-resolved et configuration DNS..."
 systemctl disable --now systemd-resolved.service || true
+
+# Supprimer attribut immuable si présent, puis recréer resolv.conf
+chattr -i /etc/resolv.conf 2>/dev/null || true
 rm -f /etc/resolv.conf
 cat <<EOF > /etc/resolv.conf
 nameserver 1.1.1.1
@@ -35,7 +39,7 @@ nameserver 8.8.8.8
 options timeout:1
 options attempts:1
 EOF
-chattr +i /etc/resolv.conf
+chmod 644 /etc/resolv.conf
 
 # --- Dépendances ---
 log "Installation des dépendances..."
@@ -182,43 +186,7 @@ net.ipv4.neigh.default.gc_thresh3=16384
 EOF
 sysctl --system >/dev/null || log "sysctl apply returned non-zero"
 
-# --- Fonction select_backend_target ---
-select_backend_target() {
-    local mode target ssh_port
-    mode="ssh"
-    if [ -f "$BACKEND_CONF" ]; then
-        source "$BACKEND_CONF"
-        mode="${BACKEND_MODE:-ssh}"
-    fi
-
-    case "$mode" in
-        ssh)
-            ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2 || echo 22)
-            [ -z "$ssh_port" ] && ssh_port=22
-            target="0.0.0.0:$ssh_port"
-            printf '[%s] Mode backend : SSH (%s)
-' "$(date '+%Y-%m-%d %H:%M:%S')" "$target"
-            ;;
-        v2ray)
-            target="0.0.0.0:5401"
-            printf '[%s] Mode backend : V2Ray (%s)
-' "$(date '+%Y-%m-%d %H:%M:%S')" "$target"
-            ;;
-        mix)
-            target="0.0.0.0:5401"
-            printf '[%s] Mode backend : MIX (via V2Ray %s)
-' "$(date '+%Y-%m-%d %H:%M:%S')" "$target"
-            ;;
-        *)
-            target="0.0.0.0:22"
-            printf '[%s] Mode backend inconnu, fallback SSH (%s)
-' "$(date '+%Y-%m-%d %H:%M:%S')" "$target"
-            ;;
-    esac
-    echo "$target"
-}
-
-# --- Wrapper SlowDNS startup CORRIGÉ (pas d'expansion $ dans heredoc) ---
+# --- Wrapper SlowDNS startup ---
 cat > /usr/local/bin/slowdns-start.sh << 'EOF'
 #!/bin/bash
 set -euo pipefail
