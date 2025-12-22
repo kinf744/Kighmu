@@ -142,7 +142,7 @@ install_package_if_missing "net-tools"
 install_package_if_missing "tmux"
 install_package_if_missing "git"
 install_package_if_missing "vnstat"
-install_package_if_missing "dos2unix"
+install_package_if_missing "chrony"
 install_package_if_missing "iptables-persistent"
 install_package_if_missing "build-essential"
 install_package_if_missing "libssl-dev"
@@ -150,20 +150,6 @@ install_package_if_missing "software-properties-common"
 
 apt autoremove -y
 apt clean
-
-# ==============================================
-# DROPBEAR INSTALLATION (autoscript exact)
-# ==============================================
-echo "=============================================="
-echo " 🚀 Installation Dropbear..."
-echo "=============================================="
-
-bash <(curl -Ls https://raw.githubusercontent.com/lalfulsk/Auto/main/dnsdisable.sh)
-wget -O /root/log-install.txt https://github.com/NETWORKTWEAKER/SCRIPTS/raw/main/log-install.txt
-bash <(curl -Ls https://raw.githubusercontent.com/lalfulsk/NT-A.I.O/main/dropbearconfig.sh)
-bash <(curl -Ls https://github.com/lalfulsk/NT-A.I.O/raw/main/dropbear.sh)
-sudo systemctl start dropbear
-sudo systemctl enable dropbear
 
 echo "=============================================="
 echo " 🚀 Installation de Kighmu VPS Manager..."
@@ -201,6 +187,7 @@ FILES=(
   "show_resources.sh"
   "nginx.conf"
   "setup_ssh_config.sh"
+  "create_ssh_user.sh"
   "menu4_2.sh"
   "botssh.sh"
   "menu_6.sh"
