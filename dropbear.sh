@@ -1,6 +1,8 @@
-cat > ~/Kighmu/dropbear.sh << 'ENDSCRIPT'
+cat > dropbear.sh << 'EOF'
 #!/bin/bash
+set -euo pipefail
 
+DROPBEAR_BIN="/usr/sbin/dropbear"
 DROPBEAR_CONF="/etc/default/dropbear"
 DROPBEAR_DIR="/etc/dropbear"
 BACKUP_DIR="/root/kighmu_dropbear_backup_$(date +%Y%m%d_%H%M%S)"
@@ -14,7 +16,7 @@ case "${UBUNTU_VERSION:0:5}" in
 esac
 BANNER="SSH-2.0-dropbear_$DROPBEAR_VER"
 
-RED='\u001B[0;31m' GREEN='\u001B[0;32m' YELLOW='\u001B[1;33m' NC='\u001B[0m'
+RED='\u001B[0;31m' GREEN='\u001B[0;32m' YELLOW='\u001B[1;33m' BLUE='\u001B[0;34m' NC='\u001B[0m'
 info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 success() { echo -e "${GREEN}[OK]${NC} $1"; }
 warn() { echo -e "${YELLOW}[!]${NC} $1"; }
@@ -29,7 +31,7 @@ header() {
     echo "    Bannière: $BANNER"
     echo "=========================================="
     echo "IP: $(hostname -I | awk '{print $1}')"
-    [ -n "$SSH_CONNECTION" ] && echo "SSH port: $(echo $SSH_CONNECTION | awk '{print $4}' | cut -d: -f2)"
+    [ -n "$SSH_CONNECTION" ] && warn "SSH actif port $(echo $SSH_CONNECTION | awk '{print $4}' | cut -d: -f2)"
     echo ""
 }
 
@@ -44,67 +46,99 @@ show_menu() {
 option1_2222() {
     header
     echo "=== OPTION 1: Dropbear sur port 2222 ==="
+    
     info "Installation Dropbear..."
-    apt-get update -qq && apt-get install -y dropbear
-    info "Clés..."
-    mkdir -p "$BACKUP_DIR" && rm -rf "$DROPBEAR_DIR"
+    apt-get update -qq && apt-get install -y dropbear lsb-release
+    
+    info "Clés sécurisées..."
+    mkdir -p "$BACKUP_DIR"
+    rm -rf "$DROPBEAR_DIR"
     mkdir -p "$DROPBEAR_DIR" && chmod 755 "$DROPBEAR_DIR"
-    umask 077 && dropbearkey -t rsa -f "$DROPBEAR_DIR/dropbear_rsa_host_key"
+    umask 077
+    dropbearkey -t rsa -f "$DROPBEAR_DIR/dropbear_rsa_host_key"
     chmod 600 "$DROPBEAR_DIR"/*
-    cat > "$DROPBEAR_CONF" << 'CONFIG'
+    
+    cat > "$DROPBEAR_CONF" << 'EOF'
 NO_START=0
 DROPBEAR_PORT=2222
 DROPBEAR_EXTRA_ARGS="-w -s -g"
-CONFIG
+EOF
+    
     systemctl daemon-reload && systemctl enable dropbear && systemctl restart dropbear
+    
     sleep 3
     if systemctl is-active --quiet dropbear && ss -tlnp | grep -q :2222; then
-        success "Dropbear 2222 OK !"
+        success "Dropbear actif sur port 2222 !"
         success "TEST: ssh root@$(hostname -I | awk '{print $1}') -p 2222"
+        success "Bannière attendue: $BANNER"
+        warn "NE FERMEZ PAS cette session avant test !"
     else
-        error "Échec 2222"; exit 1
+        error "Échec port 2222"
+        exit 1
     fi
-    read -p "Test OK ?"
+    read -p "Appuyez après test OK..."
 }
 
 option2_add22() {
     header
     echo "=== OPTION 2: Ajouter port 22 ==="
-    if ! ss -tlnp | grep -q :2222; then error "2222 non actif !"; read -p "Entrez..."; return; fi
-    warn "Session peut être coupée !"
+    
+    if ! command -v dropbear >/dev/null 2>&1; then
+        error "Dropbear non installé ! Option 1 d'abord"
+        read -p "Entrez..."; return
+    fi
+    
+    if ! ss -tlnp | grep -q :2222; then
+        error "Dropbear 2222 non actif !"
+        read -p "Entrez..."; return
+    fi
+    
+    warn "🚨 SESSION ACTUELLE PEUT ÊTRE COUPÉE ! Testé ssh -p 2222 ?"
     read -p "Confirmer ? (o/n): " confirm
-    [[ $confirm =~ ^[Oo]$ ]] || return
-    cp "$DROPBEAR_CONF" "$BACKUP_DIR/"
+    [[ $confirm =~ ^[Oo]$ ]] || { info "Annulé"; return; }
+    
+    cp "$DROPBEAR_CONF" "$BACKUP_DIR/" 2>/dev/null || true
+    
+    info "Libération port 22..."
     fuser -k 22/tcp 2>/dev/null || true
     sleep 2
+    
     CURRENT_PORT=$(grep DROPBEAR_PORT "$DROPBEAR_CONF" | cut -d= -f2)
-    cat > "$DROPBEAR_CONF" << CONFIG2
+    cat > "$DROPBEAR_CONF" << EOF
 NO_START=0
 DROPBEAR_PORT=$CURRENT_PORT
 DROPBEAR_EXTRA_ARGS="-p 22 -w -s -g"
-CONFIG2
+EOF
+    
     systemctl restart dropbear
     sleep 5
-    if ss -tlnp | grep -q ":22.*dropbear"; then
-        success "22 + 2222 OK !"
+    
+    if ss -tlnp | grep -q ":22.*dropbear" && ss -tlnp | grep -q ":2222.*dropbear"; then
+        success "🎉 Ports 22 + 2222 actifs !"
+        success "Bannière: $BANNER"
+        success "Connexion: ssh root@IP (port 22) ou ssh -p 2222"
     else
         error "Échec ! Restauration..."
-        cat > "$DROPBEAR_CONF" << 'RESTORE'
+        cat > "$DROPBEAR_CONF" << 'EOF'
 NO_START=0
 DROPBEAR_PORT=2222
 DROPBEAR_EXTRA_ARGS="-w -s -g"
-RESTORE
+EOF
         systemctl restart dropbear
     fi
-    read -p "Entrez..."
+    read -p "Entrez pour quitter..."
 }
 
 while true; do
     show_menu
     read -p "Choix (1-2): " choice
-    case $choice in 1) option1_2222 ;; 2) option2_add22 ;; *) error "1 ou 2 !" ;; esac
+    
+    case $choice in
+        1) option1_2222 ;;
+        2) option2_add22 ;;
+        *) error "Option 1 ou 2 seulement !" ;;
+    esac
 done
-ENDSCRIPT
+EOF
 
-chmod +x ~/Kighmu/dropbear.sh
-install_dropbear
+chmod +x dropbear.sh
