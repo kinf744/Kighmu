@@ -1,17 +1,12 @@
+cat > dropbear.sh << 'EOF'
 #!/bin/bash
 set -euo pipefail
 
-# ==============================
-# VARIABLES
-# ==============================
 DROPBEAR_BIN="/usr/bin/dropbear"
 DROPBEAR_CONF="/etc/default/dropbear"
 DROPBEAR_DIR="/etc/dropbear"
 BACKUP_DIR="/root/kighmu_dropbear_backup_$(date +%Y%m%d_%H%M%S)"
 
-# ==============================
-# DETECTION VERSION UBUNTU
-# ==============================
 UBUNTU_VERSION=$(lsb_release -rs 2>/dev/null || echo "22.04")
 case "${UBUNTU_VERSION:0:5}" in
     "20.04") DROPBEAR_VER="2019.78" ;;
@@ -21,19 +16,14 @@ case "${UBUNTU_VERSION:0:5}" in
 esac
 BANNER="SSH-2.0-dropbear_$DROPBEAR_VER"
 
-# ==============================
-# COULEURS + FONCTIONS
-# ==============================
 RED='\u001B[0;31m' GREEN='\u001B[0;32m' YELLOW='\u001B[1;33m' BLUE='\u001B[0;34m' NC='\u001B[0m'
 info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 success() { echo -e "${GREEN}[OK]${NC} $1"; }
 warn() { echo -e "${YELLOW}[!]${NC} $1"; }
 error() { echo -e "${RED}[X]${NC} $1"; }
 
-# Vérifier root
 [ "$EUID" -ne 0 ] && { error "Exécuter en root"; exit 1; }
 
-# Header
 header() {
     clear
     echo "=========================================="
@@ -45,7 +35,6 @@ header() {
     echo ""
 }
 
-# Menu 2 options
 show_menu() {
     header
     echo "OPTIONS:"
@@ -54,7 +43,6 @@ show_menu() {
     echo ""
 }
 
-# Option 1: Installation port 2222
 option1_2222() {
     header
     echo "=== OPTION 1: Dropbear sur port 2222 ==="
@@ -91,7 +79,6 @@ EOF
     read -p "Appuyez après test OK..."
 }
 
-# Option 2: Ajouter port 22
 option2_add22() {
     header
     echo "=== OPTION 2: Ajouter port 22 ==="
@@ -110,15 +97,12 @@ option2_add22() {
     read -p "Confirmer ? (o/n): " confirm
     [[ $confirm =~ ^[Oo]$ ]] || { info "Annulé"; return; }
     
-    # Backup
     cp "$DROPBEAR_CONF" "$BACKUP_DIR/" 2>/dev/null || true
     
-    # Libérer port 22
     info "Libération port 22..."
     fuser -k 22/tcp 2>/dev/null || true
     sleep 2
     
-    # Ajouter port 22 (garder 2222)
     CURRENT_PORT=$(grep DROPBEAR_PORT "$DROPBEAR_CONF" | cut -d= -f2)
     cat > "$DROPBEAR_CONF" << EOF
 NO_START=0
@@ -145,7 +129,6 @@ EOF
     read -p "Entrez pour quitter..."
 }
 
-# Boucle principale
 while true; do
     show_menu
     read -p "Choix (1-2): " choice
@@ -156,3 +139,6 @@ while true; do
         *) error "Option 1 ou 2 seulement !" ;;
     esac
 done
+EOF
+
+chmod +x dropbear.sh
