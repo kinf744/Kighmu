@@ -151,11 +151,8 @@ uninstall_openssh() {
 }
 
 install_dropbear() {
-    echo ">>> Installation de Dropbear..."
-    apt-get install -y dropbear
-    systemctl enable dropbear
-    systemctl start dropbear
-    echo -e "${GREEN}[OK] Dropbear installé.${RESET}"
+    echo ">>> Installation dropbear via script..."
+    bash "$HOME/Kighmu/dropbear.sh" || echo "Script introuvable."
 }
 
 uninstall_dropbear() {
