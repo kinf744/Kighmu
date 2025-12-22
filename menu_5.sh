@@ -494,6 +494,7 @@ EOF
     # 🚀 DÉMARRAGE + LOGS TEMPS RÉEL
     echo -e "${YELLOW}🔄 Démarrage V2Ray + LOGS TEMPS RÉEL...${RESET}"
     sudo iptables -I INPUT -p tcp --dport 5401 -j ACCEPT
+    sudo iptables -I INPUT -p udp --dport 5401 -j ACCEPT
     sudo netfilter-persistent save 2>/dev/null || true
 
     sudo systemctl daemon-reload
