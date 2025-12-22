@@ -23,7 +23,9 @@ check_root() {
 install_dependencies() {
     log "Installation des dépendances..."
     apt-get update -q
-    apt-get install -y iptables iptables-persistent wget tcpdump
+    apt-get install -y nftables wget tcpdump
+    systemctl enable nftables
+    systemctl start nftables
 }
 
 install_slowdns_bin() {
@@ -78,38 +80,36 @@ disable_systemd_resolved() {
 
 configure_nftables() {
     log "Configuration du pare-feu via nftables..."
-
-    # Détecter l'interface principale (non loopback)
-    interface=$(ip -o link show up | awk -F': ' '{print $2}' | grep -v '^lo$' | head -n1)
-    log "Interface détectée pour nftables : $interface"
-
-    # Créer table slowdns si inexistante
-    nft list table inet slowdns &>/dev/null || nft add table inet slowdns
-
-    # Créer chaîne prerouting pour NAT si inexistante
-    nft list chain inet slowdns prerouting &>/dev/null || \
-        nft add chain inet slowdns prerouting { type nat hook prerouting priority 0; }
-
-    # Redirection UDP 53 vers le port SlowDNS
-    nft list rule inet slowdns prerouting &>/dev/null || \
-        nft add rule inet slowdns prerouting udp dport 53 counter redirect to :$PORT
-
-    # Créer table filter si inexistante
-    nft list table inet filter &>/dev/null || nft add table inet filter
-
-    # Créer chaîne input si inexistante
-    nft list chain inet filter input &>/dev/null || \
-        nft add chain inet filter input { type filter hook input priority 0; policy accept; }
-
-    # Autoriser le port SlowDNS
-    nft list rule inet filter input udp dport $PORT &>/dev/null || \
-        nft add rule inet filter input udp dport $PORT accept
-
-    # Autoriser le port V2Ray
-    nft list rule inet filter input udp dport 5401 &>/dev/null || \
-        nft add rule inet filter input udp dport 5401 accept
-
-    log "nftables configuré : port $PORT (SlowDNS) et 5401 (V2Ray) ouverts, redirection UDP 53 active."
+    
+    # Créer table slowdns si elle n'existe pas
+    if ! nft list table inet slowdns >/dev/null 2>&1; then
+        nft add table inet slowdns
+        log "Table inet slowdns créée"
+    fi
+    
+    # Chaîne prerouting NAT
+    if ! nft list chain inet slowdns prerouting >/dev/null 2>&1; then
+        nft add chain inet slowdns prerouting { type nat hook prerouting priority 0 ; }
+        log "Chaîne prerouting NAT créée"
+    fi
+    
+    # Chaîne input filter
+    if ! nft list chain inet slowdns input >/dev/null 2>&1; then
+        nft add chain inet slowdns input { type filter hook input priority 0 ; policy accept ; }
+        log "Chaîne input filter créée"
+    fi
+    
+    # Autoriser UDP 5300 en INPUT
+    if ! nft list ruleset | grep -q "inet slowdns input udp dport $PORT accept"; then
+        nft add rule inet slowdns input udp dport "$PORT" accept
+        log "Règle ajoutée: ACCEPT udp dport $PORT"
+    else
+        log "Règle existe: ACCEPT udp dport $PORT"
+    fi
+    
+    # Sauvegarde nftables
+    nft list ruleset > /etc/nftables.conf
+    log "Règles nftables sauvegardées dans /etc/nftables.conf"
 }
 
 # Choix du backend (SSH / V2Ray / MIX)
@@ -118,9 +118,9 @@ choose_backend() {
     echo "+--------------------------------------------+"
     echo "|      CHOIX DU MODE BACKEND SLOWDNS         |"
     echo "+--------------------------------------------+"
-    echo "1) SSH direct (DNSTT → 127.0.0.1:22)"
-    echo "2) V2Ray direct (DNSTT → 127.0.0.1:5401)"
-    echo "3) MIX (DNSTT → 127.0.0.1:5401, V2Ray gère SSH + VLESS/VMESS/Trojan)"
+    echo "1) SSH direct (DNSTT → 0.0.0.0:22)"
+    echo "2) V2Ray direct (DNSTT → 0.0.0.0:5401)"
+    echo "3) MIX (DNSTT → 0.0.0.0:5401, V2Ray gère SSH + VLESS/VMESS/Trojan)"
     echo ""
     read -rp "Sélectionnez le mode [1-3] : " mode
     case "$mode" in
@@ -159,27 +159,24 @@ wait_for_interface() {
 }
 
 setup_nftables() {
-    interface="$1"
-    log "Configuration des règles nftables pour SlowDNS..."
-
-    # Création table et chaîne si inexistante
-    nft list table inet slowdns &>/dev/null || nft add table inet slowdns
-    nft list chain inet slowdns prerouting &>/dev/null || \
-        nft add chain inet slowdns prerouting { type nat hook prerouting priority 0 \; }
-
-    # Redirection UDP 53 vers SlowDNS PORT uniquement
-    nft list rule inet slowdns prerouting &>/dev/null || \
-        nft add rule inet slowdns prerouting udp dport 53 counter redirect to :$PORT
-
-    # Autoriser le port SlowDNS en INPUT
-    nft list chain inet filter input &>/dev/null || \
-        nft add table inet filter
-    nft list chain inet filter input &>/dev/null || \
-        nft add chain inet filter input { type filter hook input priority 0 \; policy accept }
-    nft list rule inet filter input &>/dev/null || \
-        nft add rule inet filter input udp dport $PORT accept
-
-    log "nftables configuré : port $PORT ouvert pour SlowDNS, redirection UDP 53 active."
+    local interface="$1"
+    
+    # Vérifier/ajouter règle INPUT udp 5300
+    if ! nft list ruleset | grep -q "udp dport $PORT accept"; then
+        nft add rule inet slowdns input udp dport "$PORT" accept
+        log "Règle INPUT udp $PORT ajoutée"
+    fi
+    
+    # Règle NAT redirection : udp/53 → 5300 pour l'interface
+    if ! nft list ruleset | grep -q "iifname "$interface" udp dport 53 redirect"; then
+        nft add rule inet slowdns prerouting iifname "$interface" udp dport 53 redirect to :"$PORT"
+        log "Règle NAT ajoutée: udp/53 → $PORT sur $interface"
+    else
+        log "Règle NAT déjà présente pour le port 53 sur $interface"
+    fi
+    
+    # Sauvegarde
+    nft list ruleset > /etc/nftables.conf
 }
 
 select_backend_target() {
@@ -231,7 +228,7 @@ log "Interface détectée : $interface"
 log "Réglage MTU à 1350 pour éviter la fragmentation DNS..."
 ip link set dev "$interface" mtu 1350 || log "Échec réglage MTU, continuer"
 
-log "Application des règles iptables..."
+log "Application des règles nftables..."
 setup_nftables "$interface"
 
 log "Démarrage du serveur SlowDNS..."
@@ -249,8 +246,8 @@ create_systemd_service() {
     cat <<EOF > /etc/systemd/system/slowdns.service
 [Unit]
 Description=SlowDNS Server Tunnel (multi-backend)
-After=network-online.target
-Wants=network-online.target
+After=network-online.target nftables.service
+Wants=network-online.target nftables.service
 
 [Service]
 Type=simple
@@ -330,6 +327,7 @@ EOF
     echo "Puis redémarrez SSH avec : systemctl restart sshd"
     echo ""
     echo "Le MTU du tunnel est fixé à 1350 via le script de démarrage pour limiter la fragmentation DNS."
+    echo "nftables est configuré avec table 'slowdns' (inet family)."
     echo ""
     log "Installation et configuration SlowDNS terminées."
 }
