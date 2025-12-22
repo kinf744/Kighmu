@@ -197,8 +197,8 @@ log "Attente de l'interface réseau..."
 interface=$(wait_for_interface)
 log "Interface détectée : $interface"
 
-log "Réglage MTU à 932 pour éviter la fragmentation DNS..."
-ip link set dev "$interface" mtu 932 || log "Échec réglage MTU, continuer"
+log "Réglage MTU à 1350 pour éviter la fragmentation DNS..."
+ip link set dev "$interface" mtu 1350 || log "Échec réglage MTU, continuer"
 
 log "Application des règles iptables..."
 setup_iptables "$interface"
@@ -298,7 +298,7 @@ EOF
     echo "Compression yes"
     echo "Puis redémarrez SSH avec : systemctl restart sshd"
     echo ""
-    echo "Le MTU du tunnel est fixé à 932 via le script de démarrage pour limiter la fragmentation DNS."
+    echo "Le MTU du tunnel est fixé à 1350 via le script de démarrage pour limiter la fragmentation DNS."
     echo ""
     log "Installation et configuration SlowDNS terminées."
 }
