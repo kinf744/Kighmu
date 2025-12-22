@@ -48,7 +48,7 @@ generer_liens_v2ray() {
     local uuid="$4"
 
     # VLESS
-    lien_vless="vless://${uuid}@${domaine}:${port}?type=ws&encryption=none&host=${domaine}&path=/vless-ws#${nom}-VLESS"
+    lien_vless="vless://${uuid}@${domaine}:${port}?type=kcp&encryption=none&headerType=none&host=${domaine}#${nom}-VLESS"
 
     # VMESS (Base64 JSON)
     local vmess_json
@@ -59,10 +59,10 @@ generer_liens_v2ray() {
         --arg port "$port" \
         --arg id "$uuid" \
         --arg aid "0" \
-        --arg net "ws" \
+        --arg net "kcp" \
         --arg type "none" \
         --arg host "$domaine" \
-        --arg path "/vmess-ws" \
+        --arg path "/vmess-kcp" \
         '{
             v: $v,
             ps: $ps,
@@ -77,11 +77,10 @@ generer_liens_v2ray() {
             tls: ""
         }'
     )
-
     lien_vmess="vmess://$(echo -n "$vmess_json" | base64 -w 0)"
 
     # TROJAN (UUID comme password)
-    lien_trojan="trojan://${uuid}@${domaine}:${port}?type=ws&host=${domaine}&path=/trojan-ws#${nom}-TROJAN"
+    lien_trojan="trojan://${uuid}@${domaine}:${port}?type=kcp&host=${domaine}&headerType=none#${nom}-TROJAN"
 }
 
 # ✅ AJOUTÉ: Fonction pour ajouter UUID dans V2Ray
