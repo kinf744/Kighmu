@@ -73,8 +73,8 @@ choose_backend() {
     echo "|      CHOIX DU MODE BACKEND SLOWDNS         |"
     echo "+--------------------------------------------+"
     echo "1) SSH direct (DNSTT → 127.0.0.1:22)"
-    echo "2) V2Ray direct (DNSTT → 127.0.0.1:5401)"
-    echo "3) MIX (DNSTT → 127.0.0.1:5401, V2Ray gère SSH + VLESS/VMESS/Trojan)"
+    echo "2) V2Ray direct (DNSTT → 127.0.0.1:8443)"
+    echo "3) MIX (DNSTT → 127.0.0.1:8443, V2Ray gère SSH + VLESS/VMESS/Trojan)"
     echo ""
     read -rp "Sélectionnez le mode [1-3] : " mode
     case "$mode" in
@@ -228,12 +228,12 @@ select_backend_target() {
 ' "$(date '+%Y-%m-%d %H:%M:%S')" "$target" >&2
             ;;
         v2ray)
-            target="127.0.0.1:5401"
+            target="127.0.0.1:8443"
             printf '[%s] Mode backend : V2Ray (%s)
 ' "$(date '+%Y-%m-%d %H:%M:%S')" "$target" >&2
             ;;
         mix)
-            target="127.0.0.1:5401"
+            target="127.0.0.1:8443"
             printf '[%s] Mode backend : MIX (via V2Ray %s)
 ' "$(date '+%Y-%m-%d %H:%M:%S')" "$target" >&2
             ;;
