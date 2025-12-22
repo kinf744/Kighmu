@@ -139,16 +139,28 @@ wait_for_interface() {
     echo "$interface"
 }
 
-setup_iptables() {
+setup_nftables() {
     interface="$1"
-    if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
-        iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
-    fi
-    if ! iptables -t nat -C PREROUTING -i "$interface" -p udp --dport 53 -j REDIRECT --to-ports "$PORT" &>/dev/null; then
-        iptables -t nat -I PREROUTING -i "$interface" -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
-    else
-        log "Règles NAT déjà présentes pour le port 53"
-    fi
+    log "Configuration des règles nftables pour SlowDNS..."
+
+    # Création table et chaîne si inexistante
+    nft list table inet slowdns &>/dev/null || nft add table inet slowdns
+    nft list chain inet slowdns prerouting &>/dev/null || \
+        nft add chain inet slowdns prerouting { type nat hook prerouting priority 0 \; }
+
+    # Redirection UDP 53 vers SlowDNS PORT uniquement
+    nft list rule inet slowdns prerouting &>/dev/null || \
+        nft add rule inet slowdns prerouting udp dport 53 counter redirect to :$PORT
+
+    # Autoriser le port SlowDNS en INPUT
+    nft list chain inet filter input &>/dev/null || \
+        nft add table inet filter
+    nft list chain inet filter input &>/dev/null || \
+        nft add chain inet filter input { type filter hook input priority 0 \; policy accept }
+    nft list rule inet filter input &>/dev/null || \
+        nft add rule inet filter input udp dport $PORT accept
+
+    log "nftables configuré : port $PORT ouvert pour SlowDNS, redirection UDP 53 active."
 }
 
 select_backend_target() {
@@ -201,7 +213,7 @@ log "Réglage MTU à 1350 pour éviter la fragmentation DNS..."
 ip link set dev "$interface" mtu 1350 || log "Échec réglage MTU, continuer"
 
 log "Application des règles iptables..."
-setup_iptables "$interface"
+setup_nftables "$interface"
 
 log "Démarrage du serveur SlowDNS..."
 
@@ -265,7 +277,7 @@ main() {
     choose_backend
 
     configure_sysctl
-    configure_iptables
+    configure_nftables
     create_wrapper_script
     create_systemd_service
 
