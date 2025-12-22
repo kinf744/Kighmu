@@ -661,6 +661,7 @@ echo -e "${YELLOW}┃ Lien TROJAN : $lien_trojan${RESET}"
 echo -e "${GREEN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
 echo ""
 read -p "Appuyez sur Entrée pour continuer..."
+}
 
 supprimer_utilisateur() {
     charger_utilisateurs
