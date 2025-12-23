@@ -1,15 +1,28 @@
 #!/bin/bash
 set -euo pipefail
 
+# ============================
+# VARIABLES PRINCIPALES
+# ============================
 SLOWDNS_DIR="/etc/slowdns"
 SLOWDNS_BIN="/usr/local/bin/dnstt-server"
 PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 SERVER_PUB="$SLOWDNS_DIR/server.pub"
+ENV_FILE="$SLOWDNS_DIR/slowdns.env"
+BACKEND_CONF="$SLOWDNS_DIR/backend.conf"
+
+# ⚠️ Remplacez par vos infos Cloudflare si nécessaire
+CF_API_TOKEN="TON_CLOUDFLARE_API_TOKEN"
+CF_ZONE_ID="TON_CLOUDFLARE_ZONE_ID"
+DOMAIN="ton-domaine.com"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
+# ============================
+# FONCTIONS DE BASE
+# ============================
 check_root() {
     if [ "$EUID" -ne 0 ]; then
         echo "Ce script doit être exécuté en root." >&2
@@ -20,7 +33,7 @@ check_root() {
 install_dependencies() {
     log "Installation des dépendances..."
     apt-get update -q
-    apt-get install -y iptables iptables-persistent wget tcpdump
+    apt-get install -y iptables iptables-persistent wget tcpdump curl jq python3 python3-venv python3-pip
 }
 
 install_slowdns_bin() {
@@ -45,7 +58,7 @@ install_fixed_keys() {
 
 configure_sysctl() {
     log "Optimisation sysctl..."
-    sed -i '/# Optimisations SlowDNS/,+10d' /etc/sysctl.conf || true
+    sed -i '/# Optimisations SlowDNS/,+20d' /etc/sysctl.conf || true
     cat <<EOF >> /etc/sysctl.conf
 
 # Optimisations SlowDNS
@@ -66,7 +79,7 @@ EOF
 }
 
 disable_systemd_resolved() {
-    log "Désactivation non-destructive du stub DNS systemd-resolved (libère le port 53 localement)..."
+    log "Désactivation non-destructive du stub DNS systemd-resolved..."
     systemctl stop systemd-resolved
     systemctl disable systemd-resolved
     rm -f /etc/resolv.conf
@@ -77,12 +90,9 @@ configure_iptables() {
     log "Configuration du pare-feu via iptables..."
     if ! iptables -C INPUT -p udp --dport 53 -j ACCEPT &>/dev/null; then
         iptables -I INPUT -p udp --dport 53 -j ACCEPT
-    else
-        log "Rule exists: ACCEPT udp dport 53"
     fi
     if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
         iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
-        log "Rule added: ACCEPT udp dport $PORT"
     fi
     iptables-save > /etc/iptables/rules.v4
     systemctl enable netfilter-persistent
@@ -90,6 +100,77 @@ configure_iptables() {
     log "Persistance iptables activée via netfilter-persistent."
 }
 
+# ============================
+# CHOIX BACKEND
+# ============================
+choose_backend() {
+    echo ""
+    echo "+--------------------------------------------+"
+    echo "|      CHOIX DU MODE BACKEND SLOWDNS         |"
+    echo "+--------------------------------------------+"
+    echo "1) SSH"
+    echo "2) V2Ray"
+    echo "3) MIX (SSH + V2Ray)"
+    echo ""
+    read -rp "Sélectionnez le backend [1-3] : " BACKEND_CHOICE
+    case "$BACKEND_CHOICE" in
+        1) BACKEND="ssh" ;;
+        2) BACKEND="v2ray" ;;
+        3) BACKEND="mix" ;;
+        *) echo "Choix invalide." >&2; exit 1 ;;
+    esac
+    echo "Backend sélectionné : $BACKEND"
+}
+
+# ============================
+# CHOIX MODE AUTO / MAN
+# ============================
+choose_mode() {
+    echo ""
+    echo "+--------------------------------------------+"
+    echo "|        CHOIX MODE AUTO / MANUEL            |"
+    echo "+--------------------------------------------+"
+    echo "1) AUTO (NS Cloudflare généré automatiquement)"
+    echo "2) MAN (NS à saisir manuellement)"
+    echo ""
+    read -rp "Sélectionnez le mode [1-2] : " MODE_CHOICE
+    case "$MODE_CHOICE" in
+        1) MODE="auto" ;;
+        2) MODE="man" ;;
+        *) echo "Choix invalide." >&2; exit 1 ;;
+    esac
+    echo "Mode sélectionné : $MODE"
+}
+
+# ============================
+# GESTION NS
+# ============================
+get_ns() {
+    if [[ "$MODE" == "auto" ]]; then
+        # NS automatique via Cloudflare API ou aléatoire
+        if [[ -f "$CONFIG_FILE" ]]; then
+            NS=$(cat "$CONFIG_FILE")
+            echo "NS existant trouvé : $NS"
+        else
+            NS="ns$((RANDOM % 9999)).$DOMAIN"
+            echo "NS généré automatiquement : $NS"
+            echo "$NS" > "$CONFIG_FILE"
+        fi
+    else
+        # Mode manuel
+        read -rp "Entrez le NameServer (NS) (ex: ns.example.com) : " NS
+        if [[ -z "$NS" ]]; then
+            echo "NameServer invalide." >&2
+            exit 1
+        fi
+        echo "$NS" > "$CONFIG_FILE"
+    fi
+    log "NameServer enregistré dans $CONFIG_FILE"
+}
+
+# ============================
+# WRAPPER SLOWDNS
+# ============================
 create_wrapper_script() {
     cat <<'EOF' > /usr/local/bin/slowdns-start.sh
 #!/bin/bash
@@ -143,12 +224,24 @@ NS=$(cat "$CONFIG_FILE")
 ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
 [ -z "$ssh_port" ] && ssh_port=22
 
-exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$ssh_port
+# Déterminer le port backend selon le choix
+if [[ "$BACKEND" == "ssh" ]]; then
+    backend_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
+    [ -z "$backend_port" ] && backend_port=22
+elif [[ "$BACKEND" == "v2ray" ]] || [[ "$BACKEND" == "mix" ]]; then
+    backend_port=8443
+fi
+
+# Lancer SlowDNS avec le port backend correct
+exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$backend_port
 EOF
 
     chmod +x /usr/local/bin/slowdns-start.sh
 }
 
+# ============================
+# SERVICE SYSTEMD
+# ============================
 create_systemd_service() {
     cat <<EOF > /etc/systemd/system/slowdns.service
 [Unit]
@@ -183,32 +276,34 @@ EOF
     systemctl restart slowdns.service
 }
 
+# ============================
+# MAIN
+# ============================
 main() {
     check_root
     install_dependencies
     install_slowdns_bin
     install_fixed_keys
     disable_systemd_resolved
-
-    read -rp "Entrez le NameServer (NS) (ex: ns.example.com) : " NAMESERVER
-    if [[ -z "$NAMESERVER" ]]; then
-        echo "NameServer invalide." >&2
-        exit 1
-    fi
-    echo "$NAMESERVER" > "$CONFIG_FILE"
-    log "NameServer enregistré dans $CONFIG_FILE"
-
     configure_sysctl
     configure_iptables
+
+    choose_backend
+    choose_mode
+    get_ns
+
     create_wrapper_script
     create_systemd_service
 
-    cat <<EOF > /etc/slowdns/slowdns.env
-NS=$NAMESERVER
+    # Génération fichier slowdns.env
+    cat <<EOF > "$ENV_FILE"
+NS=$NS
 PUB_KEY=$(cat "$SERVER_PUB")
 PRIV_KEY=$(cat "$SERVER_KEY")
+BACKEND=$BACKEND
+MODE=$MODE
 EOF
-    chmod 600 /etc/slowdns/slowdns.env
+    chmod 600 "$ENV_FILE"
     log "Fichier slowdns.env généré avec succès."
 
     PUB_KEY=$(cat "$SERVER_PUB")
@@ -218,7 +313,9 @@ EOF
     echo "+--------------------------------------------+"
     echo ""
     echo "Clé publique : $PUB_KEY"
-    echo "NameServer  : $NAMESERVER"
+    echo "NameServer  : $NS"
+    echo "Backend     : $BACKEND"
+    echo "Mode        : $MODE"
     echo ""
     echo "IMPORTANT : Pour améliorer le débit SSH, modifiez manuellement /etc/ssh/sshd_config en ajoutant :"
     echo "Ciphers aes128-ctr,aes192-ctr,aes128-gcm@openssh.com"
