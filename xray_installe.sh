@@ -123,6 +123,16 @@ cat > /etc/xray/config.json << EOF
   },
   "inbounds": [
     {
+      "port": 5401,
+      "protocol": "dokodemo-door",
+      "settings": {
+        "address": "0.0.0.0",
+        "port": 22,
+        "network": "tcp"
+      },
+      "tag": "ssh"
+    },
+    {
       "port": 8443,
       "protocol": "vmess",
       "settings": {
