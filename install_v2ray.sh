@@ -44,20 +44,40 @@ fi
 # ✅ CONFIG V2RAY ONLY (WS + TLS)
 cat <<EOF | sudo tee /etc/v2ray/config-v2only.json > /dev/null
 {
-  "log": { "loglevel": "info" },
+  "log": {
+    "loglevel": "info"
+  },
   "inbounds": [
     {
       "port": 5401,
       "protocol": "vless",
       "settings": {
-        "clients": [ { "id": "00000000-0000-0000-0000-000000000001", "email": "default@admin" } ],
+        "clients": [
+          {
+            "id": "00000000-0000-0000-0000-000000000001",
+            "email": "default@admin"
+          }
+        ],
         "decryption": "none"
       },
       "streamSettings": {
         "network": "ws",
         "security": "tls",
-        "tlsSettings": { "certificates":[ { "certificateFile": "$CERT_FILE", "keyFile": "$KEY_FILE" } ] },
-        "wsSettings": { "path": "/vless-ws" }
+        "tlsSettings": {
+          "certificates": [
+            {
+              "certificateFile": "/etc/v2ray/v2ray.crt",
+              "keyFile": "/etc/v2ray/v2ray.key"
+            }
+          ]
+        },
+        "wsSettings": {
+          "path": "/vless-ws"
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls"]
       },
       "tag": "vless"
     },
@@ -65,13 +85,32 @@ cat <<EOF | sudo tee /etc/v2ray/config-v2only.json > /dev/null
       "port": 5401,
       "protocol": "vmess",
       "settings": {
-        "clients": [ { "id": "00000000-0000-0000-0000-000000000001", "alterId":0, "email":"default@admin" } ]
+        "clients": [
+          {
+            "id": "00000000-0000-0000-0000-000000000001",
+            "alterId": 0,
+            "email": "default@admin"
+          }
+        ]
       },
       "streamSettings": {
         "network": "ws",
         "security": "tls",
-        "tlsSettings": { "certificates":[ { "certificateFile": "$CERT_FILE", "keyFile": "$KEY_FILE" } ] },
-        "wsSettings": { "path": "/vmess-ws" }
+        "tlsSettings": {
+          "certificates": [
+            {
+              "certificateFile": "/etc/v2ray/v2ray.crt",
+              "keyFile": "/etc/v2ray/v2ray.key"
+            }
+          ]
+        },
+        "wsSettings": {
+          "path": "/vmess-ws"
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls"]
       },
       "tag": "vmess"
     },
@@ -79,55 +118,170 @@ cat <<EOF | sudo tee /etc/v2ray/config-v2only.json > /dev/null
       "port": 5401,
       "protocol": "trojan",
       "settings": {
-        "clients": [ { "password": "00000000-0000-0000-0000-000000000001", "email":"default@admin" } ]
+        "clients": [
+          {
+            "password": "00000000-0000-0000-0000-000000000001",
+            "email": "default@admin"
+          }
+        ]
       },
       "streamSettings": {
         "network": "ws",
         "security": "tls",
-        "tlsSettings": { "certificates":[ { "certificateFile": "$CERT_FILE", "keyFile": "$KEY_FILE" } ] },
-        "wsSettings": { "path": "/trojan-ws" }
+        "tlsSettings": {
+          "certificates": [
+            {
+              "certificateFile": "/etc/v2ray/v2ray.crt",
+              "keyFile": "/etc/v2ray/v2ray.key"
+            }
+          ]
+        },
+        "wsSettings": {
+          "path": "/trojan-ws"
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls"]
       },
       "tag": "trojan"
     }
   ],
-  "outbounds": [ { "protocol": "freedom", "settings": {} } ]
+  "outbounds": [
+    {
+      "protocol": "freedom",
+      "settings": {
+        "domainStrategy": "UseIP"
+      }
+    }
+  ]
 }
 EOF
 
 # ✅ CONFIG MIX (SSH + WS TLS)
 cat <<EOF | sudo tee /etc/v2ray/config-mix.json > /dev/null
 {
-  "log": { "loglevel": "info" },
+  "log": {
+    "loglevel": "info"
+  },
   "inbounds": [
     {
       "port": 5401,
       "protocol": "dokodemo-door",
-      "settings": { "address":"127.0.0.1", "port":22, "network":"tcp" },
-      "tag":"ssh"
+      "settings": {
+        "address": "127.0.0.1",
+        "port": 22,
+        "network": "tcp"
+      },
+      "tag": "ssh"
     },
     {
       "port": 5401,
       "protocol": "vless",
-      "settings": { "clients":[{"id":"00000000-0000-0000-0000-000000000001","email":"default@admin"}], "decryption":"none" },
-      "streamSettings": { "network":"ws","security":"tls","tlsSettings":{"certificates":[{"certificateFile":"$CERT_FILE","keyFile":"$KEY_FILE"}]},"wsSettings":{"path":"/vless-ws"} },
-      "tag":"vless"
+      "settings": {
+        "clients": [
+          {
+            "id": "00000000-0000-0000-0000-000000000001",
+            "email": "default@admin"
+          }
+        ],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "tls",
+        "tlsSettings": {
+          "certificates": [
+            {
+              "certificateFile": "/etc/v2ray/v2ray.crt",
+              "keyFile": "/etc/v2ray/v2ray.key"
+            }
+          ]
+        },
+        "wsSettings": {
+          "path": "/vless-ws"
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls"]
+      },
+      "tag": "vless"
     },
     {
       "port": 5401,
       "protocol": "vmess",
-      "settings": { "clients":[{"id":"00000000-0000-0000-0000-000000000001","alterId":0,"email":"default@admin"}] },
-      "streamSettings": { "network":"ws","security":"tls","tlsSettings":{"certificates":[{"certificateFile":"$CERT_FILE","keyFile":"$KEY_FILE"}]},"wsSettings":{"path":"/vmess-ws"} },
-      "tag":"vmess"
+      "settings": {
+        "clients": [
+          {
+            "id": "00000000-0000-0000-0000-000000000001",
+            "alterId": 0,
+            "email": "default@admin"
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "tls",
+        "tlsSettings": {
+          "certificates": [
+            {
+              "certificateFile": "/etc/v2ray/v2ray.crt",
+              "keyFile": "/etc/v2ray/v2ray.key"
+            }
+          ]
+        },
+        "wsSettings": {
+          "path": "/vmess-ws"
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls"]
+      },
+      "tag": "vmess"
     },
     {
       "port": 5401,
       "protocol": "trojan",
-      "settings": { "clients":[{"password":"00000000-0000-0000-0000-000000000001","email":"default@admin"}] },
-      "streamSettings": { "network":"ws","security":"tls","tlsSettings":{"certificates":[{"certificateFile":"$CERT_FILE","keyFile":"$KEY_FILE"}]},"wsSettings":{"path":"/trojan-ws"} },
-      "tag":"trojan"
+      "settings": {
+        "clients": [
+          {
+            "password": "00000000-0000-0000-0000-000000000001",
+            "email": "default@admin"
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "tls",
+        "tlsSettings": {
+          "certificates": [
+            {
+              "certificateFile": "/etc/v2ray/v2ray.crt",
+              "keyFile": "/etc/v2ray/v2ray.key"
+            }
+          ]
+        },
+        "wsSettings": {
+          "path": "/trojan-ws"
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls"]
+      },
+      "tag": "trojan"
     }
   ],
-  "outbounds": [ { "protocol":"freedom", "settings":{} } ]
+  "outbounds": [
+    {
+      "protocol": "freedom",
+      "settings": {
+        "domainStrategy": "UseIP"
+      }
+    }
+  ]
 }
 EOF
 
