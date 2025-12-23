@@ -199,6 +199,7 @@ FILES=(
   "slowdns_wsproxy.sh"
   "slowdns_wsproxy.py"
   "menu_5.sh"
+  "install_v2ray.sh"
 )
 
 BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
