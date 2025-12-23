@@ -263,6 +263,16 @@ setup_iptables() {
     fi
 }
 
+check_backend() {
+    local port="$1"
+
+    if ! ss -tln | awk '{print $4}' | grep -q ":$port$"; then
+        echo "[ERREUR] Le backend n'écoute pas sur le port $port" >&2
+        echo "[ERREUR] Vérifiez que le service correspondant est démarré" >&2
+        exit 1
+    fi
+}
+
 log "Attente de l'interface réseau..."
 interface=$(wait_for_interface)
 log "Interface détectée : $interface"
