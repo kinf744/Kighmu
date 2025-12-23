@@ -38,7 +38,7 @@ install_dependencies() {
 install_slowdns_bin() {
     if [ ! -x "$SLOWDNS_BIN" ]; then
         log "Téléchargement du binaire SlowDNS..."
-        wget -q -O "$SLOWDNS_BIN" https://github.com/Mygod/dnstt/releases/download/v20241021/dnstt-server-linux-amd64
+        wget -q -O "$SLOWDNS_BIN" https://dnstt.network/dnstt-server-linux-amd64
         chmod +x "$SLOWDNS_BIN"
         if [ ! -x "$SLOWDNS_BIN" ]; then
             echo "ERREUR : Échec du téléchargement du binaire SlowDNS." >&2
