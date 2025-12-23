@@ -11,7 +11,6 @@ CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 SERVER_PUB="$SLOWDNS_DIR/server.pub"
 ENV_FILE="$SLOWDNS_DIR/slowdns.env"
-BACKEND_CONF="$SLOWDNS_DIR/backend.conf"
 
 # ⚠️ Remplacez par vos infos Cloudflare si nécessaire
 CF_API_TOKEN="TON_CLOUDFLARE_API_TOKEN"
@@ -169,7 +168,7 @@ get_ns() {
 }
 
 # ============================
-# WRAPPER SLOWDNS
+# GESTION DU WRAPPER
 # ============================
 create_wrapper_script() {
     cat <<'EOF' > /usr/local/bin/slowdns-start.sh
@@ -181,8 +180,17 @@ SLOWDNS_BIN="/usr/local/bin/dnstt-server"
 PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
+ENV_FILE="$SLOWDNS_DIR/slowdns.env"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
+
+# Charger variables depuis .env
+if [[ -f "$ENV_FILE" ]]; then
+    source "$ENV_FILE"
+else
+    echo "Fichier $ENV_FILE manquant !" >&2
+    exit 1
+fi
 
 wait_for_interface() {
     interface=""
@@ -221,8 +229,6 @@ setup_iptables "$interface"
 log "Démarrage du serveur SlowDNS..."
 
 NS=$(cat "$CONFIG_FILE")
-ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
-[ -z "$ssh_port" ] && ssh_port=22
 
 # Déterminer le port backend selon le choix
 if [[ "$BACKEND" == "ssh" ]]; then
@@ -232,7 +238,7 @@ elif [[ "$BACKEND" == "v2ray" ]] || [[ "$BACKEND" == "mix" ]]; then
     backend_port=8443
 fi
 
-# Lancer SlowDNS avec le port backend correct
+# Lancer SlowDNS
 exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 0.0.0.0:$backend_port
 EOF
 
@@ -292,10 +298,7 @@ main() {
     choose_mode
     get_ns
 
-    create_wrapper_script
-    create_systemd_service
-
-    # Génération fichier slowdns.env
+    # Génération fichier slowdns.env avant le wrapper
     cat <<EOF > "$ENV_FILE"
 NS=$NS
 PUB_KEY=$(cat "$SERVER_PUB")
@@ -305,6 +308,9 @@ MODE=$MODE
 EOF
     chmod 600 "$ENV_FILE"
     log "Fichier slowdns.env généré avec succès."
+
+    create_wrapper_script
+    create_systemd_service
 
     PUB_KEY=$(cat "$SERVER_PUB")
     echo ""
@@ -317,11 +323,11 @@ EOF
     echo "Backend     : $BACKEND"
     echo "Mode        : $MODE"
     echo ""
-    echo "IMPORTANT : Pour améliorer le débit SSH, modifiez manuellement /etc/ssh/sshd_config en ajoutant :"
+    echo "IMPORTANT : Pour améliorer le débit SSH, modifiez /etc/ssh/sshd_config :"
     echo "Ciphers aes128-ctr,aes192-ctr,aes128-gcm@openssh.com"
     echo "MACs hmac-sha2-256-etm@openssh.com,hmac-sha2-256"
     echo "Compression yes"
-    echo "Puis redémarrez SSH avec : systemctl restart sshd"
+    echo "Puis redémarrez SSH : systemctl restart sshd"
     echo ""
     echo "Le MTU du tunnel est fixé à 1400 via le script de démarrage pour limiter la fragmentation DNS."
     echo ""
