@@ -166,7 +166,7 @@ afficher_mode_v2ray_ws() {
         local v2ray_port
         v2ray_port=$(jq -r '.inbounds[0].port' /etc/v2ray/config.json 2>/dev/null || echo "5401")
         echo -e "${CYAN}Tunnel V2Ray actif:${RESET}"
-        echo -e "  - V2Ray WS sur le port TCP ${GREEN}$v2ray_port${RESET}"
+        echo -e "  - V2Ray WS TLS sur le port TCP ${GREEN}$v2ray_port${RESET}"
     else
         echo -e "${RED}Tunnel V2Ray inactif${RESET}"
     fi
