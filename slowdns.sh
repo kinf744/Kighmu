@@ -231,12 +231,21 @@ log "Démarrage du serveur SlowDNS..."
 NS=$(cat "$CONFIG_FILE")
 
 # Déterminer le port backend selon le choix
-if [[ "$BACKEND" == "ssh" ]]; then
-    backend_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
-    [ -z "$backend_port" ] && backend_port=22
-elif [[ "$BACKEND" == "v2ray" ]] || [[ "$BACKEND" == "mix" ]]; then
-    backend_port=8443
-fi
+case "$BACKEND" in
+    ssh)
+        backend_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
+        [ -z "$backend_port" ] && backend_port=22
+        ;;
+    v2ray)
+        backend_port=5401
+        ;;
+    mix)
+        backend_port=8443
+        ;;
+    *)
+        backend_port=22
+        ;;
+esac
 
 # Lancer SlowDNS
 exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 127.0.0.1:$backend_port
