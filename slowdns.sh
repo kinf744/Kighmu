@@ -14,8 +14,8 @@ SERVER_PUB="$SLOWDNS_DIR/server.pub"
 ENV_FILE="$SLOWDNS_DIR/slowdns.env"
 BACKEND_CONF="$SLOWDNS_DIR/backend.conf"
 
-CF_API_TOKEN="7mn4LKcZARvdbLlCVFTtaX7LGM2xsnyjHkiTAt37"
-CF_ZONE_ID="7debbb8ea4946898a889c4b5745ab7eb"
+CF_API_TOKEN="TON_TOKEN_CLOUDFLARE"
+CF_ZONE_ID="TON_ZONE_ID"
 DOMAIN="kingom.ggff.net"
 
 log(){ echo "[$(date '+%F %T')] $*"; }
@@ -55,57 +55,87 @@ if [ ! -x "$SLOWDNS_BIN" ]; then
 fi
 
 ############################
-# BACKEND
+# CHOIX BACKEND
 ############################
 choose_backend(){
-echo "1) SSH"
-echo "2) V2Ray"
-echo "3) MIX"
-read -rp "Choix [1-3] : " c
-case "$c" in
- 1) m=ssh ;;
- 2) m=v2ray ;;
- 3) m=mix ;;
- *) exit 1 ;;
+  echo "1) SSH"
+  echo "2) V2Ray"
+  echo "3) MIX"
+  read -rp "Choix backend [1-3] : " c
+  case "$c" in
+    1) m=ssh ;;
+    2) m=v2ray ;;
+    3) m=mix ;;
+    *) echo "Choix invalide"; exit 1 ;;
+  esac
+  echo "BACKEND_MODE=$m" > "$BACKEND_CONF"
+}
+
+############################
+# NS AUTO (CLOUDFLARE)
+############################
+generate_ns_auto(){
+  local ip sub fqdn ns
+
+  ip=$(curl -s ipv4.icanhazip.com)
+  sub="vpn-$(date +%s | sha256sum | head -c6)"
+  fqdn="$sub.$DOMAIN"
+
+  curl -s -X POST \
+   "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
+   -H "Authorization: Bearer $CF_API_TOKEN" \
+   -H "Content-Type: application/json" \
+   --data "{\"type\":\"A\",\"name\":\"$fqdn\",\"content\":\"$ip\",\"ttl\":120,\"proxied\":false}" >/dev/null
+
+  ns="ns-$(date +%s | sha256sum | head -c6).$DOMAIN"
+
+  curl -s -X POST \
+   "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
+   -H "Authorization: Bearer $CF_API_TOKEN" \
+   -H "Content-Type: application/json" \
+   --data "{\"type\":\"NS\",\"name\":\"$ns\",\"content\":\"$fqdn\",\"ttl\":120}" >/dev/null
+
+  echo -e "NS=$ns\nENV_MODE=auto" > "$ENV_FILE"
+  chmod 600 "$ENV_FILE"
+  echo "$ns"
+}
+
+############################
+# CHOIX MODE AUTO / MAN
+############################
+echo "Mode d'installation :"
+echo "1) AUTO (Cloudflare – NS persistant)"
+echo "2) MANUEL (NS toujours demandé)"
+read -rp "Choix [1-2] : " MODE
+
+case "$MODE" in
+  1)
+    if [ -f "$ENV_FILE" ]; then
+      source "$ENV_FILE"
+      if [ "${ENV_MODE:-}" = "auto" ] && [ -n "${NS:-}" ]; then
+        log "NS auto persistant détecté : $NS"
+      else
+        log "NS auto invalide → génération"
+        NS=$(generate_ns_auto)
+      fi
+    else
+      log "Aucun NS auto → génération"
+      NS=$(generate_ns_auto)
+    fi
+    echo "$NS" > "$CONFIG_FILE"
+    ;;
+  2)
+    read -rp "Entrez le NameServer (NS) à utiliser : " NS
+    echo "$NS" > "$CONFIG_FILE"
+    log "NS manuel appliqué (non persistant)"
+    ;;
+  *)
+    echo "Choix invalide"
+    exit 1
+    ;;
 esac
-echo "BACKEND_MODE=$m" > "$BACKEND_CONF"
-}
-
-############################
-# NS AUTO
-############################
-gen_ns(){
-ip=$(curl -s ipv4.icanhazip.com)
-sub="vpn-$(date +%s | sha256sum | head -c6)"
-fqdn="$sub.$DOMAIN"
-
-curl -s -X POST \
- https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records \
- -H "Authorization: Bearer $CF_API_TOKEN" \
- -H "Content-Type: application/json" \
- --data "{\"type\":\"A\",\"name\":\"$fqdn\",\"content\":\"$ip\",\"ttl\":120,\"proxied\":false}" >/dev/null
-
-ns="ns-$(date +%s | sha256sum | head -c6).$DOMAIN"
-
-curl -s -X POST \
- https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records \
- -H "Authorization: Bearer $CF_API_TOKEN" \
- -H "Content-Type: application/json" \
- --data "{\"type\":\"NS\",\"name\":\"$ns\",\"content\":\"$fqdn\",\"ttl\":120}" >/dev/null
-
-echo -e "NS=$ns\nENV_MODE=auto" > "$ENV_FILE"
-echo "$ns"
-}
-
-if [ -f "$ENV_FILE" ]; then
- source "$ENV_FILE"
-else
- NS=$(gen_ns)
-fi
 
 choose_backend
-
-echo "$NS" > "$CONFIG_FILE"
 
 ############################
 # CLES FIXES
@@ -119,6 +149,7 @@ cat > "$SERVER_PUB" <<EOF
 EOF
 
 chmod 600 "$SERVER_KEY"
+chmod 644 "$SERVER_PUB"
 
 ############################
 # SYSCTL PROD
@@ -140,7 +171,7 @@ EOF
 sysctl --system >/dev/null
 
 ############################
-# WRAPPER
+# WRAPPER DNSTT
 ############################
 cat > /usr/local/bin/slowdns-start.sh <<'EOF'
 #!/bin/bash
@@ -149,12 +180,12 @@ set -euo pipefail
 CONF="/etc/slowdns"
 BIN="/usr/local/bin/dnstt-server"
 
-mode="ssh"
-[ -f "$CONF/backend.conf" ] && source "$CONF/backend.conf"
+source "$CONF/backend.conf"
 
-case "$mode" in
- ssh) tgt="127.0.0.1:22" ;;
- v2ray|mix) tgt="127.0.0.1:8443" ;;
+case "$BACKEND_MODE" in
+  ssh) tgt="127.0.0.1:22" ;;
+  v2ray|mix) tgt="127.0.0.1:8443" ;;
+  *) tgt="127.0.0.1:22" ;;
 esac
 
 exec nice -n -5 ionice -c2 -n0 \
@@ -208,6 +239,6 @@ systemctl daemon-reload
 systemctl enable nftables slowdns
 systemctl restart nftables slowdns
 
-log "SLOWDNS PROD OK"
-log "NS : $NS"
+log "INSTALLATION SLOWDNS PROD TERMINÉE"
+log "NS UTILISÉ : $(cat $CONFIG_FILE)"
 log "BACKEND : $(cat $BACKEND_CONF)"
