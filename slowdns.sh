@@ -183,9 +183,9 @@ BIN="/usr/local/bin/dnstt-server"
 source "$CONF/backend.conf"
 
 case "$BACKEND_MODE" in
-  ssh) tgt="127.0.0.1:22" ;;
+  ssh) tgt="0.0.0.0:22" ;;
   v2ray|mix) tgt="127.0.0.1:8443" ;;
-  *) tgt="127.0.0.1:22" ;;
+  *) tgt="0.0.0.0:22" ;;
 esac
 
 exec nice -n -5 ionice -c2 -n0 \
