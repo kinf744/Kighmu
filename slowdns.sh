@@ -99,21 +99,28 @@ EOF
 
 configure_iptables() {
     log "Configuration du pare-feu via iptables..."
+
+    # Autoriser DNS entrant
     if ! iptables -C INPUT -p udp --dport 53 -j ACCEPT &>/dev/null; then
         iptables -I INPUT -p udp --dport 53 -j ACCEPT
     fi
+
+    # Autoriser le port SlowDNS
     if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
         iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
     fi
-    iptables-save > /etc/iptables/rules.v4
-    systemctl enable netfilter-persistent
-    systemctl restart netfilter-persistent
-    log "Persistance iptables activée via netfilter-persistent."
-    
-    # REDIRECT UDP 53 -> PORT SlowDNS (persistant)
+
+    # REDIRECT UDP 53 -> PORT SlowDNS (NAT)
     if ! iptables -t nat -C PREROUTING -p udp --dport 53 -j REDIRECT --to-ports "$PORT" &>/dev/null; then
         iptables -t nat -I PREROUTING -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
     fi
+
+    # Sauvegarde pour persistance
+    iptables-save > /etc/iptables/rules.v4
+    systemctl enable netfilter-persistent
+    systemctl restart netfilter-persistent
+
+    log "Persistance iptables activée via netfilter-persistent."
 }
 
 # ============================
