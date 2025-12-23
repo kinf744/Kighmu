@@ -13,9 +13,9 @@ SERVER_PUB="$SLOWDNS_DIR/server.pub"
 ENV_FILE="$SLOWDNS_DIR/slowdns.env"
 
 # ⚠️ Remplacez par vos infos Cloudflare si nécessaire
-CF_API_TOKEN="TON_CLOUDFLARE_API_TOKEN"
-CF_ZONE_ID="TON_CLOUDFLARE_ZONE_ID"
-DOMAIN="ton-domaine.com"
+CF_API_TOKEN="7mn4LKcZARvdbLlCVFTtaX7LGM2xsnyjHkiTAt37"
+CF_ZONE_ID="7debbb8ea4946898a889c4b5745ab7eb"
+DOMAIN="kingom.ggff.net"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
