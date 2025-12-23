@@ -97,6 +97,11 @@ configure_iptables() {
     systemctl enable netfilter-persistent
     systemctl restart netfilter-persistent
     log "Persistance iptables activée via netfilter-persistent."
+    
+    # REDIRECT UDP 53 -> PORT SlowDNS (persistant)
+    if ! iptables -t nat -C PREROUTING -p udp --dport 53 -j REDIRECT --to-ports "$PORT" &>/dev/null; then
+        iptables -t nat -I PREROUTING -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
+    fi
 }
 
 # ============================
@@ -255,11 +260,6 @@ setup_iptables() {
     interface="$1"
     if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
         iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
-    fi
-    if ! iptables -t nat -C PREROUTING -i "$interface" -p udp --dport 53 -j REDIRECT --to-ports "$PORT" &>/dev/null; then
-        iptables -t nat -I PREROUTING -i "$interface" -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
-    else
-        log "Règles NAT déjà présentes pour le port 53"
     fi
 }
 
