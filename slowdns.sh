@@ -144,19 +144,67 @@ choose_mode() {
 # ============================
 # GESTION NS
 # ============================
+
+create_ns_cloudflare() {
+    VPS_IP=$(curl -s https://ipv4.icanhazip.com || curl -s https://ifconfig.me)
+
+    if [[ -z "$VPS_IP" ]]; then
+        echo "Impossible de détecter l'IP publique du VPS" >&2
+        exit 1
+    fi
+
+    SUB_A="a$(date +%s | tail -c 6)"
+    SUB_NS="ns$(date +%s | tail -c 6)"
+
+    A_FQDN="$SUB_A.$DOMAIN"
+    NS_FQDN="$SUB_NS.$DOMAIN"
+
+    log "Création A record : $A_FQDN → $VPS_IP"
+
+    curl -fsSL -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
+        -H "Authorization: Bearer $CF_API_TOKEN" \
+        -H "Content-Type: application/json" \
+        --data "{
+            \"type\":\"A\",
+            \"name\":\"$A_FQDN\",
+            \"content\":\"$VPS_IP\",
+            \"ttl\":120,
+            \"proxied\":false
+        }" | jq -e '.success' >/dev/null || {
+            echo "Erreur création A record Cloudflare" >&2
+            exit 1
+        }
+
+    log "Création NS record : $NS_FQDN → $A_FQDN"
+
+    curl -fsSL -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
+        -H "Authorization: Bearer $CF_API_TOKEN" \
+        -H "Content-Type: application/json" \
+        --data "{
+            \"type\":\"NS\",
+            \"name\":\"$NS_FQDN\",
+            \"content\":\"$A_FQDN\",
+            \"ttl\":120
+        }" | jq -e '.success' >/dev/null || {
+            echo "Erreur création NS record Cloudflare" >&2
+            exit 1
+        }
+
+    echo "$NS_FQDN"
+}
+
 get_ns() {
     if [[ "$MODE" == "auto" ]]; then
-        # NS automatique via Cloudflare API ou aléatoire
         if [[ -f "$CONFIG_FILE" ]]; then
             NS=$(cat "$CONFIG_FILE")
-            echo "NS existant trouvé : $NS"
+            log "NS auto existant détecté : $NS"
         else
-            NS="ns$((RANDOM % 9999)).$DOMAIN"
-            echo "NS généré automatiquement : $NS"
+            log "Aucun NS auto trouvé, création via Cloudflare..."
+            NS=$(create_ns_cloudflare)
             echo "$NS" > "$CONFIG_FILE"
+            log "NS Cloudflare créé et sauvegardé : $NS"
         fi
     else
-        # Mode manuel
         read -rp "Entrez le NameServer (NS) (ex: ns.example.com) : " NS
         if [[ -z "$NS" ]]; then
             echo "NameServer invalide." >&2
@@ -164,7 +212,6 @@ get_ns() {
         fi
         echo "$NS" > "$CONFIG_FILE"
     fi
-    log "NameServer enregistré dans $CONFIG_FILE"
 }
 
 # ============================
