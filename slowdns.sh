@@ -78,23 +78,11 @@ EOF
 }
 
 disable_systemd_resolved() {
-    log "Configuration DNS système (safe mode)..."
-
-    systemctl disable --now systemd-resolved || true
-
-    mkdir -p /etc/systemd/resolved.conf.d
-
-    cat <<EOF > /etc/systemd/resolved.conf.d/slowdns.conf
-[Resolve]
-DNS=1.1.1.1 8.8.8.8
-FallbackDNS=9.9.9.9
-DNSStubListener=no
-EOF
-
+    log "Désactivation non-destructive du stub DNS systemd-resolved..."
+    systemctl stop systemd-resolved
+    systemctl disable systemd-resolved
     rm -f /etc/resolv.conf
-    ln -s /run/systemd/resolve/resolv.conf /etc/resolv.conf
-
-    log "DNS système configuré via systemd-resolved (stub désactivé)"
+    echo "nameserver 8.8.8.8" > /etc/resolv.conf
 }
 
 configure_iptables() {
