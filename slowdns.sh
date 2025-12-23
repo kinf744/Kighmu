@@ -255,7 +255,6 @@ ENV_FILE="$SLOWDNS_DIR/slowdns.env"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
-# Charger variables depuis .env
 if [[ -f "$ENV_FILE" ]]; then
     source "$ENV_FILE"
 else
@@ -282,31 +281,16 @@ setup_iptables() {
     fi
 }
 
-check_backend() {
-    local port="$1"
-
-    if ! ss -tln | awk '{print $4}' | grep -q ":$port$"; then
-        echo "[ERREUR] Le backend n'écoute pas sur le port $port" >&2
-        echo "[ERREUR] Vérifiez que le service correspondant est démarré" >&2
-        exit 1
-    fi
-}
-
 log "Attente de l'interface réseau..."
 interface=$(wait_for_interface)
 log "Interface détectée : $interface"
 
-log "Réglage MTU à 1400 pour éviter la fragmentation DNS..."
 ip link set dev "$interface" mtu 1400 || log "Échec réglage MTU, continuer"
 
-log "Application des règles iptables..."
 setup_iptables "$interface"
-
-log "Démarrage du serveur SlowDNS..."
 
 NS=$(cat "$CONFIG_FILE")
 
-# Déterminer le port backend selon le choix
 case "$BACKEND" in
     ssh)
         backend_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
@@ -323,7 +307,6 @@ case "$BACKEND" in
         ;;
 esac
 
-# Lancer SlowDNS
 exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 127.0.0.1:$backend_port
 EOF
 
