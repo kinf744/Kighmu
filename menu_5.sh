@@ -463,7 +463,7 @@ while true; do
     show_menu
     read option
     case "$option" in
-        1) installer_v2ray ;;
+        1) bash "$HOME/Kighmu/install_v2ray.sh" ;;
         2) creer_utilisateur ;;
         3) supprimer_utilisateur ;;
         4) desinstaller_v2ray ;;
