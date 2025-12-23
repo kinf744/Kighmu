@@ -235,7 +235,7 @@ if [[ "$BACKEND" == "ssh" ]]; then
     backend_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
     [ -z "$backend_port" ] && backend_port=22
 elif [[ "$BACKEND" == "v2ray" ]] || [[ "$BACKEND" == "mix" ]]; then
-    backend_port=8443
+    backend_port=5401
 fi
 
 # Lancer SlowDNS
