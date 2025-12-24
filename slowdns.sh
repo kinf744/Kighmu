@@ -402,7 +402,13 @@ EOF
     echo "NameServer  : $NS"
     echo "Backend     : $BACKEND"
     echo "Mode        : $MODE"
-    echo "MTU         : $SLOWDNS_MTU"
+    INTERFACE=$(ip -o link show up | awk -F': ' '{print $2}' \
+            | grep -v '^lo$' \
+            | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' \
+            | head -n1)
+
+    REAL_MTU=$(get_real_mtu "$INTERFACE")
+    echo "MTU réel appliqué sur $INTERFACE : $REAL_MTU"
     echo ""
     echo "IMPORTANT : Pour améliorer le débit SSH, modifiez /etc/ssh/sshd_config :"
     echo "Ciphers aes128-ctr,aes192-ctr,aes128-gcm@openssh.com"
