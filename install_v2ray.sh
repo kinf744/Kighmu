@@ -43,13 +43,18 @@ cat <<EOF | sudo tee /etc/v2ray/config.json >/dev/null
       "settings": {
         "clients": [
           {
-            "id": "00000000-0000-0000-0000-000000000001"
+            "id": "00000000-0000-0000-0000-000000000001",
+            "level": 0,
+            "email": "user1"
           }
         ],
         "decryption": "none"
       },
       "streamSettings": {
-        "network": "tcp"
+        "network": "tcp",
+        "tcpSettings": {
+          "acceptProxyProtocol": false
+        }
       },
       "sniffing": {
         "enabled": true,
@@ -60,9 +65,31 @@ cat <<EOF | sudo tee /etc/v2ray/config.json >/dev/null
   ],
   "outbounds": [
     {
-      "protocol": "freedom"
+      "protocol": "freedom",
+      "settings": {},
+      "tag": "direct"
+    },
+    {
+      "protocol": "blackhole",
+      "settings": {},
+      "tag": "ssh-backend"
     }
-  ]
+  ],
+  "routing": {
+    "rules": [
+      {
+        "type": "field",
+        "inboundTag": ["vless-tcp"],
+        "outboundTag": "direct"
+      },
+      {
+        "type": "field",
+        "inboundTag": ["vless-tcp"],
+        "port": 22,
+        "outboundTag": "ssh-backend"
+      }
+    ]
+  }
 }
 EOF
 
