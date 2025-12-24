@@ -56,13 +56,38 @@ cat <<EOF | sudo tee /etc/v2ray/config.json >/dev/null
         "destOverride": ["http", "tls"]
       },
       "tag": "vless-tcp"
+    },
+    {
+      "port": 2222,
+      "protocol": "dokodemo-door",
+      "settings": {
+        "address": "127.0.0.1",
+        "port": 22,
+        "network": "tcp"
+      },
+      "tag": "ssh-in"
     }
   ],
   "outbounds": [
     {
-      "protocol": "freedom"
+      "protocol": "freedom",
+      "tag": "direct"
     }
-  ]
+  ],
+  "routing": {
+    "rules": [
+      {
+        "type": "field",
+        "inboundTag": ["ssh-in"],
+        "outboundTag": "direct"
+      },
+      {
+        "type": "field",
+        "inboundTag": ["vless-tcp"],
+        "outboundTag": "direct"
+      }
+    ]
+  }
 }
 EOF
 
