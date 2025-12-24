@@ -58,17 +58,17 @@ ajouter_client_v2ray() {
 
     [[ ! -f "$config" ]] && { echo "❌ config.json introuvable"; return 1; }
 
-    # Vérification JSON avant
+    # Vérification JSON AVANT
     if ! jq empty "$config" >/dev/null 2>&1; then
         echo "❌ config.json invalide AVANT modification"
         return 1
     fi
 
-    # Vérifier doublon (VLESS suffit car UUID commun)
+    # Vérifier doublon UUID (VLESS uniquement)
     if jq -e --arg uuid "$uuid" '
-        .inbounds[] 
-        | select(.protocol=="vless") 
-        | .settings.clients[]? 
+        .inbounds[]
+        | select(.protocol=="vless")
+        | .settings.clients[]?
         | select(.id==$uuid)
     ' "$config" >/dev/null; then
         echo "⚠️ UUID déjà existant"
@@ -77,21 +77,17 @@ ajouter_client_v2ray() {
 
     tmpfile=$(mktemp)
 
-    # Ajout VLESS + VMESS + TROJAN
+    # Ajout UNIQUEMENT dans VLESS
     jq --arg uuid "$uuid" --arg email "$nom" '
     .inbounds |= map(
         if .protocol=="vless" then
             .settings.clients += [{"id": $uuid, "email": $email}]
-        elif .protocol=="vmess" then
-            .settings.clients += [{"id": $uuid, "alterId": 0, "email": $email}]
-        elif .protocol=="trojan" then
-            .settings.clients += [{"password": $uuid, "email": $email}]
         else .
         end
     )
     ' "$config" > "$tmpfile"
 
-    # Vérification JSON après
+    # Vérification JSON APRÈS
     if ! jq empty "$tmpfile" >/dev/null 2>&1; then
         echo "❌ JSON cassé APRÈS modification"
         rm -f "$tmpfile"
@@ -109,7 +105,7 @@ ajouter_client_v2ray() {
     systemctl restart v2ray
 
     if systemctl is-active --quiet v2ray; then
-        echo "✅ Utilisateur ajouté (VLESS + VMESS + TROJAN)"
+        echo "✅ Utilisateur ajouté (VLESS TCP)"
         return 0
     else
         echo "❌ V2Ray n’a pas redémarré"
@@ -131,7 +127,7 @@ afficher_mode_v2ray_ws() {
         local v2ray_port
         v2ray_port=$(jq -r '.inbounds[0].port' /etc/v2ray/config.json 2>/dev/null || echo "5401")
         echo -e "${CYAN}Tunnel V2Ray actif:${RESET}"
-        echo -e "  - V2Ray WS sur le port TCP ${GREEN}$v2ray_port${RESET}"
+        echo -e "  - V2Ray TCP sur le port TCP ${GREEN}$v2ray_port${RESET}"
     else
         echo -e "${RED}Tunnel V2Ray inactif${RESET}"
     fi
@@ -161,8 +157,6 @@ show_menu() {
     echo -e "${YELLOW}║ 2) Créer nouvel utilisateur${RESET}"
     echo -e "${YELLOW}║ 3) Supprimer un utilisateur${RESET}"
     echo -e "${YELLOW}║ 4) Désinstaller V2Ray+FastDNS${RESET}"
-    echo -e "${YELLOW}║ 5) Mode MIX (SSH + V2Ray)${RESET}"
-    echo -e "${YELLOW}║ 6) Mode V2RAY ONLY${RESET}"
     echo -e "${RED}║ 0) Quitter${RESET}"
     echo -e "${CYAN}╚═════════════════════════════════════════════════════╝${RESET}"
     echo -n "Choisissez une option : "
