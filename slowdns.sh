@@ -342,7 +342,6 @@ main() {
 NS=$NS
 PUB_KEY=$(cat "$SERVER_PUB")
 PRIV_KEY=$(cat "$SERVER_KEY")
-BACKEND=$BACKEND
 MODE=$MODE
 EOF
     chmod 600 "$ENV_FILE"
@@ -359,7 +358,6 @@ EOF
     echo ""
     echo "Clé publique : $PUB_KEY"
     echo "NameServer  : $NS"
-    echo "Backend     : $BACKEND"
     echo "Mode        : $MODE"
     echo ""
     echo "IMPORTANT : Pour améliorer le débit SSH, modifiez /etc/ssh/sshd_config :"
