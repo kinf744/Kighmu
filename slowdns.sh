@@ -222,7 +222,7 @@ ENV_FILE="$SLOWDNS_DIR/slowdns.env"
 SLOWDNS_PORT_V2RAY=5300
 SLOWDNS_PORT_SSH=5301
 V2RAY_PORT=5401
-SSH_PORT=22
+SSH_PORT=2222
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
