@@ -273,7 +273,7 @@ log "Attente de l'interface réseau..."
 interface=$(wait_for_interface)
 log "Interface détectée : $interface"
 
-ip link set dev "$interface" mtu 1400 || log "Échec réglage MTU, continuer"
+ip link set dev "$interface" mtu 132 || log "Échec réglage MTU, continuer"
 
 setup_iptables "$interface"
 
@@ -385,7 +385,7 @@ EOF
     echo "Compression yes"
     echo "Puis redémarrez SSH : systemctl restart sshd"
     echo ""
-    echo "Le MTU du tunnel est fixé à 1400 via le script de démarrage pour limiter la fragmentation DNS."
+    echo "Le MTU du tunnel est fixé à 132 via le script de démarrage pour limiter la fragmentation DNS."
     echo ""
     log "Installation et configuration SlowDNS terminées."
 }
