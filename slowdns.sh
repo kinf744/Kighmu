@@ -421,6 +421,7 @@ EOF
     echo "NameServer  : $NS"
     echo "Backend     : $BACKEND"
     echo "Mode        : $MODE"
+    echo "MTU         : $SLOWDNS_MTU"
     echo ""
     echo "IMPORTANT : Pour améliorer le débit SSH, modifiez /etc/ssh/sshd_config :"
     echo "Ciphers aes128-ctr,aes192-ctr,aes128-gcm@openssh.com"
