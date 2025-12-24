@@ -112,28 +112,6 @@ configure_iptables() {
 }
 
 # ============================
-# CHOIX BACKEND
-# ============================
-choose_backend() {
-    echo ""
-    echo "+--------------------------------------------+"
-    echo "|      CHOIX DU MODE BACKEND SLOWDNS         |"
-    echo "+--------------------------------------------+"
-    echo "1) SSH"
-    echo "2) V2Ray"
-    echo "3) MIX (SSH + V2Ray)"
-    echo ""
-    read -rp "Sélectionnez le backend [1-3] : " BACKEND_CHOICE
-    case "$BACKEND_CHOICE" in
-        1) BACKEND="ssh" ;;
-        2) BACKEND="v2ray" ;;
-        3) BACKEND="mix" ;;
-        *) echo "Choix invalide." >&2; exit 1 ;;
-    esac
-    echo "Backend sélectionné : $BACKEND"
-}
-
-# ============================
 # CHOIX MODE AUTO / MAN
 # ============================
 choose_mode() {
