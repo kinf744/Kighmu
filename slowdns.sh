@@ -286,9 +286,9 @@ EOF
 # SERVICE SYSTEMD
 # ============================
 create_systemd_service() {
-    cat <<EOF > /etc/systemd/system/slowdns.service
+    cat <<'EOF' > /etc/systemd/system/slowdns.service
 [Unit]
-Description=SlowDNS Server Tunnel
+Description=SlowDNS Server Tunnel (V2Ray + SSH)
 After=network-online.target
 Wants=network-online.target
 Documentation=https://github.com/fisabiliyusri/SLDNS
@@ -314,9 +314,12 @@ NoNewPrivileges=yes
 WantedBy=multi-user.target
 EOF
 
+    # Recharger systemd, activer et démarrer le service
     systemctl daemon-reload
     systemctl enable slowdns.service
     systemctl restart slowdns.service
+
+    echo "✅ Service SlowDNS (2 instances : V2Ray + SSH) créé et démarré."
 }
 
 # ============================
