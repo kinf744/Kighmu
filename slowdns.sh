@@ -371,6 +371,7 @@ main() {
     install_fixed_keys
     disable_systemd_resolved
     configure_sysctl
+    set_mtu
     configure_iptables
 
     choose_backend
