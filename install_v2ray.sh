@@ -56,6 +56,42 @@ cat <<EOF | sudo tee /etc/v2ray/config.json >/dev/null
         "destOverride": ["http", "tls"]
       },
       "tag": "vless-tcp"
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "freedom"
+    }
+  ]
+}
+EOF
+
+# ✅ CONFIG MIX (AVEC SSH dokodemo-door)
+cat <<EOF | sudo tee /etc/v2ray/config-mix.json > /dev/null
+{
+  "log": {
+    "loglevel": "warning"
+  },
+  "inbounds": [
+    {
+      "port": 5401,
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "00000000-0000-0000-0000-000000000001"
+          }
+        ],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "tcp"
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls"]
+      },
+      "tag": "vless-tcp"
     },
     {
       "port": 5401,
