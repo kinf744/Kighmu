@@ -366,44 +366,33 @@ supprimer_utilisateur() {
 }
 
 desinstaller_v2ray() {
-    echo -n "Êtes-vous sûr ? o/N : "
+    echo -n "Êtes-vous sûr de désinstaller uniquement V2Ray ? o/N : "
     read reponse
     if [[ "$reponse" =~ ^[Oo]$ ]]; then
-        echo -e "${YELLOW}🛑 Arrêt des services...${RESET}"
-        
-        sudo systemctl stop v2ray.service 2>/dev/null || true
-        sudo systemctl disable v2ray.service 2>/dev/null || true
-        sudo rm -f /etc/systemd/system/v2ray.service
+        echo -e "${YELLOW}🛑 Arrêt du service V2Ray...${RESET}"
 
-        sudo systemctl stop slowdns-v2ray.service 2>/dev/null || true
-        sudo systemctl disable slowdns-v2ray.service 2>/dev/null || true
-        
-        SLOWDNS_PID=$(sudo systemctl show slowdns-v2ray.service --property=MainPID --value 2>/dev/null || echo "")
-        [ -n "$SLOWDNS_PID" ] && sudo kill $SLOWDNS_PID 2>/dev/null || true
+        # Stop et disable du service V2Ray
+        systemctl stop v2ray.service 2>/dev/null || true
+        systemctl disable v2ray.service 2>/dev/null || true
+        rm -f /etc/systemd/system/v2ray.service 2>/dev/null
 
-        if screen -list | grep -q "slowdns_v2ray"; then
-            screen -S slowdns_v2ray -X quit 2>/dev/null || true
-        fi
+        # Supprimer les fichiers V2Ray
+        rm -rf /etc/v2ray 2>/dev/null
+        rm -f /usr/local/bin/v2ray 2>/dev/null
+        rm -f /usr/local/bin/v2ctl 2>/dev/null
+        rm -f /var/log/v2ray.log 2>/dev/null
+        [ -f "$USER_DB" ] && rm -f "$USER_DB"
 
-        sudo iptables -D INPUT -p tcp --dport 5401 -j ACCEPT 2>/dev/null || true
-        sudo iptables -D INPUT -p udp --dport 5400 -j ACCEPT 2>/dev/null || true
-        sudo netfilter-persistent save 2>/dev/null || true
+        # Nettoyer iptables V2Ray (port 5401 TCP)
+        iptables -D INPUT -p tcp --dport 5401 -j ACCEPT 2>/dev/null || true
+        netfilter-persistent save 2>/dev/null || true
 
-        sudo rm -rf /etc/slowdns_v2ray 
-        sudo rm -f /usr/local/bin/slowdns-v2ray-start.sh
-        sudo rm -f /var/log/slowdns_v2ray.log
-        sudo rm -rf /.v2ray_domain
-        sudo rm -rf /etc/v2ray 
-        [ -f "$USER_DB" ] && sudo rm -f "$USER_DB"
+        # Recharger systemd
+        systemctl daemon-reload
 
-        sudo systemctl daemon-reload
-        sudo rm -f /etc/systemd/system/slowdns-v2ray.service
-
-        echo -e "${GREEN}✅ V2Ray + FastDNS V2Ray désinstallé.${RESET}"
-        echo -e "${GREEN}✅ Tunnel SSH FastDNS préservé !${RESET}"
-        echo -e "${CYAN}📊 Vérification ports fermés:${RESET}"
-        ss -tuln | grep -E "(:5400|:5401)" || echo "✅ Ports 5400/5401 libres"
-        echo -e "${GREEN}✅ SSH FastDNS toujours actif: $(systemctl is-active slowdns.service 2>/dev/null || echo "non installé")${RESET}"
+        echo -e "${GREEN}✅ V2Ray désinstallé et nettoyé.${RESET}"
+        echo -e "${CYAN}📊 Vérification ports :${RESET}"
+        ss -tuln | grep -E "(:5401)" || echo "✅ Port 5401 libre"
     else
         echo "Annulé."
     fi
