@@ -66,8 +66,8 @@ cat <<EOF | sudo tee /etc/v2ray/config.json >/dev/null
 }
 EOF
 
-# ✅ CONFIG MIX (AVEC SSH dokodemo-door)
-cat <<EOF | sudo tee /etc/v2ray/config-mix.json > /dev/null
+    # ✅ CONFIG MIX (AVEC SSH dokodemo-door)
+    cat <<EOF | sudo tee /etc/v2ray/config-mix.json > /dev/null
 {
   "log": {
     "loglevel": "warning"
