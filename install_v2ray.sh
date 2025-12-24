@@ -49,17 +49,18 @@ cat <<EOF | sudo tee /etc/v2ray/config.json >/dev/null
         "decryption": "none"
       },
       "streamSettings": {
-        "network": "tcp",
-        "tcpSettings": {
-          "acceptProxyProtocol": false
-        }
-      }
+        "network": "tcp"
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls"]
+      },
+      "tag": "vless-tcp"
     }
   ],
   "outbounds": [
     {
-      "protocol": "freedom",
-      "settings": {}
+      "protocol": "freedom"
     }
   ]
 }
