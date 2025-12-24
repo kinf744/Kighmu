@@ -130,40 +130,41 @@ EOF
 # ======================
 # SYSTEMD
 # ======================
-sudo tee /etc/systemd/system/v2ray.service >/dev/null <<EOF
+sudo tee /etc/systemd/system/v2ray.service >/dev/null <<'EOF'
 [Unit]
-Description=V2Ray TCP Brut (SlowDNS)
-After=network.target
+Description=V2Ray Service (TCP + MIX possible)
+After=network.target network-online.target
+Wants=network-online.target
 
 [Service]
+Type=simple
+User=root
 ExecStart=/usr/local/bin/v2ray run -config /etc/v2ray/config.json
-Restart=always
-RestartSec=3
+Restart=on-failure
+RestartSec=5s
 LimitNOFILE=65536
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
+# Ouverture du port 5401 pour V2Ray TCP
 echo -e "${YELLOW}🔓 Ouverture du port 5401...${RESET}"
 sudo iptables -I INPUT -p tcp --dport 5401 -j ACCEPT
 sudo netfilter-persistent save >/dev/null 2>&1 || true
 
+# Activation et démarrage du service
 sudo systemctl daemon-reload
-sudo systemctl enable v2ray
-sudo systemctl restart v2ray
+sudo systemctl enable v2ray.service
+sudo systemctl restart v2ray.service
 
+# Vérification rapide
 sleep 2
-
-if systemctl is-active --quiet v2ray && ss -tln | grep -q :5401; then
-    echo -e "${GREEN}🎉 V2Ray TCP BRUT ACTIF !${RESET}"
-    echo -e "${GREEN}IP:${RESET} $domaine"
-    echo -e "${GREEN}PORT:${RESET} 5401"
-    echo -e "${GREEN}UUID:${RESET} 00000000-0000-0000-0000-000000000001"
-    echo -e "${GREEN}TRANSPORT:${RESET} TCP BRUT"
+if systemctl is-active --quiet v2ray.service && ss -tln | grep -q :5401; then
+    echo -e "${GREEN}🎉 V2Ray actif sur le port 5401 !${RESET}"
 else
-    echo -e "${RED}❌ ÉCHEC V2RAY${RESET}"
-    sudo journalctl -u v2ray -n 20 --no-pager
+    echo -e "${RED}❌ Échec du démarrage V2Ray${RESET}"
+    sudo journalctl -u v2ray.service -n 20 --no-pager
 fi
 
 read -p "Appuyez sur Entrée pour revenir au menu..."
