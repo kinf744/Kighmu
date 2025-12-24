@@ -80,6 +80,18 @@ EOF
 # ============================
 # GESTION DU MTU
 # ============================
+set_mtu() {
+    local mtu="$1"
+
+    if ! [[ "$mtu" =~ ^[0-9]+$ ]] || [ "$mtu" -lt 90 ] || [ "$mtu" -gt 1500 ]; then
+        echo "❌ MTU invalide (90–1500 requis)"
+        exit 1
+    fi
+
+    SLOWDNS_MTU="$mtu"
+    export SLOWDNS_MTU
+}
+
 ask_mtu() {
     local mtu
     while true; do
@@ -299,6 +311,10 @@ SLOWDNS_MTU="${MTU:?MTU non défini dans slowdns.env}"
 
 ip link set dev "$interface" mtu "$SLOWDNS_MTU"
 
+REAL_MTU=$(get_mtu "$interface")
+log "MTU demandé : $SLOWDNS_MTU"
+log "MTU réel appliqué sur $interface : $REAL_MTU"
+
 setup_iptables "$interface"
 
 NS=$(cat "$CONFIG_FILE")
@@ -372,6 +388,7 @@ main() {
     install_fixed_keys
     disable_systemd_resolved
     configure_sysctl
+    set_mtu
     ask_mtu
     configure_iptables
 
@@ -404,11 +421,6 @@ EOF
     echo "NameServer  : $NS"
     echo "Backend     : $BACKEND"
     echo "Mode        : $MODE"
-    
-    REAL_MTU=$(ask_mtu "$interface")
-
-    echo "MTU configuré : $SLOWDNS_MTU"
-    echo "MTU réel appliqué sur $interface : $REAL_MTU"
     echo ""
     echo "IMPORTANT : Pour améliorer le débit SSH, modifiez /etc/ssh/sshd_config :"
     echo "Ciphers aes128-ctr,aes192-ctr,aes128-gcm@openssh.com"
