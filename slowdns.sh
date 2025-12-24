@@ -388,7 +388,6 @@ main() {
     install_fixed_keys
     disable_systemd_resolved
     configure_sysctl
-    set_mtu
     ask_mtu
     configure_iptables
 
