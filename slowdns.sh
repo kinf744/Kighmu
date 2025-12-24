@@ -271,6 +271,11 @@ wait_for_interface() {
     echo "$interface"
 }
 
+get_mtu() {
+    local iface="$1"
+    ip link show "$iface" | awk '/mtu/ {for(i=1;i<=NF;i++){if($i=="mtu"){print $(i+1);exit}}}'
+}
+
 setup_iptables() {
     interface="$1"
     if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
