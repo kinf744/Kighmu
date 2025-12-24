@@ -165,3 +165,5 @@ else
     echo -e "${RED}❌ ÉCHEC V2RAY${RESET}"
     sudo journalctl -u v2ray -n 20 --no-pager
 fi
+
+read -p "Appuyez sur Entrée pour revenir au menu..."
