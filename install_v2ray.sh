@@ -31,7 +31,7 @@ echo "$domaine" | sudo tee /.v2ray_domain >/dev/null
 # ======================
 # CONFIG V2RAY TCP BRUT
 # ======================
-cat <<EOF | sudo tee /etc/v2ray/config.json >/dev/null
+cat <<EOF | sudo tee /etc/v2ray/config-v2only.json >/dev/null
 {
   "log": {
     "loglevel": "warning"
