@@ -408,7 +408,7 @@ EOF
             | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' \
             | head -n1)
 
-    REAL_MTU=$(get_real_mtu "$INTERFACE")
+    REAL_MTU=$(get_mtu "$INTERFACE")
     echo "MTU réel appliqué sur $INTERFACE : $REAL_MTU"
     echo ""
     echo "IMPORTANT : Pour améliorer le débit SSH, modifiez /etc/ssh/sshd_config :"
