@@ -58,8 +58,7 @@ cat <<EOF | sudo tee /etc/v2ray/config.json >/dev/null
       "tag": "vless-tcp"
     },
     {
-      "listen": "127.0.0.1",
-      "port": 2222,
+      "port": 5401,
       "protocol": "dokodemo-door",
       "settings": {
         "address": "127.0.0.1",
