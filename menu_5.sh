@@ -423,8 +423,6 @@ while true; do
         2) creer_utilisateur ;;
         3) supprimer_utilisateur ;;
         4) desinstaller_v2ray ;;
-        5) basculer_mode_mix ;;
-        6) basculer_mode_v2only ;;
         0) echo "Au revoir"; exit 0 ;;
         *) echo "Option invalide."
            sleep 1 
