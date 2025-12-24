@@ -112,6 +112,28 @@ configure_iptables() {
 }
 
 # ============================
+# CHOIX BACKEND
+# ============================
+choose_backend() {
+    echo ""
+    echo "+--------------------------------------------+"
+    echo "|      CHOIX DU MODE BACKEND SLOWDNS         |"
+    echo "+--------------------------------------------+"
+    echo "1) SSH"
+    echo "2) V2Ray"
+    echo "3) MIX (SSH + V2Ray)"
+    echo ""
+    read -rp "Sélectionnez le backend [1-3] : " BACKEND_CHOICE
+    case "$BACKEND_CHOICE" in
+        1) BACKEND="ssh" ;;
+        2) BACKEND="v2ray" ;;
+        3) BACKEND="mix" ;;
+        *) echo "Choix invalide." >&2; exit 1 ;;
+    esac
+    echo "Backend sélectionné : $BACKEND"
+}
+
+# ============================
 # CHOIX MODE AUTO / MAN
 # ============================
 choose_mode() {
@@ -208,19 +230,16 @@ get_ns() {
 # GESTION DU WRAPPER
 # ============================
 create_wrapper_script() {
-cat <<'EOF' > /usr/local/bin/slowdns-start.sh
+    cat <<'EOF' > /usr/local/bin/slowdns-start.sh
 #!/bin/bash
 set -euo pipefail
 
 SLOWDNS_DIR="/etc/slowdns"
 SLOWDNS_BIN="/usr/local/bin/dnstt-server"
+PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 ENV_FILE="$SLOWDNS_DIR/slowdns.env"
-
-SLOWDNS_PORT_V2RAY=5300
-SLOWDNS_PORT_SSH=5301
-V2RAY_PORT=5401   # VLESS TCP unique backend
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
@@ -235,50 +254,60 @@ wait_for_interface() {
     interface=""
     while [ -z "$interface" ]; do
         interface=$(ip -o link show up | awk -F': ' '{print $2}' \
-            | grep -v '^lo$' \
-            | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' \
-            | head -n1)
+                    | grep -v '^lo$' \
+                    | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' \
+                    | head -n1)
         [ -z "$interface" ] && sleep 2
     done
     echo "$interface"
 }
 
 setup_iptables() {
-    local port="$1"
-    iptables -C INPUT -p udp --dport "$port" -j ACCEPT 2>/dev/null \
-        || iptables -I INPUT -p udp --dport "$port" -j ACCEPT
+    interface="$1"
+    if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
+        iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
+    fi
 }
 
 log "Attente de l'interface réseau..."
 interface=$(wait_for_interface)
 log "Interface détectée : $interface"
-ip link set dev "$interface" mtu 1350 || true
 
-setup_iptables "$SLOWDNS_PORT_V2RAY"
-setup_iptables "$SLOWDNS_PORT_SSH"
+ip link set dev "$interface" mtu 1350 || log "Échec réglage MTU, continuer"
+
+setup_iptables "$interface"
 
 NS=$(cat "$CONFIG_FILE")
 
-log "Démarrage SlowDNS → V2Ray (UDP $SLOWDNS_PORT_V2RAY)"
-"$SLOWDNS_BIN" -udp :$SLOWDNS_PORT_V2RAY -privkey-file "$SERVER_KEY" "$NS" 127.0.0.1:$V2RAY_PORT &
+case "$BACKEND" in
+    ssh)
+        backend_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
+        [ -z "$backend_port" ] && backend_port=22
+        ;;
+    v2ray)
+        backend_port=5401
+        ;;
+    mix)
+        backend_port=8443
+        ;;
+    *)
+        backend_port=22
+        ;;
+esac
 
-log "Démarrage SlowDNS → V2Ray (SSH via routing) (UDP $SLOWDNS_PORT_SSH)"
-"$SLOWDNS_BIN" -udp :$SLOWDNS_PORT_SSH -privkey-file "$SERVER_KEY" "$NS" 127.0.0.1:$V2RAY_PORT &
-
-wait
+exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 127.0.0.1:$backend_port
 EOF
 
-chmod +x /usr/local/bin/slowdns-start.sh
-echo "Wrapper SlowDNS MIX (V2Ray + SSH via V2Ray) prêt."
+    chmod +x /usr/local/bin/slowdns-start.sh
 }
 
 # ============================
 # SERVICE SYSTEMD
 # ============================
 create_systemd_service() {
-    cat <<'EOF' > /etc/systemd/system/slowdns.service
+    cat <<EOF > /etc/systemd/system/slowdns.service
 [Unit]
-Description=SlowDNS Server Tunnel (V2Ray + SSH)
+Description=SlowDNS Server Tunnel
 After=network-online.target
 Wants=network-online.target
 Documentation=https://github.com/fisabiliyusri/SLDNS
@@ -304,12 +333,9 @@ NoNewPrivileges=yes
 WantedBy=multi-user.target
 EOF
 
-    # Recharger systemd, activer et démarrer le service
     systemctl daemon-reload
     systemctl enable slowdns.service
     systemctl restart slowdns.service
-
-    echo "✅ Service SlowDNS (2 instances : V2Ray + SSH) créé et démarré."
 }
 
 # ============================
@@ -324,6 +350,7 @@ main() {
     configure_sysctl
     configure_iptables
 
+    choose_backend
     choose_mode
     get_ns
 
@@ -332,6 +359,7 @@ main() {
 NS=$NS
 PUB_KEY=$(cat "$SERVER_PUB")
 PRIV_KEY=$(cat "$SERVER_KEY")
+BACKEND=$BACKEND
 MODE=$MODE
 EOF
     chmod 600 "$ENV_FILE"
@@ -348,6 +376,7 @@ EOF
     echo ""
     echo "Clé publique : $PUB_KEY"
     echo "NameServer  : $NS"
+    echo "Backend     : $BACKEND"
     echo "Mode        : $MODE"
     echo ""
     echo "IMPORTANT : Pour améliorer le débit SSH, modifiez /etc/ssh/sshd_config :"
