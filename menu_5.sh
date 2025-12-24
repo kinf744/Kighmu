@@ -336,7 +336,7 @@ supprimer_utilisateur() {
     utilisateurs=$(echo "$utilisateurs" | jq "del(.[${index}])")
     sauvegarder_utilisateurs
 
-    # 🔴 Suppression dans V2Ray (VLESS + VMESS + TROJAN)
+    # 🔴 Suppression dans V2Ray (VLESS uniquement)
     if [[ -f /etc/v2ray/config.json ]]; then
         tmpfile=$(mktemp)
 
@@ -344,10 +344,6 @@ supprimer_utilisateur() {
         .inbounds |= map(
             if .protocol=="vless" then
                 .settings.clients |= map(select(.id != $uuid))
-            elif .protocol=="vmess" then
-                .settings.clients |= map(select(.id != $uuid))
-            elif .protocol=="trojan" then
-                .settings.clients |= map(select(.password != $uuid))
             else .
             end
         )
@@ -356,7 +352,7 @@ supprimer_utilisateur() {
         if jq empty "$tmpfile" >/dev/null 2>&1; then
             mv "$tmpfile" /etc/v2ray/config.json
             systemctl restart v2ray
-            echo "✅ Utilisateur supprimé de V2Ray (VLESS / VMESS / TROJAN)"
+            echo "✅ Utilisateur supprimé de V2Ray (VLESS TCP)"
         else
             echo "❌ Erreur JSON après suppression V2Ray"
             rm -f "$tmpfile"
