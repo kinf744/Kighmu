@@ -127,9 +127,10 @@ EOF
 }
 EOF
 
-# ======================
-# SYSTEMD
-# ======================
+# Copier config-v2only.json comme config par défaut
+sudo cp /etc/v2ray/config-v2only.json /etc/v2ray/config.json
+
+# Créer le service systemd
 sudo tee /etc/systemd/system/v2ray.service >/dev/null <<'EOF'
 [Unit]
 Description=V2Ray Service (TCP + MIX possible)
@@ -148,12 +149,12 @@ LimitNOFILE=65536
 WantedBy=multi-user.target
 EOF
 
-# Ouverture du port 5401 pour V2Ray TCP
-echo -e "${YELLOW}🔓 Ouverture du port 5401...${RESET}"
+# Ouvrir le port 5401 pour V2Ray
+echo -e "${YELLOW}🔓 Ouverture du port 5401 pour V2Ray...${RESET}"
 sudo iptables -I INPUT -p tcp --dport 5401 -j ACCEPT
 sudo netfilter-persistent save >/dev/null 2>&1 || true
 
-# Activation et démarrage du service
+# Activer et démarrer le service
 sudo systemctl daemon-reload
 sudo systemctl enable v2ray.service
 sudo systemctl restart v2ray.service
