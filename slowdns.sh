@@ -404,7 +404,7 @@ EOF
     echo "NameServer  : $NS"
     echo "Backend     : $BACKEND"
     echo "Mode        : $MODE"
-    REAL_MTU=$(get_mtu "$INTERFACE")
+    REAL_MTU=$(get_mtu "$interface")
 
     echo "MTU configuré : $SLOWDNS_MTU"
     echo "MTU réel appliqué sur $interface : $REAL_MTU"
