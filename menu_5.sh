@@ -277,7 +277,7 @@ creer_utilisateur() {
     # AFFICHAGE
     clear
     echo -e "${GREEN}============================================"
-    echo -e "🧩 VLESS / VMESS / TROJAN + FASTDNS"
+    echo -e "🧩 VLESS TCP + FASTDNS"
     echo -e "===================================================="
     echo -e "📄 Configuration pour : ${YELLOW}$nom${RESET}"
     echo -e "-------------------------------------------------------------"
