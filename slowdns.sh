@@ -121,7 +121,7 @@ choose_backend() {
     echo "+--------------------------------------------+"
     echo "1) SSH"
     echo "2) V2Ray"
-    echo "3) MIX (SSH + V2Ray)"
+    echo "3) XRAY TLS"
     echo ""
     read -rp "Sélectionnez le backend [1-3] : " BACKEND_CHOICE
     case "$BACKEND_CHOICE" in
