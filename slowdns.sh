@@ -208,7 +208,7 @@ get_ns() {
 # GESTION DU WRAPPER
 # ============================
 create_wrapper_script() {
-    cat <<'EOF' > /usr/local/bin/slowdns-start.sh
+cat <<'EOF' > /usr/local/bin/slowdns-start.sh
 #!/bin/bash
 set -euo pipefail
 
@@ -218,15 +218,12 @@ CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 ENV_FILE="$SLOWDNS_DIR/slowdns.env"
 
-# Ports SlowDNS distincts
 SLOWDNS_PORT_V2RAY=5300
 SLOWDNS_PORT_SSH=5301
-V2RAY_PORT=5401
-SSH_PORT=2222
+V2RAY_PORT=5401   # VLESS TCP unique backend
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
-# Chargement des variables d'environnement
 if [[ -f "$ENV_FILE" ]]; then
     source "$ENV_FILE"
 else
@@ -234,52 +231,45 @@ else
     exit 1
 fi
 
-# Détection interface réseau
 wait_for_interface() {
     interface=""
     while [ -z "$interface" ]; do
         interface=$(ip -o link show up | awk -F': ' '{print $2}' \
-                    | grep -v '^lo$' \
-                    | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' \
-                    | head -n1)
+            | grep -v '^lo$' \
+            | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' \
+            | head -n1)
         [ -z "$interface" ] && sleep 2
     done
     echo "$interface"
 }
 
-# Ajouter règles iptables
 setup_iptables() {
     local port="$1"
-    if ! iptables -C INPUT -p udp --dport "$port" -j ACCEPT &>/dev/null; then
-        iptables -I INPUT -p udp --dport "$port" -j ACCEPT
-    fi
+    iptables -C INPUT -p udp --dport "$port" -j ACCEPT 2>/dev/null \
+        || iptables -I INPUT -p udp --dport "$port" -j ACCEPT
 }
 
 log "Attente de l'interface réseau..."
 interface=$(wait_for_interface)
 log "Interface détectée : $interface"
+ip link set dev "$interface" mtu 1350 || true
 
-ip link set dev "$interface" mtu 1350 || log "Échec réglage MTU, continuer"
-
-# Appliquer règles iptables pour les deux ports
 setup_iptables "$SLOWDNS_PORT_V2RAY"
 setup_iptables "$SLOWDNS_PORT_SSH"
 
 NS=$(cat "$CONFIG_FILE")
 
-# Lancement SlowDNS pour V2Ray
-log "Démarrage SlowDNS → V2Ray (127.0.0.1:$V2RAY_PORT) sur UDP $SLOWDNS_PORT_V2RAY"
+log "Démarrage SlowDNS → V2Ray (UDP $SLOWDNS_PORT_V2RAY)"
 "$SLOWDNS_BIN" -udp :$SLOWDNS_PORT_V2RAY -privkey-file "$SERVER_KEY" "$NS" 127.0.0.1:$V2RAY_PORT &
 
-# Lancement SlowDNS pour SSH
-log "Démarrage SlowDNS → SSH (127.0.0.1:$SSH_PORT) sur UDP $SLOWDNS_PORT_SSH"
-"$SLOWDNS_BIN" -udp :$SLOWDNS_PORT_SSH -privkey-file "$SERVER_KEY" "$NS" 127.0.0.1:$SSH_PORT &
+log "Démarrage SlowDNS → V2Ray (SSH via routing) (UDP $SLOWDNS_PORT_SSH)"
+"$SLOWDNS_BIN" -udp :$SLOWDNS_PORT_SSH -privkey-file "$SERVER_KEY" "$NS" 127.0.0.1:$V2RAY_PORT &
 
 wait
 EOF
 
-    chmod +x /usr/local/bin/slowdns-start.sh
-    echo "Wrapper SlowDNS (2 instances : V2Ray + SSH) créé avec succès."
+chmod +x /usr/local/bin/slowdns-start.sh
+echo "Wrapper SlowDNS MIX (V2Ray + SSH via V2Ray) prêt."
 }
 
 # ============================
