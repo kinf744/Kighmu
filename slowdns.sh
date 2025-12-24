@@ -328,7 +328,6 @@ main() {
     configure_sysctl
     configure_iptables
 
-    choose_backend
     choose_mode
     get_ns
 
