@@ -80,10 +80,16 @@ EOF
 # ============================
 # GESTION DU MTU
 # ============================
-set_mtu() {
-    local mtu_value=${1:-1350}  # valeur par défaut 1350 si non spécifiée
-    export SLOWDNS_MTU="$mtu_value"
-    log "MTU pour SlowDNS défini sur : $SLOWDNS_MTU"
+ask_mtu() {
+    local mtu
+    while true; do
+        read -rp "Entrez le MTU à utiliser pour SlowDNS (ex: 1350) : " mtu
+        if [[ -n "$mtu" ]]; then
+            set_mtu "$mtu"
+            break
+        fi
+        echo "❌ Le MTU est obligatoire."
+    done
 }
 
 disable_systemd_resolved() {
@@ -287,16 +293,11 @@ log "Attente de l'interface réseau..."
 interface=$(wait_for_interface)
 log "Interface détectée : $interface"
 
-if [[ -f "$ENV_FILE" ]]; then
-    source "$ENV_FILE"
-else
-    echo "Fichier $ENV_FILE manquant !" >&2
-    exit 1
-fi
+source /etc/slowdns/slowdns.env
 
-SLOWDNS_MTU=${MTU:-1350}
+SLOWDNS_MTU="${MTU:?MTU non défini dans slowdns.env}"
 
-ip link set dev "$interface" mtu ${SLOWDNS_MTU:-1350} || log "Échec réglage MTU, continuer"
+ip link set dev "$interface" mtu "$SLOWDNS_MTU"
 
 setup_iptables "$interface"
 
@@ -403,13 +404,10 @@ EOF
     echo "NameServer  : $NS"
     echo "Backend     : $BACKEND"
     echo "Mode        : $MODE"
-    INTERFACE=$(ip -o link show up | awk -F': ' '{print $2}' \
-            | grep -v '^lo$' \
-            | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' \
-            | head -n1)
-
     REAL_MTU=$(get_mtu "$INTERFACE")
-    echo "MTU réel appliqué sur $INTERFACE : $REAL_MTU"
+
+    echo "MTU configuré : $SLOWDNS_MTU"
+    echo "MTU réel appliqué sur $interface : $REAL_MTU"
     echo ""
     echo "IMPORTANT : Pour améliorer le débit SSH, modifiez /etc/ssh/sshd_config :"
     echo "Ciphers aes128-ctr,aes192-ctr,aes128-gcm@openssh.com"
