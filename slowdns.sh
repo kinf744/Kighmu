@@ -77,6 +77,15 @@ EOF
     sysctl -p
 }
 
+# ============================
+# GESTION DU MTU
+# ============================
+set_mtu() {
+    local mtu_value=${1:-1350}  # valeur par défaut 1350 si non spécifiée
+    export SLOWDNS_MTU="$mtu_value"
+    log "MTU pour SlowDNS défini sur : $SLOWDNS_MTU"
+}
+
 disable_systemd_resolved() {
     log "Désactivation non-destructive du stub DNS systemd-resolved..."
     systemctl stop systemd-resolved
@@ -273,7 +282,16 @@ log "Attente de l'interface réseau..."
 interface=$(wait_for_interface)
 log "Interface détectée : $interface"
 
-ip link set dev "$interface" mtu 1350 || log "Échec réglage MTU, continuer"
+if [[ -f "$ENV_FILE" ]]; then
+    source "$ENV_FILE"
+else
+    echo "Fichier $ENV_FILE manquant !" >&2
+    exit 1
+fi
+
+SLOWDNS_MTU=${MTU:-1350}
+
+ip link set dev "$interface" mtu ${SLOWDNS_MTU:-1350} || log "Échec réglage MTU, continuer"
 
 setup_iptables "$interface"
 
@@ -361,6 +379,7 @@ PUB_KEY=$(cat "$SERVER_PUB")
 PRIV_KEY=$(cat "$SERVER_KEY")
 BACKEND=$BACKEND
 MODE=$MODE
+MTU=$SLOWDNS_MTU
 EOF
     chmod 600 "$ENV_FILE"
     log "Fichier slowdns.env généré avec succès."
