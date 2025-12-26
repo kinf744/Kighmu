@@ -385,7 +385,7 @@ uninstall_hysteria() {
 }
 
 # --- AJOUT WS/WSS SSH ---
-install_ws_wss() {
+install_sshws() {
     echo ">>> Installation WS Tunnels (HTTP + HTTPS)..."
     
     # Vérif script
@@ -463,7 +463,7 @@ while true; do
         7) manage_mode "BadVPN" install_badvpn uninstall_badvpn ;;
         8) manage_mode "proxy ws" install_proxy_ws uninstall_proxy_ws ;;
         9) manage_mode "Hysteria" install_hysteria uninstall_hysteria ;;
-        10) manage_mode "Tunnel WS/WSS SSH" install_ws_wss uninstall_ws_wss ;;
+        10) manage_mode "Tunnel WS/WSS SSH" install_sshws uninstall_sshws ;;
         0) echo -e "${RED}🚪 Sortie du panneau de contrôle.${RESET}" ; exit 0 ;;
         *) echo -e "${RED}❌ Option invalide, réessayez.${RESET}" ;;
     esac
