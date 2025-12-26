@@ -39,16 +39,6 @@ cat <<EOF | sudo tee /etc/v2ray/config-v2only.json >/dev/null
   "inbounds": [
     {
       "port": 5401,
-      "protocol": "dokodemo-door",
-      "settings": {
-        "address": "0.0.0.0",
-        "port": 22,
-        "network": "tcp"
-      },
-      "tag": "ssh"
-    },
-    {
-      "port": 5401,
       "protocol": "vless",
       "settings": {
         "clients": [
@@ -85,6 +75,16 @@ EOF
   "inbounds": [
     {
       "port": 5401,
+      "protocol": "dokodemo-door",
+      "settings": {
+        "address": "0.0.0.0",
+        "port": 22,
+        "network": "tcp"
+      },
+      "tag": "ssh"
+    },
+    {
+      "port": 5401,
       "protocol": "vless",
       "settings": {
         "clients": [
@@ -102,38 +102,13 @@ EOF
         "destOverride": ["http", "tls"]
       },
       "tag": "vless-tcp"
-    },
-    {
-      "port": 5401,
-      "protocol": "dokodemo-door",
-      "settings": {
-        "address": "127.0.0.1",
-        "port": 22,
-        "network": "tcp"
-      },
-      "tag": "ssh-in"
     }
   ],
   "outbounds": [
     {
-      "protocol": "freedom",
-      "tag": "direct"
+      "protocol": "freedom"
     }
-  ],
-  "routing": {
-    "rules": [
-      {
-        "type": "field",
-        "inboundTag": ["ssh-in"],
-        "outboundTag": "direct"
-      },
-      {
-        "type": "field",
-        "inboundTag": ["vless-tcp"],
-        "outboundTag": "direct"
-      }
-    ]
-  }
+  ]
 }
 EOF
 
