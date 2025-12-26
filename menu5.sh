@@ -386,15 +386,40 @@ uninstall_hysteria() {
 
 # --- AJOUT WS/WSS SSH ---
 install_sshws() {
-    echo ">>> Installation WS Tunnels (HTTP + HTTPS)..."
-    
-    # Vérif script
-    WS_SCRIPT="$HOME/Kighmu/sshws.go"
-    [ -f "$WS_SCRIPT" ] || { echo "❌ $WS_SCRIPT introuvable"; return 1; }
-    
-    # Lancement
-    bash "$WS_SCRIPT"
-    echo -e "${GREEN}[OK] WS Tunnels installés.${RESET}"
+    echo ">>> Installation du tunnel SSH WebSocket..."
+
+    SRC="$HOME/Kighmu/sshws.go"
+    BIN="/usr/local/bin/sshws"
+
+    # Vérifie le fichier Go
+    [ -f "$SRC" ] || { echo "❌ $SRC introuvable."; return 1; }
+
+    # Compile le fichier Go en binaire exécutable
+    echo "⏳ Compilation du proxy sshws..."
+    go build -o "$BIN" "$SRC" || { echo "❌ Erreur de compilation."; return 1; }
+    chmod +x "$BIN"
+
+    # Démarre le service
+    systemctl stop sshws 2>/dev/null
+    cat >/etc/systemd/system/sshws.service <<EOF
+[Unit]
+Description=SSH over WebSocket
+After=network.target
+
+[Service]
+ExecStart=$BIN -listen 80 -target-host 127.0.0.1 -target-port 22
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable sshws
+    systemctl restart sshws
+
+    echo -e "✅ SSHWS installé et démarré (port 80)."
 }
 
 uninstall_sshws() {
