@@ -199,6 +199,7 @@ FILES=(
   "slowdns_wsproxy.sh"
   "slowdns_wsproxy.py"
   "menu_5.sh"
+  "sshws.go"
   "install_v2ray.sh"
 )
 
