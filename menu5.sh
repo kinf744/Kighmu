@@ -389,7 +389,7 @@ install_ws_wss() {
     echo ">>> Installation WS Tunnels (HTTP + HTTPS)..."
     
     # Vérif script
-    WS_SCRIPT="$HOME/Kighmu/ws_tt_ssl.sh"
+    WS_SCRIPT="$HOME/Kighmu/sshws.go"
     [ -f "$WS_SCRIPT" ] || { echo "❌ $WS_SCRIPT introuvable"; return 1; }
     
     # Lancement
@@ -397,23 +397,13 @@ install_ws_wss() {
     echo -e "${GREEN}[OK] WS Tunnels installés.${RESET}"
 }
 
-uninstall_ws_wss() {
-    echo ">>> Désinstallation WS Tunnels..."
-    
-    # Services
-    systemctl stop ws-dropbear ws-stunnel 2>/dev/null || true
-    systemctl disable ws-dropbear ws-stunnel 2>/dev/null || true
-    
-    # Fichiers
-    rm -f /etc/systemd/system/ws-{dropbear,stunnel}.service
-    rm -f /usr/local/bin/ws-{dropbear,stunnel}
-    rm -f /etc/nginx/conf.d/kighmu-ws.conf
-    
-    # Systemd + Ports
+uninstall_sshws() {
+    echo "🧹 Suppression du tunnel SSH WebSocket..."
+    systemctl stop sshws 2>/dev/null
+    systemctl disable sshws 2>/dev/null
+    rm -f /etc/systemd/system/sshws.service /usr/local/bin/sshws
     systemctl daemon-reload
-    fuser -k 700/tcp 2095/tcp 2>/dev/null || true
-    
-    echo -e "${GREEN}[OK] WS Tunnels supprimés.${RESET}"
+    echo "✅ SSHWS désinstallé avec succès."
 }
 
 # --- Interface utilisateur ---
