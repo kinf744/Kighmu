@@ -2,7 +2,7 @@
 // sshws.go — WebSocket → SSH (TCP) Proxy complet et sécurisé
 // Auteur : @mahboub, adapté par @vpsplus71
 // Licence : MIT
-// Version : 1.4.2 (fix DOMAIN parsing conforme à la doc Go)
+// Version : 1.4.3 (clean build, UTF-8 sans )
 // ================================================================
 
 package main
@@ -35,9 +35,9 @@ const (
 \tmaxLogSize   = 5 * 1024 * 1024 // 5 Mo
 )
 
-// =====================================================================
+// ================================================================
 // 🔐 Fonctions utilitaires
-// =====================================================================
+// ================================================================
 
 // acceptKey : calcule Sec-WebSocket-Accept pour le handshake WebSocket
 func acceptKey(key string) string {
@@ -63,7 +63,6 @@ func getKighmuDomain() string {
 \tfor scanner.Scan() {
 \t\tline := strings.TrimSpace(scanner.Text())
 \t\tif strings.HasPrefix(line, "DOMAIN=") {
-\t\t\t// ✅ Version correcte et recommandée
 \t\t\treturn strings.Trim(strings.SplitN(line, "=", 2)[1], "" ")
 \t\t}
 \t}
@@ -86,7 +85,7 @@ func setupLogging() {
 \tlog.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 }
 
-// openFirewallPort : autorise un port via iptables, avec persistance
+// openFirewallPort : autorise le port via iptables, avec persistance
 func openFirewallPort(port string) {
 \tlog.Printf("🔐 Application des règles iptables sur le port %s ...", port)
 \tcheck := exec.Command("iptables", "-C", "INPUT", "-p", "tcp", "--dport", port, "-j", "ACCEPT")
@@ -106,9 +105,9 @@ func openFirewallPort(port string) {
 \t}
 }
 
-// =====================================================================
+// ================================================================
 // 🧩 Gestion du handshake et proxy
-// =====================================================================
+// ================================================================
 
 func handleUpgrade(targetAddr string, w http.ResponseWriter, r *http.Request) {
 \tdomain := getKighmuDomain()
@@ -180,9 +179,9 @@ func handleUpgrade(targetAddr string, w http.ResponseWriter, r *http.Request) {
 \tlog.Printf("✅ Connexion WS validée (%s → %s)", r.Host, targetAddr)
 }
 
-// =====================================================================
+// ================================================================
 // ⚙️ Création du service systemd
-// =====================================================================
+// ================================================================
 
 func createSystemdFile(listen, targetHost, targetPort string) {
 \tif _, err := os.Stat(systemdPath); err == nil {
@@ -211,9 +210,9 @@ WantedBy=multi-user.target
 \tlog.Println("Active-le via : systemctl enable sshws && systemctl start sshws")
 }
 
-// =====================================================================
+// ================================================================
 // 🚀 MAIN
-// =====================================================================
+// ================================================================
 
 func main() {
 \tlisten := flag.String("listen", "80", "Port d'écoute WS (ex : 80)")
