@@ -66,7 +66,7 @@ afficher_modes_ports() {
         echo -e "  - Hysteria UDP : ${GREEN}port UDP 22000${RESET}"
     fi
     if systemctl is-active --quiet sshws.service || pgrep -f sshws >/dev/null 2>&1 || screen -list | grep -q ws_wssr; then
-        echo -e "  - WS/WSS Tunnel: ${GREEN}WS port 8880 | WSS port 443${RESET}"
+        echo -e "  - WS/WSS Tunnel: ${GREEN}WS port 80 | WSS port 443${RESET}"
     fi
 }
 
