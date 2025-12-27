@@ -25,13 +25,22 @@ import (
 	"time"
 )
 
+// =====================
+// Constantes
+// =====================
+
 const (
 	wsGUID      = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 	kighmuInfo  = ".kighmu_info"
 	logDir      = "/var/log/sshws"
 	logFile     = "/var/log/sshws/sshws.log"
 	maxLogSize  = 5 * 1024 * 1024
+	systemdPath = "/etc/systemd/system/sshws.service"
 )
+
+// =====================
+// Utils
+// =====================
 
 func acceptKey(key string) string {
 	h := sha1.New()
@@ -59,6 +68,10 @@ func getKighmuDomain() string {
 	return ""
 }
 
+// =====================
+// Logging
+// =====================
+
 func setupLogging() {
 	_ = os.MkdirAll(logDir, 0755)
 	if i, e := os.Stat(logFile); e == nil && i.Size() > maxLogSize {
@@ -69,6 +82,10 @@ func setupLogging() {
 	log.SetFlags(log.LstdFlags)
 }
 
+// =====================
+// Firewall
+// =====================
+
 func openFirewallPort(port string) {
 	if exec.Command("iptables", "-C", "INPUT", "-p", "tcp", "--dport", port, "-j", "ACCEPT").Run() == nil {
 		return
@@ -76,6 +93,55 @@ func openFirewallPort(port string) {
 	exec.Command("iptables", "-I", "INPUT", "-p", "tcp", "--dport", port, "-j", "ACCEPT").Run()
 	exec.Command("netfilter-persistent", "save").Run()
 }
+
+// =====================
+// systemd
+// =====================
+
+func createSystemdService(listen, host, port, payload, payloadAlt string, domainOnly bool) {
+	if _, err := os.Stat(systemdPath); err == nil {
+		return
+	}
+
+	args := fmt.Sprintf("-listen %s -target-host %s -target-port %s", listen, host, port)
+
+	if payload != "" {
+		args += fmt.Sprintf(` -payload '%s'`, payload)
+	}
+	if payloadAlt != "" {
+		args += fmt.Sprintf(` -payload-alt '%s'`, payloadAlt)
+	}
+	if domainOnly {
+		args += " -domain-only"
+	}
+
+	content := fmt.Sprintf(`[Unit]
+Description=SSHWS Slipstream Tunnel
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/sshws %s
+Restart=always
+RestartSec=2
+User=root
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target
+`, args)
+
+	_ = os.WriteFile(systemdPath, []byte(content), 0644)
+	exec.Command("systemctl", "daemon-reload").Run()
+	exec.Command("systemctl", "enable", "sshws").Run()
+	exec.Command("systemctl", "restart", "sshws").Run()
+
+	log.Println("Service systemd sshws installé et actif")
+}
+
+// =====================
+// MAIN
+// =====================
 
 func main() {
 	listen := flag.String("listen", "80", "")
@@ -88,6 +154,7 @@ func main() {
 
 	setupLogging()
 	openFirewallPort(*listen)
+	createSystemdService(*listen, *targetHost, *targetPort, *payload, *payloadAlt, *domainOnly)
 
 	target := net.JoinHostPort(*targetHost, *targetPort)
 	ln, err := net.Listen("tcp", ":"+*listen)
@@ -95,13 +162,17 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Println("SSHWS v2 Slipstream démarré sur le port", *listen)
+	log.Println("SSHWS Slipstream actif sur le port", *listen)
 
 	for {
 		c, _ := ln.Accept()
 		go dispatch(c, target, *payload, *payloadAlt, *domainOnly)
 	}
 }
+
+// =====================
+// Dispatcher
+// =====================
 
 func dispatch(c net.Conn, target, p1, p2 string, domainOnly bool) {
 	defer c.Close()
@@ -126,6 +197,10 @@ func dispatch(c net.Conn, target, p1, p2 string, domainOnly bool) {
 
 	handleRaw(br, c, target)
 }
+
+// =====================
+// Handlers
+// =====================
 
 func handleWS(br *bufio.Reader, c net.Conn, target string, domainOnly bool) {
 	req := ""
