@@ -402,15 +402,13 @@ uninstall_sshws() {
     echo "🧹 Désinstallation complète de SSH WebSocket (sshws)..."
 
     if systemctl list-unit-files | grep -q "^sshws.service"; then
-        systemctl stop sshws 2>/dev/null
-        systemctl disable sshws 2>/dev/null
+        systemctl stop sshws 2>/dev/null || true
+        systemctl disable sshws 2>/dev/null || true
         echo "⛔ Service sshws arrêté et désactivé"
     fi
 
     [ -f /etc/systemd/system/sshws.service ] && rm -f /etc/systemd/system/sshws.service && echo "🗑️ Service systemd supprimé"
-
     [ -f /usr/local/bin/sshws ] && rm -f /usr/local/bin/sshws && echo "🗑️ Binaire sshws supprimé"
-
     [ -d /var/log/sshws ] && rm -rf /var/log/sshws && echo "🗑️ Logs sshws supprimés"
 
     for PORT in 80 8080; do
@@ -426,7 +424,7 @@ uninstall_sshws() {
     fi
 
     systemctl daemon-reload
-    systemctl daemon-reexec
+    systemctl daemon-reexec || true
 
     echo "✅ SSHWS désinstallé proprement et complètement."
 }
