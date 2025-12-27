@@ -17,7 +17,6 @@ import (
 	"io"
 	"log"
 	"net"
-	"net/http"
 	"os"
 	"os/exec"
 	"os/user"
@@ -26,22 +25,13 @@ import (
 	"time"
 )
 
-// =====================
-// Constantes
-// =====================
-
 const (
 	wsGUID      = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 	kighmuInfo  = ".kighmu_info"
-	systemdPath = "/etc/systemd/system/sshws.service"
 	logDir      = "/var/log/sshws"
 	logFile     = "/var/log/sshws/sshws.log"
 	maxLogSize  = 5 * 1024 * 1024
 )
-
-// =====================
-// Utils
-// =====================
 
 func acceptKey(key string) string {
 	h := sha1.New()
@@ -62,36 +52,22 @@ func getKighmuDomain() string {
 
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
-		if strings.HasPrefix(line, "DOMAIN=") {
-			return strings.Trim(strings.SplitN(line, "=", 2)[1], `"`)
+		if strings.HasPrefix(sc.Text(), "DOMAIN=") {
+			return strings.Trim(strings.SplitN(sc.Text(), "=", 2)[1], `"`)
 		}
 	}
 	return ""
 }
 
-// =====================
-// Logging
-// =====================
-
 func setupLogging() {
 	_ = os.MkdirAll(logDir, 0755)
-
-	if info, err := os.Stat(logFile); err == nil && info.Size() > maxLogSize {
+	if i, e := os.Stat(logFile); e == nil && i.Size() > maxLogSize {
 		_ = os.Rename(logFile, logFile+"."+fmt.Sprint(time.Now().Unix()))
 	}
-
-	f, err := os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-	if err != nil {
-		log.Fatal(err)
-	}
+	f, _ := os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	log.SetOutput(io.MultiWriter(os.Stdout, f))
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	log.SetFlags(log.LstdFlags)
 }
-
-// =====================
-// Firewall
-// =====================
 
 func openFirewallPort(port string) {
 	if exec.Command("iptables", "-C", "INPUT", "-p", "tcp", "--dport", port, "-j", "ACCEPT").Run() == nil {
@@ -101,50 +77,78 @@ func openFirewallPort(port string) {
 	exec.Command("netfilter-persistent", "save").Run()
 }
 
-// =====================
-// WebSocket Handler
-// =====================
+func main() {
+	listen := flag.String("listen", "80", "")
+	targetHost := flag.String("target-host", "127.0.0.1", "")
+	targetPort := flag.String("target-port", "22", "")
+	payload := flag.String("payload", "", "")
+	payloadAlt := flag.String("payload-alt", "", "")
+	domainOnly := flag.Bool("domain-only", false, "")
+	flag.Parse()
 
-func handleUpgrade(targetAddr string, w http.ResponseWriter, r *http.Request) {
+	setupLogging()
+	openFirewallPort(*listen)
 
-	// --- Vérification Host (tolérante) ---
-	domain := getKighmuDomain()
-	host := r.Host
-	if strings.Contains(host, ":") {
-		host, _, _ = net.SplitHostPort(host)
+	target := net.JoinHostPort(*targetHost, *targetPort)
+	ln, err := net.Listen("tcp", ":"+*listen)
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	if domain != "" && !strings.EqualFold(host, domain) {
-		http.Error(w, "Forbidden", http.StatusForbidden)
-		return
+	log.Println("SSHWS v2 Slipstream démarré sur le port", *listen)
+
+	for {
+		c, _ := ln.Accept()
+		go dispatch(c, target, *payload, *payloadAlt, *domainOnly)
 	}
+}
 
-	// --- Vérification Upgrade (HTTP Custom friendly) ---
-	connHeader := strings.ToLower(
-		r.Header.Get("Connection") + r.Header.Get("Proxy-Connection"),
-	)
+func dispatch(c net.Conn, target, p1, p2 string, domainOnly bool) {
+	defer c.Close()
+	br := bufio.NewReader(c)
 
-	if !strings.Contains(connHeader, "upgrade") ||
-		!strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
-		http.Error(w, "Upgrade Required", http.StatusBadRequest)
-		return
-	}
-
-	hj, ok := w.(http.Hijacker)
-	if !ok {
-		http.Error(w, "Hijack not supported", 500)
-		return
-	}
-
-	conn, buf, err := hj.Hijack()
+	peek, err := br.Peek(2048)
 	if err != nil {
 		return
 	}
 
-	// --- Sec-WebSocket-Key fallback ---
-	key := r.Header.Get("Sec-WebSocket-Key")
-	if key == "" {
-		key = "dGhlIHNhbXBsZSBub25jZQ==" // fallback HTTP Custom
+	s := strings.ToLower(string(peek))
+
+	if strings.Contains(s, "upgrade: websocket") {
+		handleWS(br, c, target, domainOnly)
+		return
+	}
+
+	if strings.HasPrefix(s, "get ") || strings.HasPrefix(s, "connect ") {
+		handleTCP(br, c, target, p1, p2)
+		return
+	}
+
+	handleRaw(br, c, target)
+}
+
+func handleWS(br *bufio.Reader, c net.Conn, target string, domainOnly bool) {
+	req := ""
+	for {
+		l, _ := br.ReadString('\n')
+		req += l
+		if l == "\r\n" {
+			break
+		}
+	}
+
+	if domainOnly {
+		d := getKighmuDomain()
+		if d != "" && !strings.Contains(strings.ToLower(req), "host: "+strings.ToLower(d)) {
+			return
+		}
+	}
+
+	key := "dGhlIHNhbXBsZSBub25jZQ=="
+	for _, l := range strings.Split(req, "\r\n") {
+		if strings.HasPrefix(strings.ToLower(l), "sec-websocket-key:") {
+			key = strings.TrimSpace(strings.SplitN(l, ":", 2)[1])
+		}
 	}
 
 	resp := fmt.Sprintf(
@@ -155,76 +159,37 @@ func handleUpgrade(targetAddr string, w http.ResponseWriter, r *http.Request) {
 		acceptKey(key),
 	)
 
-	buf.WriteString(resp)
-	buf.Flush()
+	c.Write([]byte(resp))
 
-	remote, err := net.Dial("tcp", targetAddr)
+	r, _ := net.Dial("tcp", target)
+	go io.Copy(r, br)
+	io.Copy(c, r)
+}
+
+func handleTCP(br *bufio.Reader, c net.Conn, target, p1, p2 string) {
+	r, err := net.Dial("tcp", target)
 	if err != nil {
-		conn.Close()
 		return
 	}
 
-	go func() {
-		defer conn.Close()
-		defer remote.Close()
-		io.Copy(remote, conn)
-	}()
-	go func() {
-		defer conn.Close()
-		defer remote.Close()
-		io.Copy(conn, remote)
-	}()
-}
-
-// =====================
-// systemd
-// =====================
-
-func createSystemdFile(listen, host, port string) {
-	if _, err := os.Stat(systemdPath); err == nil {
-		return
+	payload := p1
+	if payload == "" && p2 != "" {
+		payload = p2
 	}
 
-	content := fmt.Sprintf(`[Unit]
-Description=SSH WebSocket Tunnel
-After=network.target
+	if payload != "" {
+		c.Write([]byte(strings.ReplaceAll(payload, "[crlf]", "\r\n")))
+	}
 
-[Service]
-ExecStart=/usr/local/bin/sshws -listen %s -target-host %s -target-port %s
-Restart=always
-User=root
-
-[Install]
-WantedBy=multi-user.target
-`, listen, host, port)
-
-	os.WriteFile(systemdPath, []byte(content), 0644)
+	go io.Copy(r, br)
+	io.Copy(c, r)
 }
 
-// =====================
-// MAIN
-// =====================
-
-func main() {
-	listen := flag.String("listen", "8080", "WS listen port (INTERNE)")
-	targetHost := flag.String("target-host", "127.0.0.1", "SSH host")
-	targetPort := flag.String("target-port", "22", "SSH port")
-	flag.Parse()
-
-	setupLogging()
-	openFirewallPort(*listen)
-	createSystemdFile(*listen, *targetHost, *targetPort)
-
-	targetAddr := net.JoinHostPort(*targetHost, *targetPort)
-
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
-			handleUpgrade(targetAddr, w, r)
-			return
-		}
-		w.Write([]byte("SSHWS OK\n"))
-	})
-
-	log.Println("SSHWS HTTP Custom compatible démarré sur le port", *listen)
-	http.ListenAndServe(":"+*listen, nil)
+func handleRaw(br *bufio.Reader, c net.Conn, target string) {
+	r, err := net.Dial("tcp", target)
+	if err != nil {
+		return
+	}
+	go io.Copy(r, br)
+	io.Copy(c, r)
 }
