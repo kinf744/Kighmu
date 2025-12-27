@@ -436,7 +436,14 @@ EOF
 }
 
 uninstall_sshws() {
-    echo "🧹 Désinstallation complète de SSH WebSocket (sshws)..."
+    echo "🧹 Désinstallation complète de SSHWS (sshws)..."
+
+    if pgrep -f "/usr/local/bin/sshws" >/dev/null; then
+        pkill -9 -f "/usr/local/bin/sshws"
+        echo "💀 Tous les processus sshws ont été tués"
+    else
+        echo "ℹ️ Aucun processus sshws actif"
+    fi
 
     if systemctl list-unit-files | grep -q "^sshws.service"; then
         systemctl stop sshws 2>/dev/null || true
@@ -444,15 +451,22 @@ uninstall_sshws() {
         echo "⛔ Service sshws arrêté et désactivé"
     fi
 
-    [ -f /etc/systemd/system/sshws.service ] && rm -f /etc/systemd/system/sshws.service && echo "🗑️ Service systemd supprimé"
+    if [ -f /etc/systemd/system/sshws.service ]; then
+        rm -f /etc/systemd/system/sshws.service
+        echo "🗑️ Service systemd supprimé"
+    fi
+
+    systemctl daemon-reload
+    systemctl reset-failed 2>/dev/null || true
+
     [ -f /usr/local/bin/sshws ] && rm -f /usr/local/bin/sshws && echo "🗑️ Binaire sshws supprimé"
     [ -d /var/log/sshws ] && rm -rf /var/log/sshws && echo "🗑️ Logs sshws supprimés"
 
     for PORT in 80 8080; do
-        if iptables -C INPUT -p tcp --dport "$PORT" -j ACCEPT 2>/dev/null; then
+        while iptables -C INPUT -p tcp --dport "$PORT" -j ACCEPT 2>/dev/null; do
             iptables -D INPUT -p tcp --dport "$PORT" -j ACCEPT
             echo "🔥 Règle iptables supprimée pour le port $PORT"
-        fi
+        done
     done
 
     if command -v netfilter-persistent >/dev/null 2>&1; then
@@ -460,10 +474,12 @@ uninstall_sshws() {
         echo "💾 Règles iptables sauvegardées"
     fi
 
-    systemctl daemon-reload
-    systemctl daemon-reexec || true
+    if command -v screen >/dev/null 2>&1; then
+        screen -ls | awk '/sshws/ {print $1}' | xargs -r screen -S {} -X quit
+        echo "🧼 Sessions screen sshws nettoyées"
+    fi
 
-    echo "✅ SSHWS désinstallé proprement et complètement."
+    echo "✅ SSHWS totalement désinstallé, système propre."
 }
 
 # --- Interface utilisateur ---
