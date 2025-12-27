@@ -423,12 +423,36 @@ EOF
 }
 
 uninstall_sshws() {
-    echo "🧹 Suppression du tunnel SSH WebSocket..."
-    systemctl stop sshws 2>/dev/null
-    systemctl disable sshws 2>/dev/null
-    rm -f /etc/systemd/system/sshws.service /usr/local/bin/sshws
+    echo "🧹 Désinstallation complète de SSH WebSocket (sshws)..."
+
+    if systemctl list-unit-files | grep -q "^sshws.service"; then
+        systemctl stop sshws 2>/dev/null
+        systemctl disable sshws 2>/dev/null
+        echo "⛔ Service sshws arrêté et désactivé"
+    fi
+
+    [ -f /etc/systemd/system/sshws.service ] && rm -f /etc/systemd/system/sshws.service && echo "🗑️ Service systemd supprimé"
+
+    [ -f /usr/local/bin/sshws ] && rm -f /usr/local/bin/sshws && echo "🗑️ Binaire sshws supprimé"
+
+    [ -d /var/log/sshws ] && rm -rf /var/log/sshws && echo "🗑️ Logs sshws supprimés"
+
+    for PORT in 80 8080; do
+        if iptables -C INPUT -p tcp --dport "$PORT" -j ACCEPT 2>/dev/null; then
+            iptables -D INPUT -p tcp --dport "$PORT" -j ACCEPT
+            echo "🔥 Règle iptables supprimée pour le port $PORT"
+        fi
+    done
+
+    if command -v netfilter-persistent >/dev/null 2>&1; then
+        netfilter-persistent save >/dev/null 2>&1
+        echo "💾 Règles iptables sauvegardées"
+    fi
+
     systemctl daemon-reload
-    echo "✅ SSHWS désinstallé avec succès."
+    systemctl daemon-reexec
+
+    echo "✅ SSHWS désinstallé proprement et complètement."
 }
 
 # --- Interface utilisateur ---
