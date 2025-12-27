@@ -1,7 +1,7 @@
 // ================================================================
 // sshws.go — WebSocket → SSH (TCP) Proxy (HTTP Custom compatible)
 // Auteur : @kighmu
-// Patch : Auto-install Go + compatibilité Go 1.13+
+// Patch : Auto-install Go sécurisé + compatibilité Go 1.13+
 // Licence : MIT
 // ================================================================
 
@@ -38,8 +38,16 @@ const (
 	logDir      = "/var/log/sshws"
 	logFile     = "/var/log/sshws/sshws.log"
 	maxLogSize  = 5 * 1024 * 1024
-	minGoMinor  = 20 // Go 1.20 minimum
+	minGoMinor  = 20 // Go 1.20 minimum (install seulement en mode manuel)
 )
+
+// =====================
+// Détection systemd
+// =====================
+
+func runningUnderSystemd() bool {
+	return os.Getenv("INVOCATION_ID") != ""
+}
 
 // =====================
 // Vérification Go
@@ -51,7 +59,6 @@ func goVersionTooOld() bool {
 		return true
 	}
 
-	// Exemple: go version go1.13.8 linux/amd64
 	re := regexp.MustCompile(`go1\.(\d+)`)
 	m := re.FindStringSubmatch(string(out))
 	if len(m) < 2 {
@@ -83,8 +90,7 @@ echo 'export PATH=$PATH:/usr/local/go/bin' > /etc/profile.d/go.sh
 		log.Fatal("❌ Installation Go échouée :", err)
 	}
 
-	log.Println("✅ Go mis à jour avec succès.")
-	log.Println("🔁 Recompile sshws puis relance-le.")
+	log.Println("✅ Go mis à jour. Recompile sshws puis relance-le.")
 	os.Exit(0)
 }
 
@@ -235,6 +241,7 @@ Description=SSH WebSocket Tunnel
 After=network.target
 
 [Service]
+Environment=PATH=/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStart=/usr/local/bin/sshws -listen %s -target-host %s -target-port %s
 Restart=always
 
@@ -252,7 +259,8 @@ WantedBy=multi-user.target
 // =====================
 
 func main() {
-	if goVersionTooOld() {
+	// Auto-install Go UNIQUEMENT en mode manuel
+	if !runningUnderSystemd() && goVersionTooOld() {
 		installLatestGo()
 	}
 
