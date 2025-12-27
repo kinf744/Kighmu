@@ -389,13 +389,50 @@ install_sshws() {
     SRC="$HOME/Kighmu/sshws.go"
     BIN="/usr/local/bin/sshws"
 
+    # Vérification du fichier source
     [ -f "$SRC" ] || { echo "❌ $SRC introuvable"; return 1; }
 
     echo "⏳ Compilation sshws..."
     go build -o "$BIN" "$SRC" || { echo "❌ Erreur compilation"; return 1; }
-    chmod +x "$BIN"
 
+    chmod +x "$BIN"
     echo "✅ SSHWS compilé et installé dans $BIN"
+
+    # Ouvrir le port 80 dans le firewall si nécessaire
+    if ! iptables -C INPUT -p tcp --dport 80 -j ACCEPT 2>/dev/null; then
+        iptables -I INPUT -p tcp --dport 80 -j ACCEPT
+        command -v netfilter-persistent >/dev/null 2>&1 && netfilter-persistent save
+        echo "✅ Port 80 ouvert dans le firewall"
+    fi
+
+    # Créer le service systemd si absent
+    SYSTEMD_FILE="/etc/systemd/system/sshws.service"
+    if [ ! -f "$SYSTEMD_FILE" ]; then
+        cat <<EOF | sudo tee "$SYSTEMD_FILE" >/dev/null
+[Unit]
+Description=SSHWS Slipstream Tunnel
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=$BIN -listen 80 -target-host 127.0.0.1 -target-port 22
+Restart=always
+RestartSec=2
+User=root
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target
+EOF
+        systemctl daemon-reload
+        systemctl enable sshws
+        systemctl restart sshws
+        echo "✅ Service systemd sshws installé et actif"
+    else
+        echo "ℹ️ Service systemd déjà existant, pas de modification"
+    fi
+
+    echo "🚀 SSHWS prêt à l'utilisation"
 }
 
 uninstall_sshws() {
