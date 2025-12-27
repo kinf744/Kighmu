@@ -1,7 +1,7 @@
 // ================================================================
 // sshws.go — WebSocket → SSH (TCP) Proxy (HTTP Custom compatible)
 // Auteur : @kighmu
-// Patch : compatibilité SSH Custom /
+// Patch : Auto-install Go + compatibilité Go 1.13+
 // Licence : MIT
 // ================================================================
 
@@ -14,6 +14,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -21,6 +22,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -36,7 +38,55 @@ const (
 	logDir      = "/var/log/sshws"
 	logFile     = "/var/log/sshws/sshws.log"
 	maxLogSize  = 5 * 1024 * 1024
+	minGoMinor  = 20 // Go 1.20 minimum
 )
+
+// =====================
+// Vérification Go
+// =====================
+
+func goVersionTooOld() bool {
+	out, err := exec.Command("go", "version").Output()
+	if err != nil {
+		return true
+	}
+
+	// Exemple: go version go1.13.8 linux/amd64
+	re := regexp.MustCompile(`go1\.(\d+)`)
+	m := re.FindStringSubmatch(string(out))
+	if len(m) < 2 {
+		return true
+	}
+
+	var minor int
+	fmt.Sscanf(m[1], "%d", &minor)
+	return minor < minGoMinor
+}
+
+func installLatestGo() {
+	log.Println("⚠️ Go trop ancien ou absent — installation de la dernière version...")
+
+	script := `
+set -e
+ARCH=amd64
+GO_VERSION=$(curl -s https://go.dev/VERSION?m=text || wget -qO- https://go.dev/VERSION?m=text)
+wget -q https://go.dev/dl/${GO_VERSION}.linux-${ARCH}.tar.gz -O /tmp/go.tar.gz
+rm -rf /usr/local/go
+tar -C /usr/local -xzf /tmp/go.tar.gz
+echo 'export PATH=$PATH:/usr/local/go/bin' > /etc/profile.d/go.sh
+`
+
+	cmd := exec.Command("bash", "-c", script)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		log.Fatal("❌ Installation Go échouée :", err)
+	}
+
+	log.Println("✅ Go mis à jour avec succès.")
+	log.Println("🔁 Recompile sshws puis relance-le.")
+	os.Exit(0)
+}
 
 // =====================
 // Utils
@@ -53,6 +103,7 @@ func getKighmuDomain() string {
 	if err != nil {
 		return ""
 	}
+
 	f, err := os.Open(filepath.Join(usr.HomeDir, kighmuInfo))
 	if err != nil {
 		return ""
@@ -84,6 +135,7 @@ func setupLogging() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	log.SetOutput(io.MultiWriter(os.Stdout, f))
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 }
@@ -106,8 +158,6 @@ func openFirewallPort(port string) {
 // =====================
 
 func handleUpgrade(targetAddr string, w http.ResponseWriter, r *http.Request) {
-
-	// --- Vérification Host tolérante ---
 	domain := getKighmuDomain()
 	host := r.Host
 	if strings.Contains(host, ":") {
@@ -119,11 +169,7 @@ func handleUpgrade(targetAddr string, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// --- Vérification Upgrade tolérante ---
-	connHeader := strings.ToLower(
-		r.Header.Get("Connection") + r.Header.Get("Proxy-Connection"),
-	)
-
+	connHeader := strings.ToLower(r.Header.Get("Connection") + r.Header.Get("Proxy-Connection"))
 	if !strings.Contains(connHeader, "upgrade") ||
 		!strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
 		http.Error(w, "Upgrade Required", http.StatusBadRequest)
@@ -141,7 +187,6 @@ func handleUpgrade(targetAddr string, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// --- Sec-WebSocket-Key fallback ---
 	key := r.Header.Get("Sec-WebSocket-Key")
 	if key == "" {
 		key = "dGhlIHNhbXBsZSBub25jZQ=="
@@ -151,8 +196,7 @@ func handleUpgrade(targetAddr string, w http.ResponseWriter, r *http.Request) {
 		"HTTP/1.1 101 Switching Protocols\r\n"+
 			"Upgrade: websocket\r\n"+
 			"Connection: Upgrade\r\n"+
-			"Sec-WebSocket-Accept: %s\r\n"+
-			"\r\n",
+			"Sec-WebSocket-Accept: %s\r\n\r\n",
 		acceptKey(key),
 	)
 
@@ -198,7 +242,9 @@ Restart=always
 WantedBy=multi-user.target
 `, listen, host, port)
 
-	os.WriteFile(systemdPath, []byte(content), 0644)
+	if err := ioutil.WriteFile(systemdPath, []byte(content), 0644); err != nil {
+		log.Fatal(err)
+	}
 }
 
 // =====================
@@ -206,6 +252,10 @@ WantedBy=multi-user.target
 // =====================
 
 func main() {
+	if goVersionTooOld() {
+		installLatestGo()
+	}
+
 	listen := flag.String("listen", "80", "WS listen port")
 	targetHost := flag.String("target-host", "127.0.0.1", "SSH host")
 	targetPort := flag.String("target-port", "22", "SSH port")
@@ -225,6 +275,6 @@ func main() {
 		w.Write([]byte("SSHWS OK\n"))
 	})
 
-	log.Println("SSHWS HTTP Custom compatible démarré sur le port", *listen)
+	log.Println("🚀 SSHWS démarré sur le port", *listen)
 	http.ListenAndServe(":"+*listen, nil)
 }
