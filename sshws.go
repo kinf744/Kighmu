@@ -1,12 +1,12 @@
-// ================================================================
-// sshws.go — WebSocket → SSH (TCP) Proxy
-// Compatible HTTP Custom + GOST
-// Auteur : @kighmu
-// Patch & validation : tunnel TCP + WS (Slipstream-like)
-// Licence : MIT
-// ================================================================
+// ================================================================  
+// sshws.go — WebSocket → SSH (TCP) Proxy  
+// Compatible HTTP Custom + GOST  
+// Auteur : @kighmu  
+// Patch & validation : tunnel TCP + WS (Slipstream-like)  
+// Licence : MIT  
+// ================================================================  
 
-package main
+package main  
 
 import (
 	"bufio"
@@ -24,10 +24,6 @@ import (
 	"strings"
 	"time"
 )
-
-// =====================
-// Constantes
-// =====================
 
 const (
 	wsGUID      = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
@@ -87,11 +83,16 @@ func setupLogging() {
 // =====================
 
 func openFirewallPort(port string) {
+	if os.Geteuid() != 0 {
+		log.Println("⚠️  Root requis pour ouvrir le port via iptables")
+		return
+	}
 	if exec.Command("iptables", "-C", "INPUT", "-p", "tcp", "--dport", port, "-j", "ACCEPT").Run() == nil {
 		return
 	}
 	exec.Command("iptables", "-I", "INPUT", "-p", "tcp", "--dport", port, "-j", "ACCEPT").Run()
 	exec.Command("netfilter-persistent", "save").Run()
+	log.Println("✅ Port", port, "ouvert dans le firewall")
 }
 
 // =====================
@@ -104,7 +105,6 @@ func createSystemdService(listen, host, port, payload, payloadAlt string, domain
 	}
 
 	args := fmt.Sprintf("-listen %s -target-host %s -target-port %s", listen, host, port)
-
 	if payload != "" {
 		args += fmt.Sprintf(` -payload '%s'`, payload)
 	}
@@ -136,7 +136,7 @@ WantedBy=multi-user.target
 	exec.Command("systemctl", "enable", "sshws").Run()
 	exec.Command("systemctl", "restart", "sshws").Run()
 
-	log.Println("Service systemd sshws installé et actif")
+	log.Println("✅ Service systemd sshws installé et actif")
 }
 
 // =====================
@@ -144,12 +144,16 @@ WantedBy=multi-user.target
 // =====================
 
 func main() {
-	listen := flag.String("listen", "80", "")
-	targetHost := flag.String("target-host", "127.0.0.1", "")
-	targetPort := flag.String("target-port", "22", "")
-	payload := flag.String("payload", "", "")
-	payloadAlt := flag.String("payload-alt", "", "")
-	domainOnly := flag.Bool("domain-only", false, "")
+	if os.Geteuid() != 0 {
+		log.Fatal("❌ Ce programme doit être lancé avec sudo/root")
+	}
+
+	listen := flag.String("listen", "80", "Port d'écoute (root requis <1024)")
+	targetHost := flag.String("target-host", "127.0.0.1", "Adresse SSH cible")
+	targetPort := flag.String("target-port", "22", "Port SSH cible")
+	payload := flag.String("payload", "", "Payload principal HTTP Custom")
+	payloadAlt := flag.String("payload-alt", "", "Payload secondaire HTTP Custom")
+	domainOnly := flag.Bool("domain-only", false, "Autoriser seulement le domaine configuré")
 	flag.Parse()
 
 	setupLogging()
@@ -162,7 +166,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Println("SSHWS Slipstream actif sur le port", *listen)
+	log.Println("🚀 SSHWS Slipstream actif sur le port", *listen)
 
 	for {
 		c, _ := ln.Accept()
