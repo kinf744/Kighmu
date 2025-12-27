@@ -1,7 +1,7 @@
 // ================================================================
 // sshws.go — WebSocket → SSH (TCP) Proxy (HTTP Custom compatible)
-// Auteur : @mahboub, adapté par @vpsplus71
-// Patch : compatibilité HTTP Custom / Slipstream
+// Auteur : @kighmu
+// Patch : compatibilité SSH Custom /
 // Licence : MIT
 // ================================================================
 
