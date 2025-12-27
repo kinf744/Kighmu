@@ -1,7 +1,8 @@
 // ================================================================
-// sshws.go — WebSocket → SSH (TCP) Proxy (HTTP Custom compatible)
+// sshws.go — WebSocket → SSH (TCP) Proxy
+// Compatible HTTP Custom + GOST
 // Auteur : @kighmu
-// Patch : compatibilité SSH Custom /
+// Patch & validation : tunnel TCP + WS (Slipstream-like)
 // Licence : MIT
 // ================================================================
 
@@ -93,8 +94,7 @@ func setupLogging() {
 // =====================
 
 func openFirewallPort(port string) {
-	cmd := exec.Command("iptables", "-C", "INPUT", "-p", "tcp", "--dport", port, "-j", "ACCEPT")
-	if cmd.Run() == nil {
+	if exec.Command("iptables", "-C", "INPUT", "-p", "tcp", "--dport", port, "-j", "ACCEPT").Run() == nil {
 		return
 	}
 	exec.Command("iptables", "-I", "INPUT", "-p", "tcp", "--dport", port, "-j", "ACCEPT").Run()
@@ -107,7 +107,7 @@ func openFirewallPort(port string) {
 
 func handleUpgrade(targetAddr string, w http.ResponseWriter, r *http.Request) {
 
-	// --- Vérification Host tolérante ---
+	// --- Vérification Host (tolérante) ---
 	domain := getKighmuDomain()
 	host := r.Host
 	if strings.Contains(host, ":") {
@@ -119,7 +119,7 @@ func handleUpgrade(targetAddr string, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// --- Vérification Upgrade tolérante ---
+	// --- Vérification Upgrade (HTTP Custom friendly) ---
 	connHeader := strings.ToLower(
 		r.Header.Get("Connection") + r.Header.Get("Proxy-Connection"),
 	)
@@ -144,15 +144,14 @@ func handleUpgrade(targetAddr string, w http.ResponseWriter, r *http.Request) {
 	// --- Sec-WebSocket-Key fallback ---
 	key := r.Header.Get("Sec-WebSocket-Key")
 	if key == "" {
-		key = "dGhlIHNhbXBsZSBub25jZQ=="
+		key = "dGhlIHNhbXBsZSBub25jZQ==" // fallback HTTP Custom
 	}
 
 	resp := fmt.Sprintf(
 		"HTTP/1.1 101 Switching Protocols\r\n"+
 			"Upgrade: websocket\r\n"+
 			"Connection: Upgrade\r\n"+
-			"Sec-WebSocket-Accept: %s\r\n"+
-			"\r\n",
+			"Sec-WebSocket-Accept: %s\r\n\r\n",
 		acceptKey(key),
 	)
 
@@ -193,6 +192,7 @@ After=network.target
 [Service]
 ExecStart=/usr/local/bin/sshws -listen %s -target-host %s -target-port %s
 Restart=always
+User=root
 
 [Install]
 WantedBy=multi-user.target
@@ -206,7 +206,7 @@ WantedBy=multi-user.target
 // =====================
 
 func main() {
-	listen := flag.String("listen", "80", "WS listen port")
+	listen := flag.String("listen", "8080", "WS listen port (INTERNE)")
 	targetHost := flag.String("target-host", "127.0.0.1", "SSH host")
 	targetPort := flag.String("target-port", "22", "SSH port")
 	flag.Parse()
