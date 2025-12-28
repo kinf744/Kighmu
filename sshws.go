@@ -1,8 +1,6 @@
 // ================================================================
 // sshws.go — TCP RAW Injector + WebSocket → SSH (MULTI-PORT + Domaine)
-// Ubuntu 18.04 → 24.04 | Go 1.13+ | systemd intégré
-// Auteur : @kighmu
-// Licence : MIT
+// Compatible Go 1.13+
 // ================================================================
 
 package main
@@ -44,6 +42,15 @@ func writeFile(path string, data []byte, perm os.FileMode) error {
 	defer f.Close()
 	_, err = f.Write(data)
 	return err
+}
+
+// =====================
+// Génère Sec-WebSocket-Accept
+// =====================
+func acceptKey(key string) string {
+	h := sha1.New()
+	h.Write([]byte(key + wsGUID))
+	return base64.StdEncoding.EncodeToString(h.Sum(nil))
 }
 
 // =====================
@@ -130,8 +137,10 @@ func handleWebSocket(client net.Conn, first []byte, target string) {
 
 	if ad != "" && hostLine != "" {
 		h := hostLine
+		// Remplace strings.Cut par SplitN pour compatibilité Go 1.13+
 		if strings.Contains(h, ":") {
-			h, _, _ = strings.Cut(h, ":")
+			parts := strings.SplitN(h, ":", 2)
+			h = parts[0]
 		}
 		if !strings.EqualFold(h, ad) {
 			client.Write([]byte("HTTP/1.1 403 Forbidden\r\n\r\n"))
