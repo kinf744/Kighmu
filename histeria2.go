@@ -24,7 +24,9 @@ import (
 // =====================
 const (
 	usersFile = "/etc/kighmu/users.list"
-	infoFile  = "/etc/kighmu/kighmu_info"
+
+	infoFileSystem = "/etc/kighmu/kighmu_info"
+	infoFileRoot   = "/root/.kighmu_info"
 
 	binPath     = "/usr/local/bin/histeria2"
 	servicePath = "/etc/systemd/system/histeria2.service"
@@ -68,39 +70,44 @@ func setupLogging() {
 }
 
 // =====================
-// Charger DOMAIN
+// Charger DOMAIN (multi-chemins sécurisé)
 // =====================
 func loadDomain() string {
-	file, err := os.Open(infoFile)
-	if err != nil {
-		log.Fatal("[ERREUR] Fichier /etc/kighmu/kighmu_info introuvable")
-	}
-	defer file.Close()
+	paths := []string{infoFileSystem, infoFileRoot}
 
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if strings.HasPrefix(line, "DOMAIN=") {
-			domain := strings.Trim(strings.SplitN(line, "=", 2)[1], "\"")
-			if domain != "" {
-				return domain
+	for _, path := range paths {
+		file, err := os.Open(path)
+		if err != nil {
+			continue
+		}
+		defer file.Close()
+
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if strings.HasPrefix(line, "DOMAIN=") {
+				domain := strings.Trim(strings.SplitN(line, "=", 2)[1], "\"")
+				if domain != "" {
+					log.Println("[OK] Domaine chargé depuis", path)
+					return domain
+				}
 			}
 		}
 	}
 
-	log.Fatal("[ERREUR] DOMAIN non défini")
+	log.Fatal("[ERREUR] Aucun fichier kighmu_info valide trouvé")
 	return ""
 }
 
 // =====================
-// Charger utilisateurs
+// Charger utilisateurs (username|password)
 // =====================
 func loadUsers() map[string]string {
 	users := make(map[string]string)
 
 	file, err := os.Open(usersFile)
 	if err != nil {
-		log.Println("[WARN] Aucun utilisateur trouvé")
+		log.Println("[WARN] Fichier utilisateurs introuvable :", usersFile)
 		return users
 	}
 	defer file.Close()
@@ -121,7 +128,7 @@ func loadUsers() map[string]string {
 }
 
 // =====================
-// Obfuscation XOR
+// Obfuscation XOR (clé = username)
 // =====================
 func xorObfuscate(data []byte, key string) []byte {
 	k := []byte(key)
@@ -154,12 +161,12 @@ func ensureCerts(domain string) {
 	)
 
 	if err := cmd.Run(); err != nil {
-		log.Fatal("Erreur certificat TLS :", err)
+		log.Fatal("Erreur génération TLS :", err)
 	}
 }
 
 // =====================
-// systemd
+// Service systemd
 // =====================
 func ensureSystemd() {
 	if _, err := os.Stat(servicePath); err == nil {
@@ -174,6 +181,7 @@ After=network.target
 ExecStart=%s
 Restart=always
 RestartSec=2
+LimitNOFILE=1048576
 
 [Install]
 WantedBy=multi-user.target
@@ -194,22 +202,26 @@ func runServer(users map[string]string, domain string) {
 	ensureCerts(domain)
 
 	if _, err := tls.LoadX509KeyPair(certFile, keyFile); err != nil {
-		log.Fatal("TLS invalide :", err)
+		log.Fatal("Certificat TLS invalide :", err)
 	}
 
-	addr, _ := net.ResolveUDPAddr("udp", ":"+port)
+	addr, err := net.ResolveUDPAddr("udp", ":"+port)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	conn, err := net.ListenUDP("udp", addr)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer conn.Close()
 
-	log.Println("🚀 Hysteria 2 actif sur", domain+":"+port)
+	log.Println("🚀 Hysteria 2 UDP actif sur", domain+":"+port)
 
 	buf := make([]byte, 65535)
 
 	for {
-		n, remoteAddr, err := conn.ReadFromUDP(buf)
+		n, remote, err := conn.ReadFromUDP(buf)
 		if err != nil {
 			continue
 		}
@@ -226,9 +238,9 @@ func runServer(users map[string]string, domain string) {
 		}
 
 		if authorized {
-			conn.WriteToUDP([]byte("HYSTERIA OK"), remoteAddr)
+			conn.WriteToUDP([]byte("HYSTERIA OK"), remote)
 		} else {
-			conn.WriteToUDP([]byte("AUTH FAILED"), remoteAddr)
+			conn.WriteToUDP([]byte("AUTH FAILED"), remote)
 		}
 	}
 }
