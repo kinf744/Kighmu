@@ -63,7 +63,7 @@ func menuPanel() {
 		fmt.Println("======================================")
 		fmt.Println("   🤖 PANNEAU BOT TELEGRAM VPS")
 		fmt.Println("======================================")
-		fmt.Println("1️⃣  Installer la librairie Telegram Go")
+		fmt.Println("1️⃣  Installer la librairie Telegram Go et compiler le bot")
 		fmt.Println("2️⃣  Lancer le bot Telegram")
 		fmt.Println("3️⃣  Quitter")
 		fmt.Print("👉 Choisissez une option [1-3] : ")
@@ -73,19 +73,9 @@ func menuPanel() {
 
 		switch choice {
 		case "1":
-			fmt.Println("⏳ Installation des dépendances Go...")
-			if !commandExists("go") {
-				fmt.Println("❌ Go n'est pas installé")
-				os.Exit(1)
-			}
-			if _, err := os.Stat("go.mod"); os.IsNotExist(err) {
-				exec.Command("go", "mod", "init", "telegram-bot").Run()
-			}
-			exec.Command("go", "get", "github.com/go-telegram-bot-api/telegram-bot-api").Run()
-			fmt.Println("✅ Librairie Telegram Go installée")
-			pause()
+			installerEtCompiler()
 		case "2":
-			startBot()
+			lancerBot()
 		case "3":
 			fmt.Println("👋 Sortie du panneau")
 			os.Exit(0)
@@ -94,6 +84,44 @@ func menuPanel() {
 		}
 		fmt.Println()
 	}
+}
+
+// =====================
+// Installer la librairie et compiler le bot
+// =====================
+func installerEtCompiler() {
+	fmt.Println("⏳ Installation des dépendances Go...")
+
+	if !commandExists("go") {
+		fmt.Println("❌ Go n'est pas installé")
+		pause()
+		return
+	}
+
+	if _, err := os.Stat("go.mod"); os.IsNotExist(err) {
+		cmd := exec.Command("go", "mod", "init", "telegram-bot")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Run()
+	}
+
+	cmd := exec.Command("go", "get", "github.com/go-telegram-bot-api/telegram-bot-api")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Run()
+
+	fmt.Println("⏳ Compilation du bot...")
+	build := exec.Command("go", "build", "-o", "bot2", "bot2.go")
+	build.Stdout = os.Stdout
+	build.Stderr = os.Stderr
+	if err := build.Run(); err != nil {
+		fmt.Println("❌ Erreur lors de la compilation :", err)
+		pause()
+		return
+	}
+
+	fmt.Println("✅ Librairie installée et bot compilé")
+	pause()
 }
 
 // =====================
@@ -113,9 +141,15 @@ func pause() {
 }
 
 // =====================
-// Lancement du bot Telegram
+// Lancer le bot Telegram
 // =====================
-func startBot() {
+func lancerBot() {
+	if _, err := os.Stat("bot2"); os.IsNotExist(err) {
+		fmt.Println("❌ Bot non compilé. Veuillez d'abord choisir l'option 1 pour compiler.")
+		pause()
+		return
+	}
+
 	if botToken == "" {
 		fmt.Println("❌ BOT_TOKEN manquant dans l'environnement")
 		pause()
@@ -171,25 +205,18 @@ func startBot() {
 				"/ram\n" +
 				"/sshws\n" +
 				"/slowdns"
-
 		case "/status":
 			response = runCommand("uptime")
-
 		case "/uptime":
 			response = runCommand("uptime")
-
 		case "/disk":
 			response = runCommand("df -h")
-
 		case "/ram":
 			response = runCommand("free -m")
-
 		case "/sshws":
 			response = runCommand("systemctl status sshws")
-
 		case "/slowdns":
 			response = runCommand("systemctl status dnstt")
-
 		default:
 			response = "❓ Commande inconnue"
 		}
