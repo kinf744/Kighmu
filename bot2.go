@@ -1,0 +1,208 @@
+// ================================================================
+// bot2.go — Telegram VPS Control Bot avec panneau de contrôle
+// Auteur : Kighmu
+// Compatible : Go 1.13+ / Ubuntu 20.04
+// ================================================================
+
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"log"
+	"os"
+	"os/exec"
+	"strconv"
+	"strings"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
+)
+
+// =====================
+// Configuration
+// =====================
+var (
+	botToken = os.Getenv("BOT_TOKEN")
+	adminID  int64
+)
+
+// =====================
+// Commandes autorisées
+// =====================
+func runCommand(cmd string) string {
+	allowed := []string{
+		"uptime",
+		"df -h",
+		"free -m",
+		"systemctl status sshws",
+		"systemctl status dnstt",
+		"systemctl restart sshws",
+		"systemctl restart dnstt",
+	}
+
+	for _, a := range allowed {
+		if cmd == a {
+			out, err := exec.Command("bash", "-c", cmd).CombinedOutput()
+			if err != nil {
+				return "❌ Erreur:\n" + err.Error()
+			}
+			return "✅ Résultat:\n" + string(out)
+		}
+	}
+
+	return "⛔ Commande non autorisée"
+}
+
+// =====================
+// Menu panneau de contrôle
+// =====================
+func menuPanel() {
+	reader := bufio.NewReader(os.Stdin)
+
+	for {
+		fmt.Println("======================================")
+		fmt.Println("   🤖 PANNEAU BOT TELEGRAM VPS")
+		fmt.Println("======================================")
+		fmt.Println("1️⃣  Installer la librairie Telegram Go")
+		fmt.Println("2️⃣  Lancer le bot Telegram")
+		fmt.Println("3️⃣  Quitter")
+		fmt.Print("👉 Choisissez une option [1-3] : ")
+
+		choice, _ := reader.ReadString('\n')
+		choice = strings.TrimSpace(choice)
+
+		switch choice {
+		case "1":
+			fmt.Println("⏳ Installation des dépendances Go...")
+			if !commandExists("go") {
+				fmt.Println("❌ Go n'est pas installé")
+				os.Exit(1)
+			}
+			if _, err := os.Stat("go.mod"); os.IsNotExist(err) {
+				exec.Command("go", "mod", "init", "telegram-bot").Run()
+			}
+			exec.Command("go", "get", "github.com/go-telegram-bot-api/telegram-bot-api").Run()
+			fmt.Println("✅ Librairie Telegram Go installée")
+			pause()
+		case "2":
+			startBot()
+		case "3":
+			fmt.Println("👋 Sortie du panneau")
+			os.Exit(0)
+		default:
+			fmt.Println("❌ Option invalide")
+		}
+		fmt.Println()
+	}
+}
+
+// =====================
+// Vérifie si une commande existe
+// =====================
+func commandExists(cmd string) bool {
+	_, err := exec.LookPath(cmd)
+	return err == nil
+}
+
+// =====================
+// Pause console
+// =====================
+func pause() {
+	fmt.Print("Appuyez sur Entrée pour continuer...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
+}
+
+// =====================
+// Lancement du bot Telegram
+// =====================
+func startBot() {
+	if botToken == "" {
+		fmt.Println("❌ BOT_TOKEN manquant dans l'environnement")
+		pause()
+		return
+	}
+
+	idStr := os.Getenv("ADMIN_ID")
+	if idStr == "" {
+		fmt.Println("❌ ADMIN_ID manquant dans l'environnement")
+		pause()
+		return
+	}
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		fmt.Println("❌ ADMIN_ID invalide")
+		pause()
+		return
+	}
+	adminID = id
+
+	bot, err := tgbotapi.NewBotAPI(botToken)
+	if err != nil {
+		fmt.Println("❌ Impossible de créer le bot:", err)
+		pause()
+		return
+	}
+
+	fmt.Println("🤖 Bot Telegram démarré")
+	u := tgbotapi.NewUpdate(0)
+	u.Timeout = 60
+	updates, _ := bot.GetUpdatesChan(u)
+
+	for update := range updates {
+		if update.Message == nil {
+			continue
+		}
+
+		if update.Message.From.ID != adminID {
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "⛔ Accès refusé")
+			bot.Send(msg)
+			continue
+		}
+
+		text := strings.TrimSpace(update.Message.Text)
+		var response string
+
+		switch text {
+		case "/start":
+			response = "👋 VPS Control Bot\n\n" +
+				"/status\n" +
+				"/uptime\n" +
+				"/disk\n" +
+				"/ram\n" +
+				"/sshws\n" +
+				"/slowdns"
+
+		case "/status":
+			response = runCommand("uptime")
+
+		case "/uptime":
+			response = runCommand("uptime")
+
+		case "/disk":
+			response = runCommand("df -h")
+
+		case "/ram":
+			response = runCommand("free -m")
+
+		case "/sshws":
+			response = runCommand("systemctl status sshws")
+
+		case "/slowdns":
+			response = runCommand("systemctl status dnstt")
+
+		default:
+			response = "❓ Commande inconnue"
+		}
+
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, response)
+		msg.ParseMode = "Markdown"
+		bot.Send(msg)
+	}
+}
+
+// =====================
+// MAIN
+// =====================
+func main() {
+	menuPanel()
+}
