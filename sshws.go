@@ -1,6 +1,7 @@
 // ================================================================
-// sshws.go — TCP RAW Injector + WebSocket → SSH (MULTI-PORT + Domaine)
-// Compatible Go 1.13+
+// sshws.go — TCP RAW Injector + WebSocket → SSH (MULTI-PORT)
+// Go 1.13+ compatible | Ubuntu 18.04 → 24.04
+// Domaine WS lu depuis ~/.kighmu_info
 // ================================================================
 
 package main
@@ -21,6 +22,8 @@ import (
 	"strings"
 )
 
+/* ===================== Constantes ===================== */
+
 const (
 	wsGUID      = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 	infoFile    = ".kighmu_info"
@@ -31,9 +34,8 @@ const (
 	logFile = "/var/log/sshws/sshws.log"
 )
 
-// =====================
-// Utils
-// =====================
+/* ===================== Utils ===================== */
+
 func writeFile(path string, data []byte, perm os.FileMode) error {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, perm)
 	if err != nil {
@@ -44,23 +46,22 @@ func writeFile(path string, data []byte, perm os.FileMode) error {
 	return err
 }
 
-// =====================
-// Génère Sec-WebSocket-Accept
-// =====================
+/* ===================== WebSocket Accept Key ===================== */
+
 func acceptKey(key string) string {
 	h := sha1.New()
 	h.Write([]byte(key + wsGUID))
 	return base64.StdEncoding.EncodeToString(h.Sum(nil))
 }
 
-// =====================
-// Récupère le domaine autorisé depuis ~/.kighmu_info
-// =====================
+/* ===================== Domaine autorisé ===================== */
+
 func allowedDomain() string {
 	u, err := user.Current()
 	if err != nil {
 		return ""
 	}
+
 	f, err := os.Open(filepath.Join(u.HomeDir, infoFile))
 	if err != nil {
 		return ""
@@ -77,9 +78,8 @@ func allowedDomain() string {
 	return ""
 }
 
-// =====================
-// Logging
-// =====================
+/* ===================== Logging ===================== */
+
 func setupLogging() {
 	_ = os.MkdirAll(logDir, 0755)
 	f, err := os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
@@ -90,66 +90,56 @@ func setupLogging() {
 	log.SetFlags(log.LstdFlags)
 }
 
-// =====================
-// systemd
-// =====================
+/* ===================== systemd ===================== */
+
 func ensureSystemd(ports, host, port string) {
 	unit := fmt.Sprintf(`[Unit]
-Description=SSHWS TCP RAW + WebSocket Tunnel (Multi-Port)
+Description=SSHWS WS + TCP RAW Tunnel (Multi-Port)
 After=network.target
 Wants=network.target
 
 [Service]
 Type=simple
+User=root
 ExecStart=%s -listen %s -target-host %s -target-port %s
 Restart=always
 RestartSec=1
 LimitNOFILE=1048576
-StandardOutput=journal
-StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
 `, binPath, ports, host, port)
 
-	if err := writeFile(servicePath, []byte(unit), 0644); err != nil {
-		log.Fatal("Impossible d'écrire le service systemd :", err)
-	}
-
+	_ = writeFile(servicePath, []byte(unit), 0644)
 	exec.Command("systemctl", "daemon-reload").Run()
 	exec.Command("systemctl", "enable", "sshws").Run()
 	exec.Command("systemctl", "restart", "sshws").Run()
 }
 
-// =====================
-// WebSocket RAW + vérification domaine
-// =====================
-func handleWebSocket(client net.Conn, first []byte, target string) {
-	ad := allowedDomain()
+/* ===================== WebSocket ===================== */
+
+func handleWebSocket(c net.Conn, first []byte, target string) {
 	req := string(first)
-	hostLine := ""
-	for _, line := range strings.Split(req, "\n") {
-		if strings.HasPrefix(strings.ToLower(line), "host:") {
-			hostLine = strings.TrimSpace(strings.SplitN(line, ":", 2)[1])
-			break
+
+	// Vérification domaine
+	ad := allowedDomain()
+	if ad != "" {
+		for _, line := range strings.Split(req, "\n") {
+			if strings.HasPrefix(strings.ToLower(line), "host:") {
+				host := strings.TrimSpace(strings.SplitN(line, ":", 2)[1])
+				if strings.Contains(host, ":") {
+					host = strings.SplitN(host, ":", 2)[0]
+				}
+				if !strings.EqualFold(host, ad) {
+					c.Write([]byte("HTTP/1.1 403 Forbidden\r\n\r\n"))
+					c.Close()
+					return
+				}
+			}
 		}
 	}
 
-	if ad != "" && hostLine != "" {
-		h := hostLine
-		// Remplace strings.Cut par SplitN pour compatibilité Go 1.13+
-		if strings.Contains(h, ":") {
-			parts := strings.SplitN(h, ":", 2)
-			h = parts[0]
-		}
-		if !strings.EqualFold(h, ad) {
-			client.Write([]byte("HTTP/1.1 403 Forbidden\r\n\r\n"))
-			client.Close()
-			log.Println("[WS] Refusé (domaine non autorisé):", hostLine)
-			return
-		}
-	}
-
+	// Récupération clé WS
 	key := ""
 	for _, line := range strings.Split(req, "\n") {
 		if strings.HasPrefix(strings.ToLower(line), "sec-websocket-key") {
@@ -168,79 +158,71 @@ func handleWebSocket(client net.Conn, first []byte, target string) {
 		acceptKey(key),
 	)
 
-	_, _ = client.Write([]byte(resp))
+	c.Write([]byte(resp))
 
 	remote, err := net.Dial("tcp", target)
 	if err != nil {
-		client.Close()
+		c.Close()
 		return
 	}
 
-	go io.Copy(remote, client)
-	go io.Copy(client, remote)
+	go io.Copy(remote, c)
+	go io.Copy(c, remote)
 }
 
-// =====================
-// TCP RAW Injector
-// =====================
-func handleTCP(client net.Conn, target string) {
-	_, _ = client.Write([]byte(
-		"HTTP/1.1 200 OK\r\n" +
-			"Connection: keep-alive\r\n\r\n",
-	))
+/* ===================== TCP RAW ===================== */
+
+func handleTCP(c net.Conn, target string) {
+	c.Write([]byte("HTTP/1.1 200 OK\r\nConnection: keep-alive\r\n\r\n"))
 
 	remote, err := net.Dial("tcp", target)
 	if err != nil {
-		client.Close()
+		c.Close()
 		return
 	}
 
-	go io.Copy(remote, client)
-	go io.Copy(client, remote)
+	go io.Copy(remote, c)
+	go io.Copy(c, remote)
 }
 
-// =====================
-// Listener par port
-// =====================
+/* ===================== Listener ===================== */
+
 func startListener(port string, target string) {
 	ln, err := net.Listen("tcp", ":"+port)
 	if err != nil {
 		log.Println("❌ Port", port, ":", err)
 		return
 	}
-	log.Println("✅ Écoute active sur le port", port)
+	log.Println("✅ Écoute sur le port", port)
 
 	for {
-		client, err := ln.Accept()
+		c, err := ln.Accept()
 		if err != nil {
 			continue
 		}
 
-		go func(c net.Conn) {
+		go func(conn net.Conn) {
 			buf := make([]byte, 4096)
-			n, err := c.Read(buf)
+			n, err := conn.Read(buf)
 			if err != nil {
-				c.Close()
+				conn.Close()
 				return
 			}
 
 			data := strings.ToLower(string(buf[:n]))
 			if strings.Contains(data, "upgrade: websocket") {
-				log.Println("[WS]", c.RemoteAddr(), "→", port)
-				handleWebSocket(c, buf[:n], target)
+				handleWebSocket(conn, buf[:n], target)
 			} else {
-				log.Println("[TCP]", c.RemoteAddr(), "→", port)
-				handleTCP(c, target)
+				handleTCP(conn, target)
 			}
-		}(client)
+		}(c)
 	}
 }
 
-// =====================
-// MAIN
-// =====================
+/* ===================== MAIN ===================== */
+
 func main() {
-	listen := flag.String("listen", "80,8880,2052,2086", "Listen ports (comma separated)")
+	listen := flag.String("listen", "80,8880,2052,2086", "Ports d'écoute")
 	targetHost := flag.String("target-host", "127.0.0.1", "SSH host")
 	targetPort := flag.String("target-port", "22", "SSH port")
 	flag.Parse()
@@ -251,11 +233,9 @@ func main() {
 	target := net.JoinHostPort(*targetHost, *targetPort)
 	ports := strings.Split(*listen, ",")
 
-	log.Println("🚀 SSHWS multi-port actif sur :", ports)
-
 	for _, p := range ports {
 		go startListener(strings.TrimSpace(p), target)
 	}
 
-	select {} // bloque le main
+	select {}
 }
