@@ -270,29 +270,62 @@ uninstall_proxy_ws() {
 install_ssl_tls() {
     echo ">>> Installation du tunnel SSL/TLS (ssl_tls.go)..."
 
-    # Vérification du binaire
-    if [ ! -x /usr/local/bin/ssl_tls ]; then
-        echo "[ERREUR] Le binaire /usr/local/bin/ssl_tls est introuvable."
-        echo "Compile d'abord ssl_tls.go"
+    # Vérifier que Go est installé
+    if ! command -v go >/dev/null 2>&1; then
+        echo "[ERREUR] Go n'est pas installé. Installez Go avant de continuer."
         return 1
     fi
 
-    # Installation du service systemd
-    systemctl daemon-reload
-    systemctl enable ssl_tls.service
-    systemctl restart ssl_tls.service
+    # Compiler le binaire
+    if [ ! -f "$HOME/Kighmu/ssl_tls.go" ]; then
+        echo "[ERREUR] Le fichier ssl_tls.go est introuvable dans $HOME/Kighmu."
+        return 1
+    fi
 
-    # Ouverture du port 444
-    iptables -C INPUT  -p tcp --dport 444 -j ACCEPT 2>/dev/null || \
-        iptables -A INPUT -p tcp --dport 444 -j ACCEPT
+    echo ">>> Compilation du binaire..."
+    sudo go build -o /usr/local/bin/ssl_tls "$HOME/Kighmu/ssl_tls.go"
+    if [ $? -ne 0 ]; then
+        echo "[ERREUR] Échec de la compilation de ssl_tls.go"
+        return 1
+    fi
+    sudo chmod +x /usr/local/bin/ssl_tls
+    echo "[OK] Binaire compilé et installé dans /usr/local/bin/ssl_tls"
 
-    iptables -C OUTPUT -p tcp --sport 444 -j ACCEPT 2>/dev/null || \
-        iptables -A OUTPUT -p tcp --sport 444 -j ACCEPT
+    # Créer le service systemd
+    echo ">>> Création du service systemd..."
+    sudo tee /etc/systemd/system/ssl_tls.service >/dev/null <<EOF
+[Unit]
+Description=Tunnel SSL/TLS SSL_TLS (Kighmu)
+After=network.target
+Wants=network.target
 
-    # Sauvegarde iptables (si disponible)
-    netfilter-persistent save 2>/dev/null || true
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/ssl_tls -listen 444 -target-host 127.0.0.1 -target-port 22
+Restart=always
+RestartSec=2
+LimitNOFILE=1048576
+StandardOutput=journal
+StandardError=journal
 
-    echo "[OK] Tunnel SSL/TLS actif sur le port 444"
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    # Recharger systemd et activer le service
+    sudo systemctl daemon-reload
+    sudo systemctl enable ssl_tls
+    sudo systemctl start ssl_tls
+    echo "[OK] Service systemd créé et démarré"
+
+    # Ouvrir le port 444 dans iptables
+    echo ">>> Ouverture du port 444 dans iptables..."
+    sudo iptables -I INPUT -p tcp --dport 444 -j ACCEPT
+    sudo iptables -I OUTPUT -p tcp --sport 444 -j ACCEPT
+    echo "[OK] Port 444 ouvert"
+
+    # Vérifier le statut du service
+    sudo systemctl status ssl_tls --no-pager
 }
 
 uninstall_ssl_tls() {
