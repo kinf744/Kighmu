@@ -2,7 +2,7 @@
 // sshws.go — TCP RAW Injector + WebSocket → SSH
 // Listener TCP brut (architecture correcte)
 // Ubuntu 18.04 → 24.04 | Go 1.13+ | systemd OK
-// Auteur : @kighmu
+// Auteur : @kighmu (corrigé définitivement)
 // Licence : MIT
 // ================================================================
 
@@ -24,6 +24,9 @@ import (
 	"strings"
 )
 
+// =====================
+// Constantes
+// =====================
 const (
 	wsGUID      = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 	infoFile    = ".kighmu_info"
@@ -107,6 +110,8 @@ ExecStart=%s -listen %s -target-host %s -target-port %s
 Restart=always
 RestartSec=1
 LimitNOFILE=1048576
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
@@ -142,7 +147,7 @@ func handleWebSocket(client net.Conn, first []byte, target string) {
 		acceptKey(key),
 	)
 
-	client.Write([]byte(resp))
+	_, _ = client.Write([]byte(resp))
 
 	remote, err := net.Dial("tcp", target)
 	if err != nil {
@@ -155,21 +160,25 @@ func handleWebSocket(client net.Conn, first []byte, target string) {
 }
 
 // =====================
-// TCP RAW Injector
+// TCP RAW Injector (CORRIGÉ)
 // =====================
-func handleTCP(client net.Conn, first []byte, target string) {
-	client.Write([]byte(
+func handleTCP(client net.Conn, target string) {
+	// Réponse HTTP d’ouverture du tunnel
+	_, _ = client.Write([]byte(
 		"HTTP/1.1 200 OK\r\n"+
 			"Connection: keep-alive\r\n\r\n",
 	))
 
+	// Connexion SSH backend
 	remote, err := net.Dial("tcp", target)
 	if err != nil {
 		client.Close()
 		return
 	}
 
-	remote.Write(first)
+	// IMPORTANT :
+	// ❌ aucun payload HTTP n’est envoyé vers SSH
+	// ✅ tunnel TCP brut uniquement
 
 	go io.Copy(remote, client)
 	go io.Copy(client, remote)
@@ -213,9 +222,11 @@ func main() {
 			data := strings.ToLower(string(buf[:n]))
 
 			if strings.Contains(data, "upgrade: websocket") {
+				log.Println("[WS]", c.RemoteAddr())
 				handleWebSocket(c, buf[:n], target)
 			} else {
-				handleTCP(c, buf[:n], target)
+				log.Println("[TCP]", c.RemoteAddr())
+				handleTCP(c, target)
 			}
 		}(client)
 	}
