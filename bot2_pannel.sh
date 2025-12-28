@@ -3,16 +3,27 @@
 SCRIPT_DIR="$HOME/Kighmu"
 BOT_BIN="$SCRIPT_DIR/bot2"
 
+stop_and_uninstall_bot() {
+    echo "🛑 Arrêt du bot (si actif)..."
+    pkill -f "$BOT_BIN" 2>/dev/null || true
+
+    echo "🗑️ Suppression des fichiers..."
+    rm -f "$BOT_BIN" "$SCRIPT_DIR/go.mod" "$SCRIPT_DIR/go.sum"
+
+    echo "✅ Bot arrêté et désinstallé"
+}
+
 while true; do
     clear
     echo "======================================"
     echo "      🤖 PANNEAU DE CONTRÔLE BOT"
     echo "======================================"
-    echo "1️⃣  Installer la librairie Telegram Go et compiler le bot"
+    echo "1️⃣  Installer / Compiler le bot"
     echo "2️⃣  Lancer le bot Telegram"
     echo "3️⃣  Quitter"
+    echo "4️⃣  Arrêter / Désinstaller le bot"
     echo "======================================"
-    read -p "👉 Choisissez une option [1-3] : " option
+    read -p "👉 Choisissez une option [1-4] : " option
 
     case "$option" in
 
@@ -24,33 +35,15 @@ while true; do
                 continue
             fi
 
-            if [ ! -d "$SCRIPT_DIR" ]; then
-                echo "❌ Répertoire $SCRIPT_DIR introuvable"
-                read -p "Entrée pour continuer..."
-                continue
-            fi
-
             cd "$SCRIPT_DIR" || continue
 
-            if [ ! -f "bot2.go" ]; then
-                echo "❌ bot2.go introuvable dans $SCRIPT_DIR"
-                read -p "Entrée pour continuer..."
-                continue
-            fi
-
-            if [ ! -f "go.mod" ]; then
-                echo "⏳ Initialisation du module Go..."
-                go mod init telegram-bot || true
-            fi
-
-            echo "⏳ Téléchargement des dépendances..."
+            [ ! -f "go.mod" ] && go mod init telegram-bot
             go mod tidy
 
-            echo "⏳ Compilation du bot..."
             if go build -o bot2 bot2.go; then
                 echo "✅ Bot compilé avec succès"
             else
-                echo "❌ Erreur lors de la compilation"
+                echo "❌ Erreur de compilation"
             fi
 
             read -p "Entrée pour continuer..."
@@ -61,20 +54,23 @@ while true; do
 
             if [ ! -f "$BOT_BIN" ]; then
                 echo "❌ Bot non compilé"
-                echo "➡ Utilise l’option 1 d’abord"
                 read -p "Entrée pour continuer..."
                 continue
             fi
 
             if [ -z "$BOT_TOKEN" ] || [ -z "$ADMIN_ID" ]; then
-                echo "❌ Variables manquantes"
-                echo "➡ BOT_TOKEN ou ADMIN_ID non définis"
+                echo "❌ Variables BOT_TOKEN ou ADMIN_ID manquantes"
                 read -p "Entrée pour continuer..."
                 continue
             fi
 
-            echo "🚀 Lancement du bot Telegram..."
-            exec "$BOT_BIN"
+            echo "🚀 Lancement du bot..."
+            "$BOT_BIN"
+            ;;
+
+        4)
+            stop_and_uninstall_bot
+            read -p "Entrée pour continuer..."
             ;;
 
         3)
