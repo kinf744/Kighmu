@@ -421,7 +421,10 @@ while true; do
         4) desinstaller_v2ray ;;
         5) basculer_mode_mix ;;
         6) basculer_mode_v2only ;;
-        7) go run "$SCRIPT_DIR/bot2.go"
+        7)
+    echo "📡 Ouverture du panneau de contrôle du bot Telegram..."
+    go run "$SCRIPT_DIR/bot2.go"
+    ;;
         0) echo "Au revoir"; exit 0 ;;
         *) echo "Option invalide."
            sleep 1 
