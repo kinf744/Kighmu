@@ -1,13 +1,14 @@
 // ================================================================
-// ssl_tls.go — Tunnel SSL/TLS + TCP RAW → SSH
-// Ubuntu 18.04 → 24.04 | Go 1.13+ | systemd OK
-// Auteur : @kighmu (corrigé)
+// ssl_tls.go — Tunnel SSL/TLS + TCP RAW
+// Compatible Go 1.13+ | Ubuntu 18.04 → 24.04
+// Auteur : @kighmu
 // Licence : MIT
 // ================================================================
 
 package main
 
 import (
+	"bufio"
 	"crypto/tls"
 	"flag"
 	"fmt"
@@ -21,17 +22,58 @@ import (
 	"strings"
 )
 
+// =====================
+// Constantes
+// =====================
 const (
+	infoFile    = ".kighmu_info"
 	binPath     = "/usr/local/bin/ssl_tls"
 	servicePath = "/etc/systemd/system/ssl_tls.service"
-	logDir      = "/var/log/ssl_tls"
-	logFile     = "/var/log/ssl_tls/ssl_tls.log"
 
 	certDir  = "/etc/ssl/ssl_tls"
-	certFile = certDir + "/server.crt"
-	keyFile  = certDir + "/server.key"
-	infoFile = ".kighmu_info"
+	certFile = "/etc/ssl/ssl_tls/cert.pem"
+	keyFile  = "/etc/ssl/ssl_tls/key.pem"
+
+	logDir  = "/var/log/ssl_tls"
+	logFile = "/var/log/ssl_tls/ssl_tls.log"
 )
+
+// =====================
+// Utils fichiers compatibles Go 1.13
+// =====================
+func writeFile(path string, data []byte, perm os.FileMode) error {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, perm)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.Write(data)
+	return err
+}
+
+// =====================
+// Lecture domaine depuis kighmu_info
+// =====================
+func allowedDomain() string {
+	u, err := user.Current()
+	if err != nil {
+		return ""
+	}
+	f, err := os.Open(filepath.Join(u.HomeDir, infoFile))
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if strings.HasPrefix(line, "DOMAIN=") {
+			return strings.Trim(strings.SplitN(line, "=", 2)[1], `"`)
+		}
+	}
+	return ""
+}
 
 // =====================
 // Logging
@@ -47,73 +89,50 @@ func setupLogging() {
 }
 
 // =====================
-// Lecture domaine SNI
-// =====================
-func allowedDomain() string {
-	u, err := user.Current()
-	if err != nil {
-		return ""
-	}
-	f, err := os.Open(filepath.Join(u.HomeDir, infoFile))
-	if err != nil {
-		return ""
-	}
-	defer f.Close()
-
-	sc := io.NewScanner(f)
-	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
-		if strings.HasPrefix(line, "DOMAIN=") {
-			return strings.Trim(strings.SplitN(line, "=", 2)[1], `"`)
-		}
-	}
-	return ""
-}
-
-// =====================
-// Certificats SSL/TLS
+// Génération certificats auto-signés
 // =====================
 func ensureCerts() {
-	if _, err := os.Stat(certFile); os.IsNotExist(err) {
-		os.MkdirAll(certDir, 0700)
-		cmd := exec.Command("openssl", "req", "-x509", "-newkey", "rsa:2048",
-			"-keyout", keyFile,
-			"-out", certFile,
-			"-days", "365",
-			"-nodes",
-			"-subj", "/CN=ssl_tls")
-		cmd.Run()
-		log.Println("[INFO] Certificats SSL/TLS créés automatiquement")
+	if _, err := os.Stat(certFile); err == nil {
+		return
 	}
+	os.MkdirAll(certDir, 0700)
+	cmd := exec.Command("openssl", "req", "-x509", "-newkey", "rsa:2048",
+		"-keyout", keyFile,
+		"-out", certFile,
+		"-days", "365",
+		"-nodes",
+		"-subj", "/CN=ssl_tls",
+	)
+	cmd.Run()
 }
 
 // =====================
 // systemd
 // =====================
-func ensureSystemd(port, targetHost, targetPort string) {
+func ensureSystemd(listen, host, port string) {
 	if _, err := os.Stat(servicePath); err == nil {
 		return
 	}
 
 	unit := fmt.Sprintf(`[Unit]
-Description=SSL/TLS Tunnel (ssl_tls)
+Description=SSL TLS Tunnel (ssl_tls.go)
 After=network.target
 Wants=network.target
 
 [Service]
 Type=simple
-ExecStart=%s -port %s -target-host %s -target-port %s
+ExecStart=%s -listen %s -target-host %s -target-port %s
 Restart=always
-RestartSec=2
+RestartSec=1
 LimitNOFILE=1048576
 StandardOutput=journal
 StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
-`, binPath, port, targetHost, targetPort)
+`, binPath, listen, host, port)
 
-	if err := os.WriteFile(servicePath, []byte(unit), 0644); err != nil {
+	if err := writeFile(servicePath, []byte(unit), 0644); err != nil {
 		log.Fatal(err)
 	}
 
@@ -123,61 +142,62 @@ WantedBy=multi-user.target
 }
 
 // =====================
-// Tunnel SSL/TLS
+// Handler SSL/TLS
 // =====================
-func handleSSL(client net.Conn, target string) {
-	targetConn, err := net.Dial("tcp", target)
+func handleTLS(conn net.Conn, target string, config *tls.Config) {
+	tlsConn := tls.Server(conn, config)
+	err := tlsConn.Handshake()
 	if err != nil {
-		client.Close()
+		conn.Close()
 		return
 	}
 
-	go io.Copy(targetConn, client)
-	go io.Copy(client, targetConn)
+	r, err := net.Dial("tcp", target)
+	if err != nil {
+		conn.Close()
+		return
+	}
+
+	go io.Copy(r, tlsConn)
+	go io.Copy(tlsConn, r)
 }
 
 // =====================
 // MAIN
 // =====================
 func main() {
-	port := flag.String("port", "444", "Port SSL/TLS")
+	listen := flag.String("listen", "444", "Listen port SSL/TLS")
 	targetHost := flag.String("target-host", "127.0.0.1", "SSH host")
 	targetPort := flag.String("target-port", "22", "SSH port")
 	flag.Parse()
 
 	setupLogging()
 	ensureCerts()
-	ensureSystemd(*port, *targetHost, *targetPort)
+	ensureSystemd(*listen, *targetHost, *targetPort)
 
-	target := fmt.Sprintf("%s:%s", *targetHost, *targetPort)
+	// Ouverture port 444 dans iptables
+	exec.Command("iptables", "-I", "INPUT", "-p", "tcp", "--dport", *listen, "-j", "ACCEPT").Run()
+	exec.Command("iptables", "-I", "OUTPUT", "-p", "tcp", "--sport", *listen, "-j", "ACCEPT").Run()
 
-	cer, err := tls.LoadX509KeyPair(certFile, keyFile)
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	config := &tls.Config{
-		Certificates: []tls.Certificate{cer},
-		ServerName:   allowedDomain(), // SNI du tunnel
+		Certificates: []tls.Certificate{cert},
 	}
 
-	ln, err := tls.Listen("tcp", ":"+*port, config)
+	ln, err := net.Listen("tcp", ":"+*listen)
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	// Ouverture port dans iptables
-	exec.Command("iptables", "-I", "INPUT", "-p", "tcp", "--dport", *port, "-j", "ACCEPT").Run()
-	exec.Command("iptables", "-I", "OUTPUT", "-p", "tcp", "--sport", *port, "-j", "ACCEPT").Run()
-
-	log.Println("🚀 SSL/TLS tunnel actif sur port", *port)
+	log.Println("🚀 SSL/TLS Tunnel actif sur le port", *listen)
 
 	for {
-		conn, err := ln.Accept()
+		c, err := ln.Accept()
 		if err != nil {
 			continue
 		}
-
-		go handleSSL(conn, target)
+		go handleTLS(c, net.JoinHostPort(*targetHost, *targetPort), config)
 	}
 }
