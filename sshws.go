@@ -1,5 +1,5 @@
 // ================================================================
-// sshws.go — TCP RAW Injector + WebSocket → SSH
+// sshws.go — TCP RAW Injector + WebSocket → SSH (MULTI-PORT)
 // Listener TCP brut (architecture correcte)
 // Ubuntu 18.04 → 24.04 | Go 1.13+ | systemd OK
 // Auteur : @kighmu (corrigé définitivement)
@@ -93,13 +93,13 @@ func setupLogging() {
 // =====================
 // systemd
 // =====================
-func ensureSystemd(listen, host, port string) {
+func ensureSystemd(ports, host, port string) {
 	if _, err := os.Stat(servicePath); err == nil {
 		return
 	}
 
 	unit := fmt.Sprintf(`[Unit]
-Description=SSHWS WS + TCP RAW Tunnel
+Description=SSHWS WS + TCP RAW Tunnel (Multi-Port)
 After=network.target
 Wants=network.target
 
@@ -115,7 +115,7 @@ StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
-`, binPath, listen, host, port)
+`, binPath, ports, host, port)
 
 	_ = writeFile(servicePath, []byte(unit), 0644)
 	exec.Command("systemctl", "daemon-reload").Run()
@@ -163,47 +163,32 @@ func handleWebSocket(client net.Conn, first []byte, target string) {
 // TCP RAW Injector (CORRIGÉ)
 // =====================
 func handleTCP(client net.Conn, target string) {
-	// Réponse HTTP d’ouverture du tunnel
 	_, _ = client.Write([]byte(
 		"HTTP/1.1 200 OK\r\n"+
 			"Connection: keep-alive\r\n\r\n",
 	))
 
-	// Connexion SSH backend
 	remote, err := net.Dial("tcp", target)
 	if err != nil {
 		client.Close()
 		return
 	}
 
-	// IMPORTANT :
-	// ❌ aucun payload HTTP n’est envoyé vers SSH
-	// ✅ tunnel TCP brut uniquement
-
 	go io.Copy(remote, client)
 	go io.Copy(client, remote)
 }
 
 // =====================
-// MAIN
+// Listener par port
 // =====================
-func main() {
-	listen := flag.String("listen", "80", "Listen port")
-	targetHost := flag.String("target-host", "127.0.0.1", "SSH host")
-	targetPort := flag.String("target-port", "22", "SSH port")
-	flag.Parse()
-
-	setupLogging()
-	ensureSystemd(*listen, *targetHost, *targetPort)
-
-	target := net.JoinHostPort(*targetHost, *targetPort)
-
-	ln, err := net.Listen("tcp", ":"+*listen)
+func startListener(port string, target string) {
+	ln, err := net.Listen("tcp", ":"+port)
 	if err != nil {
-		log.Fatal(err)
+		log.Println("❌ Port", port, ":", err)
+		return
 	}
 
-	log.Println("🚀 SSHWS WS + TCP RAW actif sur :", *listen)
+	log.Println("✅ Écoute active sur le port", port)
 
 	for {
 		client, err := ln.Accept()
@@ -222,12 +207,37 @@ func main() {
 			data := strings.ToLower(string(buf[:n]))
 
 			if strings.Contains(data, "upgrade: websocket") {
-				log.Println("[WS]", c.RemoteAddr())
+				log.Println("[WS]", c.RemoteAddr(), "→", port)
 				handleWebSocket(c, buf[:n], target)
 			} else {
-				log.Println("[TCP]", c.RemoteAddr())
+				log.Println("[TCP]", c.RemoteAddr(), "→", port)
 				handleTCP(c, target)
 			}
 		}(client)
 	}
+}
+
+// =====================
+// MAIN
+// =====================
+func main() {
+	listen := flag.String("listen", "80,8880,2052,2086", "Listen ports (comma separated)")
+	targetHost := flag.String("target-host", "127.0.0.1", "SSH host")
+	targetPort := flag.String("target-port", "22", "SSH port")
+	flag.Parse()
+
+	setupLogging()
+	ensureSystemd(*listen, *targetHost, *targetPort)
+
+	target := net.JoinHostPort(*targetHost, *targetPort)
+
+	ports := strings.Split(*listen, ",")
+
+	log.Println("🚀 SSHWS multi-port actif sur :", ports)
+
+	for _, p := range ports {
+		go startListener(strings.TrimSpace(p), target)
+	}
+
+	select {} // bloque le main
 }
