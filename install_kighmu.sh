@@ -203,6 +203,7 @@ FILES=(
   "sshws.go"
   "ssl_tls.go"
   "histeria2.go"
+  "bot2.go"
   "install_v2ray.sh"
 )
 
