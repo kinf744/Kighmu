@@ -22,7 +22,6 @@ import (
 	"os/user"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 const (
@@ -33,7 +32,6 @@ const (
 
 	logDir  = "/var/log/sshws"
 	logFile = "/var/log/sshws/sshws.log"
-	maxLog  = 5 * 1024 * 1024
 )
 
 // =====================
@@ -53,27 +51,6 @@ func acceptKey(key string) string {
 	h := sha1.New()
 	h.Write([]byte(key + wsGUID))
 	return base64.StdEncoding.EncodeToString(h.Sum(nil))
-}
-
-func allowedDomain() string {
-	u, err := user.Current()
-	if err != nil {
-		return ""
-	}
-	f, err := os.Open(filepath.Join(u.HomeDir, infoFile))
-	if err != nil {
-		return ""
-	}
-	defer f.Close()
-
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
-		if strings.HasPrefix(line, "DOMAIN=") {
-			return strings.Trim(strings.SplitN(line, "=", 2)[1], `"`)
-		}
-	}
-	return ""
 }
 
 // =====================
@@ -116,7 +93,7 @@ WantedBy=multi-user.target
 }
 
 // =====================
-// WebSocket handler RAW
+// WebSocket handler
 // =====================
 func handleWebSocket(client net.Conn, first []byte, target string) {
 	req := string(first)
@@ -128,16 +105,17 @@ func handleWebSocket(client net.Conn, first []byte, target string) {
 		}
 	}
 	if key == "" {
-		key = "dGhlIHNhbXBsZSBub25jZQ=="
+		client.Close()
+		return
 	}
 
 	resp := fmt.Sprintf(
-		`HTTP/1.1 101 Switching Protocols
-Upgrade: websocket
-Connection: Upgrade
-Sec-WebSocket-Accept: %s
-
-`, acceptKey(key))
+		"HTTP/1.1 101 Switching Protocols\r\n"+
+			"Upgrade: websocket\r\n"+
+			"Connection: Upgrade\r\n"+
+			"Sec-WebSocket-Accept: %s\r\n\r\n",
+		acceptKey(key),
+	)
 
 	client.Write([]byte(resp))
 
@@ -152,14 +130,13 @@ Sec-WebSocket-Accept: %s
 }
 
 // =====================
-// TCP Injector RAW
+// TCP Injector
 // =====================
 func handleTCP(client net.Conn, first []byte, target string) {
 	client.Write([]byte(
-		`HTTP/1.1 200 OK
-Connection: keep-alive
-
-`))
+		"HTTP/1.1 200 OK\r\n"+
+			"Connection: keep-alive\r\n\r\n",
+	))
 
 	remote, err := net.Dial("tcp", target)
 	if err != nil {
@@ -193,7 +170,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Println("🚀 SSHWS WS+TCP RAW actif sur :", port)
+	log.Println("🚀 SSHWS WS + TCP Injector actif sur le port", port)
 
 	for {
 		client, err := ln.Accept()
@@ -209,9 +186,9 @@ func main() {
 				return
 			}
 
-			data := string(buf[:n])
+			data := strings.ToLower(string(buf[:n]))
 
-			if strings.Contains(strings.ToLower(data), "upgrade: websocket") {
+			if strings.Contains(data, "upgrade: websocket") {
 				log.Println("[WS]", c.RemoteAddr())
 				handleWebSocket(c, buf[:n], target)
 			} else {
