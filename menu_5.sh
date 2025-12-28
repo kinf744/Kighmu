@@ -159,6 +159,7 @@ show_menu() {
     echo -e "${YELLOW}║ 4) Désinstaller V2Ray+FastDNS${RESET}"
     echo -e "${YELLOW}║ 5) Mode MIX (SSH + V2Ray)${RESET}"
     echo -e "${YELLOW}║ 6) Mode V2RAY ONLY${RESET}"
+    echo -e "${YELLOW}║ 7) Bot telegram${RESET}"
     echo -e "${RED}║ 0) Quitter${RESET}"
     echo -e "${CYAN}╚═════════════════════════════════════════════════════╝${RESET}"
     echo -n "Choisissez une option : "
@@ -420,6 +421,7 @@ while true; do
         4) desinstaller_v2ray ;;
         5) basculer_mode_mix ;;
         6) basculer_mode_v2only ;;
+        7) go run "$SCRIPT_DIR/bot2.go"
         0) echo "Au revoir"; exit 0 ;;
         *) echo "Option invalide."
            sleep 1 
