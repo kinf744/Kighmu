@@ -331,19 +331,22 @@ EOF
 uninstall_ssl_tls() {
     echo ">>> Désinstallation complète du tunnel SSL/TLS (ssl_tls.go)..."
 
-    # Arrêt et suppression du service
-    systemctl stop ssl_tls.service 2>/dev/null || true
-    systemctl disable ssl_tls.service 2>/dev/null || true
-    rm -f /etc/systemd/system/ssl_tls.service
-    systemctl daemon-reload
+    # Stopper et désactiver le service systemd
+    sudo systemctl stop ssl_tls 2>/dev/null || true
+    sudo systemctl disable ssl_tls 2>/dev/null || true
 
-    # Fermeture du port 444
-    iptables -D INPUT  -p tcp --dport 444 -j ACCEPT 2>/dev/null || true
-    iptables -D OUTPUT -p tcp --sport 444 -j ACCEPT 2>/dev/null || true
+    # Supprimer le fichier de service
+    sudo rm -f /etc/systemd/system/ssl_tls.service
+    sudo systemctl daemon-reload
 
-    netfilter-persistent save 2>/dev/null || true
+    # Supprimer le binaire
+    sudo rm -f /usr/local/bin/ssl_tls
 
-    echo "[OK] Tunnel SSL/TLS supprimé proprement"
+    # Fermer le port TCP 444 via iptables
+    sudo iptables -D INPUT -p tcp --dport 444 -j ACCEPT 2>/dev/null || true
+    sudo iptables -D OUTPUT -p tcp --sport 444 -j ACCEPT 2>/dev/null || true
+
+    echo "[OK] Tunnel SSL/TLS désinstallé proprement."
 }
 
 install_badvpn() {
