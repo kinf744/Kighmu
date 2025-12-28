@@ -1,8 +1,9 @@
 // ================================================================
 // sshws.go — TCP RAW Injector + WebSocket → SSH
-// Listener TCP brut (HTTP Injector + WS même port)
-// Ubuntu 18.04 → 24.04 | Go 1.13+ | systemd intégré
-// Auteur : @kighmu
+// Listener TCP brut (architecture correcte)
+// Compatible HTTP Injector + WS sur le même port
+// Ubuntu 18.04 → 24.04 | Go 1.13+ | systemd OK
+// Auteur : @kighmu (corrigé & stabilisé)
 // Licence : MIT
 // ================================================================
 
@@ -12,6 +13,7 @@ import (
 	"bufio"
 	"crypto/sha1"
 	"encoding/base64"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -21,11 +23,9 @@ import (
 	"os/user"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
-// =====================
-// Constantes
-// =====================
 const (
 	wsGUID      = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 	infoFile    = ".kighmu_info"
@@ -81,33 +81,40 @@ func allowedDomain() string {
 // =====================
 func setupLogging() {
 	_ = os.MkdirAll(logDir, 0755)
-	f, _ := os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
 	log.SetOutput(io.MultiWriter(os.Stdout, f))
 	log.SetFlags(log.LstdFlags)
 }
 
 // =====================
-// systemd
+// systemd (safe)
 // =====================
-func ensureSystemd(port string) {
+func ensureSystemd(listen, host, port string) {
 	if _, err := os.Stat(servicePath); err == nil {
 		return
 	}
 
 	unit := fmt.Sprintf(`[Unit]
-Description=SSH WS + TCP RAW Injector
+Description=SSHWS WS + TCP RAW Tunnel
 After=network.target
+Wants=network.target
 
 [Service]
 Type=simple
-ExecStart=%s %s
+User=root
+ExecStart=%s -listen %s -target-host %s -target-port %s
 Restart=always
 RestartSec=1
 LimitNOFILE=1048576
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
-`, binPath, port)
+`, binPath, listen, host, port)
 
 	_ = writeFile(servicePath, []byte(unit), 0644)
 	exec.Command("systemctl", "daemon-reload").Run()
@@ -176,23 +183,22 @@ func handleTCP(client net.Conn, first []byte, target string) {
 // MAIN
 // =====================
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: sshws <port>")
-		return
-	}
-
-	port := os.Args[1]
-	target := "127.0.0.1:22"
+	listen := flag.String("listen", "80", "Listen port")
+	targetHost := flag.String("target-host", "127.0.0.1", "SSH host")
+	targetPort := flag.String("target-port", "22", "SSH port")
+	flag.Parse()
 
 	setupLogging()
-	ensureSystemd(port)
+	ensureSystemd(*listen, *targetHost, *targetPort)
 
-	ln, err := net.Listen("tcp", ":"+port)
+	target := net.JoinHostPort(*targetHost, *targetPort)
+
+	ln, err := net.Listen("tcp", ":"+*listen)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Println("🚀 SSHWS WS + TCP RAW actif sur le port", port)
+	log.Println("🚀 SSHWS WS + TCP RAW actif sur :", *listen)
 
 	for {
 		client, err := ln.Accept()
@@ -201,6 +207,12 @@ func main() {
 		}
 
 		go func(c net.Conn) {
+			defer func() {
+				if r := recover(); r != nil {
+					c.Close()
+				}
+			}()
+
 			buf := make([]byte, 4096)
 			n, err := c.Read(buf)
 			if err != nil {
