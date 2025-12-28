@@ -1,6 +1,5 @@
 // ================================================================
-// sshws.go — TCP RAW Injector + WebSocket → SSH
-// Listener TCP brut (architecture correcte)
+// sshws.go — HTTP Injector + WebSocket → SSH (PORT 80)
 // Ubuntu 18.04 → 24.04 | Go 1.13+ | systemd OK
 // Auteur : @kighmu (corrigé définitivement)
 // Licence : MIT
@@ -61,6 +60,7 @@ func allowedDomain() string {
 	if err != nil {
 		return ""
 	}
+
 	f, err := os.Open(filepath.Join(u.HomeDir, infoFile))
 	if err != nil {
 		return ""
@@ -93,29 +93,26 @@ func setupLogging() {
 // =====================
 // systemd
 // =====================
-func ensureSystemd(listen, host, port string) {
+func ensureSystemd(host, port string) {
 	if _, err := os.Stat(servicePath); err == nil {
 		return
 	}
 
 	unit := fmt.Sprintf(`[Unit]
-Description=SSHWS WS + TCP RAW Tunnel
+Description=SSHWS HTTP + WS Injector
 After=network.target
-Wants=network.target
 
 [Service]
 Type=simple
 User=root
-ExecStart=%s -listen %s -target-host %s -target-port %s
+ExecStart=%s -target-host %s -target-port %s
 Restart=always
 RestartSec=1
 LimitNOFILE=1048576
-StandardOutput=journal
-StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
-`, binPath, listen, host, port)
+`, binPath, host, port)
 
 	_ = writeFile(servicePath, []byte(unit), 0644)
 	exec.Command("systemctl", "daemon-reload").Run()
@@ -124,7 +121,24 @@ WantedBy=multi-user.target
 }
 
 // =====================
-// WebSocket RAW
+// Détection HTTP
+// =====================
+func isHTTPRequest(data string) bool {
+	methods := []string{
+		"get ", "post ", "head ", "options ",
+		"put ", "trace ", "patch ", "delete ", "connect ",
+	}
+	data = strings.ToLower(data)
+	for _, m := range methods {
+		if strings.HasPrefix(data, m) {
+			return true
+		}
+	}
+	return false
+}
+
+// =====================
+// WebSocket → SSH
 // =====================
 func handleWebSocket(client net.Conn, first []byte, target string) {
 	req := string(first)
@@ -160,25 +174,20 @@ func handleWebSocket(client net.Conn, first []byte, target string) {
 }
 
 // =====================
-// TCP RAW Injector (CORRIGÉ)
+// HTTP Injector (TOUTES méthodes)
 // =====================
-func handleTCP(client net.Conn, target string) {
-	// Réponse HTTP d’ouverture du tunnel
+func handleHTTP(client net.Conn, target string) {
 	_, _ = client.Write([]byte(
-		"HTTP/1.1 200 OK\r\n"+
+		"HTTP/1.1 200 OK\r\n" +
+			"Content-Length: 0\r\n" +
 			"Connection: keep-alive\r\n\r\n",
 	))
 
-	// Connexion SSH backend
 	remote, err := net.Dial("tcp", target)
 	if err != nil {
 		client.Close()
 		return
 	}
-
-	// IMPORTANT :
-	// ❌ aucun payload HTTP n’est envoyé vers SSH
-	// ✅ tunnel TCP brut uniquement
 
 	go io.Copy(remote, client)
 	go io.Copy(client, remote)
@@ -188,22 +197,25 @@ func handleTCP(client net.Conn, target string) {
 // MAIN
 // =====================
 func main() {
-	listen := flag.String("listen", "80", "Listen port")
 	targetHost := flag.String("target-host", "127.0.0.1", "SSH host")
 	targetPort := flag.String("target-port", "22", "SSH port")
 	flag.Parse()
 
 	setupLogging()
-	ensureSystemd(*listen, *targetHost, *targetPort)
+	ensureSystemd(*targetHost, *targetPort)
 
 	target := net.JoinHostPort(*targetHost, *targetPort)
+	domain := allowedDomain()
 
-	ln, err := net.Listen("tcp", ":"+*listen)
+	ln, err := net.Listen("tcp", ":80")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Println("🚀 SSHWS WS + TCP RAW actif sur :", *listen)
+	log.Println("🚀 SSHWS actif sur le port 80")
+	if domain != "" {
+		log.Println("🔒 Domaine autorisé :", domain)
+	}
 
 	for {
 		client, err := ln.Accept()
@@ -224,10 +236,16 @@ func main() {
 			if strings.Contains(data, "upgrade: websocket") {
 				log.Println("[WS]", c.RemoteAddr())
 				handleWebSocket(c, buf[:n], target)
-			} else {
-				log.Println("[TCP]", c.RemoteAddr())
-				handleTCP(c, target)
+				return
 			}
+
+			if isHTTPRequest(data) {
+				log.Println("[HTTP]", c.RemoteAddr())
+				handleHTTP(c, target)
+				return
+			}
+
+			c.Close()
 		}(client)
 	}
 }
