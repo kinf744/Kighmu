@@ -14,6 +14,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -32,8 +33,8 @@ import (
 const (
 	wsGUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
-	infoFile   = ".kighmu_info"
-	binPath    = "/usr/local/bin/sshws"
+	infoFile    = ".kighmu_info"
+	binPath     = "/usr/local/bin/sshws"
 	servicePath = "/etc/systemd/system/sshws.service"
 
 	logDir  = "/var/log/sshws"
@@ -60,6 +61,7 @@ func allowedDomain() string {
 	if err != nil {
 		return ""
 	}
+
 	f, err := os.Open(filepath.Join(u.HomeDir, infoFile))
 	if err != nil {
 		return ""
@@ -97,7 +99,7 @@ func setupLogging() {
 }
 
 // =====================
-// systemd auto-install
+// systemd auto-install (GO 1.13 SAFE)
 // =====================
 
 func ensureSystemd(listen, host, port string) {
@@ -126,7 +128,8 @@ StandardError=journal
 WantedBy=multi-user.target
 `, binPath, listen, host, port)
 
-	_ = os.WriteFile(servicePath, []byte(unit), 0644)
+	// ✅ Compatible Go 1.13
+	_ = ioutil.WriteFile(servicePath, []byte(unit), 0644)
 
 	exec.Command("systemctl", "daemon-reload").Run()
 	exec.Command("systemctl", "enable", "sshws").Run()
@@ -216,10 +219,9 @@ func main() {
 
 	setupLogging()
 
-	// auto systemd
 	ensureSystemd(*listen, *targetHost, *targetPort)
 
-	// watchdog interne
+	// Watchdog interne
 	go func() {
 		for {
 			time.Sleep(30 * time.Second)
