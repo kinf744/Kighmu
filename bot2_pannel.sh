@@ -1,12 +1,12 @@
 #!/bin/bash
-set -e
 
 SCRIPT_DIR="$HOME/Kighmu"
+BOT_BIN="$SCRIPT_DIR/bot2"
 
 while true; do
     clear
     echo "======================================"
-    echo "      🤖 Panneau de contrôle Bot"
+    echo "      🤖 PANNEAU DE CONTRÔLE BOT"
     echo "======================================"
     echo "1️⃣  Installer la librairie Telegram Go et compiler le bot"
     echo "2️⃣  Lancer le bot Telegram"
@@ -15,55 +15,76 @@ while true; do
     read -p "👉 Choisissez une option [1-3] : " option
 
     case "$option" in
+
         1)
-            echo "⏳ Installation de la librairie et compilation..."
-            if ! command -v go &> /dev/null; then
-                echo "❌ Go n'est pas installé. Installez Go avant de continuer."
-                read -p "Appuyez sur Entrée pour continuer..."
+            echo "⏳ Vérification de Go..."
+            if ! command -v go >/dev/null 2>&1; then
+                echo "❌ Go n'est pas installé"
+                read -p "Entrée pour continuer..."
                 continue
             fi
 
-            cd "$SCRIPT_DIR" || { echo "❌ Répertoire $SCRIPT_DIR introuvable"; read -p "Appuyez sur Entrée pour continuer..."; continue; }
+            if [ ! -d "$SCRIPT_DIR" ]; then
+                echo "❌ Répertoire $SCRIPT_DIR introuvable"
+                read -p "Entrée pour continuer..."
+                continue
+            fi
+
+            cd "$SCRIPT_DIR" || continue
 
             if [ ! -f "bot2.go" ]; then
-                echo "❌ Fichier bot2.go introuvable dans $SCRIPT_DIR"
-                read -p "Appuyez sur Entrée pour continuer..."
+                echo "❌ bot2.go introuvable dans $SCRIPT_DIR"
+                read -p "Entrée pour continuer..."
                 continue
             fi
 
             if [ ! -f "go.mod" ]; then
                 echo "⏳ Initialisation du module Go..."
-                go mod init telegram-bot
+                go mod init telegram-bot || true
             fi
 
-            echo "⏳ Installation de la librairie Telegram..."
-            go get github.com/go-telegram-bot-api/telegram-bot-api
+            echo "⏳ Téléchargement des dépendances..."
+            go mod tidy
 
             echo "⏳ Compilation du bot..."
-            go build -o bot2 bot2.go
+            if go build -o bot2 bot2.go; then
+                echo "✅ Bot compilé avec succès"
+            else
+                echo "❌ Erreur lors de la compilation"
+            fi
 
-            echo "✅ Librairie installée et bot compilé avec succès"
-            read -p "Appuyez sur Entrée pour continuer..."
+            read -p "Entrée pour continuer..."
             ;;
-        2)
-            cd "$SCRIPT_DIR" || { echo "❌ Répertoire $SCRIPT_DIR introuvable"; read -p "Appuyez sur Entrée pour continuer..."; continue; }
 
-            if [ ! -f "bot2" ]; then
-                echo "❌ Bot non compilé. Choisissez d'abord l'option 1."
-                read -p "Appuyez sur Entrée pour continuer..."
+        2)
+            cd "$SCRIPT_DIR" || continue
+
+            if [ ! -f "$BOT_BIN" ]; then
+                echo "❌ Bot non compilé"
+                echo "➡ Utilise l’option 1 d’abord"
+                read -p "Entrée pour continuer..."
                 continue
             fi
 
-            echo "🚀 Lancement du bot..."
-            ./bot2
+            if [ -z "$BOT_TOKEN" ] || [ -z "$ADMIN_ID" ]; then
+                echo "❌ Variables manquantes"
+                echo "➡ BOT_TOKEN ou ADMIN_ID non définis"
+                read -p "Entrée pour continuer..."
+                continue
+            fi
+
+            echo "🚀 Lancement du bot Telegram..."
+            exec "$BOT_BIN"
             ;;
+
         3)
             echo "👋 Au revoir"
             exit 0
             ;;
+
         *)
             echo "❌ Option invalide"
-            read -p "Appuyez sur Entrée pour continuer..."
+            read -p "Entrée pour continuer..."
             ;;
     esac
 done
