@@ -1,7 +1,7 @@
 // ================================================================
-// sshws.go — TCP RAW Injector + WebSocket → SSH (MULTI-PORT)
+// sshws.go — TCP RAW Injector + WebSocket → SSH (MULTI-PORT + Domaine)
 // Ubuntu 18.04 → 24.04 | Go 1.13+ | systemd intégré
-// Auteur : @kighmu (corrigé Go 1.13+)
+// Auteur : @kighmu
 // Licence : MIT
 // ================================================================
 
@@ -18,11 +18,14 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"os/user"
+	"path/filepath"
 	"strings"
 )
 
 const (
 	wsGUID      = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+	infoFile    = ".kighmu_info"
 	binPath     = "/usr/local/bin/sshws"
 	servicePath = "/etc/systemd/system/sshws.service"
 
@@ -31,7 +34,7 @@ const (
 )
 
 // =====================
-// writeFile compatible Go 1.13
+// Utils
 // =====================
 func writeFile(path string, data []byte, perm os.FileMode) error {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, perm)
@@ -44,12 +47,27 @@ func writeFile(path string, data []byte, perm os.FileMode) error {
 }
 
 // =====================
-// WebSocket accept key
+// Récupère le domaine autorisé depuis ~/.kighmu_info
 // =====================
-func acceptKey(key string) string {
-	h := sha1.New()
-	h.Write([]byte(key + wsGUID))
-	return base64.StdEncoding.EncodeToString(h.Sum(nil))
+func allowedDomain() string {
+	u, err := user.Current()
+	if err != nil {
+		return ""
+	}
+	f, err := os.Open(filepath.Join(u.HomeDir, infoFile))
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if strings.HasPrefix(line, "DOMAIN=") {
+			return strings.Trim(strings.SplitN(line, "=", 2)[1], `"`)
+		}
+	}
+	return ""
 }
 
 // =====================
@@ -68,9 +86,9 @@ func setupLogging() {
 // =====================
 // systemd
 // =====================
-func ensureSystemd(listen, host, port string) {
+func ensureSystemd(ports, host, port string) {
 	unit := fmt.Sprintf(`[Unit]
-Description=SSHWS TCP RAW + WebSocket Tunnel
+Description=SSHWS TCP RAW + WebSocket Tunnel (Multi-Port)
 After=network.target
 Wants=network.target
 
@@ -85,7 +103,7 @@ StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
-`, binPath, listen, host, port)
+`, binPath, ports, host, port)
 
 	if err := writeFile(servicePath, []byte(unit), 0644); err != nil {
 		log.Fatal("Impossible d'écrire le service systemd :", err)
@@ -97,10 +115,32 @@ WantedBy=multi-user.target
 }
 
 // =====================
-// WebSocket RAW
+// WebSocket RAW + vérification domaine
 // =====================
 func handleWebSocket(client net.Conn, first []byte, target string) {
+	ad := allowedDomain()
 	req := string(first)
+	hostLine := ""
+	for _, line := range strings.Split(req, "\n") {
+		if strings.HasPrefix(strings.ToLower(line), "host:") {
+			hostLine = strings.TrimSpace(strings.SplitN(line, ":", 2)[1])
+			break
+		}
+	}
+
+	if ad != "" && hostLine != "" {
+		h := hostLine
+		if strings.Contains(h, ":") {
+			h, _, _ = strings.Cut(h, ":")
+		}
+		if !strings.EqualFold(h, ad) {
+			client.Write([]byte("HTTP/1.1 403 Forbidden\r\n\r\n"))
+			client.Close()
+			log.Println("[WS] Refusé (domaine non autorisé):", hostLine)
+			return
+		}
+	}
+
 	key := ""
 	for _, line := range strings.Split(req, "\n") {
 		if strings.HasPrefix(strings.ToLower(line), "sec-websocket-key") {
@@ -118,6 +158,7 @@ func handleWebSocket(client net.Conn, first []byte, target string) {
 			"Sec-WebSocket-Accept: %s\r\n\r\n",
 		acceptKey(key),
 	)
+
 	_, _ = client.Write([]byte(resp))
 
 	remote, err := net.Dial("tcp", target)
