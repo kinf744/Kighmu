@@ -16,7 +16,6 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 )
 
@@ -24,8 +23,8 @@ import (
 // Constantes
 // =====================
 const (
-	usersFile = "/etc/kighmu/users.list"
-	infoFile  = ".kighmu_info"
+	usersFile   = "/etc/kighmu/users.list"
+	infoFile    = "/etc/kighmu/kighmu_info" // Chemin global pour DOMAIN
 
 	binPath     = "/usr/local/bin/histeria2"
 	servicePath = "/etc/systemd/system/histeria2.service"
@@ -67,15 +66,12 @@ func setupLogging() {
 }
 
 // =====================
-// Charger DOMAIN depuis ~/.kighmu_info
+// Charger DOMAIN depuis /etc/kighmu/kighmu_info
 // =====================
 func loadDomain() string {
-	home, _ := os.UserHomeDir()
-	path := filepath.Join(home, infoFile)
-
-	file, err := os.Open(path)
+	file, err := os.Open(infoFile)
 	if err != nil {
-		log.Fatal("[ERREUR] Fichier ~/.kighmu_info introuvable")
+		log.Fatal("[ERREUR] Fichier /etc/kighmu/kighmu_info introuvable")
 	}
 	defer file.Close()
 
@@ -87,7 +83,7 @@ func loadDomain() string {
 		}
 	}
 
-	log.Fatal("[ERREUR] DOMAIN non défini dans ~/.kighmu_info")
+	log.Fatal("[ERREUR] DOMAIN non défini dans /etc/kighmu/kighmu_info")
 	return ""
 }
 
@@ -99,7 +95,8 @@ func loadUsers() map[string]string {
 
 	file, err := os.Open(usersFile)
 	if err != nil {
-		log.Fatal("[ERREUR] users.list introuvable")
+		log.Println("[WARN] Fichier utilisateurs introuvable :", usersFile)
+		return users
 	}
 	defer file.Close()
 
@@ -153,31 +150,38 @@ func ensureCerts(domain string) {
 }
 
 // =====================
-// Installation systemd
+// Service systemd
 // =====================
-func installSystemd() {
+func ensureSystemd() {
+	if _, err := os.Stat(servicePath); err == nil {
+		return
+	}
+
 	unit := fmt.Sprintf(`[Unit]
 Description=Hysteria 2 UDP Tunnel (Kighmu)
 After=network.target
+Wants=network.target
 
 [Service]
 Type=simple
-ExecStart=%s run
+ExecStart=%s
 Restart=always
 RestartSec=2
 LimitNOFILE=1048576
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
 `, binPath)
 
-	_ = writeFile(servicePath, []byte(unit), 0644)
+	if err := writeFile(servicePath, []byte(unit), 0644); err != nil {
+		log.Fatal(err)
+	}
 
 	exec.Command("systemctl", "daemon-reload").Run()
 	exec.Command("systemctl", "enable", "histeria2").Run()
 	exec.Command("systemctl", "restart", "histeria2").Run()
-
-	log.Println("[OK] Service systemd installé")
 }
 
 // =====================
@@ -191,7 +195,11 @@ func runServer(users map[string]string, domain string) {
 		log.Fatal("Certificat TLS invalide :", err)
 	}
 
-	addr, _ := net.ResolveUDPAddr("udp", ":"+port)
+	addr, err := net.ResolveUDPAddr("udp", ":"+port)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	conn, err := net.ListenUDP("udp", addr)
 	if err != nil {
 		log.Fatal(err)
@@ -205,6 +213,7 @@ func runServer(users map[string]string, domain string) {
 	for {
 		n, remoteAddr, err := conn.ReadFromUDP(buf)
 		if err != nil {
+			log.Println("Erreur UDP:", err)
 			continue
 		}
 
@@ -220,9 +229,9 @@ func runServer(users map[string]string, domain string) {
 		}
 
 		if authorized {
-			conn.WriteToUDP([]byte("HYSTERIA OK"), remoteAddr)
+			_, _ = conn.WriteToUDP([]byte("HYSTERIA OK"), remoteAddr)
 		} else {
-			conn.WriteToUDP([]byte("AUTH FAILED"), remoteAddr)
+			_, _ = conn.WriteToUDP([]byte("AUTH FAILED"), remoteAddr)
 		}
 	}
 }
@@ -232,13 +241,8 @@ func runServer(users map[string]string, domain string) {
 // =====================
 func main() {
 	setupLogging()
-
-	if len(os.Args) > 1 && os.Args[1] == "install" {
-		installSystemd()
-		return
-	}
-
 	domain := loadDomain()
 	users := loadUsers()
+	ensureSystemd()
 	runServer(users, domain)
 }
