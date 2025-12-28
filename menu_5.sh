@@ -421,15 +421,7 @@ while true; do
         4) desinstaller_v2ray ;;
         5) basculer_mode_mix ;;
         6) basculer_mode_v2only ;;
-        7)
-    echo "📡 Ouverture du panneau de contrôle du bot Telegram..."
-    # Compile si nécessaire
-    if [ ! -f "$SCRIPT_DIR/bot2" ] || [ "$SCRIPT_DIR/bot2.go" -nt "$SCRIPT_DIR/bot2" ]; then
-        go build -o "$SCRIPT_DIR/bot2" "$SCRIPT_DIR/bot2.go"
-    fi
-    # Lancer le panneau
-    "$SCRIPT_DIR/bot2"
-    ;;
+        7) bash "$SCRIPT_DIR/bot2_pannel.sh" ;;
         0) echo "Au revoir"; exit 0 ;;
         *) echo "Option invalide."
            sleep 1 
