@@ -14,7 +14,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -41,6 +40,20 @@ const (
 	logFile = "/var/log/sshws/sshws.log"
 	maxLog  = 5 * 1024 * 1024
 )
+
+// =====================
+// Fonction writeFile compatible Go 1.13+
+// =====================
+
+func writeFile(path string, data []byte, perm os.FileMode) error {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, perm)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.Write(data)
+	return err
+}
 
 // =====================
 // Utils WebSocket
@@ -99,7 +112,7 @@ func setupLogging() {
 }
 
 // =====================
-// systemd auto-install (GO 1.13 SAFE)
+// systemd auto-install
 // =====================
 
 func ensureSystemd(listen, host, port string) {
@@ -128,8 +141,9 @@ StandardError=journal
 WantedBy=multi-user.target
 `, binPath, listen, host, port)
 
-	// ✅ Compatible Go 1.13
-	_ = ioutil.WriteFile(servicePath, []byte(unit), 0644)
+	if err := writeFile(servicePath, []byte(unit), 0644); err != nil {
+		log.Fatal("Impossible d’écrire le service systemd :", err)
+	}
 
 	exec.Command("systemctl", "daemon-reload").Run()
 	exec.Command("systemctl", "enable", "sshws").Run()
