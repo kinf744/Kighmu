@@ -1,7 +1,8 @@
 // ================================================================
-// sshws.go — HTTP Injector + WebSocket → SSH (PORT 80)
+// sshws.go — TCP RAW Injector + WebSocket → SSH
+// Compatible HTTP (ALL methods) + WS
 // Ubuntu 18.04 → 24.04 | Go 1.13+ | systemd OK
-// Auteur : @kighmu (corrigé définitivement)
+// Auteur : @kighmu
 // Licence : MIT
 // ================================================================
 
@@ -37,7 +38,7 @@ const (
 )
 
 // =====================
-// Utils
+// Utils fichiers (Go 1.13 compatible)
 // =====================
 func writeFile(path string, data []byte, perm os.FileMode) error {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, perm)
@@ -49,18 +50,23 @@ func writeFile(path string, data []byte, perm os.FileMode) error {
 	return err
 }
 
+// =====================
+// WebSocket accept key
+// =====================
 func acceptKey(key string) string {
 	h := sha1.New()
 	h.Write([]byte(key + wsGUID))
 	return base64.StdEncoding.EncodeToString(h.Sum(nil))
 }
 
+// =====================
+// Lecture domaine WS
+// =====================
 func allowedDomain() string {
 	u, err := user.Current()
 	if err != nil {
 		return ""
 	}
-
 	f, err := os.Open(filepath.Join(u.HomeDir, infoFile))
 	if err != nil {
 		return ""
@@ -91,59 +97,45 @@ func setupLogging() {
 }
 
 // =====================
-// systemd
+// systemd (cohérent avec flags)
 // =====================
-func ensureSystemd(host, port string) {
+func ensureSystemd(listen, host, port string) {
 	if _, err := os.Stat(servicePath); err == nil {
 		return
 	}
 
 	unit := fmt.Sprintf(`[Unit]
-Description=SSHWS HTTP + WS Injector
+Description=SSHWS Slipstream Tunnel
 After=network.target
+Wants=network.target
 
 [Service]
 Type=simple
-User=root
-ExecStart=%s -target-host %s -target-port %s
+ExecStart=%s -listen %s -target-host %s -target-port %s
 Restart=always
 RestartSec=1
 LimitNOFILE=1048576
 
 [Install]
 WantedBy=multi-user.target
-`, binPath, host, port)
+`, binPath, listen, host, port)
 
-	_ = writeFile(servicePath, []byte(unit), 0644)
+	if err := writeFile(servicePath, []byte(unit), 0644); err != nil {
+		log.Fatal(err)
+	}
+
 	exec.Command("systemctl", "daemon-reload").Run()
 	exec.Command("systemctl", "enable", "sshws").Run()
 	exec.Command("systemctl", "restart", "sshws").Run()
 }
 
 // =====================
-// Détection HTTP
+// WebSocket handler
 // =====================
-func isHTTPRequest(data string) bool {
-	methods := []string{
-		"get ", "post ", "head ", "options ",
-		"put ", "trace ", "patch ", "delete ", "connect ",
-	}
-	data = strings.ToLower(data)
-	for _, m := range methods {
-		if strings.HasPrefix(data, m) {
-			return true
-		}
-	}
-	return false
-}
-
-// =====================
-// WebSocket → SSH
-// =====================
-func handleWebSocket(client net.Conn, first []byte, target string) {
+func handleWebSocket(c net.Conn, first []byte, target string) {
 	req := string(first)
-
 	key := ""
+
 	for _, line := range strings.Split(req, "\n") {
 		if strings.HasPrefix(strings.ToLower(line), "sec-websocket-key") {
 			key = strings.TrimSpace(strings.SplitN(line, ":", 2)[1])
@@ -161,91 +153,83 @@ func handleWebSocket(client net.Conn, first []byte, target string) {
 		acceptKey(key),
 	)
 
-	_, _ = client.Write([]byte(resp))
+	c.Write([]byte(resp))
 
-	remote, err := net.Dial("tcp", target)
+	r, err := net.Dial("tcp", target)
 	if err != nil {
-		client.Close()
+		c.Close()
 		return
 	}
 
-	go io.Copy(remote, client)
-	go io.Copy(client, remote)
+	go io.Copy(r, c)
+	go io.Copy(c, r)
 }
 
 // =====================
-// HTTP Injector (TOUTES méthodes)
+// TCP RAW Injector (ALL HTTP METHODS)
 // =====================
-func handleHTTP(client net.Conn, target string) {
-	_, _ = client.Write([]byte(
+func handleTCP(c net.Conn, target string) {
+	// Réponse générique HTTP valable pour
+	// GET, POST, PUT, DELETE, HEAD, OPTIONS, TRACE, PATCH, CONNECT
+	c.Write([]byte(
 		"HTTP/1.1 200 OK\r\n" +
-			"Content-Length: 0\r\n" +
 			"Connection: keep-alive\r\n\r\n",
 	))
 
-	remote, err := net.Dial("tcp", target)
+	r, err := net.Dial("tcp", target)
 	if err != nil {
-		client.Close()
+		c.Close()
 		return
 	}
 
-	go io.Copy(remote, client)
-	go io.Copy(client, remote)
+	go io.Copy(r, c)
+	go io.Copy(c, r)
 }
 
 // =====================
 // MAIN
 // =====================
 func main() {
+	listen := flag.String("listen", "80", "Listen port")
 	targetHost := flag.String("target-host", "127.0.0.1", "SSH host")
 	targetPort := flag.String("target-port", "22", "SSH port")
 	flag.Parse()
 
 	setupLogging()
-	ensureSystemd(*targetHost, *targetPort)
+	ensureSystemd(*listen, *targetHost, *targetPort)
 
 	target := net.JoinHostPort(*targetHost, *targetPort)
-	domain := allowedDomain()
 
-	ln, err := net.Listen("tcp", ":80")
+	ln, err := net.Listen("tcp", ":"+*listen)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Println("🚀 SSHWS actif sur le port 80")
-	if domain != "" {
-		log.Println("🔒 Domaine autorisé :", domain)
-	}
+	log.Println("🚀 SSHWS actif sur le port", *listen)
 
 	for {
-		client, err := ln.Accept()
+		c, err := ln.Accept()
 		if err != nil {
 			continue
 		}
 
-		go func(c net.Conn) {
+		go func(conn net.Conn) {
 			buf := make([]byte, 4096)
-			n, err := c.Read(buf)
+			n, err := conn.Read(buf)
 			if err != nil {
-				c.Close()
+				conn.Close()
 				return
 			}
 
 			data := strings.ToLower(string(buf[:n]))
 
 			if strings.Contains(data, "upgrade: websocket") {
-				log.Println("[WS]", c.RemoteAddr())
-				handleWebSocket(c, buf[:n], target)
-				return
+				log.Println("[WS]", conn.RemoteAddr())
+				handleWebSocket(conn, buf[:n], target)
+			} else {
+				log.Println("[TCP]", conn.RemoteAddr())
+				handleTCP(conn, target)
 			}
-
-			if isHTTPRequest(data) {
-				log.Println("[HTTP]", c.RemoteAddr())
-				handleHTTP(c, target)
-				return
-			}
-
-			c.Close()
-		}(client)
+		}(c)
 	}
 }
