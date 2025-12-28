@@ -2,7 +2,7 @@
 // sshws.go — TCP RAW Injector + WebSocket → SSH
 // Compatible HTTP (ALL methods) + WS
 // Ubuntu 18.04 → 24.04 | Go 1.13+ | systemd OK
-// Auteur : @kighmu
+// Auteur : @kighmu (corrigé définitivement)
 // Licence : MIT
 // ================================================================
 
@@ -97,7 +97,7 @@ func setupLogging() {
 }
 
 // =====================
-// systemd (cohérent avec flags)
+// systemd
 // =====================
 func ensureSystemd(listen, host, port string) {
 	if _, err := os.Stat(servicePath); err == nil {
@@ -115,6 +115,8 @@ ExecStart=%s -listen %s -target-host %s -target-port %s
 Restart=always
 RestartSec=1
 LimitNOFILE=1048576
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
@@ -169,8 +171,7 @@ func handleWebSocket(c net.Conn, first []byte, target string) {
 // TCP RAW Injector (ALL HTTP METHODS)
 // =====================
 func handleTCP(c net.Conn, target string) {
-	// Réponse générique HTTP valable pour
-	// GET, POST, PUT, DELETE, HEAD, OPTIONS, TRACE, PATCH, CONNECT
+	// Réponse générique HTTP valable pour GET/POST/PUT/DELETE/HEAD/OPTIONS/TRACE/PATCH/CONNECT
 	c.Write([]byte(
 		"HTTP/1.1 200 OK\r\n" +
 			"Connection: keep-alive\r\n\r\n",
@@ -182,6 +183,7 @@ func handleTCP(c net.Conn, target string) {
 		return
 	}
 
+	// TCP brut
 	go io.Copy(r, c)
 	go io.Copy(c, r)
 }
