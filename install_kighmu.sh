@@ -202,6 +202,7 @@ FILES=(
   "menu_5.sh"
   "sshws.go"
   "ssl_tls.go"
+  "histeria2.go"
   "install_v2ray.sh"
 )
 
