@@ -1,172 +1,116 @@
 #!/bin/bash
-# udp_custom.sh
-# Installation et configuration UDP Custom pour HTTP Custom VPN
-# Fonctionnalité : iptables persistantes pour port UDP, systemd redémarrage automatique
+# ==========================================================
+# UDP Custom Server → SSH (fonctionnel)
+# Compatible HTTP Custom VPN (Android)
+# ==========================================================
 
 set -euo pipefail
 
-# --- Variables ---
+# ---------- VARIABLES ----------
 INSTALL_DIR="/opt/udp-custom"
-CONFIG_FILE="$INSTALL_DIR/config/config.json"
-BIN_PATH="$INSTALL_DIR/bin/udp-custom-linux-amd64"
+BIN_DIR="$INSTALL_DIR/bin"
+BIN_PATH="$BIN_DIR/udp-custom-linux-amd64"
 UDP_PORT=54000
+TARGET_HOST="127.0.0.1"
+TARGET_PORT=22
+RUN_USER="udpuser"
 LOG_DIR="/var/log/udp-custom"
+SERVICE_NAME="udp_custom.service"
+
+# ---------- LOG ----------
+mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/install.log"
 
-mkdir -p "$LOG_DIR"
-
 log() {
-  local msg="$1"
-  echo "$(date '+%Y-%m-%d %H:%M:%S') | $msg" | tee -a "$LOG_FILE"
+  echo "$(date '+%Y-%m-%d %H:%M:%S') | $1" | tee -a "$LOG_FILE"
 }
 
-log "+--------------------------------------------+"
-log "|             INSTALLATION UDP CUSTOM        |"
-log "+--------------------------------------------+"
+log "============================================"
+log " INSTALLATION UDP CUSTOM → SSH (STABLE)"
+log "============================================"
 
-# --- Dépendances ---
-install_package_if_missing() {
-  local pkg="$1"
-  log "Installation de $pkg..."
-  apt-get update -y >/dev/null 2>&1 || true
-  if ! apt-get install -y "$pkg" >/dev/null 2>&1; then
-    log "⚠️ Échec de l'installation de $pkg, le script continue..."
-  else
-    log "Le paquet $pkg a été installé avec succès."
-  fi
-}
+# ---------- DEPENDANCES ----------
+apt update -y
+apt install -y \
+  git curl iptables ca-certificates \
+  openssh-server netfilter-persistent
 
-essential_packages=(git curl build-essential libssl-dev jq iptables ca-certificates)
-for p in "${essential_packages[@]}"; do
-  install_package_if_missing "$p"
-done
-
-# --- Vérification IP publique ---
-if ! command -v curl >/dev/null 2>&1; then
-  install_package_if_missing curl
-fi
-IP_TEST=$(curl -s --max-time 5 https://ifconfig.co)
-if [[ -z "$IP_TEST" ]]; then
-  log "⚠️ Impossible de déterminer l’IP publique via curl."
+# ---------- UTILISATEUR DÉDIÉ ----------
+if ! id "$RUN_USER" &>/dev/null; then
+  useradd -r -m -s /usr/sbin/nologin "$RUN_USER"
+  log "Utilisateur $RUN_USER créé"
 fi
 
-# --- Clonage ou mise à jour du dépôt ---
+# ---------- CLONAGE ----------
 if [ ! -d "$INSTALL_DIR" ]; then
-  log "Clonage du dépôt udp-custom..."
-  git clone https://github.com/http-custom/udp-custom.git "$INSTALL_DIR" 2>>"$LOG_FILE" || {
-    log "Échec du clonage. Vérifier l’accès réseau et l’URL du dépôt."
-    exit 1
-  }
+  git clone https://github.com/http-custom/udp-custom.git "$INSTALL_DIR"
 else
-  log "udp-custom déjà présent, mise à jour..."
   cd "$INSTALL_DIR"
-  git pull 2>>"$LOG_FILE" || log "Échec de la mise à jour, le script continue."
+  git pull || true
 fi
-cd "$INSTALL_DIR"
 
-# --- Vérification du binaire ---
+# ---------- BINAIRE ----------
+mkdir -p "$BIN_DIR"
+chmod +x "$BIN_PATH"
+
 if [ ! -x "$BIN_PATH" ]; then
-  if [ -f "$BIN_PATH" ]; then
-    chmod +x "$BIN_PATH"
-  fi
-fi
-if [ ! -x "$BIN_PATH" ]; then
-  log "❌ Erreur critique: Le binaire $BIN_PATH est manquant ou non exécutable."
+  log "❌ Binaire udp-custom introuvable"
   exit 1
 fi
 
-# --- Configuration JSON ---
-log "Configuration UDP..."
-mkdir -p "$(dirname "$CONFIG_FILE")"
-cat > "$CONFIG_FILE" << EOF
-{
-  "server_port": $UDP_PORT,
-  "exclude_port": [],
-  "udp_timeout": 600,
-  "dns_cache": true
-}
-EOF
+# ---------- IPTABLES ----------
+log "Configuration iptables UDP $UDP_PORT"
 
-# --- Création utilisateur dédié ---
-if ! id -u udpuser >/dev/null 2>&1; then
-  useradd -r -m -d /home/udpuser udpuser || true
-  log "Utilisateur dédié udpuser créé."
-fi
-chown -R udpuser:udpuser "$INSTALL_DIR"
+iptables -C INPUT -p udp --dport "$UDP_PORT" -j ACCEPT 2>/dev/null \
+  || iptables -I INPUT -p udp --dport "$UDP_PORT" -j ACCEPT
 
-# --- iptables persistantes ---
-log "Configuration du port UDP $UDP_PORT avec iptables..."
-iptables -C INPUT -p udp --dport "$UDP_PORT" -j ACCEPT 2>/dev/null || iptables -I INPUT -p udp --dport "$UDP_PORT" -j ACCEPT
-iptables -C OUTPUT -p udp --sport "$UDP_PORT" -j ACCEPT 2>/dev/null || iptables -I OUTPUT -p udp --sport "$UDP_PORT" -j ACCEPT
+iptables -C OUTPUT -p udp --sport "$UDP_PORT" -j ACCEPT 2>/dev/null \
+  || iptables -I OUTPUT -p udp --sport "$UDP_PORT" -j ACCEPT
 
-# Sauvegarde persistante
-mkdir -p /etc/iptables
-iptables-save | tee /etc/iptables/rules.v4
+iptables-save > /etc/iptables/rules.v4
 systemctl enable netfilter-persistent
-systemctl restart netfilter-persistent || true
-log "Règles iptables appliquées et persistantes."
+systemctl restart netfilter-persistent
 
-# --- Service systemd ---
-SERVICE_PATH="/etc/systemd/system/udp_custom.service"
-log "Création du fichier systemd udp_custom.service..."
-cat > "$SERVICE_PATH" <<EOF
+# ---------- SYSTEMD ----------
+log "Création du service systemd"
+
+cat > /etc/systemd/system/$SERVICE_NAME <<EOF
 [Unit]
-Description=UDP Custom Service for HTTP Custom VPN
-After=network-online.target
+Description=UDP Custom Server (UDP → SSH)
+After=network-online.target ssh.service
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=udpuser
-Group=udpuser
-WorkingDirectory=$INSTALL_DIR
-ExecStart=$BIN_PATH -c $CONFIG_FILE
+User=$RUN_USER
+ExecStart=$BIN_PATH \
+  --listen 0.0.0.0:$UDP_PORT \
+  --target $TARGET_HOST:$TARGET_PORT
 Restart=always
-RestartSec=5
-Environment=LOG_DIR=$LOG_DIR
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=udp-custom
+RestartSec=3
+LimitNOFILE=1048576
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
+# ---------- DÉMARRAGE ----------
+systemctl daemon-reexec
 systemctl daemon-reload
-systemctl enable udp_custom.service
-systemctl restart udp_custom.service
+systemctl enable $SERVICE_NAME
+systemctl restart $SERVICE_NAME
 
-# --- Vérification démarrage ---
-sleep 3
-if pgrep -f "udp-custom-linux-amd64" >/dev/null; then
-  log "UDP Custom démarré avec succès sur le port $UDP_PORT."
+sleep 2
+
+if ss -lunp | grep -q ":$UDP_PORT"; then
+  log "✅ UDP Custom actif sur UDP $UDP_PORT → SSH $TARGET_PORT"
 else
-  log "❌ Échec: UDP Custom ne s’est pas lancé correctement."
+  log "❌ UDP Custom ne répond pas"
+  journalctl -u $SERVICE_NAME --no-pager | tail -n 30
   exit 1
 fi
 
-log "+--------------------------------------------+"
-log "|          Configuration terminée            |"
-log "|  Port UDP $UDP_PORT ouvert et persistant   |"
-log "|  Service systemd udp_custom actif          |"
-log "+--------------------------------------------+"
-
-# --- Désinstallation ---
-uninstall_udp_custom() {
-    log ">>> Désinstallation UDP Custom..."
-    systemctl stop udp_custom.service || true
-    systemctl disable udp_custom.service || true
-    rm -f /etc/systemd/system/udp_custom.service
-    systemctl daemon-reload
-
-    rm -rf "$INSTALL_DIR"
-
-    iptables -D INPUT -p udp --dport "$UDP_PORT" -j ACCEPT 2>/dev/null || true
-    iptables -D OUTPUT -p udp --sport "$UDP_PORT" -j ACCEPT 2>/dev/null || true
-    iptables-save | tee /etc/iptables/rules.v4
-    systemctl restart netfilter-persistent || true
-
-    log "[OK] UDP Custom désinstallé."
-}
-
-exit 0
+log "============================================"
+log " INSTALLATION TERMINÉE AVEC SUCCÈS"
+log " UDP $UDP_PORT → SSH $TARGET_PORT"
+log "============================================"
