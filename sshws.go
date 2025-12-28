@@ -1,6 +1,8 @@
 // ================================================================
-// sshws.go — WebSocket → SSH (TCP) Proxy
-// Auto-install systemd | Ubuntu 18.04 → 24.04 | Go 1.13+
+// sshws.go — WebSocket + TCP/HTTP Injector → SSH
+// WS + TCP tunnel on same port
+// systemd auto-install
+// Ubuntu 18.04 → 24.04 | Go 1.13+
 // Auteur : @kighmu
 // Licence : MIT
 // ================================================================
@@ -25,13 +27,8 @@ import (
 	"time"
 )
 
-// =====================
-// Constantes
-// =====================
-
 const (
-	wsGUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-
+	wsGUID      = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 	infoFile    = ".kighmu_info"
 	binPath     = "/usr/local/bin/sshws"
 	servicePath = "/etc/systemd/system/sshws.service"
@@ -42,9 +39,8 @@ const (
 )
 
 // =====================
-// Fonction writeFile compatible Go 1.13+
+// writeFile (Go 1.13+)
 // =====================
-
 func writeFile(path string, data []byte, perm os.FileMode) error {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, perm)
 	if err != nil {
@@ -56,9 +52,8 @@ func writeFile(path string, data []byte, perm os.FileMode) error {
 }
 
 // =====================
-// Utils WebSocket
+// WebSocket accept key
 // =====================
-
 func acceptKey(key string) string {
 	h := sha1.New()
 	h.Write([]byte(key + wsGUID))
@@ -68,13 +63,11 @@ func acceptKey(key string) string {
 // =====================
 // Domaine autorisé (optionnel)
 // =====================
-
 func allowedDomain() string {
 	u, err := user.Current()
 	if err != nil {
 		return ""
 	}
-
 	f, err := os.Open(filepath.Join(u.HomeDir, infoFile))
 	if err != nil {
 		return ""
@@ -94,7 +87,6 @@ func allowedDomain() string {
 // =====================
 // Logging robuste
 // =====================
-
 func setupLogging() {
 	_ = os.MkdirAll(logDir, 0755)
 
@@ -114,14 +106,13 @@ func setupLogging() {
 // =====================
 // systemd auto-install
 // =====================
-
 func ensureSystemd(listen, host, port string) {
 	if _, err := os.Stat(servicePath); err == nil {
 		return
 	}
 
 	unit := fmt.Sprintf(`[Unit]
-Description=SSH WebSocket Tunnel (SSHWS)
+Description=SSH WebSocket + TCP Tunnel
 After=network.target
 Wants=network.target
 
@@ -131,7 +122,6 @@ User=root
 ExecStart=%s -listen %s -target-host %s -target-port %s
 Restart=always
 RestartSec=1
-TimeoutStopSec=5
 KillMode=process
 LimitNOFILE=1048576
 StandardOutput=journal
@@ -142,7 +132,7 @@ WantedBy=multi-user.target
 `, binPath, listen, host, port)
 
 	if err := writeFile(servicePath, []byte(unit), 0644); err != nil {
-		log.Fatal("Impossible d’écrire le service systemd :", err)
+		log.Fatal(err)
 	}
 
 	exec.Command("systemctl", "daemon-reload").Run()
@@ -151,25 +141,60 @@ WantedBy=multi-user.target
 }
 
 // =====================
-// WebSocket → SSH
+// Réponse HTTP Injector
 // =====================
+func injectorResponse(method string) string {
+	m := strings.ToUpper(method)
 
-func handleWS(target string, w http.ResponseWriter, r *http.Request) {
-	ad := allowedDomain()
+	if strings.Contains(m, "CONNECT") || strings.Contains(m, "HTTP/2.0") {
+		return `HTTP/2.0 200 OK
+Connection: keep-alive
 
-	host := r.Host
-	if strings.Contains(host, ":") {
-		host, _, _ = net.SplitHostPort(host)
+`
 	}
-	if ad != "" && !strings.EqualFold(host, ad) {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+
+	return `HTTP/1.1 200 OK
+Connection: keep-alive
+
+`
+}
+
+// =====================
+// Tunnel TCP / HTTP Injector
+// =====================
+func handleTCPTunnel(target string, w http.ResponseWriter, r *http.Request) {
+	log.Printf("[TCP] %s %s Host=%s XOH=%s",
+		r.RemoteAddr, r.Method, r.Host, r.Header.Get("X-Online-Host"))
+
+	hj, ok := w.(http.Hijacker)
+	if !ok {
+		http.Error(w, "Hijack not supported", 500)
 		return
 	}
 
-	if !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
-		http.Error(w, "Upgrade Required", http.StatusBadRequest)
+	client, buf, err := hj.Hijack()
+	if err != nil {
 		return
 	}
+
+	buf.WriteString(injectorResponse(r.Method))
+	buf.Flush()
+
+	remote, err := net.DialTimeout("tcp", target, 10*time.Second)
+	if err != nil {
+		client.Close()
+		return
+	}
+
+	go io.Copy(remote, client)
+	go io.Copy(client, remote)
+}
+
+// =====================
+// Tunnel WebSocket
+// =====================
+func handleWebSocket(target string, w http.ResponseWriter, r *http.Request) {
+	log.Printf("[WS] %s", r.RemoteAddr)
 
 	hj, ok := w.(http.Hijacker)
 	if !ok {
@@ -188,12 +213,12 @@ func handleWS(target string, w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := fmt.Sprintf(
-		"HTTP/1.1 101 Switching Protocols\r\n"+
-			"Upgrade: websocket\r\n"+
-			"Connection: Upgrade\r\n"+
-			"Sec-WebSocket-Accept: %s\r\n\r\n",
-		acceptKey(key),
-	)
+		`HTTP/1.1 101 Switching Protocols
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Accept: %s
+
+`, acceptKey(key))
 
 	buf.WriteString(resp)
 	buf.Flush()
@@ -204,38 +229,47 @@ func handleWS(target string, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if tcp, ok := remote.(*net.TCPConn); ok {
-		tcp.SetKeepAlive(true)
-		tcp.SetKeepAlivePeriod(30 * time.Second)
+	go io.Copy(remote, client)
+	go io.Copy(client, remote)
+}
+
+// =====================
+// Handler principal WS + TCP
+// =====================
+func handleConnection(target string, w http.ResponseWriter, r *http.Request) {
+	ad := allowedDomain()
+	if ad != "" {
+		host := r.Host
+		if strings.Contains(host, ":") {
+			host, _, _ = net.SplitHostPort(host)
+		}
+		if !strings.EqualFold(host, ad) {
+			http.Error(w, "Forbidden", 403)
+			return
+		}
 	}
 
-	go func() {
-		defer client.Close()
-		defer remote.Close()
-		io.Copy(remote, client)
-	}()
-	go func() {
-		defer client.Close()
-		defer remote.Close()
-		io.Copy(client, remote)
-	}()
+	if strings.EqualFold(r.Header.Get("Upgrade"), "websocket") ||
+		strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") {
+		handleWebSocket(target, w, r)
+		return
+	}
+
+	handleTCPTunnel(target, w, r)
 }
 
 // =====================
 // MAIN
 // =====================
-
 func main() {
-	listen := flag.String("listen", "80", "Port WebSocket")
-	targetHost := flag.String("target-host", "127.0.0.1", "Hôte SSH")
-	targetPort := flag.String("target-port", "22", "Port SSH")
+	listen := flag.String("listen", "80", "Port WS + TCP")
+	targetHost := flag.String("target-host", "127.0.0.1", "SSH host")
+	targetPort := flag.String("target-port", "22", "SSH port")
 	flag.Parse()
 
 	setupLogging()
-
 	ensureSystemd(*listen, *targetHost, *targetPort)
 
-	// Watchdog interne
 	go func() {
 		for {
 			time.Sleep(30 * time.Second)
@@ -246,13 +280,9 @@ func main() {
 	target := net.JoinHostPort(*targetHost, *targetPort)
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
-			handleWS(target, w, r)
-			return
-		}
-		w.Write([]byte("SSHWS OK\n"))
+		handleConnection(target, w, r)
 	})
 
-	log.Println("SSHWS actif sur le port", *listen)
+	log.Printf("🚀 SSHWS actif sur :%s → %s", *listen, target)
 	log.Fatal(http.ListenAndServe(":"+*listen, nil))
 }
