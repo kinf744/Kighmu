@@ -1,6 +1,6 @@
 // ================================================================
 // sshws.go — TCP RAW Injector + WebSocket → SSH
-// Compatible HTTP (ALL methods) + WS
+// HTTP FAKE MODE (ALL methods) + WS
 // Ubuntu 18.04 → 24.04 | Go 1.13+ | systemd OK
 // Auteur : @kighmu (corrigé définitivement)
 // Licence : MIT
@@ -38,7 +38,7 @@ const (
 )
 
 // =====================
-// Utils fichiers (Go 1.13 compatible)
+// Utils fichiers
 // =====================
 func writeFile(path string, data []byte, perm os.FileMode) error {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, perm)
@@ -115,17 +115,12 @@ ExecStart=%s -listen %s -target-host %s -target-port %s
 Restart=always
 RestartSec=1
 LimitNOFILE=1048576
-StandardOutput=journal
-StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
 `, binPath, listen, host, port)
 
-	if err := writeFile(servicePath, []byte(unit), 0644); err != nil {
-		log.Fatal(err)
-	}
-
+	_ = writeFile(servicePath, []byte(unit), 0644)
 	exec.Command("systemctl", "daemon-reload").Run()
 	exec.Command("systemctl", "enable", "sshws").Run()
 	exec.Command("systemctl", "restart", "sshws").Run()
@@ -168,14 +163,14 @@ func handleWebSocket(c net.Conn, first []byte, target string) {
 }
 
 // =====================
-// TCP RAW Injector (ALL HTTP METHODS)
+// TCP RAW Injector (HTTP FAKE MODE)
 // =====================
 func handleTCP(c net.Conn, target string) {
-	// Réponse générique HTTP valable pour GET/POST/PUT/DELETE/HEAD/OPTIONS/TRACE/PATCH/CONNECT
-	c.Write([]byte(
-		"HTTP/1.1 200 OK\r\n" +
-			"Connection: keep-alive\r\n\r\n",
-	))
+	// Réponse minimale FAKE HTTP
+	c.Write([]byte("HTTP/1.1 200 OK\r\n\r\n"))
+
+	// ⚠️ IMPORTANT : on IGNORE totalement la requête HTTP
+	// rien de ce que le client a envoyé avant ne part vers SSH
 
 	r, err := net.Dial("tcp", target)
 	if err != nil {
@@ -183,7 +178,7 @@ func handleTCP(c net.Conn, target string) {
 		return
 	}
 
-	// TCP brut
+	// Tunnel TCP brut propre
 	go io.Copy(r, c)
 	go io.Copy(c, r)
 }
@@ -207,7 +202,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Println("🚀 SSHWS actif sur le port", *listen)
+	log.Println("🚀 SSHWS HTTP-FAKE Injector actif sur le port", *listen)
 
 	for {
 		c, err := ln.Accept()
@@ -216,7 +211,7 @@ func main() {
 		}
 
 		go func(conn net.Conn) {
-			buf := make([]byte, 4096)
+			buf := make([]byte, 8192)
 			n, err := conn.Read(buf)
 			if err != nil {
 				conn.Close()
@@ -229,7 +224,7 @@ func main() {
 				log.Println("[WS]", conn.RemoteAddr())
 				handleWebSocket(conn, buf[:n], target)
 			} else {
-				log.Println("[TCP]", conn.RemoteAddr())
+				log.Println("[HTTP-FAKE]", conn.RemoteAddr())
 				handleTCP(conn, target)
 			}
 		}(c)
