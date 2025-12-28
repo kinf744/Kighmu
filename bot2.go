@@ -1,5 +1,5 @@
 // ================================================================
-// bot2.go — Telegram VPS Control Bot (sans panneau interne)
+// bot2.go — Telegram VPS Control Bot
 // Auteur : Kighmu
 // Compatible : Go 1.13+ / Ubuntu 20.04
 // ================================================================
@@ -7,7 +7,8 @@
 package main
 
 import (
-	"log"
+	"bufio"
+	"fmt"
 	"os"
 	"os/exec"
 	"strconv"
@@ -52,42 +53,108 @@ func runCommand(cmd string) string {
 }
 
 // =====================
-// MAIN
+// Pause console
 // =====================
-func main() {
+func pause() {
+	fmt.Print("Appuyez sur Entrée pour continuer...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
+}
+
+// =====================
+// Vérifie si une commande existe
+// =====================
+func commandExists(cmd string) bool {
+	_, err := exec.LookPath(cmd)
+	return err == nil
+}
+
+// =====================
+// Installer et compiler le bot
+// =====================
+func installerEtCompiler() {
+	fmt.Println("⏳ Vérification de Go...")
+
+	if !commandExists("go") {
+		fmt.Println("❌ Go n'est pas installé")
+		pause()
+		return
+	}
+
+	if _, err := os.Stat("go.mod"); os.IsNotExist(err) {
+		cmd := exec.Command("go", "mod", "init", "telegram-bot")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Run()
+	}
+
+	fmt.Println("⏳ Installation de la librairie Telegram...")
+	cmdGet := exec.Command("go", "get", "github.com/go-telegram-bot-api/telegram-bot-api")
+	cmdGet.Stdout = os.Stdout
+	cmdGet.Stderr = os.Stderr
+	cmdGet.Run()
+
+	fmt.Println("⏳ Compilation du bot...")
+	build := exec.Command("go", "build", "-o", "bot2", "bot2.go")
+	build.Stdout = os.Stdout
+	build.Stderr = os.Stderr
+	if err := build.Run(); err != nil {
+		fmt.Println("❌ Erreur lors de la compilation :", err)
+		pause()
+		return
+	}
+
+	fmt.Println("✅ Librairie installée et bot compilé")
+	pause()
+}
+
+// =====================
+// Lancer le bot Telegram
+// =====================
+func lancerBot() {
+	if _, err := os.Stat("bot2"); os.IsNotExist(err) {
+		fmt.Println("❌ Bot non compilé. Choisissez d'abord l'option 1.")
+		pause()
+		return
+	}
 
 	if botToken == "" {
-		log.Fatal("❌ BOT_TOKEN manquant dans l'environnement")
+		fmt.Println("❌ BOT_TOKEN manquant dans l'environnement")
+		pause()
+		return
 	}
 
 	idStr := os.Getenv("ADMIN_ID")
 	if idStr == "" {
-		log.Fatal("❌ ADMIN_ID manquant dans l'environnement")
+		fmt.Println("❌ ADMIN_ID manquant dans l'environnement")
+		pause()
+		return
 	}
-
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		log.Fatal("❌ ADMIN_ID invalide")
+		fmt.Println("❌ ADMIN_ID invalide")
+		pause()
+		return
 	}
 	adminID = id
 
 	bot, err := tgbotapi.NewBotAPI(botToken)
 	if err != nil {
-		log.Fatal("❌ Impossible de créer le bot :", err)
+		fmt.Println("❌ Impossible de créer le bot:", err)
+		pause()
+		return
 	}
 
-	log.Printf("🤖 Bot démarré : %s", bot.Self.UserName)
-
+	fmt.Println("🤖 Bot Telegram démarré")
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
-	updates := bot.GetUpdatesChan(u)
+	updates, _ := bot.GetUpdatesChan(u)
 
 	for update := range updates {
 		if update.Message == nil {
 			continue
 		}
 
-		// ✅ CORRECTION ICI (int → int64)
+		// ⚠️ Cast corrigé pour éviter mismatched types
 		if int64(update.Message.From.ID) != adminID {
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "⛔ Accès refusé")
 			bot.Send(msg)
@@ -98,42 +165,26 @@ func main() {
 		var response string
 
 		switch text {
-
 		case "/start":
-			response = "👋 *VPS Control Bot*\n\n" +
+			response = "👋 VPS Control Bot\n\n" +
 				"/status\n" +
 				"/uptime\n" +
 				"/disk\n" +
 				"/ram\n" +
 				"/sshws\n" +
-				"/slowdns\n" +
-				"/restart_sshws\n" +
-				"/restart_slowdns"
-
+				"/slowdns"
 		case "/status":
 			response = runCommand("uptime")
-
 		case "/uptime":
 			response = runCommand("uptime")
-
 		case "/disk":
 			response = runCommand("df -h")
-
 		case "/ram":
 			response = runCommand("free -m")
-
 		case "/sshws":
 			response = runCommand("systemctl status sshws")
-
 		case "/slowdns":
 			response = runCommand("systemctl status dnstt")
-
-		case "/restart_sshws":
-			response = runCommand("systemctl restart sshws")
-
-		case "/restart_slowdns":
-			response = runCommand("systemctl restart dnstt")
-
 		default:
 			response = "❓ Commande inconnue"
 		}
@@ -142,4 +193,12 @@ func main() {
 		msg.ParseMode = "Markdown"
 		bot.Send(msg)
 	}
+}
+
+// =====================
+// MAIN
+// =====================
+func main() {
+	// Le panneau de contrôle n'est plus nécessaire
+	lancerBot()
 }
