@@ -204,6 +204,7 @@ FILES=(
   "ssl_tls.go"
   "histeria2.go"
   "bot2.go"
+  "bot2_pannel.sh"
   "install_v2ray.sh"
 )
 
