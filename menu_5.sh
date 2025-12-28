@@ -413,44 +413,54 @@ while true; do
     afficher_menu
     afficher_mode_v2ray_ws
     show_menu
-    read option
+    read -p "Choisissez une option : " option
+
+    SCRIPT_DIR="$HOME/Kighmu"  # Définition du chemin vers ton dossier Kighmu
+
     case "$option" in
-        1) bash "$HOME/Kighmu/install_v2ray.sh" ;;
-        2) creer_utilisateur ;;
-        3) supprimer_utilisateur ;;
-        4) desinstaller_v2ray ;;
-        5) basculer_mode_mix ;;
-        6) basculer_mode_v2only ;;
+        1)
+            bash "$HOME/Kighmu/install_v2ray.sh"
+            ;;
+        2)
+            creer_utilisateur
+            ;;
+        3)
+            supprimer_utilisateur
+            ;;
+        4)
+            desinstaller_v2ray
+            ;;
+        5)
+            basculer_mode_mix
+            ;;
+        6)
+            basculer_mode_v2only
+            ;;
         7)
-    echo "📡 Ouverture du panneau de contrôle du bot Telegram..."
+            echo "📡 Ouverture du panneau de contrôle du bot Telegram..."
+            
+            # Vérifie que le script existe
+            if [ ! -f "$SCRIPT_DIR/bot2_pannel.sh" ]; then
+                echo "❌ Script bot2_pannel.sh introuvable dans $SCRIPT_DIR"
+                read -p "Appuyez sur Entrée pour continuer..."
+                continue
+            fi
 
-    # Vérifie que le script existe
-    if [ ! -f "$SCRIPT_DIR/bot2_pannel.sh" ]; then
-        echo "❌ Script bot2_pannel.sh introuvable dans $SCRIPT_DIR"
-        read -p "Appuyez sur Entrée pour continuer..."
-        continue
-    fi
+            # Vérifie que le script est exécutable
+            if [ ! -x "$SCRIPT_DIR/bot2_pannel.sh" ]; then
+                chmod +x "$SCRIPT_DIR/bot2_pannel.sh"
+            fi
 
-    # Vérifie que le script est exécutable, sinon le rend exécutable
-    if [ ! -x "$SCRIPT_DIR/bot2_pannel.sh" ]; then
-        chmod +x "$SCRIPT_DIR/bot2_pannel.sh" || {
-            echo "❌ Impossible de rendre le script exécutable"
-            read -p "Appuyez sur Entrée pour continuer..."
-            continue
-        }
-    fi
-
-    # Lancer le panneau dans un sous-shell pour ne pas bloquer le menu principal
-    (cd "$SCRIPT_DIR" && ./bot2_pannel.sh)
-
-    # Retour automatique au menu après fermeture du panneau
-    echo "🔙 Retour au menu principal..."
-    read -p "Appuyez sur Entrée pour continuer..."
-    ;;
-        0) echo "Au revoir"; exit 0 ;;
-        *) echo "Option invalide."
-           sleep 1 
-           ;;
+            # Lancer le panneau dans le terminal
+            "$SCRIPT_DIR/bot2_pannel.sh"
+            ;;
+        0)
+            echo "👋 Au revoir"
+            exit 0
+            ;;
+        *)
+            echo "❌ Option invalide."
+            sleep 1
+            ;;
     esac
 done
-     
