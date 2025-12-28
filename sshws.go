@@ -1,9 +1,8 @@
 // ================================================================
 // sshws.go — TCP RAW Injector + WebSocket → SSH
 // Listener TCP brut (architecture correcte)
-// Compatible HTTP Injector + WS sur le même port
 // Ubuntu 18.04 → 24.04 | Go 1.13+ | systemd OK
-// Auteur : @kighmu (corrigé & stabilisé)
+// Auteur : @kighmu
 // Licence : MIT
 // ================================================================
 
@@ -23,7 +22,6 @@ import (
 	"os/user"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 const (
@@ -90,7 +88,7 @@ func setupLogging() {
 }
 
 // =====================
-// systemd (safe)
+// systemd
 // =====================
 func ensureSystemd(listen, host, port string) {
 	if _, err := os.Stat(servicePath); err == nil {
@@ -109,8 +107,6 @@ ExecStart=%s -listen %s -target-host %s -target-port %s
 Restart=always
 RestartSec=1
 LimitNOFILE=1048576
-StandardOutput=journal
-StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
@@ -207,12 +203,6 @@ func main() {
 		}
 
 		go func(c net.Conn) {
-			defer func() {
-				if r := recover(); r != nil {
-					c.Close()
-				}
-			}()
-
 			buf := make([]byte, 4096)
 			n, err := c.Read(buf)
 			if err != nil {
@@ -223,10 +213,8 @@ func main() {
 			data := strings.ToLower(string(buf[:n]))
 
 			if strings.Contains(data, "upgrade: websocket") {
-				log.Println("[WS]", c.RemoteAddr())
 				handleWebSocket(c, buf[:n], target)
 			} else {
-				log.Println("[TCP]", c.RemoteAddr())
 				handleTCP(c, buf[:n], target)
 			}
 		}(client)
