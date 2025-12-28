@@ -22,7 +22,7 @@ afficher_modes_ports() {
     if systemctl is-active --quiet socks_python_ws.service || pgrep -f ws2_proxy.py >/dev/null 2>&1; then any_active=1; fi
     if systemctl is-active --quiet ssl_tls.service || pgrep -f stunnel >/dev/null 2>&1; then any_active=1; fi
     if systemctl is-active --quiet badvpn.service || pgrep -f "badvpn-udpgw" >/dev/null 2>&1 || screen -list | grep -q badvpn_session; then any_active=1; fi
-    if systemctl is-active --quiet hysteria.service || pgrep -f hysteria >/dev/null 2>&1; then any_active=1; fi
+    if systemctl is-active --quiet histeria2.service || pgrep -f hysteria >/dev/null 2>&1; then any_active=1; fi
     if systemctl is-active --quiet sshws.service || pgrep -f sshws >/dev/null 2>&1; then any_active=1; fi
 
     if [[ $any_active -eq 0 ]]; then
@@ -62,8 +62,8 @@ afficher_modes_ports() {
     if systemctl is-active --quiet badvpn.service || pgrep -f stunnel >/dev/null 2>&1; then
         echo -e "  - badvpn: ${GREEN}port UDP 7300${RESET}"
     fi
-    if systemctl is-active --quiet hysteria.service || pgrep -f hysteria >/dev/null 2>&1; then
-        echo -e "  - Hysteria UDP : ${GREEN}port UDP 22000${RESET}"
+    if systemctl is-active --quiet histeria2.service || pgrep -f hysteria >/dev/null 2>&1; then
+        echo -e "  - Hysteria 2 UDP : ${GREEN}port UDP 22000${RESET}"
     fi
     if systemctl is-active --quiet sshws.service || pgrep -f sshws >/dev/null 2>&1 || screen -list | grep -q ws_wssr; then
         echo -e "  - WS/WSS Tunnel: ${GREEN}WS port 80 | WSS port 443${RESET}"
@@ -385,68 +385,81 @@ uninstall_badvpn() {
 HYST_PORT=22000
 
 install_hysteria() {
-    echo ">>> Installation Hysteria..."
+    echo ">>> Installation du tunnel Hysteria 2 (UDP)..."
 
-    local SCRIPT_PATH="$HOME/Kighmu/hysteria.sh"
-
-    # Vérification de la présence du script
-    if [ ! -f "$SCRIPT_PATH" ]; then
-        echo "❌ Script hysteria.sh introuvable à l’emplacement attendu : $SCRIPT_PATH"
+    # Vérification du fichier source
+    if [ ! -f "$HOME/Kighmu/histeria2.go" ]; then
+        echo "[ERREUR] histeria2.go introuvable dans $HOME/Kighmu"
+        read -p "Appuyez sur Entrée..."
         return 1
     fi
 
-    # Exécution sécurisée du script externe
-    bash "$SCRIPT_PATH" || {
-        echo "❌ Erreur lors de l’exécution du script hysteria.sh."
+    echo ">>> Compilation du binaire..."
+    if ! go build -o /usr/local/bin/histeria2 "$HOME/Kighmu/histeria2.go"; then
+        echo "[ERREUR] Échec de la compilation"
+        read -p "Appuyez sur Entrée..."
         return 1
-    }
-
-    # Vérification du service systemd
-    if systemctl is-active --quiet hysteria; then
-        echo -e "${GREEN}[OK] Hysteria installé et lancé.${RESET}"
-    else
-        echo -e "${RED}❌ Hysteria ne s’est pas lancé correctement.${RESET}"
-        systemctl status hysteria --no-pager
-        journalctl -u hysteria -n 20 --no-pager
     fi
+
+    chmod +x /usr/local/bin/histeria2
+    echo "[OK] Binaire installé : /usr/local/bin/histeria2"
+
+    echo ">>> Création du service systemd..."
+    cat >/etc/systemd/system/histeria2.service <<EOF
+[Unit]
+Description=Hysteria 2 UDP Tunnel (Kighmu)
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/histeria2
+Restart=always
+RestartSec=2
+LimitNOFILE=1048576
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable histeria2
+    systemctl restart histeria2
+
+    echo ">>> Ouverture du port UDP 22000..."
+    iptables -I INPUT  -p udp --dport 22000 -j ACCEPT
+    iptables -I OUTPUT -p udp --sport 22000 -j ACCEPT
+
+    echo "[OK] Hysteria 2 installé et actif"
+    systemctl status histeria2 --no-pager
+    read -p "Appuyez sur Entrée..."
 }
 
 uninstall_hysteria() {
-    echo ">>> Désinstallation Hysteria..."
+    echo ">>> Désinstallation du tunnel Hysteria 2..."
 
-    # Arrêt et suppression du service systemd
-    if systemctl list-units --full -all | grep -Fq 'hysteria.service'; then
-        echo "==> Arrêt et désactivation du service systemd..."
-        systemctl stop hysteria.service 2>/dev/null || true
-        systemctl disable hysteria.service 2>/dev/null || true
-        rm -f /etc/systemd/system/hysteria.service
-        systemctl daemon-reload
-    fi
+    systemctl stop histeria2 2>/dev/null || true
+    systemctl disable histeria2 2>/dev/null || true
 
-    # Arrêt des processus encore en mémoire
-    if pgrep -f hysteria >/dev/null 2>&1; then
-        echo "==> Arrêt des processus Hysteria en cours..."
-        pkill -f hysteria || true
-        sleep 1
-    fi
+    rm -f /etc/systemd/system/histeria2.service
+    rm -f /usr/local/bin/histeria2
 
-    # Nettoyage du port UDP 22000
-    echo "==> Nettoyage des règles iptables pour le port 22000..."
-    iptables -D INPUT -p udp --dport 22000 -j ACCEPT 2>/dev/null || true
+    # Certificats TLS Hysteria (si utilisés)
+    rm -rf /etc/ssl/histeria2
+    rm -rf /var/log/histeria2
+
+    systemctl daemon-reload
+
+    echo ">>> Fermeture du port UDP 22000..."
+    iptables -D INPUT  -p udp --dport 22000 -j ACCEPT 2>/dev/null || true
     iptables -D OUTPUT -p udp --sport 22000 -j ACCEPT 2>/dev/null || true
 
-    # Suppression optionnelle de la configuration
-    read -rp "Souhaitez-vous supprimer la configuration (/etc/hysteria) ? [y/N] : " CONFIRM
-    if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
-        rm -rf /etc/hysteria
-        echo "==> Configuration supprimée."
-    else
-        echo "==> Configuration conservée."
-    fi
-
-    echo -e "${GREEN}[OK] Hysteria désinstallé proprement.${RESET}"
+    echo "[OK] Hysteria 2 désinstallé proprement"
+    read -p "Appuyez sur Entrée..."
 }
-
+    
 # --- AJOUT WS/WSS SSH ---
 install_sshws() {
     SRC="$HOME/Kighmu/sshws.go"
