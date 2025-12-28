@@ -1,5 +1,5 @@
 // ================================================================
-// histeria2.go — Tunnel Hysteria 2 (UDP) avec TLS/QUIC simplifié
+// histeria2.go — Tunnel Hysteria 2 (UDP) avec TLS + Obfuscation
 // Compatible Go 1.13+ | Ubuntu 18.04 → 24.04
 // Auteur : @kighmu
 // Licence : MIT
@@ -16,23 +16,32 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
+// =====================
+// Constantes
+// =====================
 const (
 	usersFile   = "/etc/kighmu/users.list"
+	infoFile    = ".kighmu_info"
+
 	binPath     = "/usr/local/bin/histeria2"
 	servicePath = "/etc/systemd/system/histeria2.service"
-	logDir      = "/var/log/histeria2"
-	logFile     = "/var/log/histeria2/histeria2.log"
-	port        = "22000"
-	certDir     = "/etc/ssl/histeria2"
-	certFile    = "/etc/ssl/histeria2/cert.pem"
-	keyFile     = "/etc/ssl/histeria2/key.pem"
+
+	logDir  = "/var/log/histeria2"
+	logFile = "/var/log/histeria2/histeria2.log"
+
+	certDir  = "/etc/ssl/histeria2"
+	certFile = "/etc/ssl/histeria2/cert.pem"
+	keyFile  = "/etc/ssl/histeria2/key.pem"
+
+	port = "22000"
 )
 
 // =====================
-// Utilitaires fichiers
+// Utils fichiers
 // =====================
 func writeFile(path string, data []byte, perm os.FileMode) error {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, perm)
@@ -58,10 +67,36 @@ func setupLogging() {
 }
 
 // =====================
-// Charger les utilisateurs
+// Charger DOMAIN depuis ~/.kighmu_info
+// =====================
+func loadDomain() string {
+	home, _ := os.UserHomeDir()
+	path := filepath.Join(home, infoFile)
+
+	file, err := os.Open(path)
+	if err != nil {
+		log.Fatal("[ERREUR] Fichier ~/.kighmu_info introuvable")
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "DOMAIN=") {
+			return strings.Trim(strings.SplitN(line, "=", 2)[1], "\"")
+		}
+	}
+
+	log.Fatal("[ERREUR] DOMAIN non défini dans ~/.kighmu_info")
+	return ""
+}
+
+// =====================
+// Charger utilisateurs
 // =====================
 func loadUsers() map[string]string {
 	users := make(map[string]string)
+
 	file, err := os.Open(usersFile)
 	if err != nil {
 		log.Println("[WARN] Fichier utilisateurs introuvable :", usersFile)
@@ -77,10 +112,45 @@ func loadUsers() map[string]string {
 		}
 		parts := strings.Split(line, "|")
 		if len(parts) >= 2 {
-			users[parts[0]] = parts[1]
+			users[parts[0]] = parts[1] // username | password
 		}
 	}
 	return users
+}
+
+// =====================
+// Obfuscation XOR (username)
+// =====================
+func xorObfuscate(data []byte, key string) []byte {
+	k := []byte(key)
+	out := make([]byte, len(data))
+	for i := range data {
+		out[i] = data[i] ^ k[i%len(k)]
+	}
+	return out
+}
+
+// =====================
+// Certificat TLS lié au DOMAINE
+// =====================
+func ensureCerts(domain string) {
+	if _, err := os.Stat(certFile); err == nil {
+		return
+	}
+
+	_ = os.MkdirAll(certDir, 0700)
+
+	cmd := exec.Command(
+		"openssl", "req",
+		"-x509", "-newkey", "rsa:2048",
+		"-keyout", keyFile,
+		"-out", certFile,
+		"-days", "365",
+		"-nodes",
+		"-subj", "/CN="+domain,
+		"-addext", "subjectAltName=DNS:"+domain,
+	)
+	cmd.Run()
 }
 
 // =====================
@@ -92,7 +162,7 @@ func ensureSystemd() {
 	}
 
 	unit := fmt.Sprintf(`[Unit]
-Description=Hysteria2 UDP Tunnel (Kighmu)
+Description=Hysteria 2 UDP Tunnel (Kighmu)
 After=network.target
 Wants=network.target
 
@@ -119,60 +189,50 @@ WantedBy=multi-user.target
 }
 
 // =====================
-// Certificat TLS
+// Serveur Hysteria 2 UDP
 // =====================
-func ensureCerts() {
-	if _, err := os.Stat(certFile); err == nil {
-		return
-	}
-	os.MkdirAll(certDir, 0700)
-	cmd := exec.Command("openssl", "req", "-x509", "-newkey", "rsa:2048",
-		"-keyout", keyFile,
-		"-out", certFile,
-		"-days", "365",
-		"-nodes",
-		"-subj", "/CN=histeria2")
-	cmd.Run()
-}
+func runServer(users map[string]string, domain string) {
+	ensureCerts(domain)
 
-// =====================
-// Serveur Hysteria UDP (simplifié)
-// =====================
-func runServer(users map[string]string) {
-	ensureCerts()
 	_, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
-		log.Println("[WARN] Certificat TLS introuvable ou invalide :", err)
+		log.Fatal("Certificat TLS invalide :", err)
 	}
 
 	addr, err := net.ResolveUDPAddr("udp", ":"+port)
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	conn, err := net.ListenUDP("udp", addr)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer conn.Close()
 
-	log.Println("🚀 Hysteria2 UDP Tunnel actif sur le port", port)
+	log.Println("🚀 Hysteria 2 UDP actif sur", domain+":"+port)
+
 	buf := make([]byte, 65535)
 
 	for {
 		n, remoteAddr, err := conn.ReadFromUDP(buf)
 		if err != nil {
-			log.Println("Erreur lecture UDP:", err)
+			log.Println("Erreur UDP:", err)
 			continue
 		}
-		data := string(buf[:n])
-		valid := false
-		for u, p := range users {
-			if strings.Contains(data, u) && strings.Contains(data, p) {
-				valid = true
+
+		raw := buf[:n]
+		authorized := false
+
+		for user, pass := range users {
+			payload := string(xorObfuscate(raw, user))
+			if strings.Contains(payload, pass) {
+				authorized = true
 				break
 			}
 		}
-		if valid {
+
+		if authorized {
 			_, _ = conn.WriteToUDP([]byte("HYSTERIA OK"), remoteAddr)
 		} else {
 			_, _ = conn.WriteToUDP([]byte("AUTH FAILED"), remoteAddr)
@@ -185,7 +245,8 @@ func runServer(users map[string]string) {
 // =====================
 func main() {
 	setupLogging()
+	domain := loadDomain()
 	users := loadUsers()
 	ensureSystemd()
-	runServer(users)
+	runServer(users, domain)
 }
