@@ -1,7 +1,7 @@
 // ================================================================
-// sshws.go — WebSocket → SSH (TCP) Proxy (HTTP Custom compatible)
+// sshws.go — WebSocket → SSH (TCP) Proxy
+// Auto-install systemd | Ubuntu 18.04 → 24.04 | Go 1.13+
 // Auteur : @kighmu
-// Patch : Auto-install Go sécurisé + compatibilité Go 1.13+
 // Licence : MIT
 // ================================================================
 
@@ -14,7 +14,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -22,7 +21,6 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 )
@@ -32,70 +30,19 @@ import (
 // =====================
 
 const (
-	wsGUID      = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-	kighmuInfo  = ".kighmu_info"
-	systemdPath = "/etc/systemd/system/sshws.service"
-	logDir      = "/var/log/sshws"
-	logFile     = "/var/log/sshws/sshws.log"
-	maxLogSize  = 5 * 1024 * 1024
-	minGoMinor  = 20 // Go 1.20 minimum (install seulement en mode manuel)
+	wsGUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+
+	infoFile   = ".kighmu_info"
+	binPath    = "/usr/local/bin/sshws"
+	servicePath = "/etc/systemd/system/sshws.service"
+
+	logDir  = "/var/log/sshws"
+	logFile = "/var/log/sshws/sshws.log"
+	maxLog  = 5 * 1024 * 1024
 )
 
 // =====================
-// Détection systemd
-// =====================
-
-func runningUnderSystemd() bool {
-	return os.Getenv("INVOCATION_ID") != ""
-}
-
-// =====================
-// Vérification Go
-// =====================
-
-func goVersionTooOld() bool {
-	out, err := exec.Command("go", "version").Output()
-	if err != nil {
-		return true
-	}
-
-	re := regexp.MustCompile(`go1\.(\d+)`)
-	m := re.FindStringSubmatch(string(out))
-	if len(m) < 2 {
-		return true
-	}
-
-	var minor int
-	fmt.Sscanf(m[1], "%d", &minor)
-	return minor < minGoMinor
-}
-
-func installLatestGo() {
-	log.Println("⚠️ Go trop ancien ou absent — installation de la dernière version...")
-
-	script := `
-set -e
-ARCH=amd64
-GO_VERSION=$(curl -s https://go.dev/VERSION?m=text || wget -qO- https://go.dev/VERSION?m=text)
-wget -q https://go.dev/dl/${GO_VERSION}.linux-${ARCH}.tar.gz -O /tmp/go.tar.gz
-rm -rf /usr/local/go
-tar -C /usr/local -xzf /tmp/go.tar.gz
-echo 'export PATH=$PATH:/usr/local/go/bin' > /etc/profile.d/go.sh
-`
-
-	cmd := exec.Command("bash", "-c", script)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		log.Fatal("❌ Installation Go échouée :", err)
-	}
-
-	log.Println("✅ Go mis à jour. Recompile sshws puis relance-le.")
-	os.Exit(0)
-}
-
-// =====================
-// Utils
+// Utils WebSocket
 // =====================
 
 func acceptKey(key string) string {
@@ -104,13 +51,16 @@ func acceptKey(key string) string {
 	return base64.StdEncoding.EncodeToString(h.Sum(nil))
 }
 
-func getKighmuDomain() string {
-	usr, err := user.Current()
+// =====================
+// Domaine autorisé (optionnel)
+// =====================
+
+func allowedDomain() string {
+	u, err := user.Current()
 	if err != nil {
 		return ""
 	}
-
-	f, err := os.Open(filepath.Join(usr.HomeDir, kighmuInfo))
+	f, err := os.Open(filepath.Join(u.HomeDir, infoFile))
 	if err != nil {
 		return ""
 	}
@@ -127,13 +77,13 @@ func getKighmuDomain() string {
 }
 
 // =====================
-// Logging
+// Logging robuste
 // =====================
 
 func setupLogging() {
 	_ = os.MkdirAll(logDir, 0755)
 
-	if info, err := os.Stat(logFile); err == nil && info.Size() > maxLogSize {
+	if st, err := os.Stat(logFile); err == nil && st.Size() > maxLog {
 		_ = os.Rename(logFile, logFile+"."+fmt.Sprint(time.Now().Unix()))
 	}
 
@@ -143,41 +93,63 @@ func setupLogging() {
 	}
 
 	log.SetOutput(io.MultiWriter(os.Stdout, f))
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	log.SetFlags(log.LstdFlags)
 }
 
 // =====================
-// Firewall
+// systemd auto-install
 // =====================
 
-func openFirewallPort(port string) {
-	cmd := exec.Command("iptables", "-C", "INPUT", "-p", "tcp", "--dport", port, "-j", "ACCEPT")
-	if cmd.Run() == nil {
+func ensureSystemd(listen, host, port string) {
+	if _, err := os.Stat(servicePath); err == nil {
 		return
 	}
-	exec.Command("iptables", "-I", "INPUT", "-p", "tcp", "--dport", port, "-j", "ACCEPT").Run()
-	exec.Command("netfilter-persistent", "save").Run()
+
+	unit := fmt.Sprintf(`[Unit]
+Description=SSH WebSocket Tunnel (SSHWS)
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=%s -listen %s -target-host %s -target-port %s
+Restart=always
+RestartSec=1
+TimeoutStopSec=5
+KillMode=process
+LimitNOFILE=1048576
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+`, binPath, listen, host, port)
+
+	_ = os.WriteFile(servicePath, []byte(unit), 0644)
+
+	exec.Command("systemctl", "daemon-reload").Run()
+	exec.Command("systemctl", "enable", "sshws").Run()
+	exec.Command("systemctl", "restart", "sshws").Run()
 }
 
 // =====================
-// WebSocket Handler
+// WebSocket → SSH
 // =====================
 
-func handleUpgrade(targetAddr string, w http.ResponseWriter, r *http.Request) {
-	domain := getKighmuDomain()
+func handleWS(target string, w http.ResponseWriter, r *http.Request) {
+	ad := allowedDomain()
+
 	host := r.Host
 	if strings.Contains(host, ":") {
 		host, _, _ = net.SplitHostPort(host)
 	}
-
-	if domain != "" && !strings.EqualFold(host, domain) {
+	if ad != "" && !strings.EqualFold(host, ad) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
-	connHeader := strings.ToLower(r.Header.Get("Connection") + r.Header.Get("Proxy-Connection"))
-	if !strings.Contains(connHeader, "upgrade") ||
-		!strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+	if !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
 		http.Error(w, "Upgrade Required", http.StatusBadRequest)
 		return
 	}
@@ -188,7 +160,7 @@ func handleUpgrade(targetAddr string, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conn, buf, err := hj.Hijack()
+	client, buf, err := hj.Hijack()
 	if err != nil {
 		return
 	}
@@ -209,49 +181,27 @@ func handleUpgrade(targetAddr string, w http.ResponseWriter, r *http.Request) {
 	buf.WriteString(resp)
 	buf.Flush()
 
-	remote, err := net.Dial("tcp", targetAddr)
+	remote, err := net.DialTimeout("tcp", target, 10*time.Second)
 	if err != nil {
-		conn.Close()
+		client.Close()
 		return
 	}
 
-	go func() {
-		defer conn.Close()
-		defer remote.Close()
-		io.Copy(remote, conn)
-	}()
-	go func() {
-		defer conn.Close()
-		defer remote.Close()
-		io.Copy(conn, remote)
-	}()
-}
-
-// =====================
-// systemd
-// =====================
-
-func createSystemdFile(listen, host, port string) {
-	if _, err := os.Stat(systemdPath); err == nil {
-		return
+	if tcp, ok := remote.(*net.TCPConn); ok {
+		tcp.SetKeepAlive(true)
+		tcp.SetKeepAlivePeriod(30 * time.Second)
 	}
 
-	content := fmt.Sprintf(`[Unit]
-Description=SSH WebSocket Tunnel
-After=network.target
-
-[Service]
-Environment=PATH=/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ExecStart=/usr/local/bin/sshws -listen %s -target-host %s -target-port %s
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-`, listen, host, port)
-
-	if err := ioutil.WriteFile(systemdPath, []byte(content), 0644); err != nil {
-		log.Fatal(err)
-	}
+	go func() {
+		defer client.Close()
+		defer remote.Close()
+		io.Copy(remote, client)
+	}()
+	go func() {
+		defer client.Close()
+		defer remote.Close()
+		io.Copy(client, remote)
+	}()
 }
 
 // =====================
@@ -259,30 +209,34 @@ WantedBy=multi-user.target
 // =====================
 
 func main() {
-	// Auto-install Go UNIQUEMENT en mode manuel
-	if !runningUnderSystemd() && goVersionTooOld() {
-		installLatestGo()
-	}
-
-	listen := flag.String("listen", "80", "WS listen port")
-	targetHost := flag.String("target-host", "127.0.0.1", "SSH host")
-	targetPort := flag.String("target-port", "22", "SSH port")
+	listen := flag.String("listen", "80", "Port WebSocket")
+	targetHost := flag.String("target-host", "127.0.0.1", "Hôte SSH")
+	targetPort := flag.String("target-port", "22", "Port SSH")
 	flag.Parse()
 
 	setupLogging()
-	openFirewallPort(*listen)
-	createSystemdFile(*listen, *targetHost, *targetPort)
 
-	targetAddr := net.JoinHostPort(*targetHost, *targetPort)
+	// auto systemd
+	ensureSystemd(*listen, *targetHost, *targetPort)
+
+	// watchdog interne
+	go func() {
+		for {
+			time.Sleep(30 * time.Second)
+			log.Println("watchdog alive")
+		}
+	}()
+
+	target := net.JoinHostPort(*targetHost, *targetPort)
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
-			handleUpgrade(targetAddr, w, r)
+			handleWS(target, w, r)
 			return
 		}
 		w.Write([]byte("SSHWS OK\n"))
 	})
 
-	log.Println("🚀 SSHWS démarré sur le port", *listen)
-	http.ListenAndServe(":"+*listen, nil)
+	log.Println("SSHWS actif sur le port", *listen)
+	log.Fatal(http.ListenAndServe(":"+*listen, nil))
 }
