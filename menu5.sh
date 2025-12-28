@@ -20,7 +20,7 @@ afficher_modes_ports() {
     if systemctl is-active --quiet udp_custom.service || pgrep -f udp-custom-linux-amd64 >/dev/null 2>&1 || screen -list | grep -q udp_custom; then any_active=1; fi
     if systemctl is-active --quiet socks_python.service || pgrep -f KIGHMUPROXY.py >/dev/null 2>&1 || screen -list | grep -q socks_python; then any_active=1; fi
     if systemctl is-active --quiet socks_python_ws.service || pgrep -f ws2_proxy.py >/dev/null 2>&1; then any_active=1; fi
-    if systemctl is-active --quiet stunnel4.service || pgrep -f stunnel >/dev/null 2>&1; then any_active=1; fi
+    if systemctl is-active --quiet ssl_tls.service || pgrep -f stunnel >/dev/null 2>&1; then any_active=1; fi
     if systemctl is-active --quiet badvpn.service || pgrep -f "badvpn-udpgw" >/dev/null 2>&1 || screen -list | grep -q badvpn_session; then any_active=1; fi
     if systemctl is-active --quiet hysteria.service || pgrep -f hysteria >/dev/null 2>&1; then any_active=1; fi
     if systemctl is-active --quiet sshws.service || pgrep -f sshws >/dev/null 2>&1; then any_active=1; fi
@@ -56,7 +56,7 @@ afficher_modes_ports() {
         PROXY_WS_PORT=${PROXY_WS_PORT:-9090}
         echo -e "  - proxy ws: ${GREEN}port TCP $PROXY_WS_PORT${RESET}"
     fi
-    if systemctl is-active --quiet stunnel4.service || pgrep -f stunnel >/dev/null 2>&1; then
+    if systemctl is-active --quiet ssl_tls.service || pgrep -f stunnel >/dev/null 2>&1; then
         echo -e "  - Stunnel SSL/TLS: ${GREEN}port TCP 444${RESET}"
     fi
     if systemctl is-active --quiet badvpn.service || pgrep -f stunnel >/dev/null 2>&1; then
@@ -268,8 +268,31 @@ uninstall_proxy_ws() {
 }
 
 install_ssl_tls() {
-    echo ">>> Lancement du script d'installation SSL/TLS externe..."
-    bash "$HOME/Kighmu/ssl.sh" || echo "Script SSL/TLS introuvable ou erreur."
+    echo ">>> Installation du tunnel SSL/TLS (ssl_tls.go)..."
+
+    # Vérification du binaire
+    if [ ! -x /usr/local/bin/ssl_tls ]; then
+        echo "[ERREUR] Le binaire /usr/local/bin/ssl_tls est introuvable."
+        echo "Compile d'abord ssl_tls.go"
+        return 1
+    fi
+
+    # Installation du service systemd
+    systemctl daemon-reload
+    systemctl enable ssl_tls.service
+    systemctl restart ssl_tls.service
+
+    # Ouverture du port 444
+    iptables -C INPUT  -p tcp --dport 444 -j ACCEPT 2>/dev/null || \
+        iptables -A INPUT -p tcp --dport 444 -j ACCEPT
+
+    iptables -C OUTPUT -p tcp --sport 444 -j ACCEPT 2>/dev/null || \
+        iptables -A OUTPUT -p tcp --sport 444 -j ACCEPT
+
+    # Sauvegarde iptables (si disponible)
+    netfilter-persistent save 2>/dev/null || true
+
+    echo "[OK] Tunnel SSL/TLS actif sur le port 444"
 }
 
 uninstall_ssl_tls() {
