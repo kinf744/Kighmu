@@ -1,7 +1,6 @@
 // ================================================================
 // sshws.go — TCP RAW Injector + WebSocket → SSH
-// Architecture correcte : listener TCP brut
-// Compatible HTTP Injector + WS sur le même port
+// Listener TCP brut (HTTP Injector + WS même port)
 // Ubuntu 18.04 → 24.04 | Go 1.13+ | systemd intégré
 // Auteur : @kighmu
 // Licence : MIT
@@ -24,6 +23,9 @@ import (
 	"strings"
 )
 
+// =====================
+// Constantes
+// =====================
 const (
 	wsGUID      = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 	infoFile    = ".kighmu_info"
@@ -53,6 +55,27 @@ func acceptKey(key string) string {
 	return base64.StdEncoding.EncodeToString(h.Sum(nil))
 }
 
+func allowedDomain() string {
+	u, err := user.Current()
+	if err != nil {
+		return ""
+	}
+	f, err := os.Open(filepath.Join(u.HomeDir, infoFile))
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if strings.HasPrefix(line, "DOMAIN=") {
+			return strings.Trim(strings.SplitN(line, "=", 2)[1], `"`)
+		}
+	}
+	return ""
+}
+
 // =====================
 // Logging
 // =====================
@@ -72,7 +95,7 @@ func ensureSystemd(port string) {
 	}
 
 	unit := fmt.Sprintf(`[Unit]
-Description=SSH WS + TCP Injector Tunnel
+Description=SSH WS + TCP RAW Injector
 After=network.target
 
 [Service]
@@ -86,14 +109,14 @@ LimitNOFILE=1048576
 WantedBy=multi-user.target
 `, binPath, port)
 
-	writeFile(servicePath, []byte(unit), 0644)
+	_ = writeFile(servicePath, []byte(unit), 0644)
 	exec.Command("systemctl", "daemon-reload").Run()
 	exec.Command("systemctl", "enable", "sshws").Run()
 	exec.Command("systemctl", "restart", "sshws").Run()
 }
 
 // =====================
-// WebSocket handler
+// WebSocket RAW
 // =====================
 func handleWebSocket(client net.Conn, first []byte, target string) {
 	req := string(first)
@@ -105,8 +128,7 @@ func handleWebSocket(client net.Conn, first []byte, target string) {
 		}
 	}
 	if key == "" {
-		client.Close()
-		return
+		key = "dGhlIHNhbXBsZSBub25jZQ=="
 	}
 
 	resp := fmt.Sprintf(
@@ -130,7 +152,7 @@ func handleWebSocket(client net.Conn, first []byte, target string) {
 }
 
 // =====================
-// TCP Injector
+// TCP RAW Injector
 // =====================
 func handleTCP(client net.Conn, first []byte, target string) {
 	client.Write([]byte(
@@ -170,7 +192,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Println("🚀 SSHWS WS + TCP Injector actif sur le port", port)
+	log.Println("🚀 SSHWS WS + TCP RAW actif sur le port", port)
 
 	for {
 		client, err := ln.Accept()
@@ -179,7 +201,7 @@ func main() {
 		}
 
 		go func(c net.Conn) {
-			buf := make([]byte, 2048)
+			buf := make([]byte, 4096)
 			n, err := c.Read(buf)
 			if err != nil {
 				c.Close()
