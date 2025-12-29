@@ -34,7 +34,6 @@ type UtilisateurV2Ray struct {
 
 var utilisateursV2Ray []UtilisateurV2Ray
 
-// ===============================
 // Initialisation ADMIN_ID
 // ===============================
 func initAdminID() {
@@ -56,7 +55,6 @@ func initAdminID() {
 	adminID = id
 }
 
-// ===============================
 // Charger DOMAIN depuis kighmu_info si non défini
 // ===============================
 func loadDomain() string {
@@ -90,7 +88,6 @@ func loadDomain() string {
 	return ""
 }
 
-// ===============================
 // Fonctions auxiliaires FastDNS
 // ===============================
 func slowdnsPubKey() string {
@@ -114,7 +111,6 @@ func genererUUID() string {
 	return strings.TrimSpace(string(out))
 }
 
-// ===============================
 // Créer utilisateur normal (jours)
 // ===============================
 func creerUtilisateurNormal(username, password string, limite int, days int) string {
@@ -186,7 +182,6 @@ func creerUtilisateurNormal(username, password string, limite int, days int) str
 	return strings.Join(res, "\n")
 }
 
-// ===============================
 // Créer utilisateur test (minutes)
 // ===============================
 func creerUtilisateurTest(username, password string, limite, minutes int) string {
@@ -255,7 +250,6 @@ func creerUtilisateurTest(username, password string, limite, minutes int) string
 	return strings.Join(res, "\n")
 }
 
-// ===============================
 // Charger utilisateurs V2Ray depuis fichier
 // ===============================
 func chargerUtilisateursV2Ray() {
@@ -281,7 +275,6 @@ func chargerUtilisateursV2Ray() {
 	}
 }
 
-// ===============================
 // Enregistrer un utilisateur V2Ray dans le fichier
 // ===============================
 func enregistrerUtilisateurV2Ray(u UtilisateurV2Ray) error {
@@ -297,7 +290,6 @@ func enregistrerUtilisateurV2Ray(u UtilisateurV2Ray) error {
 	return err
 }
 
-// ===============================
 // Créer utilisateur V2Ray + FastDNS
 // ===============================
 func creerUtilisateurV2Ray(nom string, duree int) string {
@@ -346,7 +338,6 @@ func creerUtilisateurV2Ray(nom string, duree int) string {
 	return builder.String()
 }
 
-// ===============================
 // Supprimer utilisateur V2Ray + FastDNS
 // ===============================
 func supprimerUtilisateurV2Ray(index int) string {
@@ -371,7 +362,6 @@ func supprimerUtilisateurV2Ray(index int) string {
 	return fmt.Sprintf("✅ Utilisateur %s supprimé.", u.Nom)
 }
 
-// ===============================
 // Lancement Bot Telegram
 // ===============================
 func lancerBot() {
@@ -434,7 +424,6 @@ func lancerBot() {
 		if update.Message != nil && int64(update.Message.From.ID) == adminID {
     text := strings.TrimSpace(update.Message.Text)
 
-    // =================================
     // SSH NORMAL / TEST (4 champs)
     // username,password,limite,duree
     // =================================
@@ -463,7 +452,6 @@ func lancerBot() {
         continue
     }
 
-    // ===============================
     // V2RAY + FASTDNS (2 champs)
     // nom,duree
     // ===============================
@@ -482,7 +470,6 @@ func lancerBot() {
         continue
     }
 
-    // ===============================
     // SUPPRESSION V2RAY
     // ===============================
     if num, err := strconv.Atoi(text); err == nil && num > 0 && num <= len(utilisateursV2Ray) {
@@ -491,7 +478,6 @@ func lancerBot() {
         continue
     }
 
-    // ===============================
     // COMMANDE INCONNUE
     // ===============================
     bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "❌ Format non reconnu"))
