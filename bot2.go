@@ -6,7 +6,7 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil" // ← Utilisé pour ReadFile compatible Go <1.16
+	"io/ioutil" // ← Pour ReadFile compatible Go <1.16
 	"os"
 	"os/exec"
 	"os/user"
@@ -27,13 +27,13 @@ var (
 // Fonctions utilitaires
 // ===============================
 
-// Créer utilisateur normal (menu1, jours)
+// Créer utilisateur normal (jours)
 func creerUtilisateurNormal(username, password string, limite int, days int) string {
 	if _, err := user.Lookup(username); err == nil {
 		return fmt.Sprintf("❌ L'utilisateur %s existe déjà", username)
 	}
 
-	// Créer utilisateur
+	// Création utilisateur
 	cmdAdd := exec.Command("useradd", "-m", "-s", "/bin/bash", username)
 	if err := cmdAdd.Run(); err != nil {
 		return fmt.Sprintf("❌ Erreur création utilisateur: %v", err)
@@ -47,8 +47,7 @@ func creerUtilisateurNormal(username, password string, limite int, days int) str
 
 	// Expiration
 	expireDate := time.Now().AddDate(0, 0, days).Format("2006-01-02")
-	cmdExp := exec.Command("chage", "-E", expireDate, username)
-	cmdExp.Run()
+	exec.Command("chage", "-E", expireDate, username).Run()
 
 	// Host IP
 	hostIPBytes, _ := exec.Command("hostname", "-I").Output()
@@ -89,13 +88,13 @@ func creerUtilisateurNormal(username, password string, limite int, days int) str
 	return strings.Join(res, "\n")
 }
 
-// Créer utilisateur test (menu2, minutes)
+// Créer utilisateur test (minutes)
 func creerUtilisateurTest(username, password string, limite, minutes int) string {
 	if _, err := user.Lookup(username); err == nil {
 		return fmt.Sprintf("❌ L'utilisateur %s existe déjà", username)
 	}
 
-	// Créer utilisateur
+	// Création utilisateur
 	cmdAdd := exec.Command("useradd", "-M", "-s", "/bin/bash", username)
 	if err := cmdAdd.Run(); err != nil {
 		return fmt.Sprintf("❌ Erreur création utilisateur: %v", err)
@@ -209,13 +208,21 @@ func lancerBot() {
 					bot.Send(msg)
 				}
 			} else if text == "/kighmu" {
+				msgText := `============================================
+          ⚡ KIGHMU MANAGER ⚡
+============================================
+        AUTEUR : @KIGHMU
+        TELEGRAM : https://t.me/lkgcddtoog
+============================================
+   SÉLECTIONNEZ UNE OPTION CI-DESSOUS !
+============================================`
 				keyboard := tgbotapi.NewInlineKeyboardMarkup(
 					tgbotapi.NewInlineKeyboardRow(
 						tgbotapi.NewInlineKeyboardButtonData("Créer utilisateur (jours)", "menu1"),
 						tgbotapi.NewInlineKeyboardButtonData("Créer utilisateur test (minutes)", "menu2"),
 					),
 				)
-				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "⚡ KIGHMU MANAGER ⚡")
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, msgText)
 				msg.ReplyMarkup = keyboard
 				bot.Send(msg)
 			} else {
