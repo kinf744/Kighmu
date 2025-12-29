@@ -376,6 +376,9 @@ func lancerBot() {
 	u.Timeout = 60
 	updates, _ := bot.GetUpdatesChan(u)
 
+	// Map pour gérer le mode suppression multiple par chat
+	modeSupprimerMultiple := make(map[int64]bool)
+
 	for update := range updates {
 
 		/* ===============================
@@ -438,6 +441,13 @@ func lancerBot() {
 				}
 				txt += "\nEnvoyez le numéro à supprimer"
 				bot.Send(tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, txt))
+
+			case "supprimer_multi":
+				msg := tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID,
+					"Envoyez les noms des utilisateurs à supprimer, séparés par des virgules ou espaces :\n`user1,user2,user3`")
+				msg.ParseMode = "Markdown"
+				bot.Send(msg)
+				modeSupprimerMultiple[update.CallbackQuery.Message.Chat.ID] = true
 			}
 
 			continue
@@ -450,11 +460,50 @@ func lancerBot() {
 			continue
 		}
 
+		chatID := update.Message.Chat.ID
 		text := strings.TrimSpace(update.Message.Text)
+
+		// ===== MODE SUPPRESSION MULTIPLE =====
+		if modeSupprimerMultiple[chatID] {
+			users := strings.FieldsFunc(text, func(r rune) bool { return r == ',' || r == ' ' })
+			var results []string
+
+			for _, u := range users {
+				u = strings.TrimSpace(u)
+				if u == "" {
+					continue
+				}
+
+				// Vérification si l'utilisateur existe
+				if _, err := user.Lookup(u); err == nil {
+					cmd := exec.Command("sudo", "userdel", "-r", u)
+					if err := cmd.Run(); err != nil {
+						results = append(results, fmt.Sprintf("❌ Erreur suppression %s", u))
+					} else {
+						// Supprimer ligne users.list
+						data, _ := ioutil.ReadFile("/etc/kighmu/users.list")
+						lines := strings.Split(string(data), "\n")
+						var newLines []string
+						for _, line := range lines {
+							if !strings.HasPrefix(line, u+"|") {
+								newLines = append(newLines, line)
+							}
+						}
+						ioutil.WriteFile("/etc/kighmu/users.list", []byte(strings.Join(newLines, "\n")), 0600)
+						results = append(results, fmt.Sprintf("✅ Utilisateur %s supprimé", u))
+					}
+				} else {
+					results = append(results, fmt.Sprintf("⚠️ Utilisateur %s introuvable", u))
+				}
+			}
+
+			bot.Send(tgbotapi.NewMessage(chatID, strings.Join(results, "\n")))
+			delete(modeSupprimerMultiple, chatID) // désactiver le mode
+			continue
+		}
 
 		/* ===== MENU PRINCIPAL ===== */
 		if text == "/kighmu" {
-
 			msgText := `============================================
 ⚡ KIGHMU MANAGER ⚡
 ============================================
@@ -465,63 +514,24 @@ SÉLECTIONNEZ UNE OPTION CI-DESSOUS !
 ============================================`
 
 			keyboard := tgbotapi.NewInlineKeyboardMarkup(
-    tgbotapi.NewInlineKeyboardRow(
-        tgbotapi.NewInlineKeyboardButtonData("Créer utilisateur (jours)", "menu1"),
-        tgbotapi.NewInlineKeyboardButtonData("Créer utilisateur test (minutes)", "menu2"),
-    ),
-    tgbotapi.NewInlineKeyboardRow(
-        tgbotapi.NewInlineKeyboardButtonData("➕ Créer utilisateur V2Ray+FastDNS", "v2ray_creer"),
-        tgbotapi.NewInlineKeyboardButtonData("➖ Supprimer utilisateur V2Ray+FastDNS", "v2ray_supprimer"),
-    ),
-    tgbotapi.NewInlineKeyboardRow(
-        tgbotapi.NewInlineKeyboardButtonData("❌ Supprimer utilisateur(s)", "supprimer_multi"),
-    ),
-)
+				tgbotapi.NewInlineKeyboardRow(
+					tgbotapi.NewInlineKeyboardButtonData("Créer utilisateur (jours)", "menu1"),
+					tgbotapi.NewInlineKeyboardButtonData("Créer utilisateur test (minutes)", "menu2"),
+				),
+				tgbotapi.NewInlineKeyboardRow(
+					tgbotapi.NewInlineKeyboardButtonData("➕ Créer utilisateur V2Ray+FastDNS", "v2ray_creer"),
+					tgbotapi.NewInlineKeyboardButtonData("➖ Supprimer utilisateur V2Ray+FastDNS", "v2ray_supprimer"),
+				),
+				tgbotapi.NewInlineKeyboardRow(
+					tgbotapi.NewInlineKeyboardButtonData("❌ Supprimer utilisateur(s)", "supprimer_multi"),
+				),
+			)
 
-// Ensuite, dans la section des callbacks
-case "supprimer_multi":
-    msg := tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID,
-        "Envoyez les noms des utilisateurs à supprimer, séparés par des virgules ou espaces :\n`user1,user2,user3`")
-    msg.ParseMode = "Markdown"
-    bot.Send(msg)
-
-// Puis, dans la section de traitement des messages texte
-if strings.Contains(text, ",") || strings.Contains(text, " ") {
-    // Tentative de suppression multiple
-    users := strings.FieldsFunc(text, func(r rune) bool {
-        return r == ',' || r == ' '
-    })
-    var results []string
-    for _, u := range users {
-        u = strings.TrimSpace(u)
-        if u == "" {
-            continue
-        }
-        // Utiliser la fonction existante pour supprimer un utilisateur normal
-        if _, err := user.Lookup(u); err == nil {
-            cmd := exec.Command("sudo", "userdel", "-r", u)
-            if err := cmd.Run(); err != nil {
-                results = append(results, fmt.Sprintf("❌ Erreur suppression %s", u))
-            } else {
-                // Supprimer la ligne dans users.list
-                data, _ := ioutil.ReadFile("/etc/kighmu/users.list")
-                lines := strings.Split(string(data), "\n")
-                var newLines []string
-                for _, line := range lines {
-                    if !strings.HasPrefix(line, u+"|") {
-                        newLines = append(newLines, line)
-                    }
-                }
-                ioutil.WriteFile("/etc/kighmu/users.list", []byte(strings.Join(newLines, "\n")), 0600)
-                results = append(results, fmt.Sprintf("✅ Utilisateur %s supprimé", u))
-            }
-        } else {
-            results = append(results, fmt.Sprintf("⚠️ Utilisateur %s introuvable", u))
-        }
-    }
-    bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, strings.Join(results, "\n")))
-    continue
-   }
+			msg := tgbotapi.NewMessage(chatID, msgText)
+			msg.ReplyMarkup = keyboard
+			bot.Send(msg)
+		}
+	}
 }
 
 // ===============================
