@@ -170,16 +170,44 @@ func creerUtilisateurNormal(username, password string, limite int, days int) str
 // ===============================
 // Création utilisateur V2Ray + FastDNS
 // ===============================
-func creerUtilisateurV2Ray(nom string, duree int) string {
+func creerUtilisateurV2Ray() string {
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Print("Entrez le nom de l'utilisateur : ")
+	nom, _ := reader.ReadString('\n')
+	nom = strings.TrimSpace(nom)
+	var duree int
+	fmt.Print("Durée de validité (en jours) : ")
+	fmt.Scanf("%d\n", &duree)
 	uuid := genererUUID()
-	expire := time.Now().AddDate(0, 0, duree).Format("2006-01-02")
-	utilisateursV2Ray = append(utilisateursV2Ray, UtilisateurV2Ray{Nom: nom, UUID: uuid, Expire: expire})
-
-	msgText := fmt.Sprintf(
-		"✅ Utilisateur V2Ray+FastDNS créé\n\nNom : %s\nUUID : %s\nDurée : %d jours\nExpire : %s\n\n🔹 Domaine : %s\n🔹 FastDNS UDP : 5400\n🔹 V2Ray TCP : 5401\n🔹 Clé publique FastDNS : %s\n🔹 NameServer : %s",
-		nom, uuid, duree, expire, DOMAIN, slowdnsPubKey(), slowdnsNameServer(),
-	)
-	return msgText
+	dateExp := time.Now().AddDate(0, 0, duree).Format("2006-01-02")
+	v2rayPort := 5401
+	fastdnsPort := 5400
+	pubKey := slowdnsPubKey()
+	nameServer := slowdnsNameServer()
+	domaine := DOMAIN
+	lienVLESS := fmt.Sprintf("vless://%s@%s:%d?type=tcp&encryption=none&host=%s#%s-VLESS-TCP",
+		uuid, domaine, v2rayPort, domaine, nom)
+	var builder strings.Builder
+	builder.WriteString("============================================\n")
+	builder.WriteString("🧩 VLESS TCP + FASTDNS\n")
+	builder.WriteString("====================================================\n")
+	builder.WriteString(fmt.Sprintf("📄 Configuration pour : %s\n", nom))
+	builder.WriteString("-------------------------------------------------------------\n")
+	builder.WriteString(fmt.Sprintf("➤ DOMAINE : %s\n", domaine))
+	builder.WriteString("➤ PORTS :\n")
+	builder.WriteString(fmt.Sprintf("   FastDNS UDP: %d\n", fastdnsPort))
+	builder.WriteString(fmt.Sprintf("   V2Ray TCP  : %d\n", v2rayPort))
+	builder.WriteString(fmt.Sprintf("➤ UUID / Password : %s\n", uuid))
+	builder.WriteString(fmt.Sprintf("➤ Validité : %d jours (expire: %s)\n", duree, dateExp))
+	builder.WriteString("━━━━━━━━━━━━━  CONFIGS SLOWDNS PORT 5400 ━━━━━━━━━━━━━●\n")
+	builder.WriteString("Clé publique FastDNS:\n")
+	builder.WriteString(pubKey + "\n")
+	builder.WriteString(fmt.Sprintf("NameServer: %s\n", nameServer))
+	builder.WriteString("●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●\n")
+	builder.WriteString(fmt.Sprintf("┃ Lien VLESS  : %s\n", lienVLESS))
+	builder.WriteString("┃\n")
+	builder.WriteString("●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●\n")
+	return builder.String()
 }
 
 // ===============================
