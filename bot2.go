@@ -119,15 +119,13 @@ func creerUtilisateurNormal(username, password string, limite, days int) string 
 		return fmt.Sprintf("❌ L'utilisateur %s existe déjà", username)
 	}
 
-	// Création utilisateur système avec home
+	// Création utilisateur avec home
 	if err := exec.Command("useradd", "-m", "-s", "/bin/bash", username).Run(); err != nil {
 		return fmt.Sprintf("❌ Erreur création utilisateur: %v", err)
 	}
 
 	// Définir mot de passe
-	if err := exec.Command("bash", "-c", fmt.Sprintf("echo '%s:%s' | chpasswd", username, password)).Run(); err != nil {
-		return fmt.Sprintf("❌ Erreur mot de passe: %v", err)
-	}
+	exec.Command("bash", "-c", fmt.Sprintf("echo '%s:%s' | chpasswd", username, password)).Run()
 
 	// Définir date d'expiration
 	expireDate := time.Now().AddDate(0, 0, days).Format("2006-01-02")
@@ -149,7 +147,6 @@ if [ -f %s ]; then
 fi
 `, bannerPath, bannerPath)
 
-	// Go 1.13 utilise ioutil.WriteFile
 	ioutil.WriteFile(bashrcPath, []byte(bashrcContent), 0644)
 	exec.Command("chown", "-R", fmt.Sprintf("%s:%s", username, username), userHome).Run()
 
@@ -170,8 +167,7 @@ fi
 	os.MkdirAll("/etc/kighmu", 0755)
 	userFile := "/etc/kighmu/users.list"
 	entry := fmt.Sprintf("%s|%s|%d|%s|%s|%s|%s\n", username, password, limite, expireDate, hostIP, DOMAIN, slowdnsNS)
-	f, err := os.OpenFile(userFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-	if err == nil {
+	if f, err := os.OpenFile(userFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600); err == nil {
 		defer f.Close()
 		f.WriteString(entry)
 	}
@@ -197,21 +193,17 @@ fi
 	return strings.Join(res, "\n")
 }
 
-// Création utilisateur test (minutes)
+// Version test en minutes
 func creerUtilisateurTest(username, password string, limite, minutes int) string {
 	if _, err := user.Lookup(username); err == nil {
 		return fmt.Sprintf("❌ L'utilisateur %s existe déjà", username)
 	}
 
-	// Création utilisateur sans home
-	if err := exec.Command("useradd", "-M", "-s", "/bin/bash", username).Run(); err != nil {
-		return fmt.Sprintf("❌ Erreur création utilisateur: %v", err)
-	}
+	// Création sans home
+	exec.Command("useradd", "-M", "-s", "/bin/bash", username).Run()
 
 	// Définir mot de passe
-	if err := exec.Command("bash", "-c", fmt.Sprintf("echo '%s:%s' | chpasswd", username, password)).Run(); err != nil {
-		return fmt.Sprintf("❌ Erreur mot de passe: %v", err)
-	}
+	exec.Command("bash", "-c", fmt.Sprintf("echo '%s:%s' | chpasswd", username, password)).Run()
 
 	// Définir expiration en minutes
 	expireTime := time.Now().Add(time.Duration(minutes) * time.Minute).Format("2006-01-02 15:04:05")
@@ -233,8 +225,7 @@ func creerUtilisateurTest(username, password string, limite, minutes int) string
 	os.MkdirAll("/etc/kighmu", 0755)
 	userFile := "/etc/kighmu/users.list"
 	entry := fmt.Sprintf("%s|%s|%d|%s|%s|%s|%s\n", username, password, limite, expireTime, hostIP, DOMAIN, slowdnsNS)
-	f, err := os.OpenFile(userFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-	if err == nil {
+	if f, err := os.OpenFile(userFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600); err == nil {
 		defer f.Close()
 		f.WriteString(entry)
 	}
