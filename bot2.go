@@ -385,7 +385,6 @@ func lancerBot() {
 		   CALLBACKS (INLINE MENU)
 		================================ */
 		if update.CallbackQuery != nil {
-
 			if int64(update.CallbackQuery.From.ID) != adminID {
 				bot.AnswerCallbackQuery(
 					tgbotapi.NewCallback(update.CallbackQuery.ID, "⛔ Accès refusé"),
@@ -431,13 +430,9 @@ func lancerBot() {
 					))
 					continue
 				}
-
 				txt := "Liste des utilisateurs V2Ray :\n"
 				for i, u := range utilisateursV2Ray {
-					txt += fmt.Sprintf(
-						"%d) %s | UUID: %s | Expire: %s\n",
-						i+1, u.Nom, u.UUID, u.Expire,
-					)
+					txt += fmt.Sprintf("%d) %s | UUID: %s | Expire: %s\n", i+1, u.Nom, u.UUID, u.Expire)
 				}
 				txt += "\nEnvoyez le numéro à supprimer"
 				bot.Send(tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, txt))
@@ -449,7 +444,6 @@ func lancerBot() {
 				bot.Send(msg)
 				modeSupprimerMultiple[update.CallbackQuery.Message.Chat.ID] = true
 			}
-
 			continue
 		}
 
@@ -463,18 +457,15 @@ func lancerBot() {
 		chatID := update.Message.Chat.ID
 		text := strings.TrimSpace(update.Message.Text)
 
-		// ===== MODE SUPPRESSION MULTIPLE =====
+		/* ===== MODE SUPPRESSION MULTIPLE ===== */
 		if modeSupprimerMultiple[chatID] {
 			users := strings.FieldsFunc(text, func(r rune) bool { return r == ',' || r == ' ' })
 			var results []string
-
 			for _, u := range users {
 				u = strings.TrimSpace(u)
 				if u == "" {
 					continue
 				}
-
-				// Vérification si l'utilisateur existe
 				if _, err := user.Lookup(u); err == nil {
 					cmd := exec.Command("sudo", "userdel", "-r", u)
 					if err := cmd.Run(); err != nil {
@@ -496,9 +487,8 @@ func lancerBot() {
 					results = append(results, fmt.Sprintf("⚠️ Utilisateur %s introuvable", u))
 				}
 			}
-
 			bot.Send(tgbotapi.NewMessage(chatID, strings.Join(results, "\n")))
-			delete(modeSupprimerMultiple, chatID) // désactiver le mode
+			delete(modeSupprimerMultiple, chatID)
 			continue
 		}
 
@@ -512,7 +502,6 @@ TELEGRAM : https://t.me/lkgcddtoog
 ============================================
 SÉLECTIONNEZ UNE OPTION CI-DESSOUS !
 ============================================`
-
 			keyboard := tgbotapi.NewInlineKeyboardMarkup(
 				tgbotapi.NewInlineKeyboardRow(
 					tgbotapi.NewInlineKeyboardButtonData("Créer utilisateur (jours)", "menu1"),
@@ -526,11 +515,49 @@ SÉLECTIONNEZ UNE OPTION CI-DESSOUS !
 					tgbotapi.NewInlineKeyboardButtonData("❌ Supprimer utilisateur(s)", "supprimer_multi"),
 				),
 			)
-
 			msg := tgbotapi.NewMessage(chatID, msgText)
 			msg.ReplyMarkup = keyboard
 			bot.Send(msg)
+			continue
 		}
+
+		/* ===== SSH NORMAL / TEST ===== */
+		if strings.Count(text, ",") == 3 {
+			p := strings.Split(text, ",")
+			limite, err1 := strconv.Atoi(strings.TrimSpace(p[2]))
+			duree, err2 := strconv.Atoi(strings.TrimSpace(p[3]))
+			if err1 != nil || err2 != nil {
+				bot.Send(tgbotapi.NewMessage(chatID, "❌ Paramètres invalides"))
+				continue
+			}
+			if duree <= 1440 {
+				bot.Send(tgbotapi.NewMessage(chatID, creerUtilisateurTest(p[0], p[1], limite, duree)))
+			} else {
+				bot.Send(tgbotapi.NewMessage(chatID, creerUtilisateurNormal(p[0], p[1], limite, duree)))
+			}
+			continue
+		}
+
+		/* ===== V2RAY ===== */
+		if strings.Count(text, ",") == 1 {
+			p := strings.Split(text, ",")
+			duree, err := strconv.Atoi(strings.TrimSpace(p[1]))
+			if err != nil {
+				bot.Send(tgbotapi.NewMessage(chatID, "❌ Durée invalide"))
+				continue
+			}
+			bot.Send(tgbotapi.NewMessage(chatID, creerUtilisateurV2Ray(p[0], duree)))
+			continue
+		}
+
+		/* ===== SUPPRESSION V2RAY ===== */
+		if num, err := strconv.Atoi(text); err == nil && num > 0 && num <= len(utilisateursV2Ray) {
+			bot.Send(tgbotapi.NewMessage(chatID, supprimerUtilisateurV2Ray(num-1)))
+			continue
+		}
+
+		/* ===== INCONNU ===== */
+		bot.Send(tgbotapi.NewMessage(chatID, "❌ Commande ou format inconnu"))
 	}
 }
 
