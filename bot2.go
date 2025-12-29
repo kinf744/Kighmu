@@ -119,7 +119,16 @@ func setPassword(username, password string) error {
 		"-c",
 		fmt.Sprintf("echo '%s:%s' | chpasswd", username, password),
 	)
-	return cmd.Run()
+	err := cmd.Run()
+	if err != nil {
+		return err
+	}
+
+	// Déverrouiller le compte au cas où
+	exec.Command("passwd", "-u", username).Run()
+	exec.Command("usermod", "-U", username).Run()
+
+	return nil
 }
 
 func creerUtilisateurNormal(username, password string, limite, days int) string {
