@@ -22,6 +22,7 @@ var (
 	botToken = os.Getenv("BOT_TOKEN")
 	adminID  int64
 	DOMAIN   = os.Getenv("DOMAIN")
+	v2rayFile = "/etc/kighmu/v2ray_users.list"
 )
 
 // Structure pour V2Ray+FastDNS
