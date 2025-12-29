@@ -1,10 +1,9 @@
 #!/bin/bash
-# ==================================================
-# Kighmu VPS Manager - Création Utilisateur (Jours)
+# ===============================================
+# Kighmu VPS Manager - Création Utilisateur Test
 # Compatible BOT Telegram + Local
-# ==================================================
-
-set -o pipefail
+# ===============================================
+set -euo pipefail
 
 # ===============================
 # DÉTECTION MODE BOT
@@ -15,48 +14,35 @@ if [[ $# -ge 4 ]]; then
     username="$1"
     password="$2"
     limite="$3"
-    jours="$4"
+    minutes="$4"
 fi
 
 # ===============================
-# SÉCURITÉ MODE BOT
+# COULEURS (désactivées en mode BOT)
 # ===============================
 if $BOT_MODE; then
-    set +e
-    set +u
-    RED=""; GREEN=""; YELLOW=""; BLUE=""
-    MAGENTA=""; CYAN=""; BOLD=""; RESET=""
+    RED=""; GREEN=""; YELLOW=""; BLUE=""; MAGENTA=""; CYAN=""; BOLD=""; RESET=""
+    export TERM=dumb
 else
-    set -euo pipefail
+    RED="\e[31m"; GREEN="\e[32m"; YELLOW="\e[33m"; BLUE="\e[34m"
+    MAGENTA="\e[35m"; CYAN="\e[36m"; BOLD="\e[1m"; RESET="\e[0m"
 fi
-
-# ===============================
-# COULEURS (LOCAL UNIQUEMENT)
-# ===============================
-RED="\e[31m"
-GREEN="\e[32m"
-YELLOW="\e[33m"
-BLUE="\e[34m"
-MAGENTA="\e[35m"
-CYAN="\e[36m"
-BOLD="\e[1m"
-RESET="\e[0m"
 
 # ===============================
 # ROOT
 # ===============================
 if [[ $EUID -ne 0 ]]; then
-    echo "Erreur : ce script doit être exécuté en root"
-    exit 1
+  echo "Erreur : ce script doit être lancé avec les droits root."
+  exit 1
 fi
 
 # ===============================
 # CONFIG GLOBALE
 # ===============================
-if [[ -f ~/.kighmu_info ]]; then
+if [ -f ~/.kighmu_info ]; then
     source ~/.kighmu_info
 else
-    echo "Erreur : ~/.kighmu_info introuvable"
+    echo "Erreur : fichier ~/.kighmu_info introuvable."
     exit 1
 fi
 
@@ -64,13 +50,15 @@ fi
 # AUTO SSH SHELL
 # ===============================
 detect_ssh_shell() {
-    if pgrep -x dropbear >/dev/null 2>&1; then
+    if pgrep -x dropbear >/dev/null 2>&1 || systemctl is-active --quiet dropbear 2>/dev/null; then
         echo "/usr/sbin/nologin"
-    elif pgrep -x sshd >/dev/null 2>&1; then
-        echo "/bin/bash"
-    else
-        echo "/usr/sbin/nologin"
+        return
     fi
+    if pgrep -x sshd >/dev/null 2>&1 || systemctl is-active --quiet ssh 2>/dev/null; then
+        echo "/bin/bash"
+        return
+    fi
+    echo "/usr/sbin/nologin"
 }
 
 # ===============================
@@ -84,20 +72,19 @@ SLOWDNS_NS=$(cat /etc/slowdns/ns.conf 2>/dev/null || echo "N/A")
 # ===============================
 USER_FILE="/etc/kighmu/users.list"
 LOCK_FILE="/etc/kighmu/users.list.lock"
-mkdir -p /etc/kighmu
+TEST_DIR="/etc/kighmu/userteste"
+mkdir -p /etc/kighmu "$TEST_DIR"
 touch "$USER_FILE"
 chmod 600 "$USER_FILE"
 
-# ===============================
-# CLEAR LOCAL
-# ===============================
+# Clear uniquement si terminal local
 if [[ -t 1 && "$BOT_MODE" = false ]]; then
-    clear || true
+    clear
 fi
 
-echo "${CYAN}+==================================================+${RESET}"
-echo "|        CRÉATION D'UTILISATEUR KIGHMU VPS         |"
-echo "${CYAN}+==================================================+${RESET}"
+echo "+==================================================+"
+echo "|              CRÉATION D'UTILISATEUR TEST       |"
+echo "+==================================================+"
 
 # ===============================
 # SAISIE LOCALE
@@ -106,17 +93,17 @@ if ! $BOT_MODE; then
     read -p "Nom d'utilisateur : " username
     read -s -p "Mot de passe : " password; echo
     read -p "Nombre d'appareils autorisés : " limite
-    read -p "Durée de validité (en jours) : " jours
+    read -p "Durée de validité (en minutes) : " minutes
 fi
 
 # ===============================
 # VALIDATION
 # ===============================
-[[ -z "${username:-}" ]] && { echo "Utilisateur vide"; exit 1; }
-[[ -z "${password:-}" ]] && { echo "Mot de passe vide"; exit 1; }
-id "$username" &>/dev/null && { echo "Utilisateur existe déjà"; exit 1; }
-[[ ! "$limite" =~ ^[0-9]+$ ]] && { echo "Limite invalide"; exit 1; }
-[[ ! "$jours" =~ ^[0-9]+$ ]] && { echo "Durée invalide"; exit 1; }
+[[ -z "${username:-}" ]] && { echo "Nom d'utilisateur vide."; exit 1; }
+[[ -z "${password:-}" ]] && { echo "Mot de passe vide."; exit 1; }
+id "$username" &>/dev/null && { echo "Utilisateur déjà existant."; exit 1; }
+[[ ! "$limite" =~ ^[0-9]+$ ]] && { echo "Limite invalide."; exit 1; }
+[[ ! "$minutes" =~ ^[0-9]+$ ]] && { echo "Durée invalide."; exit 1; }
 
 # ===============================
 # CRÉATION UTILISATEUR
@@ -125,20 +112,38 @@ USER_SHELL=$(detect_ssh_shell)
 useradd -M -s "$USER_SHELL" "$username"
 echo "$username:$password" | chpasswd
 
-expire_date=$(date -d "+$jours days" '+%Y-%m-%d')
-HOST_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
-HOST_IP=${HOST_IP:-127.0.0.1}
+expire_date=$(date -d "+$minutes minutes" '+%Y-%m-%d %H:%M:%S')
+HOST_IP=$(hostname -I | awk '{print $1}')
 
 # ===============================
 # ENREGISTREMENT
 # ===============================
 (
-    flock -x 200
-    echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
+  flock -x 200
+  echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
 ) 200>"$LOCK_FILE"
 
 # ===============================
-# BANNIÈRE SSH
+# AUTO-SUPPRESSION
+# ===============================
+CLEAN_SCRIPT="$TEST_DIR/$username-clean.sh"
+cat > "$CLEAN_SCRIPT" <<EOF
+#!/bin/bash
+pkill -u "$username" 2>/dev/null
+userdel --force "$username" 2>/dev/null
+(
+  flock -x 200
+  grep -v "^$username|" $USER_FILE > /tmp/users.tmp
+  mv /tmp/users.tmp $USER_FILE
+) 200>"$LOCK_FILE"
+rm -f "$CLEAN_SCRIPT"
+EOF
+chmod +x "$CLEAN_SCRIPT"
+
+command -v at >/dev/null && echo "bash $CLEAN_SCRIPT" | at now + "$minutes" min >/dev/null 2>&1 || true
+
+# ===============================
+# BANNIÈRE
 # ===============================
 USER_HOME="/home/$username"
 mkdir -p "$USER_HOME"
@@ -150,33 +155,41 @@ EOF
 chown "$username:$username" "$USER_HOME/.bashrc"
 
 # ===============================
-# AFFICHAGE FINAL
+# AFFICHAGE FINAL (PLAIN TEXT pour BOT)
 # ===============================
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "UTILISATEUR CRÉÉ AVEC SUCCÈS"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "DOMAIN        : $DOMAIN"
-echo "IP/HOST       : $HOST_IP"
-echo "UTILISATEUR   : $username"
-echo "MOT DE PASSE  : $password"
-echo "LIMITE        : $limite"
-echo "EXPIRATION    : $expire_date"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-echo "SSH WS   : $DOMAIN:80@$username:$password"
-echo "SSL/TLS  : $HOST_IP:444@$username:$password"
-echo "UDP      : $HOST_IP:54000@$username:$password"
-echo "HYSTERIA : $DOMAIN:22000@$username:$password"
-
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "FASTDNS (5300)"
-echo "PUB KEY :"
+echo "+=================================================================+"
+echo "*NOUVEAU UTILISATEUR TEST CRÉÉ*"
+echo "─────────────────────────────────────────────────────────────────"
+echo "∘ SSH: 22      ∘ System-DNS: 53"
+echo "∘ SSH WS: 80   ∘ WEB-NGINX: 81"
+echo "∘ DROPBEAR: 2222   ∘ SSL: 444"
+echo "∘ BadVPN: 7200    ∘ BadVPN: 7300"
+echo "∘ FASTDNS: 5300   ∘ UDP-Custom: 54000"
+echo "∘ Hysteria: 22000  ∘ Proxy WS: 9090"
+echo "─────────────────────────────────────────────────────────────────"
+echo "DOMAIN         : $DOMAIN"
+echo "Host/IP-Address : $HOST_IP"
+echo "UTILISATEUR    : $username"
+echo "MOT DE PASSE   : $password"
+echo "LIMITE         : $limite"
+echo "DATE EXPIRÉE   : $expire_date"
+echo "─────────────────────────────────────────────────────────────────"
+echo "En APPS comme HTTP Injector, CUSTOM, SOCKSIP TUNNEL, SSC, etc."
+echo "SSH WS          : $DOMAIN:80@$username:$password"
+echo "SSL/TLS (SNI)   : $HOST_IP:444@$username:$password"
+echo "Proxy WS        : $HOST_IP:9090@$username:$password"
+echo "SSH UDP         : $HOST_IP:54000@$username:$password"
+echo "Hysteria (UDP)  : $DOMAIN:22000@$username:$password"
+echo "PAYLOAD WS      : GET / HTTP/1.1[crlf]Host: [host][crlf]Connection: Upgrade[crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]"
+echo "─────────────────────────────────────────────────────────────────"
+echo "CONFIGS FASTDNS PORT 5300"
+echo "Pub KEY :"
 echo "$SLOWDNS_KEY"
-echo "NS      : $SLOWDNS_NS"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "NameServer (NS) : $SLOWDNS_NS"
+echo "+=================================================================+"
+echo "Compte test créé avec succès"
 
-echo "Compte créé avec succès ✔"
-
+# Pause seulement en mode local
 if [[ "$BOT_MODE" = false ]]; then
     read -p "Appuyez sur Entrée pour revenir au menu..."
 fi
