@@ -10,66 +10,18 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 )
 
-// =====================
-// Configuration
-// =====================
 var (
 	botToken = os.Getenv("BOT_TOKEN")
 	adminID  int64
 )
 
-// =====================
-// Commandes autorisées
-// =====================
-func runCommand(cmd string) string {
-	allowed := []string{
-		"uptime",
-		"df -h",
-		"free -m",
-		"systemctl status sshws",
-		"systemctl status dnstt",
-		"systemctl restart sshws",
-		"systemctl restart dnstt",
-	}
-
-	for _, a := range allowed {
-		if cmd == a {
-			out, err := exec.Command("bash", "-c", cmd).CombinedOutput()
-			if err != nil {
-				return "❌ Erreur:\n" + err.Error()
-			}
-			return "✅ Résultat:\n" + string(out)
-		}
-	}
-
-	return "⛔ Commande non autorisée"
-}
-
-// =====================
-// Pause console
-// =====================
-func pause() {
-	fmt.Print("Appuyez sur Entrée pour continuer...")
-	bufio.NewReader(os.Stdin).ReadBytes('\n')
-}
-
-// =====================
-// Lancer le bot Telegram
-// =====================
 func lancerBot() {
-	if _, err := os.Stat("bot2"); os.IsNotExist(err) {
-		fmt.Println("❌ Bot non compilé. Veuillez d'abord compiler le bot.")
-		pause()
-		return
-	}
-
 	reader := bufio.NewReader(os.Stdin)
 
 	// Demande BOT_TOKEN si manquant
@@ -90,7 +42,6 @@ func lancerBot() {
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		fmt.Println("❌ ADMIN_ID invalide")
-		pause()
 		return
 	}
 	adminID = id
@@ -98,7 +49,6 @@ func lancerBot() {
 	bot, err := tgbotapi.NewBotAPI(botToken)
 	if err != nil {
 		fmt.Println("❌ Impossible de créer le bot:", err)
-		pause()
 		return
 	}
 
@@ -113,6 +63,7 @@ func lancerBot() {
 			continue
 		}
 
+		// Vérifie si c'est l'admin
 		if int64(update.Message.From.ID) != adminID {
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "⛔ Accès refusé")
 			bot.Send(msg)
@@ -120,42 +71,42 @@ func lancerBot() {
 		}
 
 		text := strings.TrimSpace(update.Message.Text)
-		var response string
 
 		switch text {
-		case "/start":
-			response = "👋 VPS Control Bot\n\n" +
-				"/status\n" +
-				"/uptime\n" +
-				"/disk\n" +
-				"/ram\n" +
-				"/sshws\n" +
-				"/slowdns"
-		case "/status":
-			response = runCommand("uptime")
-		case "/uptime":
-			response = runCommand("uptime")
-		case "/disk":
-			response = runCommand("df -h")
-		case "/ram":
-			response = runCommand("free -m")
-		case "/sshws":
-			response = runCommand("systemctl status sshws")
-		case "/slowdns":
-			response = runCommand("systemctl status dnstt")
-		default:
-			response = "❓ Commande inconnue"
-		}
+		case "/kighmu":
+			msgText := `============================================
+          ⚡ KIGHMU MANAGER ⚡
+============================================
+        AUTEUR : @KIGHMU
+                                        
+        TELEGRAM : https://t.me/lkgcddtoog
+============================================
+   SÉLECTIONNEZ UNE OPTION CI-DESSOUS !
+============================================`
 
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, response)
-		msg.ParseMode = "Markdown"
-		bot.Send(msg)
+			keyboard := tgbotapi.NewInlineKeyboardMarkup(
+				tgbotapi.NewInlineKeyboardRow(
+					tgbotapi.NewInlineKeyboardButtonURL("Option 1", "https://t.me/tonlien1"),
+				),
+				tgbotapi.NewInlineKeyboardRow(
+					tgbotapi.NewInlineKeyboardButtonURL("Option 2", "https://t.me/tonlien2"),
+				),
+				tgbotapi.NewInlineKeyboardRow(
+					tgbotapi.NewInlineKeyboardButtonURL("Option 3", "https://t.me/tonlien3"),
+				),
+			)
+
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, msgText)
+			msg.ReplyMarkup = keyboard
+			bot.Send(msg)
+
+		default:
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "❌ Commande inconnue")
+			bot.Send(msg)
+		}
 	}
 }
 
-// =====================
-// MAIN
-// =====================
 func main() {
 	fmt.Println("✅ Bot prêt à être lancé")
 	lancerBot()
