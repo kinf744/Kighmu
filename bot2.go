@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io/ioutil" // ← Pour ReadFile compatible Go <1.16
 	"os"
@@ -43,6 +44,40 @@ func initAdminID() {
 		os.Exit(1)
 	}
 	adminID = id
+}
+
+// ===============================
+// Charger DOMAIN depuis kighmu_info si non défini
+// ===============================
+func loadDomain() string {
+	if DOMAIN != "" {
+		return DOMAIN
+	}
+
+	paths := []string{"/etc/kighmu/kighmu_info", "/root/.kighmu_info"}
+
+	for _, path := range paths {
+		file, err := os.Open(path)
+		if err != nil {
+			continue
+		}
+		defer file.Close()
+
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if strings.HasPrefix(line, "DOMAIN=") {
+				domain := strings.Trim(strings.SplitN(line, "=", 2)[1], "\"")
+				if domain != "" {
+					fmt.Println("[OK] Domaine chargé depuis", path)
+					return domain
+				}
+			}
+		}
+	}
+
+	fmt.Println("[ERREUR] Aucun fichier kighmu_info valide trouvé, domaine vide")
+	return ""
 }
 
 // ===============================
@@ -259,7 +294,8 @@ func lancerBot() {
 // Main
 // ===============================
 func main() {
-	initAdminID() // ← Initialisation obligatoire ADMIN_ID
+	initAdminID()            // ← Initialisation obligatoire ADMIN_ID
+	DOMAIN = loadDomain()    // ← Charger le domaine depuis kighmu_info si vide
 	fmt.Println("✅ Bot prêt à être lancé")
 	lancerBot()
 }
