@@ -168,56 +168,116 @@ func creerUtilisateurNormal(username, password string, limite int, days int) str
 }
 
 // ===============================
-// Création utilisateur V2Ray + FastDNS
+// Structure utilisateur V2Ray
 // ===============================
-func creerUtilisateurV2Ray(nom string, duree int) string {
-    uuid := genererUUID()
-    expire := time.Now().AddDate(0, 0, duree).Format("2006-01-02")
+type UtilisateurV2Ray struct {
+	Nom    string
+	UUID   string
+	Expire string
+}
 
-    // Ports et infos FastDNS / V2Ray
-    v2rayPort := 5401
-    fastdnsPort := 5400
-    pubKey := slowdnsPubKey()
-    nameServer := slowdnsNameServer()
+var utilisateursV2Ray []UtilisateurV2Ray
+var v2rayFile = "/etc/kighmu/v2ray_users.list"
 
-    // Générer le lien VLESS TCP
-    lienVLESS := fmt.Sprintf(
-        "vless://%s@%s:%d?type=tcp&encryption=none&host=%s#%s-VLESS-TCP",
-        uuid, DOMAIN, v2rayPort, DOMAIN, nom,
-    )
-
-    // Construire le message
-    var builder strings.Builder
-    builder.WriteString("====================================================\n")
-    builder.WriteString("🧩 VLESS TCP + FASTDNS\n")
-    builder.WriteString("====================================================\n")
-    builder.WriteString(fmt.Sprintf("📄 Configuration pour : %s\n", nom))
-    builder.WriteString("----------------------------------------------------\n")
-    builder.WriteString(fmt.Sprintf("➤ DOMAINE : %s\n", DOMAIN))
-    builder.WriteString("➤ PORTS :\n")
-    builder.WriteString(fmt.Sprintf("   FastDNS UDP : %d\n", fastdnsPort))
-    builder.WriteString(fmt.Sprintf("   V2Ray TCP   : %d\n", v2rayPort))
-    builder.WriteString(fmt.Sprintf("➤ UUID / Password : %s\n", uuid))
-    builder.WriteString(fmt.Sprintf("➤ Validité : %d jours (expire : %s)\n", duree, expire))
-    builder.WriteString("\n━━━━━━━━━━━━━  CONFIGS SLOWDNS PORT 5400 ━━━━━━━━━━━━━\n")
-    builder.WriteString(fmt.Sprintf("Clé publique FastDNS :\n%s\n", pubKey))
-    builder.WriteString(fmt.Sprintf("NameServer : %s\n", nameServer))
-    builder.WriteString("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-    builder.WriteString(fmt.Sprintf("Lien VLESS  : %s\n", lienVLESS))
-    builder.WriteString("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-
-    return builder.String()
+// ===============================
+// Charger utilisateurs V2Ray depuis fichier
+// ===============================
+func chargerUtilisateursV2Ray() {
+	utilisateursV2Ray = []UtilisateurV2Ray{}
+	data, err := ioutil.ReadFile(v2rayFile)
+	if err != nil {
+		return
+	}
+	lignes := strings.Split(string(data), "\n")
+	for _, ligne := range lignes {
+		if ligne == "" {
+			continue
+		}
+		parts := strings.Split(ligne, "|")
+		if len(parts) >= 3 {
+			utilisateursV2Ray = append(utilisateursV2Ray, UtilisateurV2Ray{
+				Nom:    parts[0],
+				UUID:   parts[1],
+				Expire: parts[2],
+			})
+		}
+	}
 }
 
 // ===============================
-// Suppression utilisateur V2Ray + FastDNS
+// Enregistrer un utilisateur V2Ray dans le fichier
+// ===============================
+func enregistrerUtilisateurV2Ray(u UtilisateurV2Ray) {
+	os.MkdirAll("/etc/kighmu", 0755)
+	f, _ := os.OpenFile(v2rayFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	defer f.Close()
+	f.WriteString(fmt.Sprintf("%s|%s|%s\n", u.Nom, u.UUID, u.Expire))
+}
+
+// ===============================
+// Créer utilisateur V2Ray + FastDNS
+// ===============================
+func creerUtilisateurV2Ray(nom string, duree int) string {
+	uuid := genererUUID()
+	expire := time.Now().AddDate(0, 0, duree).Format("2006-01-02")
+
+	// Ajouter au slice et fichier
+	u := UtilisateurV2Ray{Nom: nom, UUID: uuid, Expire: expire}
+	utilisateursV2Ray = append(utilisateursV2Ray, u)
+	enregistrerUtilisateurV2Ray(u)
+
+	// Ports et infos FastDNS / V2Ray
+	v2rayPort := 5401
+	fastdnsPort := 5400
+	pubKey := slowdnsPubKey()
+	nameServer := slowdnsNameServer()
+
+	// Lien VLESS TCP
+	lienVLESS := fmt.Sprintf(
+		"vless://%s@%s:%d?type=tcp&encryption=none&host=%s#%s-VLESS-TCP",
+		u.UUID, DOMAIN, v2rayPort, DOMAIN, u.Nom,
+	)
+
+	// Message complet
+	var builder strings.Builder
+	builder.WriteString("====================================================\n")
+	builder.WriteString("🧩 VLESS TCP + FASTDNS\n")
+	builder.WriteString("====================================================\n")
+	builder.WriteString(fmt.Sprintf("📄 Configuration pour : %s\n", u.Nom))
+	builder.WriteString("----------------------------------------------------\n")
+	builder.WriteString(fmt.Sprintf("➤ DOMAINE : %s\n", DOMAIN))
+	builder.WriteString("➤ PORTS :\n")
+	builder.WriteString(fmt.Sprintf("   FastDNS UDP : %d\n", fastdnsPort))
+	builder.WriteString(fmt.Sprintf("   V2Ray TCP   : %d\n", v2rayPort))
+	builder.WriteString(fmt.Sprintf("➤ UUID / Password : %s\n", u.UUID))
+	builder.WriteString(fmt.Sprintf("➤ Validité : %d jours (expire : %s)\n", duree, expire))
+	builder.WriteString("\n━━━━━━━━━━━━━  CONFIGS SLOWDNS PORT 5400 ━━━━━━━━━━━━━\n")
+	builder.WriteString(fmt.Sprintf("Clé publique FastDNS :\n%s\n", pubKey))
+	builder.WriteString(fmt.Sprintf("NameServer : %s\n", nameServer))
+	builder.WriteString("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+	builder.WriteString(fmt.Sprintf("Lien VLESS  : %s\n", lienVLESS))
+	builder.WriteString("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+
+	return builder.String()
+}
+
+// ===============================
+// Supprimer utilisateur V2Ray + FastDNS
 // ===============================
 func supprimerUtilisateurV2Ray(index int) string {
 	if index < 0 || index >= len(utilisateursV2Ray) {
 		return "❌ Index invalide"
 	}
 	u := utilisateursV2Ray[index]
+	// Retirer du slice
 	utilisateursV2Ray = append(utilisateursV2Ray[:index], utilisateursV2Ray[index+1:]...)
+	// Réécrire le fichier complet
+	os.MkdirAll("/etc/kighmu", 0755)
+	f, _ := os.Create(v2rayFile)
+	defer f.Close()
+	for _, u := range utilisateursV2Ray {
+		f.WriteString(fmt.Sprintf("%s|%s|%s\n", u.Nom, u.UUID, u.Expire))
+	}
 	return fmt.Sprintf("✅ Utilisateur %s supprimé.", u.Nom)
 }
 
