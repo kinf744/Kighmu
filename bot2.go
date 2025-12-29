@@ -61,74 +61,32 @@ func pause() {
 }
 
 // =====================
-// Vérifie si une commande existe
-// =====================
-func commandExists(cmd string) bool {
-	_, err := exec.LookPath(cmd)
-	return err == nil
-}
-
-// =====================
-// Installer et compiler le bot
-// =====================
-func installerEtCompiler() {
-	fmt.Println("⏳ Vérification de Go...")
-
-	if !commandExists("go") {
-		fmt.Println("❌ Go n'est pas installé")
-		pause()
-		return
-	}
-
-	if _, err := os.Stat("go.mod"); os.IsNotExist(err) {
-		cmd := exec.Command("go", "mod", "init", "telegram-bot")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.Run()
-	}
-
-	fmt.Println("⏳ Installation de la librairie Telegram...")
-	cmdGet := exec.Command("go", "get", "github.com/go-telegram-bot-api/telegram-bot-api")
-	cmdGet.Stdout = os.Stdout
-	cmdGet.Stderr = os.Stderr
-	cmdGet.Run()
-
-	fmt.Println("⏳ Compilation du bot...")
-	build := exec.Command("go", "build", "-o", "bot2", "bot2.go")
-	build.Stdout = os.Stdout
-	build.Stderr = os.Stderr
-	if err := build.Run(); err != nil {
-		fmt.Println("❌ Erreur lors de la compilation :", err)
-		pause()
-		return
-	}
-
-	fmt.Println("✅ Librairie installée et bot compilé")
-	pause()
-}
-
-// =====================
 // Lancer le bot Telegram
 // =====================
 func lancerBot() {
 	if _, err := os.Stat("bot2"); os.IsNotExist(err) {
-		fmt.Println("❌ Bot non compilé. Choisissez d'abord l'option 1.")
+		fmt.Println("❌ Bot non compilé. Veuillez d'abord compiler le bot.")
 		pause()
 		return
 	}
 
+	reader := bufio.NewReader(os.Stdin)
+
+	// Demande BOT_TOKEN si manquant
 	if botToken == "" {
-		fmt.Println("❌ BOT_TOKEN manquant dans l'environnement")
-		pause()
-		return
+		fmt.Print("🔑 Entrez votre BOT_TOKEN : ")
+		inputToken, _ := reader.ReadString('\n')
+		botToken = strings.TrimSpace(inputToken)
 	}
 
+	// Demande ADMIN_ID si manquant
 	idStr := os.Getenv("ADMIN_ID")
 	if idStr == "" {
-		fmt.Println("❌ ADMIN_ID manquant dans l'environnement")
-		pause()
-		return
+		fmt.Print("🆔 Entrez votre ADMIN_ID (Telegram) : ")
+		inputID, _ := reader.ReadString('\n')
+		idStr = strings.TrimSpace(inputID)
 	}
+
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		fmt.Println("❌ ADMIN_ID invalide")
@@ -145,6 +103,7 @@ func lancerBot() {
 	}
 
 	fmt.Println("🤖 Bot Telegram démarré")
+
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 	updates, _ := bot.GetUpdatesChan(u)
@@ -154,7 +113,6 @@ func lancerBot() {
 			continue
 		}
 
-		// ⚠️ Cast corrigé pour éviter mismatched types
 		if int64(update.Message.From.ID) != adminID {
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "⛔ Accès refusé")
 			bot.Send(msg)
@@ -199,6 +157,6 @@ func lancerBot() {
 // MAIN
 // =====================
 func main() {
-	// Le panneau de contrôle n'est plus nécessaire
+	fmt.Println("✅ Bot prêt à être lancé")
 	lancerBot()
 }
