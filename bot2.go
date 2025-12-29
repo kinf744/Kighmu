@@ -143,26 +143,31 @@ func genererMessageUtilisateur(username, password string, limite int, expireDate
 }
 
 // ===============================
-// Création utilisateur normal (jours)
+// Fonction interne pour créer un utilisateur
 // ===============================
-func creerUtilisateurNormal(username, password string, limite int, days int) string {
+func creerUtilisateur(username, password string, limite int, duration time.Duration) string {
+	// Vérifie si l'utilisateur existe déjà
 	if _, err := user.Lookup(username); err == nil {
 		return fmt.Sprintf("❌ L'utilisateur %s existe déjà", username)
 	}
 
+	// Création utilisateur système
 	exec.Command("useradd", "-m", "-s", "/bin/bash", username).Run()
 	exec.Command("bash", "-c", fmt.Sprintf("echo '%s:%s' | chpasswd", username, password)).Run()
 
-	expireDate := time.Now().AddDate(0, 0, days).Format("2006-01-02")
-	exec.Command("chage", "-E", expireDate, username).Run()
+	// Calcul date d'expiration
+	expireDate := time.Now().Add(duration).Format("2006-01-02 15:04")
+	exec.Command("chage", "-E", time.Now().Add(duration).Format("2006-01-02"), username).Run()
 
+	// Récupération de l'IP du serveur
 	hostIPBytes, _ := exec.Command("hostname", "-I").Output()
 	hostIP := strings.Fields(string(hostIPBytes))[0]
 
 	// Enregistrement dans le fichier users.list
 	os.MkdirAll("/etc/kighmu", 0755)
 	userFile := "/etc/kighmu/users.list"
-	entry := fmt.Sprintf("%s|%s|%d|%s|%s|%s|%s\n", username, password, limite, expireDate, hostIP, DOMAIN, slowdnsNameServer())
+	entry := fmt.Sprintf("%s|%s|%d|%s|%s|%s|%s\n",
+		username, password, limite, expireDate, hostIP, DOMAIN, slowdnsNameServer())
 	f, _ := os.OpenFile(userFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	defer f.Close()
 	f.WriteString(entry)
@@ -172,32 +177,17 @@ func creerUtilisateurNormal(username, password string, limite int, days int) str
 }
 
 // ===============================
+// Création utilisateur normal (jours)
+// ===============================
+func creerUtilisateurNormal(username, password string, limite int, days int) string {
+	return creerUtilisateur(username, password, limite, time.Duration(days)*24*time.Hour)
+}
+
+// ===============================
 // Création utilisateur test (minutes)
 // ===============================
 func creerUtilisateurTest(username, password string, limite int, minutes int) string {
-	if _, err := user.Lookup(username); err == nil {
-		return fmt.Sprintf("❌ L'utilisateur %s existe déjà", username)
-	}
-
-	exec.Command("useradd", "-m", "-s", "/bin/bash", username).Run()
-	exec.Command("bash", "-c", fmt.Sprintf("echo '%s:%s' | chpasswd", username, password)).Run()
-
-	expireDate := time.Now().Add(time.Duration(minutes) * time.Minute).Format("2006-01-02 15:04")
-	exec.Command("chage", "-E", time.Now().Add(time.Duration(minutes)*time.Minute).Format("2006-01-02")).Run()
-
-	hostIPBytes, _ := exec.Command("hostname", "-I").Output()
-	hostIP := strings.Fields(string(hostIPBytes))[0]
-
-	// Enregistrement dans le fichier users.list
-	os.MkdirAll("/etc/kighmu", 0755)
-	userFile := "/etc/kighmu/users.list"
-	entry := fmt.Sprintf("%s|%s|%d|%s|%s|%s|%s\n", username, password, limite, expireDate, hostIP, DOMAIN, slowdnsNameServer())
-	f, _ := os.OpenFile(userFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-	defer f.Close()
-	f.WriteString(entry)
-
-	// Retourne le message formaté
-	return genererMessageUtilisateur(username, password, limite, expireDate, hostIP)
+	return creerUtilisateur(username, password, limite, time.Duration(minutes)*time.Minute)
 }
 
 // ===============================
