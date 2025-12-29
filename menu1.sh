@@ -1,7 +1,7 @@
 #!/bin/bash
 # ===============================================
 # Kighmu VPS Manager - Création Utilisateur Test
-# Compatible BOT Telegram + Local
+# (Compatible BOT Telegram + Local)
 # ===============================================
 set -euo pipefail
 
@@ -18,21 +18,27 @@ if [[ $# -ge 4 ]]; then
 fi
 
 # ===============================
-# COULEURS (désactivées en mode BOT)
+# EXPORT TERM pour éviter erreur Telegram
 # ===============================
-if $BOT_MODE; then
-    RED=""; GREEN=""; YELLOW=""; BLUE=""; MAGENTA=""; CYAN=""; BOLD=""; RESET=""
-    export TERM=dumb
-else
-    RED="\e[31m"; GREEN="\e[32m"; YELLOW="\e[33m"; BLUE="\e[34m"
-    MAGENTA="\e[35m"; CYAN="\e[36m"; BOLD="\e[1m"; RESET="\e[0m"
-fi
+export TERM=${TERM:-xterm}
+
+# ===============================
+# COULEURS
+# ===============================
+RED="\e[31m"
+GREEN="\e[32m"
+YELLOW="\e[33m"
+BLUE="\e[34m"
+MAGENTA="\e[35m"
+CYAN="\e[36m"
+BOLD="\e[1m"
+RESET="\e[0m"
 
 # ===============================
 # ROOT
 # ===============================
 if [[ $EUID -ne 0 ]]; then
-  echo "Erreur : ce script doit être lancé avec les droits root."
+  echo -e "${RED}Erreur : ce script doit être lancé avec les droits root.${RESET}"
   exit 1
 fi
 
@@ -42,9 +48,12 @@ fi
 if [ -f ~/.kighmu_info ]; then
     source ~/.kighmu_info
 else
-    echo "Erreur : fichier ~/.kighmu_info introuvable."
+    echo -e "${RED}Erreur : fichier ~/.kighmu_info introuvable.${RESET}"
     exit 1
 fi
+
+# Définir DOMAIN par défaut si non défini
+DOMAIN=${DOMAIN:-localhost}
 
 # ===============================
 # AUTO SSH SHELL
@@ -77,14 +86,14 @@ mkdir -p /etc/kighmu "$TEST_DIR"
 touch "$USER_FILE"
 chmod 600 "$USER_FILE"
 
-# Clear uniquement si terminal local
+# clear uniquement si terminal et pas BOT
 if [[ -t 1 && "$BOT_MODE" = false ]]; then
     clear
 fi
 
-echo "+==================================================+"
-echo "|              CRÉATION D'UTILISATEUR TEST       |"
-echo "+==================================================+"
+echo -e "${CYAN}+==================================================+${RESET}"
+echo -e "|              CRÉATION D'UTILISATEUR TEST          |"
+echo -e "${CYAN}+==================================================+${RESET}"
 
 # ===============================
 # SAISIE LOCALE
@@ -99,11 +108,11 @@ fi
 # ===============================
 # VALIDATION
 # ===============================
-[[ -z "${username:-}" ]] && { echo "Nom d'utilisateur vide."; exit 1; }
-[[ -z "${password:-}" ]] && { echo "Mot de passe vide."; exit 1; }
-id "$username" &>/dev/null && { echo "Utilisateur déjà existant."; exit 1; }
-[[ ! "$limite" =~ ^[0-9]+$ ]] && { echo "Limite invalide."; exit 1; }
-[[ ! "$minutes" =~ ^[0-9]+$ ]] && { echo "Durée invalide."; exit 1; }
+[[ -z "${username:-}" ]] && { echo -e "${RED}Nom d'utilisateur vide.${RESET}"; exit 1; }
+[[ -z "${password:-}" ]] && { echo -e "${RED}Mot de passe vide.${RESET}"; exit 1; }
+id "$username" &>/dev/null && { echo -e "${RED}Utilisateur déjà existant.${RESET}"; exit 1; }
+[[ ! "$limite" =~ ^[0-9]+$ ]] && { echo -e "${RED}Limite invalide.${RESET}"; exit 1; }
+[[ ! "$minutes" =~ ^[0-9]+$ ]] && { echo -e "${RED}Durée invalide.${RESET}"; exit 1; }
 
 # ===============================
 # CRÉATION UTILISATEUR
@@ -155,41 +164,49 @@ EOF
 chown "$username:$username" "$USER_HOME/.bashrc"
 
 # ===============================
-# AFFICHAGE FINAL (PLAIN TEXT pour BOT)
+# AFFICHAGE FINAL (COMPLET ET SANS ERREUR BOT)
 # ===============================
-echo "+=================================================================+"
-echo "*NOUVEAU UTILISATEUR TEST CRÉÉ*"
-echo "─────────────────────────────────────────────────────────────────"
-echo "∘ SSH: 22      ∘ System-DNS: 53"
-echo "∘ SSH WS: 80   ∘ WEB-NGINX: 81"
-echo "∘ DROPBEAR: 2222   ∘ SSL: 444"
-echo "∘ BadVPN: 7200    ∘ BadVPN: 7300"
-echo "∘ FASTDNS: 5300   ∘ UDP-Custom: 54000"
-echo "∘ Hysteria: 22000  ∘ Proxy WS: 9090"
-echo "─────────────────────────────────────────────────────────────────"
-echo "DOMAIN         : $DOMAIN"
-echo "Host/IP-Address : $HOST_IP"
-echo "UTILISATEUR    : $username"
-echo "MOT DE PASSE   : $password"
-echo "LIMITE         : $limite"
-echo "DATE EXPIRÉE   : $expire_date"
-echo "─────────────────────────────────────────────────────────────────"
-echo "En APPS comme HTTP Injector, CUSTOM, SOCKSIP TUNNEL, SSC, etc."
-echo "SSH WS          : $DOMAIN:80@$username:$password"
-echo "SSL/TLS (SNI)   : $HOST_IP:444@$username:$password"
-echo "Proxy WS        : $HOST_IP:9090@$username:$password"
-echo "SSH UDP         : $HOST_IP:54000@$username:$password"
-echo "Hysteria (UDP)  : $DOMAIN:22000@$username:$password"
-echo "PAYLOAD WS      : GET / HTTP/1.1[crlf]Host: [host][crlf]Connection: Upgrade[crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]"
-echo "─────────────────────────────────────────────────────────────────"
-echo "CONFIGS FASTDNS PORT 5300"
-echo "Pub KEY :"
-echo "$SLOWDNS_KEY"
-echo "NameServer (NS) : $SLOWDNS_NS"
-echo "+=================================================================+"
-echo "Compte test créé avec succès"
+output=$(cat <<EOF
++=================================================================+
+* NOUVEAU UTILISATEUR TEST CRÉÉ *
+-------------------------------------------------------------------
+SSH: 22          | System-DNS: 53
+SSH WS: 80       | WEB-NGINX: 81
+DROPBEAR: 2222   | SSL: 444
+BadVPN: 7200     | BadVPN: 7300
+FASTDNS: 5300    | UDP-Custom: 54000
+Hysteria: 22000  | Proxy WS: 9090
+-------------------------------------------------------------------
+DOMAIN       : $DOMAIN
+Host/IP      : $HOST_IP
+UTILISATEUR : $username
+MOT DE PASSE  : $password
+LIMITE       : $limite
+DATE EXPIRÉE : $expire_date
+-------------------------------------------------------------------
+En APPS comme HTTP Injector, CUSTOM, SOCKSIP TUNNEL, SSC, etc.
 
-# Pause seulement en mode local
-if [[ "$BOT_MODE" = false ]]; then
+SSH WS          : $DOMAIN:80@$username:$password
+SSL/TLS (SNI)   : $HOST_IP:444@$username:$password
+Proxy WS        : $HOST_IP:9090@$username:$password
+SSH UDP         : $HOST_IP:54000@$username:$password
+Hysteria (UDP)  : $DOMAIN:22000@$username:$password
+
+PAYLOAD WS      : GET / HTTP/1.1[crlf]Host: [host][crlf]Connection: Upgrade[crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]
+
+CONFIGS FASTDNS PORT 5300
+Pub KEY         : $SLOWDNS_KEY
+NameServer (NS) : $SLOWDNS_NS
+-------------------------------------------------------------------
+Compte test créé avec succès
++=================================================================+
+EOF
+)
+
+# Affichage selon mode
+if $BOT_MODE; then
+    echo "$output"
+else
+    echo -e "$output"
     read -p "Appuyez sur Entrée pour revenir au menu..."
 fi
