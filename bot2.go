@@ -115,50 +115,56 @@ func genererUUID() string {
 }
 
 // ===============================
-// Fonctions utilitaires
-// ===============================
-
 // Créer utilisateur normal (jours)
+// ===============================
 func creerUtilisateurNormal(username, password string, limite int, days int) string {
 	if _, err := user.Lookup(username); err == nil {
 		return fmt.Sprintf("❌ L'utilisateur %s existe déjà", username)
 	}
 
-	// Création utilisateur
-	cmdAdd := exec.Command("useradd", "-m", "-s", "/bin/bash", username)
-	if err := cmdAdd.Run(); err != nil {
+	// Création utilisateur système
+	if err := exec.Command("useradd", "-m", "-s", "/bin/bash", username).Run(); err != nil {
 		return fmt.Sprintf("❌ Erreur création utilisateur: %v", err)
 	}
 
 	// Définir mot de passe
-	cmdPass := exec.Command("bash", "-c", fmt.Sprintf("echo '%s:%s' | chpasswd", username, password))
-	if err := cmdPass.Run(); err != nil {
+	if err := exec.Command("bash", "-c", fmt.Sprintf("echo '%s:%s' | chpasswd", username, password)).Run(); err != nil {
 		return fmt.Sprintf("❌ Erreur mot de passe: %v", err)
 	}
 
 	// Expiration
 	expireDate := time.Now().AddDate(0, 0, days).Format("2006-01-02")
-	exec.Command("chage", "-E", expireDate, username).Run()
+	if err := exec.Command("chage", "-E", expireDate, username).Run(); err != nil {
+		return fmt.Sprintf("❌ Erreur définition expiration: %v", err)
+	}
 
-	// Host IP
-	hostIPBytes, _ := exec.Command("hostname", "-I").Output()
-	hostIP := strings.Fields(string(hostIPBytes))[0]
+	// Récupération IP
+	hostIP := "IP_non_disponible"
+	if ipBytes, err := exec.Command("hostname", "-I").Output(); err == nil {
+		ips := strings.Fields(string(ipBytes))
+		if len(ips) > 0 {
+			hostIP = ips[0]
+		}
+	}
 
 	// SlowDNS
-	slowdnsKeyBytes, _ := ioutil.ReadFile("/etc/slowdns/server.pub")
-	slowdnsKey := strings.TrimSpace(string(slowdnsKeyBytes))
-	slowdnsNSBytes, _ := ioutil.ReadFile("/etc/slowdns/ns.conf")
-	slowdnsNS := strings.TrimSpace(string(slowdnsNSBytes))
+	slowdnsKey := slowdnsPubKey()
+	slowdnsNS := slowdnsNameServer()
 
-	// Sauvegarder
-	userFile := "/etc/kighmu/users.list"
+	// Sauvegarde
 	os.MkdirAll("/etc/kighmu", 0755)
+	userFile := "/etc/kighmu/users.list"
 	entry := fmt.Sprintf("%s|%s|%d|%s|%s|%s|%s\n", username, password, limite, expireDate, hostIP, DOMAIN, slowdnsNS)
-	f, _ := os.OpenFile(userFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	f, err := os.OpenFile(userFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		return fmt.Sprintf("❌ Erreur ouverture fichier users.list: %v", err)
+	}
 	defer f.Close()
-	f.WriteString(entry)
+	if _, err := f.WriteString(entry); err != nil {
+		return fmt.Sprintf("❌ Erreur écriture fichier users.list: %v", err)
+	}
 
-	// Résumé
+	// Message résumé
 	res := []string{
 		fmt.Sprintf("✅ Utilisateur %s créé avec succès", username),
 		"∘ SSH: 22  ∘ System-DNS: 53",
@@ -179,46 +185,54 @@ func creerUtilisateurNormal(username, password string, limite int, days int) str
 	return strings.Join(res, "\n")
 }
 
+// ===============================
 // Créer utilisateur test (minutes)
+// ===============================
 func creerUtilisateurTest(username, password string, limite, minutes int) string {
 	if _, err := user.Lookup(username); err == nil {
 		return fmt.Sprintf("❌ L'utilisateur %s existe déjà", username)
 	}
 
-	// Création utilisateur
-	cmdAdd := exec.Command("useradd", "-M", "-s", "/bin/bash", username)
-	if err := cmdAdd.Run(); err != nil {
+	// Création utilisateur système (sans home)
+	if err := exec.Command("useradd", "-M", "-s", "/bin/bash", username).Run(); err != nil {
 		return fmt.Sprintf("❌ Erreur création utilisateur: %v", err)
 	}
 
 	// Définir mot de passe
-	cmdPass := exec.Command("bash", "-c", fmt.Sprintf("echo '%s:%s' | chpasswd", username, password))
-	if err := cmdPass.Run(); err != nil {
+	if err := exec.Command("bash", "-c", fmt.Sprintf("echo '%s:%s' | chpasswd", username, password)).Run(); err != nil {
 		return fmt.Sprintf("❌ Erreur mot de passe: %v", err)
 	}
 
 	// Expiration
 	expireTime := time.Now().Add(time.Duration(minutes) * time.Minute).Format("2006-01-02 15:04:05")
 
-	// Host IP
-	hostIPBytes, _ := exec.Command("hostname", "-I").Output()
-	hostIP := strings.Fields(string(hostIPBytes))[0]
+	// Récupération IP
+	hostIP := "IP_non_disponible"
+	if ipBytes, err := exec.Command("hostname", "-I").Output(); err == nil {
+		ips := strings.Fields(string(ipBytes))
+		if len(ips) > 0 {
+			hostIP = ips[0]
+		}
+	}
 
 	// SlowDNS
-	slowdnsKeyBytes, _ := ioutil.ReadFile("/etc/slowdns/server.pub")
-	slowdnsKey := strings.TrimSpace(string(slowdnsKeyBytes))
-	slowdnsNSBytes, _ := ioutil.ReadFile("/etc/slowdns/ns.conf")
-	slowdnsNS := strings.TrimSpace(string(slowdnsNSBytes))
+	slowdnsKey := slowdnsPubKey()
+	slowdnsNS := slowdnsNameServer()
 
-	// Sauvegarder
-	userFile := "/etc/kighmu/users.list"
+	// Sauvegarde
 	os.MkdirAll("/etc/kighmu", 0755)
+	userFile := "/etc/kighmu/users.list"
 	entry := fmt.Sprintf("%s|%s|%d|%s|%s|%s|%s\n", username, password, limite, expireTime, hostIP, DOMAIN, slowdnsNS)
-	f, _ := os.OpenFile(userFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	f, err := os.OpenFile(userFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		return fmt.Sprintf("❌ Erreur ouverture fichier users.list: %v", err)
+	}
 	defer f.Close()
-	f.WriteString(entry)
+	if _, err := f.WriteString(entry); err != nil {
+		return fmt.Sprintf("❌ Erreur écriture fichier users.list: %v", err)
+	}
 
-	// Résumé
+	// Message résumé
 	res := []string{
 		fmt.Sprintf("✅ Utilisateur test %s créé avec succès", username),
 		"∘ SSH: 22  ∘ System-DNS: 53",
