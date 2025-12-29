@@ -516,35 +516,34 @@ func lancerBot() {
 	}
 }
 
-			// Commande principale
-			if text == "/kighmu" {
-				msgText := `============================================
-          ⚡ KIGHMU MANAGER ⚡
+// ===============================
+// COMMANDE /kighmu (MENU)
+// ===============================
+if text == "/kighmu" {
+	msgText := `============================================
+⚡ KIGHMU MANAGER ⚡
 ============================================
-        AUTEUR : @KIGHMU
-        TELEGRAM : https://t.me/lkgcddtoog
+AUTEUR : @KIGHMU
+TELEGRAM : https://t.me/lkgcddtoog
 ============================================
-   SÉLECTIONNEZ UNE OPTION CI-DESSOUS !
+SÉLECTIONNEZ UNE OPTION CI-DESSOUS !
 ============================================`
-				keyboard := tgbotapi.NewInlineKeyboardMarkup(
-					tgbotapi.NewInlineKeyboardRow(
-						tgbotapi.NewInlineKeyboardButtonData("Créer utilisateur (jours)", "menu1"),
-						tgbotapi.NewInlineKeyboardButtonData("Créer utilisateur test (minutes)", "menu2"),
-					),
-					tgbotapi.NewInlineKeyboardRow(
-						tgbotapi.NewInlineKeyboardButtonData("➕ Créer utilisateur V2Ray+FastDNS", "v2ray_creer"),
-						tgbotapi.NewInlineKeyboardButtonData("➖ Supprimer utilisateur V2Ray+FastDNS", "v2ray_supprimer"),
-					),
-				)
-				msg := tgbotapi.NewMessage(update.Message.Chat.ID, msgText)
-				msg.ReplyMarkup = keyboard
-				bot.Send(msg)
-			} else {
-				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "❌ Commande inconnue")
-				bot.Send(msg)
-			}
-		}
-	}
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("Créer utilisateur (jours)", "menu1"),
+			tgbotapi.NewInlineKeyboardButtonData("Créer utilisateur test (minutes)", "menu2"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("➕ Créer utilisateur V2Ray+FastDNS", "v2ray_creer"),
+			tgbotapi.NewInlineKeyboardButtonData("➖ Supprimer utilisateur V2Ray+FastDNS", "v2ray_supprimer"),
+		),
+	)
+
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, msgText)
+	msg.ReplyMarkup = keyboard
+	bot.Send(msg)
+	continue
 }
 
 // ===============================
