@@ -168,29 +168,18 @@ func creerUtilisateurNormal(username, password string, limite int, days int) str
 }
 
 // ===============================
-// Structure utilisateur V2Ray
-// ===============================
-type UtilisateurV2Ray struct {
-	Nom    string
-	UUID   string
-	Expire string
-}
-
-var utilisateursV2Ray []UtilisateurV2Ray
-var v2rayFile = "/etc/kighmu/v2ray_users.list"
-
-// ===============================
 // Charger utilisateurs V2Ray depuis fichier
 // ===============================
 func chargerUtilisateursV2Ray() {
 	utilisateursV2Ray = []UtilisateurV2Ray{}
 	data, err := ioutil.ReadFile(v2rayFile)
 	if err != nil {
+		// fichier inexistant, on continue avec slice vide
 		return
 	}
 	lignes := strings.Split(string(data), "\n")
 	for _, ligne := range lignes {
-		if ligne == "" {
+		if strings.TrimSpace(ligne) == "" {
 			continue
 		}
 		parts := strings.Split(ligne, "|")
@@ -207,11 +196,17 @@ func chargerUtilisateursV2Ray() {
 // ===============================
 // Enregistrer un utilisateur V2Ray dans le fichier
 // ===============================
-func enregistrerUtilisateurV2Ray(u UtilisateurV2Ray) {
-	os.MkdirAll("/etc/kighmu", 0755)
-	f, _ := os.OpenFile(v2rayFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+func enregistrerUtilisateurV2Ray(u UtilisateurV2Ray) error {
+	if err := os.MkdirAll("/etc/kighmu", 0755); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(v2rayFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
 	defer f.Close()
-	f.WriteString(fmt.Sprintf("%s|%s|%s\n", u.Nom, u.UUID, u.Expire))
+	_, err = f.WriteString(fmt.Sprintf("%s|%s|%s\n", u.Nom, u.UUID, u.Expire))
+	return err
 }
 
 // ===============================
@@ -224,7 +219,9 @@ func creerUtilisateurV2Ray(nom string, duree int) string {
 	// Ajouter au slice et fichier
 	u := UtilisateurV2Ray{Nom: nom, UUID: uuid, Expire: expire}
 	utilisateursV2Ray = append(utilisateursV2Ray, u)
-	enregistrerUtilisateurV2Ray(u)
+	if err := enregistrerUtilisateurV2Ray(u); err != nil {
+		return fmt.Sprintf("❌ Erreur sauvegarde utilisateur : %v", err)
+	}
 
 	// Ports et infos FastDNS / V2Ray
 	v2rayPort := 5401
@@ -272,8 +269,13 @@ func supprimerUtilisateurV2Ray(index int) string {
 	// Retirer du slice
 	utilisateursV2Ray = append(utilisateursV2Ray[:index], utilisateursV2Ray[index+1:]...)
 	// Réécrire le fichier complet
-	os.MkdirAll("/etc/kighmu", 0755)
-	f, _ := os.Create(v2rayFile)
+	if err := os.MkdirAll("/etc/kighmu", 0755); err != nil {
+		return fmt.Sprintf("❌ Erreur dossier : %v", err)
+	}
+	f, err := os.Create(v2rayFile)
+	if err != nil {
+		return fmt.Sprintf("❌ Erreur fichier : %v", err)
+	}
 	defer f.Close()
 	for _, u := range utilisateursV2Ray {
 		f.WriteString(fmt.Sprintf("%s|%s|%s\n", u.Nom, u.UUID, u.Expire))
