@@ -2,15 +2,47 @@
 
 SCRIPT_DIR="$HOME/Kighmu"
 BOT_BIN="$SCRIPT_DIR/bot2"
+SERVICE_FILE="/etc/systemd/system/bot2.service"
 
 stop_and_uninstall_bot() {
     echo "🛑 Arrêt du bot (si actif)..."
-    pkill -f "$BOT_BIN" 2>/dev/null || true
+    sudo systemctl stop bot2 2>/dev/null || true
+    sudo systemctl disable bot2 2>/dev/null || true
+    sudo rm -f "$SERVICE_FILE"
 
     echo "🗑️ Suppression des fichiers..."
     rm -f "$BOT_BIN" "$SCRIPT_DIR/go.mod" "$SCRIPT_DIR/go.sum"
 
     echo "✅ Bot arrêté et désinstallé"
+}
+
+create_systemd_service() {
+    read -p "🔑 Entrez votre BOT_TOKEN : " BOT_TOKEN
+    read -p "🆔 Entrez votre ADMIN_ID : " ADMIN_ID
+
+    sudo tee "$SERVICE_FILE" >/dev/null <<EOF
+[Unit]
+Description=Telegram VPS Control Bot
+After=network.target
+
+[Service]
+Type=simple
+User=$USER
+WorkingDirectory=$SCRIPT_DIR
+ExecStart=$BOT_BIN
+Restart=always
+RestartSec=5
+Environment=BOT_TOKEN=$BOT_TOKEN
+Environment=ADMIN_ID=$ADMIN_ID
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    sudo systemctl daemon-reload
+    sudo systemctl enable bot2
+    sudo systemctl start bot2
+    echo "✅ Service systemd créé et bot démarré"
 }
 
 while true; do
@@ -19,7 +51,7 @@ while true; do
     echo "      🤖 PANNEAU DE CONTRÔLE BOT"
     echo "======================================"
     echo "1️⃣  Installer / Compiler le bot"
-    echo "2️⃣  Lancer le bot Telegram"
+    echo "2️⃣  Lancer le bot (systemd)"
     echo "3️⃣  Quitter"
     echo "4️⃣  Arrêter / Désinstaller le bot"
     echo "======================================"
@@ -50,16 +82,13 @@ while true; do
             ;;
 
         2)
-            cd "$SCRIPT_DIR" || continue
-
             if [ ! -f "$BOT_BIN" ]; then
-                echo "❌ Bot non compilé"
+                echo "❌ Bot non compilé. Veuillez choisir l'option 1 d'abord."
                 read -p "Entrée pour continuer..."
                 continue
             fi
-
-            echo "🚀 Lancement du bot..."
-            "$BOT_BIN"
+            create_systemd_service
+            read -p "Entrée pour continuer..."
             ;;
 
         4)
