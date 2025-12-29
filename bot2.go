@@ -118,6 +118,7 @@ func genererUUID() string {
 // Créer utilisateur normal (jours)
 // ===============================
 func creerUtilisateurNormal(username, password string, limite int, days int) string {
+	// Vérification si l'utilisateur existe déjà
 	if _, err := user.Lookup(username); err == nil {
 		return fmt.Sprintf("❌ L'utilisateur %s existe déjà", username)
 	}
@@ -132,7 +133,7 @@ func creerUtilisateurNormal(username, password string, limite int, days int) str
 		return fmt.Sprintf("❌ Erreur mot de passe: %v", err)
 	}
 
-	// Expiration
+	// Définir date d'expiration
 	expireDate := time.Now().AddDate(0, 0, days).Format("2006-01-02")
 	if err := exec.Command("chage", "-E", expireDate, username).Run(); err != nil {
 		return fmt.Sprintf("❌ Erreur définition expiration: %v", err)
@@ -151,7 +152,7 @@ func creerUtilisateurNormal(username, password string, limite int, days int) str
 	slowdnsKey := slowdnsPubKey()
 	slowdnsNS := slowdnsNameServer()
 
-	// Sauvegarde
+	// Sauvegarde dans fichier
 	os.MkdirAll("/etc/kighmu", 0755)
 	userFile := "/etc/kighmu/users.list"
 	entry := fmt.Sprintf("%s|%s|%d|%s|%s|%s|%s\n", username, password, limite, expireDate, hostIP, DOMAIN, slowdnsNS)
@@ -189,6 +190,7 @@ func creerUtilisateurNormal(username, password string, limite int, days int) str
 // Créer utilisateur test (minutes)
 // ===============================
 func creerUtilisateurTest(username, password string, limite, minutes int) string {
+	// Vérification si l'utilisateur existe déjà
 	if _, err := user.Lookup(username); err == nil {
 		return fmt.Sprintf("❌ L'utilisateur %s existe déjà", username)
 	}
@@ -203,7 +205,7 @@ func creerUtilisateurTest(username, password string, limite, minutes int) string
 		return fmt.Sprintf("❌ Erreur mot de passe: %v", err)
 	}
 
-	// Expiration
+	// Définir expiration en minutes
 	expireTime := time.Now().Add(time.Duration(minutes) * time.Minute).Format("2006-01-02 15:04:05")
 
 	// Récupération IP
@@ -219,7 +221,7 @@ func creerUtilisateurTest(username, password string, limite, minutes int) string
 	slowdnsKey := slowdnsPubKey()
 	slowdnsNS := slowdnsNameServer()
 
-	// Sauvegarde
+	// Sauvegarde dans fichier
 	os.MkdirAll("/etc/kighmu", 0755)
 	userFile := "/etc/kighmu/users.list"
 	entry := fmt.Sprintf("%s|%s|%d|%s|%s|%s|%s\n", username, password, limite, expireTime, hostIP, DOMAIN, slowdnsNS)
