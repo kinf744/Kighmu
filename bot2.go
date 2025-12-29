@@ -115,38 +115,11 @@ func genererUUID() string {
 }
 
 // ===============================
-// Création utilisateur normal (jours)
+// Générer le message de création utilisateur
 // ===============================
-func creerUtilisateurNormal(username, password string, limite int, days int) string {
-	if _, err := user.Lookup(username); err == nil {
-		return fmt.Sprintf("❌ L'utilisateur %s existe déjà", username)
-	}
-
-	cmdAdd := exec.Command("useradd", "-m", "-s", "/bin/bash", username)
-	if err := cmdAdd.Run(); err != nil {
-		return fmt.Sprintf("❌ Erreur création utilisateur: %v", err)
-	}
-
-	cmdPass := exec.Command("bash", "-c", fmt.Sprintf("echo '%s:%s' | chpasswd", username, password))
-	if err := cmdPass.Run(); err != nil {
-		return fmt.Sprintf("❌ Erreur mot de passe: %v", err)
-	}
-
-	expireDate := time.Now().AddDate(0, 0, days).Format("2006-01-02")
-	exec.Command("chage", "-E", expireDate, username).Run()
-
-	hostIPBytes, _ := exec.Command("hostname", "-I").Output()
-	hostIP := strings.Fields(string(hostIPBytes))[0]
-
+func genererMessageUtilisateur(username, password string, limite int, expireDate, hostIP string) string {
 	slowdnsKey := slowdnsPubKey()
 	slowdnsNS := slowdnsNameServer()
-
-	userFile := "/etc/kighmu/users.list"
-	os.MkdirAll("/etc/kighmu", 0755)
-	entry := fmt.Sprintf("%s|%s|%d|%s|%s|%s|%s\n", username, password, limite, expireDate, hostIP, DOMAIN, slowdnsNS)
-	f, _ := os.OpenFile(userFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-	defer f.Close()
-	f.WriteString(entry)
 
 	res := []string{
 		fmt.Sprintf("✅ Utilisateur %s créé avec succès", username),
@@ -165,7 +138,66 @@ func creerUtilisateurNormal(username, password string, limite int, days int) str
 		"Pub KEY SlowDNS:\n" + slowdnsKey,
 		"NameServer NS:\n" + slowdnsNS,
 	}
+
 	return strings.Join(res, "\n")
+}
+
+// ===============================
+// Création utilisateur normal (jours)
+// ===============================
+func creerUtilisateurNormal(username, password string, limite int, days int) string {
+	if _, err := user.Lookup(username); err == nil {
+		return fmt.Sprintf("❌ L'utilisateur %s existe déjà", username)
+	}
+
+	exec.Command("useradd", "-m", "-s", "/bin/bash", username).Run()
+	exec.Command("bash", "-c", fmt.Sprintf("echo '%s:%s' | chpasswd", username, password)).Run()
+
+	expireDate := time.Now().AddDate(0, 0, days).Format("2006-01-02")
+	exec.Command("chage", "-E", expireDate, username).Run()
+
+	hostIPBytes, _ := exec.Command("hostname", "-I").Output()
+	hostIP := strings.Fields(string(hostIPBytes))[0]
+
+	// Enregistrement dans le fichier users.list
+	os.MkdirAll("/etc/kighmu", 0755)
+	userFile := "/etc/kighmu/users.list"
+	entry := fmt.Sprintf("%s|%s|%d|%s|%s|%s|%s\n", username, password, limite, expireDate, hostIP, DOMAIN, slowdnsNameServer())
+	f, _ := os.OpenFile(userFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	defer f.Close()
+	f.WriteString(entry)
+
+	// Retourne le message formaté
+	return genererMessageUtilisateur(username, password, limite, expireDate, hostIP)
+}
+
+// ===============================
+// Création utilisateur test (minutes)
+// ===============================
+func creerUtilisateurTest(username, password string, limite int, minutes int) string {
+	if _, err := user.Lookup(username); err == nil {
+		return fmt.Sprintf("❌ L'utilisateur %s existe déjà", username)
+	}
+
+	exec.Command("useradd", "-m", "-s", "/bin/bash", username).Run()
+	exec.Command("bash", "-c", fmt.Sprintf("echo '%s:%s' | chpasswd", username, password)).Run()
+
+	expireDate := time.Now().Add(time.Duration(minutes) * time.Minute).Format("2006-01-02 15:04")
+	exec.Command("chage", "-E", time.Now().Add(time.Duration(minutes)*time.Minute).Format("2006-01-02")).Run()
+
+	hostIPBytes, _ := exec.Command("hostname", "-I").Output()
+	hostIP := strings.Fields(string(hostIPBytes))[0]
+
+	// Enregistrement dans le fichier users.list
+	os.MkdirAll("/etc/kighmu", 0755)
+	userFile := "/etc/kighmu/users.list"
+	entry := fmt.Sprintf("%s|%s|%d|%s|%s|%s|%s\n", username, password, limite, expireDate, hostIP, DOMAIN, slowdnsNameServer())
+	f, _ := os.OpenFile(userFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	defer f.Close()
+	f.WriteString(entry)
+
+	// Retourne le message formaté
+	return genererMessageUtilisateur(username, password, limite, expireDate, hostIP)
 }
 
 // ===============================
