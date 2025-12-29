@@ -114,43 +114,41 @@ func genererUUID() string {
 // Créer utilisateur normal (jours)
 // ===============================
 func creerUtilisateurNormal(username, password string, limite, days int) string {
-	// Vérification si l'utilisateur existe déjà
 	if _, err := user.Lookup(username); err == nil {
 		return fmt.Sprintf("❌ L'utilisateur %s existe déjà", username)
 	}
 
-	// Création utilisateur avec home
+	// Création utilisateur
 	if err := exec.Command("useradd", "-m", "-s", "/bin/bash", username).Run(); err != nil {
 		return fmt.Sprintf("❌ Erreur création utilisateur: %v", err)
 	}
 
-	// Définir mot de passe
-	exec.Command("bash", "-c", fmt.Sprintf("echo '%s:%s' | chpasswd", username, password)).Run()
+	// Mot de passe
+	exec.Command("bash", "-c",
+		fmt.Sprintf("echo '%s:%s' | chpasswd", username, password),
+	).Run()
 
-	// Définir date d'expiration
+	// ✅ CORRECTION CRITIQUE : expiration en jours (PAS -E)
+	exec.Command("chage", "-M", strconv.Itoa(days), username).Run()
+
 	expireDate := time.Now().AddDate(0, 0, days).Format("2006-01-02")
-	exec.Command("chage", "-E", expireDate, username).Run()
 
-	// Préparer home et .bashrc
+	// Home & bashrc
 	userHome := "/home/" + username
 	bashrcPath := userHome + "/.bashrc"
 	bannerPath := "/etc/ssh/sshd_banner"
 
-	if _, err := os.Stat(userHome); os.IsNotExist(err) {
-		os.MkdirAll(userHome, 0755)
-	}
-
 	bashrcContent := fmt.Sprintf(`
 # Affichage du banner Kighmu VPS Manager
 if [ -f %s ]; then
-    cat %s
+	cat %s
 fi
 `, bannerPath, bannerPath)
 
 	ioutil.WriteFile(bashrcPath, []byte(bashrcContent), 0644)
-	exec.Command("chown", "-R", fmt.Sprintf("%s:%s", username, username), userHome).Run()
+	exec.Command("chown", "-R", username+":"+username, userHome).Run()
 
-	// Récupération IP
+	// IP
 	hostIP := "IP_non_disponible"
 	if ipBytes, err := exec.Command("hostname", "-I").Output(); err == nil {
 		ips := strings.Fields(string(ipBytes))
@@ -163,34 +161,26 @@ fi
 	slowdnsKey := slowdnsPubKey()
 	slowdnsNS := slowdnsNameServer()
 
-	// Sauvegarde dans users.list
+	// users.list
 	os.MkdirAll("/etc/kighmu", 0755)
 	userFile := "/etc/kighmu/users.list"
-	entry := fmt.Sprintf("%s|%s|%d|%s|%s|%s|%s\n", username, password, limite, expireDate, hostIP, DOMAIN, slowdnsNS)
+	entry := fmt.Sprintf("%s|%s|%d|%s|%s|%s|%s\n",
+		username, password, limite, expireDate, hostIP, DOMAIN, slowdnsNS,
+	)
 	if f, err := os.OpenFile(userFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600); err == nil {
 		defer f.Close()
 		f.WriteString(entry)
 	}
 
-	// Résumé complet
-	res := []string{
+	return strings.Join([]string{
 		fmt.Sprintf("✅ Utilisateur %s créé avec succès", username),
-		"∘ SSH: 22  ∘ System-DNS: 53",
-		"∘ SSH WS: 80  ∘ WEB-NGINX: 81",
-		"∘ DROPBEAR: 2222  ∘ SSL: 444",
-		"∘ BadVPN: 7200  ∘ BadVPN: 7300",
-		"∘ FASTDNS: 5300  ∘ UDP-Custom: 54000",
-		"∘ Hysteria: 22000  ∘ Proxy WS: 9090",
-		fmt.Sprintf("DOMAIN: %s", DOMAIN),
-		fmt.Sprintf("Host/IP: %s", hostIP),
-		fmt.Sprintf("Utilisateur: %s", username),
 		fmt.Sprintf("Mot de passe: %s", password),
-		fmt.Sprintf("Limite appareils: %d", limite),
-		fmt.Sprintf("Date expiration: %s", expireDate),
+		fmt.Sprintf("Expire le: %s", expireDate),
+		fmt.Sprintf("Host/IP: %s", hostIP),
+		fmt.Sprintf("DOMAIN: %s", DOMAIN),
 		"Pub KEY SlowDNS:\n" + slowdnsKey,
 		"NameServer NS:\n" + slowdnsNS,
-	}
-	return strings.Join(res, "\n")
+	}, "\n")
 }
 
 // Version test en minutes
@@ -199,16 +189,22 @@ func creerUtilisateurTest(username, password string, limite, minutes int) string
 		return fmt.Sprintf("❌ L'utilisateur %s existe déjà", username)
 	}
 
-	// Création sans home
+	// Création utilisateur test
 	exec.Command("useradd", "-M", "-s", "/bin/bash", username).Run()
 
-	// Définir mot de passe
-	exec.Command("bash", "-c", fmt.Sprintf("echo '%s:%s' | chpasswd", username, password)).Run()
+	// Mot de passe
+	exec.Command("bash", "-c",
+		fmt.Sprintf("echo '%s:%s' | chpasswd", username, password),
+	).Run()
 
-	// Définir expiration en minutes
-	expireTime := time.Now().Add(time.Duration(minutes) * time.Minute).Format("2006-01-02 15:04:05")
+	// ✅ SUPPRESSION PROGRAMMÉE (méthode correcte)
+	exec.Command("bash", "-c",
+		fmt.Sprintf("echo 'userdel -r %s' | at now + %d minutes", username, minutes),
+	).Run()
 
-	// Récupération IP
+	expireTime := time.Now().Add(time.Duration(minutes) * time.Minute).Format("2006-01-02 15:04")
+
+	// IP
 	hostIP := "IP_non_disponible"
 	if ipBytes, err := exec.Command("hostname", "-I").Output(); err == nil {
 		ips := strings.Fields(string(ipBytes))
@@ -221,34 +217,26 @@ func creerUtilisateurTest(username, password string, limite, minutes int) string
 	slowdnsKey := slowdnsPubKey()
 	slowdnsNS := slowdnsNameServer()
 
-	// Sauvegarde dans users.list
+	// users.list
 	os.MkdirAll("/etc/kighmu", 0755)
 	userFile := "/etc/kighmu/users.list"
-	entry := fmt.Sprintf("%s|%s|%d|%s|%s|%s|%s\n", username, password, limite, expireTime, hostIP, DOMAIN, slowdnsNS)
+	entry := fmt.Sprintf("%s|%s|%d|%s|%s|%s|%s\n",
+		username, password, limite, expireTime, hostIP, DOMAIN, slowdnsNS,
+	)
 	if f, err := os.OpenFile(userFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600); err == nil {
 		defer f.Close()
 		f.WriteString(entry)
 	}
 
-	// Résumé complet
-	res := []string{
-		fmt.Sprintf("✅ Utilisateur test %s créé avec succès", username),
-		"∘ SSH: 22  ∘ System-DNS: 53",
-		"∘ SSH WS: 80  ∘ WEB-NGINX: 81",
-		"∘ DROPBEAR: 2222  ∘ SSL: 444",
-		"∘ BadVPN: 7200  ∘ BadVPN: 7300",
-		"∘ FASTDNS: 5300  ∘ UDP-Custom: 54000",
-		"∘ Hysteria: 22000  ∘ Proxy WS: 9090",
-		fmt.Sprintf("DOMAIN: %s", DOMAIN),
-		fmt.Sprintf("Host/IP: %s", hostIP),
-		fmt.Sprintf("Utilisateur: %s", username),
+	return strings.Join([]string{
+		fmt.Sprintf("🧪 Utilisateur TEST %s créé", username),
 		fmt.Sprintf("Mot de passe: %s", password),
-		fmt.Sprintf("Limite appareils: %d", limite),
-		fmt.Sprintf("Date expiration: %s", expireTime),
+		fmt.Sprintf("Expire à: %s", expireTime),
+		fmt.Sprintf("Host/IP: %s", hostIP),
+		fmt.Sprintf("DOMAIN: %s", DOMAIN),
 		"Pub KEY SlowDNS:\n" + slowdnsKey,
 		"NameServer NS:\n" + slowdnsNS,
-	}
-	return strings.Join(res, "\n")
+	}, "\n")
 }
 
 // Charger utilisateurs V2Ray depuis fichier
