@@ -7,11 +7,12 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
+	"bufio"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 )
@@ -19,7 +20,18 @@ import (
 var (
 	botToken = os.Getenv("BOT_TOKEN")
 	adminID  int64
+	homeDir  = os.Getenv("HOME")
 )
+
+// Exécute un script bash et retourne stdout/stderr
+func execScript(script string) string {
+	cmd := exec.Command("bash", script)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Sprintf("❌ Erreur : %v\n%s", err, string(out))
+	}
+	return string(out)
+}
 
 func lancerBot() {
 	reader := bufio.NewReader(os.Stdin)
@@ -78,7 +90,6 @@ func lancerBot() {
           ⚡ KIGHMU MANAGER ⚡
 ============================================
         AUTEUR : @KIGHMU
-                                        
         TELEGRAM : https://t.me/lkgcddtoog
 ============================================
    SÉLECTIONNEZ UNE OPTION CI-DESSOUS !
@@ -86,13 +97,12 @@ func lancerBot() {
 
 			keyboard := tgbotapi.NewInlineKeyboardMarkup(
 				tgbotapi.NewInlineKeyboardRow(
-					tgbotapi.NewInlineKeyboardButtonURL("Option 1", "https://t.me/tonlien1"),
+					tgbotapi.NewInlineKeyboardButtonData("Créer utilisateur (jours)", "menu1"),
+					tgbotapi.NewInlineKeyboardButtonData("Créer utilisateur test (minutes)", "menu2"),
 				),
 				tgbotapi.NewInlineKeyboardRow(
-					tgbotapi.NewInlineKeyboardButtonURL("Option 2", "https://t.me/tonlien2"),
-				),
-				tgbotapi.NewInlineKeyboardRow(
-					tgbotapi.NewInlineKeyboardButtonURL("Option 3", "https://t.me/tonlien3"),
+					tgbotapi.NewInlineKeyboardButtonData("Gestion utilisateurs en ligne", "menu3"),
+					tgbotapi.NewInlineKeyboardButtonData("Supprimer utilisateur", "menu4"),
 				),
 			)
 
@@ -102,6 +112,35 @@ func lancerBot() {
 
 		default:
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "❌ Commande inconnue")
+			bot.Send(msg)
+		}
+	}
+
+	// Gestion des callbacks (boutons)
+	for update := range bot.ListenForWebhook("/") {
+		if update.CallbackQuery != nil {
+			data := update.CallbackQuery.Data
+			var scriptPath string
+
+			switch data {
+			case "menu1":
+				scriptPath = homeDir + "/Kighmu/menu1.sh"
+			case "menu2":
+				scriptPath = homeDir + "/Kighmu/menu2.sh"
+			case "menu3":
+				scriptPath = homeDir + "/Kighmu/menu3.sh"
+			case "menu4":
+				scriptPath = homeDir + "/Kighmu/menu4.sh"
+			default:
+				bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, "❌ Option inconnue"))
+				continue
+			}
+
+			bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, "✅ Exécution du script..."))
+
+			// Exécution du script et envoi du résultat dans Telegram
+			output := execScript(scriptPath)
+			msg := tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, "Résultat de "+data+":\n"+output)
 			bot.Send(msg)
 		}
 	}
