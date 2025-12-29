@@ -432,24 +432,70 @@ func lancerBot() {
 		}
 
 		if update.Message != nil && int64(update.Message.From.ID) == adminID {
-			text := strings.TrimSpace(update.Message.Text)
+    text := strings.TrimSpace(update.Message.Text)
 
-			// Gestion V2Ray+FastDNS création
-			if strings.Count(text, ",") == 1 {
-				parts := strings.Split(text, ",")
-				nom := strings.TrimSpace(parts[0])
-				duree, _ := strconv.Atoi(strings.TrimSpace(parts[1]))
-				output := creerUtilisateurV2Ray(nom, duree)
-				bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, output))
-				continue
-			}
+    // =================================
+    // SSH NORMAL / TEST (4 champs)
+    // username,password,limite,duree
+    // =================================
+    if strings.Count(text, ",") == 3 {
+        parts := strings.Split(text, ",")
 
-			// Gestion V2Ray+FastDNS suppression
-			if num, err := strconv.Atoi(text); err == nil && num > 0 && num <= len(utilisateursV2Ray) {
-				output := supprimerUtilisateurV2Ray(num - 1)
-				bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, output))
-				continue
-			}
+        username := strings.TrimSpace(parts[0])
+        password := strings.TrimSpace(parts[1])
+        limite, err1 := strconv.Atoi(strings.TrimSpace(parts[2]))
+        duree, err2 := strconv.Atoi(strings.TrimSpace(parts[3]))
+
+        if err1 != nil || err2 != nil {
+            bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "❌ Limite ou durée invalide"))
+            continue
+        }
+
+        // 🔁 Ici tu peux décider NORMAL ou TEST
+        // Exemple : < 1440 min = test
+        if duree <= 1440 {
+            output := creerUtilisateurTest(username, password, limite, duree)
+            bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, output))
+        } else {
+            output := creerUtilisateurNormal(username, password, limite, duree)
+            bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, output))
+        }
+        continue
+    }
+
+    // ===============================
+    // V2RAY + FASTDNS (2 champs)
+    // nom,duree
+    // ===============================
+    if strings.Count(text, ",") == 1 {
+        parts := strings.Split(text, ",")
+
+        nom := strings.TrimSpace(parts[0])
+        duree, err := strconv.Atoi(strings.TrimSpace(parts[1]))
+        if err != nil {
+            bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "❌ Durée invalide"))
+            continue
+        }
+
+        output := creerUtilisateurV2Ray(nom, duree)
+        bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, output))
+        continue
+    }
+
+    // ===============================
+    // SUPPRESSION V2RAY
+    // ===============================
+    if num, err := strconv.Atoi(text); err == nil && num > 0 && num <= len(utilisateursV2Ray) {
+        output := supprimerUtilisateurV2Ray(num - 1)
+        bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, output))
+        continue
+    }
+
+    // ===============================
+    // COMMANDE INCONNUE
+    // ===============================
+    bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "❌ Format non reconnu"))
+}
 
 			// Commande principale
 			if text == "/kighmu" {
