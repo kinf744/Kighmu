@@ -504,15 +504,15 @@ SÉLECTIONNEZ UNE OPTION CI-DESSOUS !
 ============================================`
 			keyboard := tgbotapi.NewInlineKeyboardMarkup(
 				tgbotapi.NewInlineKeyboardRow(
-					tgbotapi.NewInlineKeyboardButtonData("Créer utilisateur (jours)", "menu1"),
-					tgbotapi.NewInlineKeyboardButtonData("Créer utilisateur test (minutes)", "menu2"),
+					tgbotapi.NewInlineKeyboardButtonData("Compte_SSH (jours)", "menu1"),
+					tgbotapi.NewInlineKeyboardButtonData("Compte_SSH test(minutes)", "menu2"),
 				),
 				tgbotapi.NewInlineKeyboardRow(
-					tgbotapi.NewInlineKeyboardButtonData("➕ Créer utilisateur V2Ray+FastDNS", "v2ray_creer"),
-					tgbotapi.NewInlineKeyboardButtonData("➖ Supprimer utilisateur V2Ray+FastDNS", "v2ray_supprimer"),
+					tgbotapi.NewInlineKeyboardButtonData("➕ Compte V2Ray+FastDNS", "v2ray_creer"),
+					tgbotapi.NewInlineKeyboardButtonData("➖ Supprimer_Compte V2Ray+FastDNS", "v2ray_supprimer"),
 				),
 				tgbotapi.NewInlineKeyboardRow(
-					tgbotapi.NewInlineKeyboardButtonData("❌ Supprimer utilisateur(s)", "supprimer_multi"),
+					tgbotapi.NewInlineKeyboardButtonData("❌ Supprimer_Compte_SSH(s)", "supprimer_multi"),
 				),
 			)
 			msg := tgbotapi.NewMessage(chatID, msgText)
