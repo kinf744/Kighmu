@@ -7,7 +7,7 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"io/ioutil" // ← Pour ReadFile compatible Go <1.16
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"os/user"
@@ -24,12 +24,21 @@ var (
 	DOMAIN   = os.Getenv("DOMAIN")
 )
 
+// Structure pour V2Ray+FastDNS
+type UtilisateurV2Ray struct {
+	Nom    string
+	UUID   string
+	Expire string
+}
+
+var utilisateursV2Ray []UtilisateurV2Ray
+
 // ===============================
 // Initialisation ADMIN_ID
 // ===============================
 func initAdminID() {
 	if adminID != 0 {
-		return // déjà défini
+		return
 	}
 
 	idStr := os.Getenv("ADMIN_ID")
@@ -81,42 +90,56 @@ func loadDomain() string {
 }
 
 // ===============================
-// Fonctions utilitaires
+// Fonctions auxiliaires FastDNS
 // ===============================
+func slowdnsPubKey() string {
+	data, err := ioutil.ReadFile("/etc/slowdns/server.pub")
+	if err != nil {
+		return "clé_non_disponible"
+	}
+	return strings.TrimSpace(string(data))
+}
 
-// Créer utilisateur normal (jours)
+func slowdnsNameServer() string {
+	data, err := ioutil.ReadFile("/etc/slowdns/ns.conf")
+	if err != nil {
+		return "NS_non_defini"
+	}
+	return strings.TrimSpace(string(data))
+}
+
+func genererUUID() string {
+	out, _ := exec.Command("cat", "/proc/sys/kernel/random/uuid").Output()
+	return strings.TrimSpace(string(out))
+}
+
+// ===============================
+// Création utilisateur normal (jours)
+// ===============================
 func creerUtilisateurNormal(username, password string, limite int, days int) string {
 	if _, err := user.Lookup(username); err == nil {
 		return fmt.Sprintf("❌ L'utilisateur %s existe déjà", username)
 	}
 
-	// Création utilisateur
 	cmdAdd := exec.Command("useradd", "-m", "-s", "/bin/bash", username)
 	if err := cmdAdd.Run(); err != nil {
 		return fmt.Sprintf("❌ Erreur création utilisateur: %v", err)
 	}
 
-	// Définir mot de passe
 	cmdPass := exec.Command("bash", "-c", fmt.Sprintf("echo '%s:%s' | chpasswd", username, password))
 	if err := cmdPass.Run(); err != nil {
 		return fmt.Sprintf("❌ Erreur mot de passe: %v", err)
 	}
 
-	// Expiration
 	expireDate := time.Now().AddDate(0, 0, days).Format("2006-01-02")
 	exec.Command("chage", "-E", expireDate, username).Run()
 
-	// Host IP
 	hostIPBytes, _ := exec.Command("hostname", "-I").Output()
 	hostIP := strings.Fields(string(hostIPBytes))[0]
 
-	// SlowDNS
-	slowdnsKeyBytes, _ := ioutil.ReadFile("/etc/slowdns/server.pub")
-	slowdnsKey := strings.TrimSpace(string(slowdnsKeyBytes))
-	slowdnsNSBytes, _ := ioutil.ReadFile("/etc/slowdns/ns.conf")
-	slowdnsNS := strings.TrimSpace(string(slowdnsNSBytes))
+	slowdnsKey := slowdnsPubKey()
+	slowdnsNS := slowdnsNameServer()
 
-	// Sauvegarder
 	userFile := "/etc/kighmu/users.list"
 	os.MkdirAll("/etc/kighmu", 0755)
 	entry := fmt.Sprintf("%s|%s|%d|%s|%s|%s|%s\n", username, password, limite, expireDate, hostIP, DOMAIN, slowdnsNS)
@@ -124,7 +147,6 @@ func creerUtilisateurNormal(username, password string, limite int, days int) str
 	defer f.Close()
 	f.WriteString(entry)
 
-	// Résumé
 	res := []string{
 		fmt.Sprintf("✅ Utilisateur %s créé avec succès", username),
 		"∘ SSH: 22  ∘ System-DNS: 53",
@@ -145,64 +167,31 @@ func creerUtilisateurNormal(username, password string, limite int, days int) str
 	return strings.Join(res, "\n")
 }
 
-// Créer utilisateur test (minutes)
-func creerUtilisateurTest(username, password string, limite, minutes int) string {
-	if _, err := user.Lookup(username); err == nil {
-		return fmt.Sprintf("❌ L'utilisateur %s existe déjà", username)
+// ===============================
+// Création utilisateur V2Ray + FastDNS
+// ===============================
+func creerUtilisateurV2Ray(nom string, duree int) string {
+	uuid := genererUUID()
+	expire := time.Now().AddDate(0, 0, duree).Format("2006-01-02")
+	utilisateursV2Ray = append(utilisateursV2Ray, UtilisateurV2Ray{Nom: nom, UUID: uuid, Expire: expire})
+
+	msgText := fmt.Sprintf(
+		"✅ Utilisateur V2Ray+FastDNS créé\n\nNom : %s\nUUID : %s\nDurée : %d jours\nExpire : %s\n\n🔹 Domaine : %s\n🔹 FastDNS UDP : 5400\n🔹 V2Ray TCP : 5401\n🔹 Clé publique FastDNS : %s\n🔹 NameServer : %s",
+		nom, uuid, duree, expire, DOMAIN, slowdnsPubKey(), slowdnsNameServer(),
+	)
+	return msgText
+}
+
+// ===============================
+// Suppression utilisateur V2Ray + FastDNS
+// ===============================
+func supprimerUtilisateurV2Ray(index int) string {
+	if index < 0 || index >= len(utilisateursV2Ray) {
+		return "❌ Index invalide"
 	}
-
-	// Création utilisateur
-	cmdAdd := exec.Command("useradd", "-M", "-s", "/bin/bash", username)
-	if err := cmdAdd.Run(); err != nil {
-		return fmt.Sprintf("❌ Erreur création utilisateur: %v", err)
-	}
-
-	// Définir mot de passe
-	cmdPass := exec.Command("bash", "-c", fmt.Sprintf("echo '%s:%s' | chpasswd", username, password))
-	if err := cmdPass.Run(); err != nil {
-		return fmt.Sprintf("❌ Erreur mot de passe: %v", err)
-	}
-
-	// Expiration
-	expireTime := time.Now().Add(time.Duration(minutes) * time.Minute).Format("2006-01-02 15:04:05")
-
-	// Host IP
-	hostIPBytes, _ := exec.Command("hostname", "-I").Output()
-	hostIP := strings.Fields(string(hostIPBytes))[0]
-
-	// SlowDNS
-	slowdnsKeyBytes, _ := ioutil.ReadFile("/etc/slowdns/server.pub")
-	slowdnsKey := strings.TrimSpace(string(slowdnsKeyBytes))
-	slowdnsNSBytes, _ := ioutil.ReadFile("/etc/slowdns/ns.conf")
-	slowdnsNS := strings.TrimSpace(string(slowdnsNSBytes))
-
-	// Sauvegarder
-	userFile := "/etc/kighmu/users.list"
-	os.MkdirAll("/etc/kighmu", 0755)
-	entry := fmt.Sprintf("%s|%s|%d|%s|%s|%s|%s\n", username, password, limite, expireTime, hostIP, DOMAIN, slowdnsNS)
-	f, _ := os.OpenFile(userFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-	defer f.Close()
-	f.WriteString(entry)
-
-	// Résumé
-	res := []string{
-		fmt.Sprintf("✅ Utilisateur test %s créé avec succès", username),
-		"∘ SSH: 22  ∘ System-DNS: 53",
-		"∘ SSH WS: 80  ∘ WEB-NGINX: 81",
-		"∘ DROPBEAR: 2222  ∘ SSL: 444",
-		"∘ BadVPN: 7200  ∘ BadVPN: 7300",
-		"∘ FASTDNS: 5300  ∘ UDP-Custom: 54000",
-		"∘ Hysteria: 22000  ∘ Proxy WS: 9090",
-		fmt.Sprintf("DOMAIN: %s", DOMAIN),
-		fmt.Sprintf("Host/IP: %s", hostIP),
-		fmt.Sprintf("Utilisateur: %s", username),
-		fmt.Sprintf("Mot de passe: %s", password),
-		fmt.Sprintf("Limite appareils: %d", limite),
-		fmt.Sprintf("Date expiration: %s", expireTime),
-		"Pub KEY SlowDNS:\n" + slowdnsKey,
-		"NameServer NS:\n" + slowdnsNS,
-	}
-	return strings.Join(res, "\n")
+	u := utilisateursV2Ray[index]
+	utilisateursV2Ray = append(utilisateursV2Ray[:index], utilisateursV2Ray[index+1:]...)
+	return fmt.Sprintf("✅ Utilisateur %s supprimé.", u.Nom)
 }
 
 // ===============================
@@ -235,36 +224,58 @@ func lancerBot() {
 					"Envoyez les infos pour création utilisateur (jours) sous ce format :\n`username,password,limite,days`")
 				msg.ParseMode = "Markdown"
 				bot.Send(msg)
+
 			case "menu2":
 				msg := tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID,
 					"Envoyez les infos pour création utilisateur test (minutes) sous ce format :\n`username,password,limite,minutes`")
 				msg.ParseMode = "Markdown"
 				bot.Send(msg)
+
+			case "v2ray_creer":
+				msg := tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID,
+					"Envoyez les infos pour créer un utilisateur V2Ray + FastDNS sous ce format :\n`nom,durée`")
+				msg.ParseMode = "Markdown"
+				bot.Send(msg)
+
+			case "v2ray_supprimer":
+				if len(utilisateursV2Ray) == 0 {
+					bot.Send(tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, "❌ Aucun utilisateur V2Ray+FastDNS à supprimer."))
+				} else {
+					msgText := "Liste des utilisateurs V2Ray+FastDNS :\n"
+					for i, u := range utilisateursV2Ray {
+						msgText += fmt.Sprintf("%d) %s | UUID: %s | Expire: %s\n", i+1, u.Nom, u.UUID, u.Expire)
+					}
+					msgText += "\nRépondez avec le numéro de l'utilisateur à supprimer."
+					bot.Send(tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, msgText))
+				}
+
 			default:
 				bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, "❌ Option inconnue"))
 			}
 		}
 
-		// --- Gestion messages texte ---
 		if update.Message != nil && int64(update.Message.From.ID) == adminID {
 			text := strings.TrimSpace(update.Message.Text)
-			if strings.Count(text, ",") == 3 {
+
+			// Gestion V2Ray+FastDNS création
+			if strings.Count(text, ",") == 1 {
 				parts := strings.Split(text, ",")
-				username := strings.TrimSpace(parts[0])
-				password := strings.TrimSpace(parts[1])
-				limite, _ := strconv.Atoi(strings.TrimSpace(parts[2]))
-				if strings.Contains(text, "days") {
-					days, _ := strconv.Atoi(strings.TrimSpace(parts[3]))
-					output := creerUtilisateurNormal(username, password, limite, days)
-					msg := tgbotapi.NewMessage(update.Message.Chat.ID, output)
-					bot.Send(msg)
-				} else {
-					minutes, _ := strconv.Atoi(strings.TrimSpace(parts[3]))
-					output := creerUtilisateurTest(username, password, limite, minutes)
-					msg := tgbotapi.NewMessage(update.Message.Chat.ID, output)
-					bot.Send(msg)
-				}
-			} else if text == "/kighmu" {
+				nom := strings.TrimSpace(parts[0])
+				duree, _ := strconv.Atoi(strings.TrimSpace(parts[1]))
+				output := creerUtilisateurV2Ray(nom, duree)
+				bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, output))
+				continue
+			}
+
+			// Gestion V2Ray+FastDNS suppression
+			if num, err := strconv.Atoi(text); err == nil && num > 0 && num <= len(utilisateursV2Ray) {
+				output := supprimerUtilisateurV2Ray(num - 1)
+				bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, output))
+				continue
+			}
+
+			// Commande principale
+			if text == "/kighmu" {
 				msgText := `============================================
           ⚡ KIGHMU MANAGER ⚡
 ============================================
@@ -277,6 +288,10 @@ func lancerBot() {
 					tgbotapi.NewInlineKeyboardRow(
 						tgbotapi.NewInlineKeyboardButtonData("Créer utilisateur (jours)", "menu1"),
 						tgbotapi.NewInlineKeyboardButtonData("Créer utilisateur test (minutes)", "menu2"),
+					),
+					tgbotapi.NewInlineKeyboardRow(
+						tgbotapi.NewInlineKeyboardButtonData("➕ Créer utilisateur V2Ray+FastDNS", "v2ray_creer"),
+						tgbotapi.NewInlineKeyboardButtonData("➖ Supprimer utilisateur V2Ray+FastDNS", "v2ray_supprimer"),
 					),
 				)
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, msgText)
@@ -294,8 +309,8 @@ func lancerBot() {
 // Main
 // ===============================
 func main() {
-	initAdminID()            // ← Initialisation obligatoire ADMIN_ID
-	DOMAIN = loadDomain()    // ← Charger le domaine depuis kighmu_info si vide
+	initAdminID()
+	DOMAIN = loadDomain()
 	fmt.Println("✅ Bot prêt à être lancé")
 	lancerBot()
 }
