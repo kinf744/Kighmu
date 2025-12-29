@@ -114,8 +114,11 @@ func genererUUID() string {
 // Créer utilisateur normal (jours)
 // ===============================
 func setPassword(username, password string) error {
-	cmd := exec.Command("chpasswd")
-	cmd.Stdin = strings.NewReader(username + ":" + password)
+	cmd := exec.Command(
+		"bash",
+		"-c",
+		fmt.Sprintf("echo '%s:%s' | chpasswd", username, password),
+	)
 	return cmd.Run()
 }
 
