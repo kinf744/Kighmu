@@ -1,7 +1,5 @@
 // ================================================================
 // bot2.go — Telegram VPS Control Bot
-// Auteur : Kighmu
-// Compatible : Go 1.13+ / Ubuntu 20.04
 // ================================================================
 
 package main
@@ -23,7 +21,6 @@ var (
 	homeDir  = os.Getenv("HOME")
 )
 
-// Exécute un script bash et retourne stdout/stderr
 func execScript(script string) string {
 	cmd := exec.Command("bash", script)
 	out, err := cmd.CombinedOutput()
@@ -36,17 +33,15 @@ func execScript(script string) string {
 func lancerBot() {
 	reader := bufio.NewReader(os.Stdin)
 
-	// Demande BOT_TOKEN si manquant
 	if botToken == "" {
 		fmt.Print("🔑 Entrez votre BOT_TOKEN : ")
 		inputToken, _ := reader.ReadString('\n')
 		botToken = strings.TrimSpace(inputToken)
 	}
 
-	// Demande ADMIN_ID si manquant
 	idStr := os.Getenv("ADMIN_ID")
 	if idStr == "" {
-		fmt.Print("🆔 Entrez votre ADMIN_ID (Telegram) : ")
+		fmt.Print("🆔 Entrez votre ADMIN_ID : ")
 		inputID, _ := reader.ReadString('\n')
 		idStr = strings.TrimSpace(inputID)
 	}
@@ -71,11 +66,41 @@ func lancerBot() {
 	updates, _ := bot.GetUpdatesChan(u)
 
 	for update := range updates {
-		if update.Message == nil {
+
+		// --- Gestion CallbackQuery (boutons) ---
+		if update.CallbackQuery != nil {
+			if int64(update.CallbackQuery.From.ID) != adminID {
+				bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, "⛔ Accès refusé"))
+				continue
+			}
+
+			var scriptPath string
+			switch update.CallbackQuery.Data {
+			case "menu1":
+				scriptPath = homeDir + "/Kighmu/menu1.sh"
+			case "menu2":
+				scriptPath = homeDir + "/Kighmu/menu2.sh"
+			case "menu3":
+				scriptPath = homeDir + "/Kighmu/menu3.sh"
+			case "menu4":
+				scriptPath = homeDir + "/Kighmu/menu4.sh"
+			default:
+				bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, "❌ Option inconnue"))
+				continue
+			}
+
+			bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, "✅ Exécution du script..."))
+
+			output := execScript(scriptPath)
+			msg := tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, "Résultat :\n"+output)
+			bot.Send(msg)
 			continue
 		}
 
-		// Vérifie si c'est l'admin
+		// --- Gestion messages texte ---
+		if update.Message == nil {
+			continue
+		}
 		if int64(update.Message.From.ID) != adminID {
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "⛔ Accès refusé")
 			bot.Send(msg)
@@ -83,9 +108,7 @@ func lancerBot() {
 		}
 
 		text := strings.TrimSpace(update.Message.Text)
-
-		switch text {
-		case "/kighmu":
+		if text == "/kighmu" {
 			msgText := `============================================
           ⚡ KIGHMU MANAGER ⚡
 ============================================
@@ -109,38 +132,8 @@ func lancerBot() {
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, msgText)
 			msg.ReplyMarkup = keyboard
 			bot.Send(msg)
-
-		default:
+		} else {
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "❌ Commande inconnue")
-			bot.Send(msg)
-		}
-	}
-
-	// Gestion des callbacks (boutons)
-	for update := range bot.ListenForWebhook("/") {
-		if update.CallbackQuery != nil {
-			data := update.CallbackQuery.Data
-			var scriptPath string
-
-			switch data {
-			case "menu1":
-				scriptPath = homeDir + "/Kighmu/menu1.sh"
-			case "menu2":
-				scriptPath = homeDir + "/Kighmu/menu2.sh"
-			case "menu3":
-				scriptPath = homeDir + "/Kighmu/menu3.sh"
-			case "menu4":
-				scriptPath = homeDir + "/Kighmu/menu4.sh"
-			default:
-				bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, "❌ Option inconnue"))
-				continue
-			}
-
-			bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, "✅ Exécution du script..."))
-
-			// Exécution du script et envoi du résultat dans Telegram
-			output := execScript(scriptPath)
-			msg := tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, "Résultat de "+data+":\n"+output)
 			bot.Send(msg)
 		}
 	}
