@@ -58,12 +58,6 @@ while true; do
                 continue
             fi
 
-            if [ -z "$BOT_TOKEN" ] || [ -z "$ADMIN_ID" ]; then
-                echo "❌ Variables BOT_TOKEN ou ADMIN_ID manquantes"
-                read -p "Entrée pour continuer..."
-                continue
-            fi
-
             echo "🚀 Lancement du bot..."
             "$BOT_BIN"
             ;;
