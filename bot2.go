@@ -378,10 +378,11 @@ func lancerBot() {
 
 	for update := range updates {
 
-		// ===============================
-		// CALLBACKS (MENU)
-		// ===============================
+		/* ===============================
+		   CALLBACKS (INLINE MENU)
+		================================ */
 		if update.CallbackQuery != nil {
+
 			if int64(update.CallbackQuery.From.ID) != adminID {
 				bot.AnswerCallbackQuery(
 					tgbotapi.NewCallback(update.CallbackQuery.ID, "⛔ Accès refusé"),
@@ -398,7 +399,7 @@ func lancerBot() {
 			case "menu1":
 				msg := tgbotapi.NewMessage(
 					update.CallbackQuery.Message.Chat.ID,
-					"Envoyez les infos pour création utilisateur (jours) :\n`username,password,limite,days`",
+					"Envoyez :\n`username,password,limite,jours`",
 				)
 				msg.ParseMode = "Markdown"
 				bot.Send(msg)
@@ -406,7 +407,7 @@ func lancerBot() {
 			case "menu2":
 				msg := tgbotapi.NewMessage(
 					update.CallbackQuery.Message.Chat.ID,
-					"Envoyez les infos pour création utilisateur test (minutes) :\n`username,password,limite,minutes`",
+					"Envoyez :\n`username,password,limite,minutes`",
 				)
 				msg.ParseMode = "Markdown"
 				bot.Send(msg)
@@ -425,102 +426,36 @@ func lancerBot() {
 						update.CallbackQuery.Message.Chat.ID,
 						"❌ Aucun utilisateur V2Ray à supprimer",
 					))
-				} else {
-					txt := "Liste des utilisateurs V2Ray :\n"
-					for i, u := range utilisateursV2Ray {
-						txt += fmt.Sprintf(
-							"%d) %s | UUID: %s | Expire: %s\n",
-							i+1, u.Nom, u.UUID, u.Expire,
-						)
-					}
-					txt += "\nEnvoyez le numéro à supprimer"
-					bot.Send(tgbotapi.NewMessage(
-						update.CallbackQuery.Message.Chat.ID, txt,
-					))
-				}
-
-			default:
-				bot.AnswerCallbackQuery(
-					tgbotapi.NewCallback(update.CallbackQuery.ID, "❌ Option inconnue"),
-				)
-			}
-		}
-
-		// ===============================
-		// MESSAGES (COMMANDES TEXTE)
-		// ===============================
-		if update.Message != nil && int64(update.Message.From.ID) == adminID {
-
-			text := strings.TrimSpace(update.Message.Text)
-
-			// SSH NORMAL / TEST
-			if strings.Count(text, ",") == 3 {
-				parts := strings.Split(text, ",")
-
-				username := strings.TrimSpace(parts[0])
-				password := strings.TrimSpace(parts[1])
-				limite, err1 := strconv.Atoi(strings.TrimSpace(parts[2]))
-				duree, err2 := strconv.Atoi(strings.TrimSpace(parts[3]))
-
-				if err1 != nil || err2 != nil {
-					bot.Send(tgbotapi.NewMessage(
-						update.Message.Chat.ID,
-						"❌ Limite ou durée invalide",
-					))
 					continue
 				}
 
-				if duree <= 1440 {
-					out := creerUtilisateurTest(username, password, limite, duree)
-					bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, out))
-				} else {
-					out := creerUtilisateurNormal(username, password, limite, duree)
-					bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, out))
+				txt := "Liste des utilisateurs V2Ray :\n"
+				for i, u := range utilisateursV2Ray {
+					txt += fmt.Sprintf(
+						"%d) %s | UUID: %s | Expire: %s\n",
+						i+1, u.Nom, u.UUID, u.Expire,
+					)
 				}
-				continue
+				txt += "\nEnvoyez le numéro à supprimer"
+				bot.Send(tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, txt))
 			}
 
-			// V2RAY
-			if strings.Count(text, ",") == 1 {
-				parts := strings.Split(text, ",")
-				nom := strings.TrimSpace(parts[0])
-				duree, err := strconv.Atoi(strings.TrimSpace(parts[1]))
-				if err != nil {
-					bot.Send(tgbotapi.NewMessage(
-						update.Message.Chat.ID,
-						"❌ Durée invalide",
-					))
-					continue
-				}
-
-				out := creerUtilisateurV2Ray(nom, duree)
-				bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, out))
-				continue
-			}
-
-			// SUPPRESSION V2RAY
-			if num, err := strconv.Atoi(text); err == nil &&
-				num > 0 && num <= len(utilisateursV2Ray) {
-
-				out := supprimerUtilisateurV2Ray(num - 1)
-				bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, out))
-				continue
-			}
-
-			// COMMANDE INCONNUE
-			bot.Send(tgbotapi.NewMessage(
-				update.Message.Chat.ID,
-				"❌ Format non reconnu",
-			))
+			continue
 		}
-	}
-}
 
-// ===============================
-// COMMANDE /kighmu (MENU)
-// ===============================
-if text == "/kighmu" {
-	msgText := `============================================
+		/* ===============================
+		   MESSAGES TEXTE
+		================================ */
+		if update.Message == nil || int64(update.Message.From.ID) != adminID {
+			continue
+		}
+
+		text := strings.TrimSpace(update.Message.Text)
+
+		/* ===== MENU PRINCIPAL ===== */
+		if text == "/kighmu" {
+
+			msgText := `============================================
 ⚡ KIGHMU MANAGER ⚡
 ============================================
 AUTEUR : @KIGHMU
@@ -529,21 +464,78 @@ TELEGRAM : https://t.me/lkgcddtoog
 SÉLECTIONNEZ UNE OPTION CI-DESSOUS !
 ============================================`
 
-	keyboard := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("Créer utilisateur (jours)", "menu1"),
-			tgbotapi.NewInlineKeyboardButtonData("Créer utilisateur test (minutes)", "menu2"),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("➕ Créer utilisateur V2Ray+FastDNS", "v2ray_creer"),
-			tgbotapi.NewInlineKeyboardButtonData("➖ Supprimer utilisateur V2Ray+FastDNS", "v2ray_supprimer"),
-		),
-	)
+			keyboard := tgbotapi.NewInlineKeyboardMarkup(
+				tgbotapi.NewInlineKeyboardRow(
+					tgbotapi.NewInlineKeyboardButtonData("Créer utilisateur (jours)", "menu1"),
+					tgbotapi.NewInlineKeyboardButtonData("Créer utilisateur test (minutes)", "menu2"),
+				),
+				tgbotapi.NewInlineKeyboardRow(
+					tgbotapi.NewInlineKeyboardButtonData("➕ Créer utilisateur V2Ray+FastDNS", "v2ray_creer"),
+					tgbotapi.NewInlineKeyboardButtonData("➖ Supprimer utilisateur V2Ray+FastDNS", "v2ray_supprimer"),
+				),
+			)
 
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, msgText)
-	msg.ReplyMarkup = keyboard
-	bot.Send(msg)
-	continue
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, msgText)
+			msg.ReplyMarkup = keyboard
+			bot.Send(msg)
+			continue
+		}
+
+		/* ===== SSH NORMAL / TEST ===== */
+		if strings.Count(text, ",") == 3 {
+			p := strings.Split(text, ",")
+
+			limite, err1 := strconv.Atoi(strings.TrimSpace(p[2]))
+			duree, err2 := strconv.Atoi(strings.TrimSpace(p[3]))
+			if err1 != nil || err2 != nil {
+				bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "❌ Paramètres invalides"))
+				continue
+			}
+
+			if duree <= 1440 {
+				bot.Send(tgbotapi.NewMessage(
+					update.Message.Chat.ID,
+					creerUtilisateurTest(p[0], p[1], limite, duree),
+				))
+			} else {
+				bot.Send(tgbotapi.NewMessage(
+					update.Message.Chat.ID,
+					creerUtilisateurNormal(p[0], p[1], limite, duree),
+				))
+			}
+			continue
+		}
+
+		/* ===== V2RAY ===== */
+		if strings.Count(text, ",") == 1 {
+			p := strings.Split(text, ",")
+			duree, err := strconv.Atoi(strings.TrimSpace(p[1]))
+			if err != nil {
+				bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "❌ Durée invalide"))
+				continue
+			}
+
+			bot.Send(tgbotapi.NewMessage(
+				update.Message.Chat.ID,
+				creerUtilisateurV2Ray(p[0], duree),
+			))
+			continue
+		}
+
+		/* ===== SUPPRESSION V2RAY ===== */
+		if num, err := strconv.Atoi(text); err == nil &&
+			num > 0 && num <= len(utilisateursV2Ray) {
+
+			bot.Send(tgbotapi.NewMessage(
+				update.Message.Chat.ID,
+				supprimerUtilisateurV2Ray(num-1),
+			))
+			continue
+		}
+
+		/* ===== INCONNU ===== */
+		bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "❌ Commande ou format inconnu"))
+	}
 }
 
 // ===============================
