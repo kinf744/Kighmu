@@ -24,6 +24,28 @@ var (
 )
 
 // ===============================
+// Initialisation ADMIN_ID
+// ===============================
+func initAdminID() {
+	if adminID != 0 {
+		return // déjà défini
+	}
+
+	idStr := os.Getenv("ADMIN_ID")
+	if idStr == "" {
+		fmt.Print("🆔 Entrez votre ADMIN_ID Telegram : ")
+		fmt.Scanln(&idStr)
+	}
+
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		fmt.Println("❌ ADMIN_ID invalide")
+		os.Exit(1)
+	}
+	adminID = id
+}
+
+// ===============================
 // Fonctions utilitaires
 // ===============================
 
@@ -233,7 +255,11 @@ func lancerBot() {
 	}
 }
 
+// ===============================
+// Main
+// ===============================
 func main() {
+	initAdminID() // ← Initialisation obligatoire ADMIN_ID
 	fmt.Println("✅ Bot prêt à être lancé")
 	lancerBot()
 }
