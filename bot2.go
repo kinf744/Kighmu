@@ -131,11 +131,9 @@ func creerUtilisateurNormal(username, password string, limite, days int) string 
 
 	// Définir date d'expiration
 	expireDate := time.Now().AddDate(0, 0, days).Format("2006-01-02")
-	if err := exec.Command("chage", "-E", expireDate, username).Run(); err != nil {
-		return fmt.Sprintf("❌ Erreur définition expiration: %v", err)
-	}
+	exec.Command("chage", "-E", expireDate, username).Run()
 
-	// Préparer home et .bashrc pour affichage du banner
+	// Préparer home et .bashrc
 	userHome := "/home/" + username
 	bashrcPath := userHome + "/.bashrc"
 	bannerPath := "/etc/ssh/sshd_banner"
@@ -150,6 +148,8 @@ if [ -f %s ]; then
     cat %s
 fi
 `, bannerPath, bannerPath)
+
+	// Go 1.13 utilise ioutil.WriteFile
 	ioutil.WriteFile(bashrcPath, []byte(bashrcContent), 0644)
 	exec.Command("chown", "-R", fmt.Sprintf("%s:%s", username, username), userHome).Run()
 
@@ -170,9 +170,13 @@ fi
 	os.MkdirAll("/etc/kighmu", 0755)
 	userFile := "/etc/kighmu/users.list"
 	entry := fmt.Sprintf("%s|%s|%d|%s|%s|%s|%s\n", username, password, limite, expireDate, hostIP, DOMAIN, slowdnsNS)
-	appendToFile(userFile, entry)
+	f, err := os.OpenFile(userFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	if err == nil {
+		defer f.Close()
+		f.WriteString(entry)
+	}
 
-	// Message résumé complet
+	// Résumé complet
 	res := []string{
 		fmt.Sprintf("✅ Utilisateur %s créé avec succès", username),
 		"∘ SSH: 22  ∘ System-DNS: 53",
@@ -193,21 +197,26 @@ fi
 	return strings.Join(res, "\n")
 }
 
+// Création utilisateur test (minutes)
 func creerUtilisateurTest(username, password string, limite, minutes int) string {
 	if _, err := user.Lookup(username); err == nil {
 		return fmt.Sprintf("❌ L'utilisateur %s existe déjà", username)
 	}
 
+	// Création utilisateur sans home
 	if err := exec.Command("useradd", "-M", "-s", "/bin/bash", username).Run(); err != nil {
 		return fmt.Sprintf("❌ Erreur création utilisateur: %v", err)
 	}
 
+	// Définir mot de passe
 	if err := exec.Command("bash", "-c", fmt.Sprintf("echo '%s:%s' | chpasswd", username, password)).Run(); err != nil {
 		return fmt.Sprintf("❌ Erreur mot de passe: %v", err)
 	}
 
+	// Définir expiration en minutes
 	expireTime := time.Now().Add(time.Duration(minutes) * time.Minute).Format("2006-01-02 15:04:05")
 
+	// Récupération IP
 	hostIP := "IP_non_disponible"
 	if ipBytes, err := exec.Command("hostname", "-I").Output(); err == nil {
 		ips := strings.Fields(string(ipBytes))
@@ -216,14 +225,21 @@ func creerUtilisateurTest(username, password string, limite, minutes int) string
 		}
 	}
 
+	// SlowDNS
 	slowdnsKey := slowdnsPubKey()
 	slowdnsNS := slowdnsNameServer()
 
+	// Sauvegarde dans users.list
 	os.MkdirAll("/etc/kighmu", 0755)
 	userFile := "/etc/kighmu/users.list"
 	entry := fmt.Sprintf("%s|%s|%d|%s|%s|%s|%s\n", username, password, limite, expireTime, hostIP, DOMAIN, slowdnsNS)
-	appendToFile(userFile, entry)
+	f, err := os.OpenFile(userFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	if err == nil {
+		defer f.Close()
+		f.WriteString(entry)
+	}
 
+	// Résumé complet
 	res := []string{
 		fmt.Sprintf("✅ Utilisateur test %s créé avec succès", username),
 		"∘ SSH: 22  ∘ System-DNS: 53",
@@ -242,17 +258,6 @@ func creerUtilisateurTest(username, password string, limite, minutes int) string
 		"NameServer NS:\n" + slowdnsNS,
 	}
 	return strings.Join(res, "\n")
-}
-
-// Fonction utilitaire compatible Go 1.13 pour ajouter dans un fichier
-func appendToFile(filename, content string) error {
-	f, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	_, err = f.WriteString(content)
-	return err
 }
 
 // Charger utilisateurs V2Ray depuis fichier
