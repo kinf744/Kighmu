@@ -1,5 +1,5 @@
 // ================================================================
-// bot2.go — Telegram VPS Control Bot avec menu1 dynamique
+// bot2.go — Telegram VPS Control Bot
 // ================================================================
 
 package main
@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/user"
 	"strconv"
 	"strings"
 	"time"
@@ -18,197 +19,209 @@ import (
 var (
 	botToken = os.Getenv("BOT_TOKEN")
 	adminID  int64
-	homeDir  = os.Getenv("HOME")
+	DOMAIN   = os.Getenv("DOMAIN")
 )
 
-// Fonction utilitaire pour exécuter une commande et récupérer le stdout
-func execOutput(cmd string) string {
-	out, _ := exec.Command("bash", "-c", cmd).Output()
-	return string(out)
-}
+// ===============================
+// Fonctions utilitaires
+// ===============================
 
-// Lecture de fichier, renvoie "N/A" si absent
-func readFile(path string) string {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return "N/A"
-	}
-	return string(b)
-}
-
-// Création utilisateur (menu1) avec Go
-func CreateUserMenu1(username, password string, limite, days int) (string, error) {
-	if username == "" || password == "" {
-		return "", fmt.Errorf("paramètres invalides")
+// Créer utilisateur normal (menu1, jours)
+func creerUtilisateurNormal(username, password string, limite int, days int) string {
+	if _, err := user.Lookup(username); err == nil {
+		return fmt.Sprintf("❌ L'utilisateur %s existe déjà", username)
 	}
 
-	// Vérifier si l'utilisateur existe déjà
-	if err := exec.Command("id", username).Run(); err == nil {
-		return "", fmt.Errorf("l'utilisateur existe déjà")
+	// Créer utilisateur
+	cmdAdd := exec.Command("useradd", "-m", "-s", "/bin/bash", username)
+	if err := cmdAdd.Run(); err != nil {
+		return fmt.Sprintf("❌ Erreur création utilisateur: %v", err)
 	}
 
-	// Date d'expiration
+	// Définir mot de passe
+	cmdPass := exec.Command("bash", "-c", fmt.Sprintf("echo '%s:%s' | chpasswd", username, password))
+	if err := cmdPass.Run(); err != nil {
+		return fmt.Sprintf("❌ Erreur mot de passe: %v", err)
+	}
+
+	// Expiration
 	expireDate := time.Now().AddDate(0, 0, days).Format("2006-01-02")
+	cmdExp := exec.Command("chage", "-E", expireDate, username)
+	cmdExp.Run()
 
-	// Création de l'utilisateur
-	if err := exec.Command("useradd", "-m", "-s", "/bin/bash", username).Run(); err != nil {
-		return "", fmt.Errorf("erreur lors de la création de l'utilisateur")
-	}
+	// Host IP
+	hostIPBytes, _ := exec.Command("hostname", "-I").Output()
+	hostIP := strings.Fields(string(hostIPBytes))[0]
 
-	// Définir le mot de passe
-	cmd := exec.Command("bash", "-c", fmt.Sprintf("echo '%s:%s' | chpasswd", username, password))
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("erreur lors de la définition du mot de passe")
-	}
+	// SlowDNS
+	slowdnsKeyBytes, _ := os.ReadFile("/etc/slowdns/server.pub")
+	slowdnsKey := strings.TrimSpace(string(slowdnsKeyBytes))
+	slowdnsNSBytes, _ := os.ReadFile("/etc/slowdns/ns.conf")
+	slowdnsNS := strings.TrimSpace(string(slowdnsNSBytes))
 
-	// Définir la date d'expiration
-	exec.Command("chage", "-E", expireDate, username).Run()
-
-	// Infos système
-	hostIP := strings.TrimSpace(execOutput("hostname -I | awk '{print $1}'"))
-	domain := strings.TrimSpace(execOutput("grep DOMAIN ~/.kighmu_info | cut -d= -f2"))
-	slowDNSKey := readFile("/etc/slowdns/server.pub")
-	slowDNSNS := readFile("/etc/slowdns/ns.conf")
-
-	// Enregistrement
-	os.MkdirAll("/etc/kighmu", 0700)
-	f, _ := os.OpenFile("/etc/kighmu/users.list", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	// Sauvegarder
+	userFile := "/etc/kighmu/users.list"
+	os.MkdirAll("/etc/kighmu", 0755)
+	entry := fmt.Sprintf("%s|%s|%d|%s|%s|%s|%s\n", username, password, limite, expireDate, hostIP, DOMAIN, slowdnsNS)
+	f, _ := os.OpenFile(userFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	defer f.Close()
-	fmt.Fprintf(f, "%s|%s|%d|%s|%s|%s|%s\n", username, password, limite, expireDate, hostIP, domain, slowDNSNS)
+	f.WriteString(entry)
 
-	result := fmt.Sprintf(`
-✅ *NOUVEAU UTILISATEUR CRÉÉ*
-
-🌍 Domaine : %s
-🖥 IP : %s
-👤 Utilisateur : %s
-🔑 Mot de passe : %s
-📱 Limite : %d
-⏳ Expire : %s
-
-🔑 FASTDNS PUB KEY :
-%s
-
-📡 NS : %s
-`, domain, hostIP, username, password, limite, expireDate, slowDNSKey, slowDNSNS)
-
-	return result, nil
+	// Résumé
+	res := []string{
+		fmt.Sprintf("✅ Utilisateur %s créé avec succès", username),
+		"∘ SSH: 22  ∘ System-DNS: 53",
+		"∘ SSH WS: 80  ∘ WEB-NGINX: 81",
+		"∘ DROPBEAR: 2222  ∘ SSL: 444",
+		"∘ BadVPN: 7200  ∘ BadVPN: 7300",
+		"∘ FASTDNS: 5300  ∘ UDP-Custom: 1-65535",
+		"∘ Hysteria: 22000  ∘ Proxy WS: 9090",
+		fmt.Sprintf("DOMAIN: %s", DOMAIN),
+		fmt.Sprintf("Host/IP: %s", hostIP),
+		fmt.Sprintf("Utilisateur: %s", username),
+		fmt.Sprintf("Mot de passe: %s", password),
+		fmt.Sprintf("Limite appareils: %d", limite),
+		fmt.Sprintf("Date expiration: %s", expireDate),
+		"Pub KEY SlowDNS:\n" + slowdnsKey,
+		"NameServer NS:\n" + slowdnsNS,
+	}
+	return strings.Join(res, "\n")
 }
 
-// ================================================================
-// LANCEMENT DU BOT
-// ================================================================
+// Créer utilisateur test (menu2, minutes)
+func creerUtilisateurTest(username, password string, limite, minutes int) string {
+	if _, err := user.Lookup(username); err == nil {
+		return fmt.Sprintf("❌ L'utilisateur %s existe déjà", username)
+	}
+
+	// Créer utilisateur
+	cmdAdd := exec.Command("useradd", "-M", "-s", "/bin/bash", username)
+	if err := cmdAdd.Run(); err != nil {
+		return fmt.Sprintf("❌ Erreur création utilisateur: %v", err)
+	}
+
+	// Définir mot de passe
+	cmdPass := exec.Command("bash", "-c", fmt.Sprintf("echo '%s:%s' | chpasswd", username, password))
+	if err := cmdPass.Run(); err != nil {
+		return fmt.Sprintf("❌ Erreur mot de passe: %v", err)
+	}
+
+	// Expiration
+	expireTime := time.Now().Add(time.Duration(minutes) * time.Minute).Format("2006-01-02 15:04:05")
+
+	// Host IP
+	hostIPBytes, _ := exec.Command("hostname", "-I").Output()
+	hostIP := strings.Fields(string(hostIPBytes))[0]
+
+	// SlowDNS
+	slowdnsKeyBytes, _ := os.ReadFile("/etc/slowdns/server.pub")
+	slowdnsKey := strings.TrimSpace(string(slowdnsKeyBytes))
+	slowdnsNSBytes, _ := os.ReadFile("/etc/slowdns/ns.conf")
+	slowdnsNS := strings.TrimSpace(string(slowdnsNSBytes))
+
+	// Sauvegarder
+	userFile := "/etc/kighmu/users.list"
+	os.MkdirAll("/etc/kighmu", 0755)
+	entry := fmt.Sprintf("%s|%s|%d|%s|%s|%s|%s\n", username, password, limite, expireTime, hostIP, DOMAIN, slowdnsNS)
+	f, _ := os.OpenFile(userFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	defer f.Close()
+	f.WriteString(entry)
+
+	// Résumé
+	res := []string{
+		fmt.Sprintf("✅ Utilisateur test %s créé avec succès", username),
+		"∘ SSH: 22  ∘ System-DNS: 53",
+		"∘ SSH WS: 80  ∘ WEB-NGINX: 81",
+		"∘ DROPBEAR: 2222  ∘ SSL: 444",
+		"∘ BadVPN: 7200  ∘ BadVPN: 7300",
+		"∘ FASTDNS: 5300  ∘ UDP-Custom: 1-65535",
+		"∘ Hysteria: 22000  ∘ Proxy WS: 9090",
+		fmt.Sprintf("DOMAIN: %s", DOMAIN),
+		fmt.Sprintf("Host/IP: %s", hostIP),
+		fmt.Sprintf("Utilisateur: %s", username),
+		fmt.Sprintf("Mot de passe: %s", password),
+		fmt.Sprintf("Limite appareils: %d", limite),
+		fmt.Sprintf("Date expiration: %s", expireTime),
+		"Pub KEY SlowDNS:\n" + slowdnsKey,
+		"NameServer NS:\n" + slowdnsNS,
+	}
+	return strings.Join(res, "\n")
+}
+
+// ===============================
+// Lancement Bot Telegram
+// ===============================
 func lancerBot() {
 	bot, err := tgbotapi.NewBotAPI(botToken)
 	if err != nil {
 		fmt.Println("❌ Impossible de créer le bot:", err)
 		return
 	}
-
 	fmt.Println("🤖 Bot Telegram démarré")
 
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 	updates, _ := bot.GetUpdatesChan(u)
 
-	// Etat de saisie par utilisateur
-	type session struct {
-		step     string
-		username string
-		password string
-		limite   int
-		days     int
-	}
-	sessions := make(map[int64]*session)
-
 	for update := range updates {
+		if update.CallbackQuery != nil {
+			if int64(update.CallbackQuery.From.ID) != adminID {
+				bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, "⛔ Accès refusé"))
+				continue
+			}
 
-		if update.Message == nil {
-			continue
+			bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, "✅ Exécution..."))
+
+			switch update.CallbackQuery.Data {
+			case "menu1":
+				msg := tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID,
+					"Envoyez les infos pour création utilisateur (jours) sous ce format :\n`username,password,limite,days`")
+				msg.ParseMode = "Markdown"
+				bot.Send(msg)
+			case "menu2":
+				msg := tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID,
+					"Envoyez les infos pour création utilisateur test (minutes) sous ce format :\n`username,password,limite,minutes`")
+				msg.ParseMode = "Markdown"
+				bot.Send(msg)
+			default:
+				bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, "❌ Option inconnue"))
+			}
 		}
-		chatID := update.Message.Chat.ID
-		userID := int64(update.Message.From.ID)
 
-		// Vérification admin
-		if userID != adminID {
-			bot.Send(tgbotapi.NewMessage(chatID, "⛔ Accès refusé"))
-			continue
-		}
-
-		// Gestion saisie menu1
-		if s, ok := sessions[userID]; ok {
-			switch s.step {
-			case "username":
-				s.username = update.Message.Text
-				s.step = "password"
-				bot.Send(tgbotapi.NewMessage(chatID, "🔑 Entrez le mot de passe :"))
-			case "password":
-				s.password = update.Message.Text
-				s.step = "limite"
-				bot.Send(tgbotapi.NewMessage(chatID, "📱 Entrez le nombre d'appareils autorisés :"))
-			case "limite":
-				lim, err := strconv.Atoi(update.Message.Text)
-				if err != nil {
-					bot.Send(tgbotapi.NewMessage(chatID, "❌ Limite invalide, réessayez :"))
-					continue
-				}
-				s.limite = lim
-				s.step = "days"
-				bot.Send(tgbotapi.NewMessage(chatID, "⏳ Entrez la durée de validité en jours :"))
-			case "days":
-				d, err := strconv.Atoi(update.Message.Text)
-				if err != nil {
-					bot.Send(tgbotapi.NewMessage(chatID, "❌ Durée invalide, réessayez :"))
-					continue
-				}
-				s.days = d
-
-				// Créer l'utilisateur
-				out, err := CreateUserMenu1(s.username, s.password, s.limite, s.days)
-				if err != nil {
-					bot.Send(tgbotapi.NewMessage(chatID, "❌ "+err.Error()))
+		// --- Gestion messages texte ---
+		if update.Message != nil && int64(update.Message.From.ID) == adminID {
+			text := strings.TrimSpace(update.Message.Text)
+			if strings.Count(text, ",") == 3 {
+				parts := strings.Split(text, ",")
+				username := strings.TrimSpace(parts[0])
+				password := strings.TrimSpace(parts[1])
+				limite, _ := strconv.Atoi(strings.TrimSpace(parts[2]))
+				// Distinction menu1/menu2 par mot clé "minutes" ou "days" en message
+				if strings.Contains(text, "days") {
+					days, _ := strconv.Atoi(strings.TrimSpace(parts[3]))
+					output := creerUtilisateurNormal(username, password, limite, days)
+					msg := tgbotapi.NewMessage(update.Message.Chat.ID, output)
+					bot.Send(msg)
 				} else {
-					msg := tgbotapi.NewMessage(chatID, out)
-					msg.ParseMode = "Markdown"
+					minutes, _ := strconv.Atoi(strings.TrimSpace(parts[3]))
+					output := creerUtilisateurTest(username, password, limite, minutes)
+					msg := tgbotapi.NewMessage(update.Message.Chat.ID, output)
 					bot.Send(msg)
 				}
-				delete(sessions, userID) // fin session
+			} else if text == "/kighmu" {
+				keyboard := tgbotapi.NewInlineKeyboardMarkup(
+					tgbotapi.NewInlineKeyboardRow(
+						tgbotapi.NewInlineKeyboardButtonData("Créer utilisateur (jours)", "menu1"),
+						tgbotapi.NewInlineKeyboardButtonData("Créer utilisateur test (minutes)", "menu2"),
+					),
+				)
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "⚡ KIGHMU MANAGER ⚡")
+				msg.ReplyMarkup = keyboard
+				bot.Send(msg)
+			} else {
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "❌ Commande inconnue")
+				bot.Send(msg)
 			}
-			continue
-		}
-
-		text := strings.TrimSpace(update.Message.Text)
-
-		if text == "/kighmu" {
-			msgText := `============================================
-          ⚡ KIGHMU MANAGER ⚡
-============================================
-        AUTEUR : @KIGHMU
-        TELEGRAM : https://t.me/lkgcddtoog
-============================================
-   SÉLECTIONNEZ UNE OPTION CI-DESSOUS !
-============================================`
-
-			keyboard := tgbotapi.NewInlineKeyboardMarkup(
-				tgbotapi.NewInlineKeyboardRow(
-					tgbotapi.NewInlineKeyboardButtonData("Créer utilisateur (jours)", "menu1"),
-					tgbotapi.NewInlineKeyboardButtonData("Créer utilisateur test (minutes)", "menu2"),
-				),
-				tgbotapi.NewInlineKeyboardRow(
-					tgbotapi.NewInlineKeyboardButtonData("Gestion utilisateurs en ligne", "menu3"),
-					tgbotapi.NewInlineKeyboardButtonData("Supprimer utilisateur", "menu4"),
-				),
-			)
-
-			msg := tgbotapi.NewMessage(chatID, msgText)
-			msg.ReplyMarkup = keyboard
-			bot.Send(msg)
-		} else if text == "menu1" || strings.Contains(text, "Créer utilisateur") {
-			// Initialiser session menu1
-			sessions[userID] = &session{step: "username"}
-			bot.Send(tgbotapi.NewMessage(chatID, "👤 Entrez le nom d'utilisateur :"))
-		} else {
-			bot.Send(tgbotapi.NewMessage(chatID, "❌ Commande inconnue"))
 		}
 	}
 }
