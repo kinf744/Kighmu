@@ -20,6 +20,7 @@ create_systemd_service() {
     read -p "🔑 Entrez votre BOT_TOKEN : " BOT_TOKEN
     read -p "🆔 Entrez votre ADMIN_ID : " ADMIN_ID
 
+    # Le bot sera lancé en root
     sudo tee "$SERVICE_FILE" >/dev/null <<EOF
 [Unit]
 Description=Telegram VPS Control Bot
@@ -27,7 +28,7 @@ After=network.target
 
 [Service]
 Type=simple
-User=$USER
+User=root
 WorkingDirectory=$SCRIPT_DIR
 ExecStart=$BOT_BIN
 Restart=always
@@ -77,6 +78,10 @@ while true; do
             else
                 echo "❌ Erreur de compilation"
             fi
+
+            # Permissions pour root
+            sudo chown root:root "$BOT_BIN"
+            sudo chmod +x "$BOT_BIN"
 
             read -p "Entrée pour continuer..."
             ;;
