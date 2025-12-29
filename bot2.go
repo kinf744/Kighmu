@@ -400,6 +400,7 @@ func lancerBot() {
 func main() {
 	initAdminID()
 	DOMAIN = loadDomain()
+	chargerUtilisateursV2Ray() // <- ajouter cette ligne
 	fmt.Println("✅ Bot prêt à être lancé")
 	lancerBot()
 }
