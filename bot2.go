@@ -113,13 +113,13 @@ func genererUUID() string {
 
 // Créer utilisateur normal (jours)
 // ===============================
-func creerUtilisateurNormal(username, password string, limite int, days int) string {
+func creerUtilisateurNormal(username, password string, limite, days int) string {
 	// Vérification si l'utilisateur existe déjà
 	if _, err := user.Lookup(username); err == nil {
 		return fmt.Sprintf("❌ L'utilisateur %s existe déjà", username)
 	}
 
-	// Création utilisateur système
+	// Création utilisateur système avec home
 	if err := exec.Command("useradd", "-m", "-s", "/bin/bash", username).Run(); err != nil {
 		return fmt.Sprintf("❌ Erreur création utilisateur: %v", err)
 	}
@@ -135,6 +135,24 @@ func creerUtilisateurNormal(username, password string, limite int, days int) str
 		return fmt.Sprintf("❌ Erreur définition expiration: %v", err)
 	}
 
+	// Préparer home et .bashrc pour affichage du banner
+	userHome := "/home/" + username
+	bashrcPath := userHome + "/.bashrc"
+	bannerPath := "/etc/ssh/sshd_banner"
+
+	if _, err := os.Stat(userHome); os.IsNotExist(err) {
+		os.MkdirAll(userHome, 0755)
+	}
+
+	bashrcContent := fmt.Sprintf(`
+# Affichage du banner Kighmu VPS Manager
+if [ -f %s ]; then
+    cat %s
+fi
+`, bannerPath, bannerPath)
+	os.WriteFile(bashrcPath, []byte(bashrcContent), 0644)
+	exec.Command("chown", "-R", fmt.Sprintf("%s:%s", username, username), userHome).Run()
+
 	// Récupération IP
 	hostIP := "IP_non_disponible"
 	if ipBytes, err := exec.Command("hostname", "-I").Output(); err == nil {
@@ -148,7 +166,7 @@ func creerUtilisateurNormal(username, password string, limite int, days int) str
 	slowdnsKey := slowdnsPubKey()
 	slowdnsNS := slowdnsNameServer()
 
-	// Sauvegarde dans fichier
+	// Sauvegarde dans users.list
 	os.MkdirAll("/etc/kighmu", 0755)
 	userFile := "/etc/kighmu/users.list"
 	entry := fmt.Sprintf("%s|%s|%d|%s|%s|%s|%s\n", username, password, limite, expireDate, hostIP, DOMAIN, slowdnsNS)
@@ -161,7 +179,7 @@ func creerUtilisateurNormal(username, password string, limite int, days int) str
 		return fmt.Sprintf("❌ Erreur écriture fichier users.list: %v", err)
 	}
 
-	// Message résumé
+	// Message résumé complet
 	res := []string{
 		fmt.Sprintf("✅ Utilisateur %s créé avec succès", username),
 		"∘ SSH: 22  ∘ System-DNS: 53",
@@ -182,15 +200,13 @@ func creerUtilisateurNormal(username, password string, limite int, days int) str
 	return strings.Join(res, "\n")
 }
 
-// Créer utilisateur test (minutes)
-// ===============================
 func creerUtilisateurTest(username, password string, limite, minutes int) string {
 	// Vérification si l'utilisateur existe déjà
 	if _, err := user.Lookup(username); err == nil {
 		return fmt.Sprintf("❌ L'utilisateur %s existe déjà", username)
 	}
 
-	// Création utilisateur système (sans home)
+	// Création utilisateur système sans home
 	if err := exec.Command("useradd", "-M", "-s", "/bin/bash", username).Run(); err != nil {
 		return fmt.Sprintf("❌ Erreur création utilisateur: %v", err)
 	}
@@ -216,7 +232,7 @@ func creerUtilisateurTest(username, password string, limite, minutes int) string
 	slowdnsKey := slowdnsPubKey()
 	slowdnsNS := slowdnsNameServer()
 
-	// Sauvegarde dans fichier
+	// Sauvegarde dans users.list
 	os.MkdirAll("/etc/kighmu", 0755)
 	userFile := "/etc/kighmu/users.list"
 	entry := fmt.Sprintf("%s|%s|%d|%s|%s|%s|%s\n", username, password, limite, expireTime, hostIP, DOMAIN, slowdnsNS)
@@ -229,7 +245,7 @@ func creerUtilisateurTest(username, password string, limite, minutes int) string
 		return fmt.Sprintf("❌ Erreur écriture fichier users.list: %v", err)
 	}
 
-	// Message résumé
+	// Message résumé complet
 	res := []string{
 		fmt.Sprintf("✅ Utilisateur test %s créé avec succès", username),
 		"∘ SSH: 22  ∘ System-DNS: 53",
