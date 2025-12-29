@@ -146,33 +146,50 @@ func genererMessageUtilisateur(username, password string, limite int, expireDate
 // Fonction interne pour créer un utilisateur
 // ===============================
 func creerUtilisateur(username, password string, limite int, duration time.Duration) string {
-	// Vérifie si l'utilisateur existe déjà
 	if _, err := user.Lookup(username); err == nil {
 		return fmt.Sprintf("❌ L'utilisateur %s existe déjà", username)
 	}
 
 	// Création utilisateur système
-	exec.Command("useradd", "-m", "-s", "/bin/bash", username).Run()
-	exec.Command("bash", "-c", fmt.Sprintf("echo '%s:%s' | chpasswd", username, password)).Run()
+	if err := exec.Command("useradd", "-m", "-s", "/bin/bash", username).Run(); err != nil {
+		return fmt.Sprintf("❌ Erreur création utilisateur système : %v", err)
+	}
 
-	// Calcul date d'expiration
-	expireDate := time.Now().Add(duration).Format("2006-01-02 15:04")
-	exec.Command("chage", "-E", time.Now().Add(duration).Format("2006-01-02"), username).Run()
+	if err := exec.Command("bash", "-c", fmt.Sprintf("echo '%s:%s' | chpasswd", username, password)).Run(); err != nil {
+		return fmt.Sprintf("❌ Erreur définition mot de passe : %v", err)
+	}
 
-	// Récupération de l'IP du serveur
-	hostIPBytes, _ := exec.Command("hostname", "-I").Output()
-	hostIP := strings.Fields(string(hostIPBytes))[0]
+	if err := exec.Command("chage", "-E", time.Now().Add(duration).Format("2006-01-02"), username).Run(); err != nil {
+		return fmt.Sprintf("❌ Erreur définition date expiration : %v", err)
+	}
 
-	// Enregistrement dans le fichier users.list
+	// Récupération de l'IP
+	hostIP := "IP_non_disponible"
+	if hostIPBytes, err := exec.Command("hostname", "-I").Output(); err == nil {
+		ips := strings.Fields(string(hostIPBytes))
+		if len(ips) > 0 {
+			hostIP = ips[0]
+		}
+	}
+
+	// Enregistrement dans users.list
 	os.MkdirAll("/etc/kighmu", 0755)
 	userFile := "/etc/kighmu/users.list"
+	expireDate := time.Now().Add(duration).Format("2006-01-02 15:04")
 	entry := fmt.Sprintf("%s|%s|%d|%s|%s|%s|%s\n",
-		username, password, limite, expireDate, hostIP, DOMAIN, slowdnsNameServer())
-	f, _ := os.OpenFile(userFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-	defer f.Close()
-	f.WriteString(entry)
+		username, password, limite, expireDate, hostIP, DOMAIN, slowdnsNameServer(),
+	)
 
-	// Retourne le message formaté
+	f, err := os.OpenFile(userFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		return fmt.Sprintf("❌ Erreur ouverture fichier users.list : %v", err)
+	}
+	defer f.Close()
+
+	if _, err := f.WriteString(entry); err != nil {
+		return fmt.Sprintf("❌ Erreur écriture fichier users.list : %v", err)
+	}
+
 	return genererMessageUtilisateur(username, password, limite, expireDate, hostIP)
 }
 
