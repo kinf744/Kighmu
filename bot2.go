@@ -114,17 +114,33 @@ func genererUUID() string {
 // Créer utilisateur normal (jours)
 // ===============================
 func setPassword(username, password string) error {
-    cmd := exec.Command("chpasswd")
-    cmd.Stdin = strings.NewReader(fmt.Sprintf("%s:%s
-", username, password))
-    out, err := cmd.CombinedOutput()
-    if err != nil {
-        return fmt.Errorf("chpasswd error: %v, output: %s", err, string(out))
-    }
+	cmd := exec.Command("chpasswd")
 
-    exec.Command("passwd", "-u", username).Run()
-    exec.Command("usermod", "-U", username).Run()
-    return nil
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return fmt.Errorf("StdinPipe error: %v", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("chpasswd start error: %v", err)
+	}
+
+	// ⚠️ \n OBLIGATOIRE
+	_, err = stdin.Write([]byte(fmt.Sprintf("%s:%s\n", username, password)))
+	if err != nil {
+		return fmt.Errorf("stdin write error: %v", err)
+	}
+	stdin.Close()
+
+	if err := cmd.Wait(); err != nil {
+		return fmt.Errorf("chpasswd wait error: %v", err)
+	}
+
+	// Déverrouiller le compte (important pour SSH)
+	exec.Command("passwd", "-u", username).Run()
+	exec.Command("usermod", "-U", username).Run()
+
+	return nil
 }
 
 func creerUtilisateurNormal(username, password string, limite, days int) string {
