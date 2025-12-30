@@ -93,7 +93,6 @@ uuid5=$(cat /proc/sys/kernel/random/uuid)
 uuid6=$(cat /proc/sys/kernel/random/uuid)
 
 cat > /etc/xray/users.json << EOF
-cat > /etc/xray/users.json << EOF
 {
   "vmess": {
     "ws_tls": [
@@ -135,7 +134,6 @@ cat > /etc/xray/users.json << EOF
     ]
   }
 }
-EOF
 EOF
 
 cat > /etc/xray/config.json << EOF
