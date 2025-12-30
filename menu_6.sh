@@ -150,7 +150,7 @@ create_config() {
   local port_tls=8443
   local port_ntls=80
   local path_ws_tls path_ws_ntls
-  local link_tls link_ntls
+  local link_tls link_ntls link_tcp link_grpc
   local uuid_tls uuid_ntls
 
   case "$proto" in
@@ -173,6 +173,8 @@ create_config() {
       # Génération liens
       link_tls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$uuid_tls\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"$path_ws_tls\",\"tls\":\"tls\",\"sni\":\"$DOMAIN\"}" | base64 -w0)"
       link_ntls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_ntls\",\"id\":\"$uuid_ntls\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"$path_ws_ntls\",\"tls\":\"none\",\"sni\":\"$DOMAIN\"}" | base64 -w0)"
+      link_tcp="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$uuid_tls\",\"aid\":0,\"net\":\"tcp\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"tls\":\"tls\",\"sni\":\"$DOMAIN\"}" | base64 -w0)"
+      link_grpc="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$uuid_tls\",\"aid\":0,\"net\":\"grpc\",\"type\":\"none\",\"serviceName\":\"$name\",\"tls\":\"tls\",\"sni\":\"$DOMAIN\"}" | base64 -w0)"
       ;;
     vless)
       path_ws_tls="/vless-tls"
@@ -188,8 +190,11 @@ create_config() {
       jq --arg id "$uuid_ntls" --arg proto "vless" \
         '(.inbounds[] | select(.protocol == $proto and .streamSettings.security == "none") | .settings.clients) += [{"id": $id}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
 
+      # Génération liens
       link_tls="vless://$uuid_tls@$DOMAIN:$port_tls?security=tls&type=ws&host=$DOMAIN&path=$path_ws_tls&encryption=none&sni=$DOMAIN#$name"
       link_ntls="vless://$uuid_ntls@$DOMAIN:$port_ntls?security=none&type=ws&host=$DOMAIN&path=$path_ws_ntls&encryption=none#$name"
+      link_tcp="vless://$uuid_tls@$DOMAIN:$port_tls?security=tls&type=tcp&sni=$DOMAIN#$name"
+      link_grpc="vless://$uuid_tls@$DOMAIN:$port_tls?security=tls&type=grpc&serviceName=$name&sni=$DOMAIN#$name"
       ;;
     trojan)
       path_ws_tls="/trojan-tls"
@@ -205,8 +210,11 @@ create_config() {
           (.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="none") | .settings.clients)+=[{"password": $idntls}]' \
           "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
 
+      # Génération liens
       link_tls="trojan://$uuid_tls@$DOMAIN:$port_tls?security=tls&type=ws&path=$path_ws_tls#$name"
       link_ntls="trojan://$uuid_ntls@$DOMAIN:$port_ntls?type=ws&path=$path_ws_ntls#$name"
+      link_tcp="trojan://$uuid_tls@$DOMAIN:$port_tls?security=tls&type=tcp#$name"
+      link_grpc="trojan://$uuid_tls@$DOMAIN:$port_tls?security=tls&type=grpc&serviceName=$name#$name"
       ;;
     *)
       echo -e "${RED}Protocole inconnu.${RESET}"
@@ -220,31 +228,32 @@ create_config() {
 
   local total_users=$(count_users)
 
-echo
-echo -e "${CYAN}==============================${RESET}"
-echo -e "${BOLD}🧩 ${proto^^}${RESET}"
-echo -e "${CYAN}==============================${RESET}"
-echo -e "${YELLOW}📄 Configuration générée pour :${RESET} $name"
-echo "--------------------------------------------------"
-echo -e "➤ DOMAINE : ${YELLOW}$DOMAIN${RESET}"
-echo -e "${GREEN}➤ PORTs :${RESET}"
-echo -e "   TLS   : ${MAGENTA}$port_tls${RESET}"
-echo -e "   NTLS  : ${MAGENTA}$port_ntls${RESET}"
-echo -e "${GREEN}➤ UUIDs générés :${RESET}"
-echo -e "   TLS   : ${MAGENTA}$uuid_tls${RESET}"
-echo -e "   NTLS  : ${MAGENTA}$uuid_ntls${RESET}"
-echo -e "➤ Paths :"
-echo -e "   TLS   : ${MAGENTA}$path_ws_tls${RESET}"
-echo -e "   NTLS  : ${MAGENTA}$path_ws_ntls${RESET}"
-echo -e "➤ Validité : ${YELLOW}$days jours${RESET} (expire le $(date -d "+$days days" +"%d/%m/%Y"))"
-echo -e "➤ Nombre total d'utilisateurs : ${BOLD}$limit${RESET}"
-echo
-echo -e "${CYAN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●${RESET}"
-echo -e "${CYAN}┃ TLS     : ${GREEN}$link_tls${RESET}"
-echo
-echo -e "${CYAN}┃ Non‑TLS : ${GREEN}$link_ntls${RESET}"
-echo -e "${CYAN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●${RESET}"
-echo
+  echo
+  echo -e "${CYAN}==============================${RESET}"
+  echo -e "${BOLD}🧩 ${proto^^}${RESET}"
+  echo -e "${CYAN}==============================${RESET}"
+  echo -e "${YELLOW}📄 Configuration générée pour :${RESET} $name"
+  echo "--------------------------------------------------"
+  echo -e "➤ DOMAINE : ${YELLOW}$DOMAIN${RESET}"
+  echo -e "${GREEN}➤ PORTs :${RESET}"
+  echo -e "   TLS   : ${MAGENTA}$port_tls${RESET}"
+  echo -e "   NTLS  : ${MAGENTA}$port_ntls${RESET}"
+  echo -e "${GREEN}➤ UUIDs générés :${RESET}"
+  echo -e "   TLS   : ${MAGENTA}$uuid_tls${RESET}"
+  echo -e "   NTLS  : ${MAGENTA}$uuid_ntls${RESET}"
+  echo -e "➤ Paths :"
+  echo -e "   TLS   : ${MAGENTA}$path_ws_tls${RESET}"
+  echo -e "   NTLS  : ${MAGENTA}$path_ws_ntls${RESET}"
+  echo -e "➤ Validité : ${YELLOW}$days jours${RESET} (expire le $(date -d "+$days days" +"%d/%m/%Y"))"
+  echo -e "➤ Nombre total d'utilisateurs : ${BOLD}$limit${RESET}"
+  echo
+  echo -e "${CYAN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●${RESET}"
+  echo -e "${CYAN}┃ WS TLS   : ${GREEN}$link_tls${RESET}"
+  echo -e "${CYAN}┃ WS Non‑TLS : ${GREEN}$link_ntls${RESET}"
+  echo -e "${CYAN}┃ TCP TLS  : ${GREEN}$link_tcp${RESET}"
+  echo -e "${CYAN}┃ gRPC TLS : ${GREEN}$link_grpc${RESET}"
+  echo -e "${CYAN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●${RESET}"
+  echo
 
   systemctl restart xray
 }
