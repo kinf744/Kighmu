@@ -228,7 +228,8 @@ func creerUtilisateurTest(username, password string, limite, minutes int) string
 	}
 
 	// Création
-	exec.Command("useradd", "-M", "-s", "/bin/bash", username).Run()
+	exec.Command("useradd", "-m", "-s", "/bin/bash", username).Run()
+    fixHome(username)
 
 	// Mot de passe (CORRIGÉ)
 	if err := setPassword(username, password); err != nil {
@@ -492,7 +493,7 @@ func lancerBot() {
 					continue
 				}
 				if _, err := user.Lookup(u); err == nil {
-					cmd := exec.Command("sudo", "userdel", "-r", u)
+					cmd := exec.Command("userdel", "-r", u)
 					if err := cmd.Run(); err != nil {
 						results = append(results, fmt.Sprintf("❌ Erreur suppression %s", u))
 					} else {
