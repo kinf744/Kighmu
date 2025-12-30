@@ -94,23 +94,46 @@ uuid6=$(cat /proc/sys/kernel/random/uuid)
 
 cat > /etc/xray/users.json << EOF
 {
-  "vmess_tls": [
-    {"uuid": "uuid1", "limit": 5},
-    {"uuid": "uuid3", "limit": 5},
-    {"uuid": "uuid5", "limit": 5}
-  ],
-  "vmess_ntls": [
-    {"uuid": "uuid2", "limit": 5}
-  ],
-  "vless_tls": [
-    {"uuid": "uuid4", "limit": 5}
-  ],
-  "vless_ntls": [],
-  "trojan_tls": [
-    {"uuid": "uuid6", "limit": 5},
-    {"uuid": "uuid7", "limit": 5}
-  ],
-  "trojan_ntls": []
+  "vmess": {
+    "ws_tls": [
+      { "uuid": "uuid_vmess_ws_tls_1", "limit": 5 },
+      { "uuid": "uuid_vmess_ws_tls_2", "limit": 5 }
+    ],
+    "tcp_tls": [
+      { "uuid": "uuid_vmess_tcp_tls_1", "limit": 5 }
+    ],
+    "grpc_tls": [
+      { "uuid": "uuid_vmess_grpc_tls_1", "limit": 5 }
+    ],
+    "ws_ntls": [
+      { "uuid": "uuid_vmess_ws_ntls_1", "limit": 5 }
+    ]
+  },
+  "vless": {
+    "ws_tls": [
+      { "uuid": "uuid_vless_ws_tls_1", "limit": 5 }
+    ],
+    "tcp_tls": [
+      { "uuid": "uuid_vless_tcp_tls_1", "limit": 5 }
+    ],
+    "grpc_tls": [
+      { "uuid": "uuid_vless_grpc_tls_1", "limit": 5 }
+    ],
+    "ws_ntls": [
+      { "uuid": "uuid_vless_ws_ntls_1", "limit": 5 }
+    ]
+  },
+  "trojan": {
+    "ws_tls": [
+      { "uuid": "uuid_trojan_ws_tls_1", "limit": 5 }
+    ],
+    "tcp_tls": [
+      { "uuid": "uuid_trojan_tcp_tls_1", "limit": 5 }
+    ],
+    "grpc_tls": [
+      { "uuid": "uuid_trojan_grpc_tls_1", "limit": 5 }
+    ]
+  }
 }
 EOF
 
