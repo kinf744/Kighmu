@@ -114,33 +114,32 @@ func genererUUID() string {
 // Créer utilisateur normal (jours)
 // ===============================
 func setPassword(username, password string) error {
+	fmt.Printf("[DEBUG] setPassword %s (len=%d)\n", username, len(password))
+
 	cmd := exec.Command("chpasswd")
+	cmd.Stdin = strings.NewReader(fmt.Sprintf("%s:%s\n", username, password))
 
-	stdin, err := cmd.StdinPipe()
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("StdinPipe error: %v", err)
+		return fmt.Errorf("chpasswd failed: %v | %s", err, string(out))
 	}
 
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("chpasswd start error: %v", err)
-	}
-
-	// ⚠️ \n OBLIGATOIRE
-	_, err = stdin.Write([]byte(fmt.Sprintf("%s:%s\n", username, password)))
-	if err != nil {
-		return fmt.Errorf("stdin write error: %v", err)
-	}
-	stdin.Close()
-
-	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("chpasswd wait error: %v", err)
-	}
-
-	// Déverrouiller le compte (important pour SSH)
+	// Déverrouiller le compte
 	exec.Command("passwd", "-u", username).Run()
 	exec.Command("usermod", "-U", username).Run()
 
+	// Debug shadow
+	shadowOut, _ := exec.Command("getent", "shadow", username).CombinedOutput()
+	fmt.Printf("[DEBUG shadow] %s\n", string(shadowOut))
+
 	return nil
+}
+
+func fixHome(username string) {
+	home := "/home/" + username
+	exec.Command("mkdir", "-p", home).Run()
+	exec.Command("chown", "-R", username+":"+username, home).Run()
+	exec.Command("chmod", "700", home).Run()
 }
 
 func creerUtilisateurNormal(username, password string, limite, days int) string {
