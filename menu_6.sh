@@ -20,21 +20,20 @@ print_header() {
 
 afficher_utilisateurs_xray() {
   if [[ -f "$USERS_FILE" ]]; then
-    # Comptage des utilisateurs pour tous les protocoles et variantes
-    vmess_tls_count=$(jq '.vmess_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
-    vmess_ntls_count=$(jq '.vmess_ntls | length' "$USERS_FILE" 2>/dev/null || echo 0)
-    vmess_tcp_count=$(jq '.vmess_tcp_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
-    vmess_grpc_count=$(jq '.vmess_grpc_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    vmess_tls_count=$(jq '.vmess.ws_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    vmess_ntls_count=$(jq '.vmess.ws_ntls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    vmess_tcp_count=$(jq '.vmess.tcp_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    vmess_grpc_count=$(jq '.vmess.grpc_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
 
-    vless_tls_count=$(jq '.vless_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
-    vless_ntls_count=$(jq '.vless_ntls | length' "$USERS_FILE" 2>/dev/null || echo 0)
-    vless_tcp_count=$(jq '.vless_tcp_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
-    vless_grpc_count=$(jq '.vless_grpc_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    vless_tls_count=$(jq '.vless.ws_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    vless_ntls_count=$(jq '.vless.ws_ntls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    vless_tcp_count=$(jq '.vless.tcp_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    vless_grpc_count=$(jq '.vless.grpc_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
 
-    trojan_tls_count=$(jq '.trojan_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
-    trojan_ntls_count=$(jq '.trojan_ntls | length' "$USERS_FILE" 2>/dev/null || echo 0)
-    trojan_tcp_count=$(jq '.trojan_tcp_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
-    trojan_grpc_count=$(jq '.trojan_grpc_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    trojan_tls_count=$(jq '.trojan.ws_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    trojan_ntls_count=$(jq '.trojan.ws_ntls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    trojan_tcp_count=$(jq '.trojan.tcp_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    trojan_grpc_count=$(jq '.trojan.grpc_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
 
     vmess_count=$((vmess_tls_count + vmess_ntls_count + vmess_tcp_count + vmess_grpc_count))
     vless_count=$((vless_tls_count + vless_ntls_count + vless_tcp_count + vless_grpc_count))
@@ -118,33 +117,33 @@ show_menu() {
 
 load_user_data() {
   if [[ -f "$USERS_FILE" ]]; then
-    VMESS_WS_TLS=$(jq -r '.vmess_ws_tls // empty' "$USERS_FILE")
-    VMESS_TCP_TLS=$(jq -r '.vmess_tcp_tls // empty' "$USERS_FILE")
-    VMESS_GRPC_TLS=$(jq -r '.vmess_grpc_tls // empty' "$USERS_FILE")
-    VMESS_NTLS=$(jq -r '.vmess_ntls // empty' "$USERS_FILE")
-    
-    VLESS_WS_TLS=$(jq -r '.vless_ws_tls // empty' "$USERS_FILE")
-    VLESS_TCP_TLS=$(jq -r '.vless_tcp_tls // empty' "$USERS_FILE")
-    VLESS_GRPC_TLS=$(jq -r '.vless_grpc_tls // empty' "$USERS_FILE")
-    VLESS_NTLS=$(jq -r '.vless_ntls // empty' "$USERS_FILE")
-    
-    TROJAN_WS_TLS=$(jq -r '.trojan_ws_tls // empty' "$USERS_FILE")
-    TROJAN_TCP_TLS=$(jq -r '.trojan_tcp_tls // empty' "$USERS_FILE")
-    TROJAN_GRPC_TLS=$(jq -r '.trojan_grpc_tls // empty' "$USERS_FILE")
-    TROJAN_NTLS=$(jq -r '.trojan_ntls // empty' "$USERS_FILE")
+    VMESS_WS_TLS=$(jq -r '.vmess.ws_tls // empty' "$USERS_FILE")
+    VMESS_TCP_TLS=$(jq -r '.vmess.tcp_tls // empty' "$USERS_FILE")
+    VMESS_GRPC_TLS=$(jq -r '.vmess.grpc_tls // empty' "$USERS_FILE")
+    VMESS_NTLS=$(jq -r '.vmess.ws_ntls // empty' "$USERS_FILE")
+
+    VLESS_WS_TLS=$(jq -r '.vless.ws_tls // empty' "$USERS_FILE")
+    VLESS_TCP_TLS=$(jq -r '.vless.tcp_tls // empty' "$USERS_FILE")
+    VLESS_GRPC_TLS=$(jq -r '.vless.grpc_tls // empty' "$USERS_FILE")
+    VLESS_NTLS=$(jq -r '.vless.ws_ntls // empty' "$USERS_FILE")
+
+    TROJAN_WS_TLS=$(jq -r '.trojan.ws_tls // empty' "$USERS_FILE")
+    TROJAN_TCP_TLS=$(jq -r '.trojan.tcp_tls // empty' "$USERS_FILE")
+    TROJAN_GRPC_TLS=$(jq -r '.trojan.grpc_tls // empty' "$USERS_FILE")
+    TROJAN_NTLS=$(jq -r '.trojan.ws_ntls // empty' "$USERS_FILE")
   fi
 }
 
 # Compte total des utilisateurs multi-protocole
 count_users() {
   local total=0
-  # Ajout des clés TCP TLS et gRPC TLS
-  local keys=("vmess_tls" "vmess_ntls" "vless_tls" "vless_ntls" "trojan_tls" "trojan_ntls" \
-              "vmess_tcp_tls" "vmess_grpc_tls" "vless_tcp_tls" "vless_grpc_tls" "trojan_tcp_tls" "trojan_grpc_tls")
+  local keys=("vmess.ws_tls" "vmess.ws_ntls" "vmess.tcp_tls" "vmess.grpc_tls" \
+              "vless.ws_tls" "vless.ws_ntls" "vless.tcp_tls" "vless.grpc_tls" \
+              "trojan.ws_tls" "trojan.ws_ntls" "trojan.tcp_tls" "trojan.grpc_tls")
 
   for key in "${keys[@]}"; do
     local count
-    count=$(jq --arg k "$key" '.[$k] | length // 0' "$USERS_FILE")
+    count=$(jq --arg k "$key" 'getpath($k | split(".")) | length // 0' "$USERS_FILE")
     total=$(( total + count ))
   done
 
