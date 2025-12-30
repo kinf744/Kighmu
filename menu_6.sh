@@ -108,12 +108,19 @@ show_menu() {
 
 load_user_data() {
   if [[ -f "$USERS_FILE" ]]; then
-    VMESS_TLS=$(jq -r '.vmess_tls // empty' "$USERS_FILE")
-    VMESS_NTLS=$(jq -r '.vmess_ntls // empty' "$USERS_FILE")
-    VLESS_TLS=$(jq -r '.vless_tls // empty' "$USERS_FILE")
-    VLESS_NTLS=$(jq -r '.vless_ntls // empty' "$USERS_FILE")
-    TROJAN_PASS=$(jq -r '.trojan_pass // empty' "$USERS_FILE")
-    TROJAN_NTLS_PASS=$(jq -r '.trojan_ntls_pass // empty' "$USERS_FILE")
+    VMESS_TLS=$(jq -r '.vmess_tls // empty | map(.uuid) | join(",")' "$USERS_FILE")
+    VMESS_NTLS=$(jq -r '.vmess_ntls // empty | map(.uuid) | join(",")' "$USERS_FILE")
+    VLESS_TLS=$(jq -r '.vless_tls // empty | map(.uuid) | join(",")' "$USERS_FILE")
+    VLESS_NTLS=$(jq -r '.vless_ntls // empty | map(.uuid) | join(",")' "$USERS_FILE")
+    TROJAN_TLS=$(jq -r '.trojan_tls // empty | map(.uuid) | join(",")' "$USERS_FILE")
+    TROJAN_NTLS=$(jq -r '.trojan_ntls // empty | map(.uuid) | join(",")' "$USERS_FILE")
+  else
+    VMESS_TLS=""
+    VMESS_NTLS=""
+    VLESS_TLS=""
+    VLESS_NTLS=""
+    TROJAN_TLS=""
+    TROJAN_NTLS=""
   fi
 }
 
