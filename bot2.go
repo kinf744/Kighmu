@@ -114,21 +114,17 @@ func genererUUID() string {
 // Créer utilisateur normal (jours)
 // ===============================
 func setPassword(username, password string) error {
-	cmd := exec.Command(
-		"bash",
-		"-c",
-		fmt.Sprintf("echo '%s:%s' | chpasswd", username, password),
-	)
-	err := cmd.Run()
-	if err != nil {
-		return err
-	}
+    cmd := exec.Command("chpasswd")
+    cmd.Stdin = strings.NewReader(fmt.Sprintf("%s:%s
+", username, password))
+    out, err := cmd.CombinedOutput()
+    if err != nil {
+        return fmt.Errorf("chpasswd error: %v, output: %s", err, string(out))
+    }
 
-	// Déverrouiller le compte au cas où
-	exec.Command("passwd", "-u", username).Run()
-	exec.Command("usermod", "-U", username).Run()
-
-	return nil
+    exec.Command("passwd", "-u", username).Run()
+    exec.Command("usermod", "-U", username).Run()
+    return nil
 }
 
 func creerUtilisateurNormal(username, password string, limite, days int) string {
