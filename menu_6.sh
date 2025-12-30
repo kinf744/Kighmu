@@ -418,6 +418,7 @@ while true; do
       ;;
     5)
       bash "$HOME/Kighmu/Delete_user_xray.sh"
+      read -p "Appuyez sur Entrée pour continuer..."
       ;;
     6)
       echo -e "${YELLOW}Désinstallation complète de Xray et Trojan en cours...${RESET}"
