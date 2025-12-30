@@ -128,18 +128,16 @@ load_user_data() {
 # Compte total des utilisateurs multi-protocole
 count_users() {
   local total=0
-  local keys=(
-    "vmess_ws_tls" "vmess_tcp_tls" "vmess_grpc_tls" "vmess_ntls"
-    "vless_ws_tls" "vless_tcp_tls" "vless_grpc_tls" "vless_ntls"
-    "trojan_ws_tls" "trojan_tcp_tls" "trojan_grpc_tls" "trojan_ntls"
-  )
-  
+  # Ajout des clés TCP TLS et gRPC TLS
+  local keys=("vmess_tls" "vmess_ntls" "vless_tls" "vless_ntls" "trojan_tls" "trojan_ntls" \
+              "vmess_tcp_tls" "vmess_grpc_tls" "vless_tcp_tls" "vless_grpc_tls" "trojan_tcp_tls" "trojan_grpc_tls")
+
   for key in "${keys[@]}"; do
     local count
     count=$(jq --arg k "$key" '.[$k] | length // 0' "$USERS_FILE")
     total=$(( total + count ))
   done
-  
+
   echo "$total"
 }
 
