@@ -108,31 +108,38 @@ show_menu() {
 
 load_user_data() {
   if [[ -f "$USERS_FILE" ]]; then
-    VMESS_TLS=$(jq -r '.vmess_tls // empty | map(.uuid) | join(",")' "$USERS_FILE")
-    VMESS_NTLS=$(jq -r '.vmess_ntls // empty | map(.uuid) | join(",")' "$USERS_FILE")
-    VLESS_TLS=$(jq -r '.vless_tls // empty | map(.uuid) | join(",")' "$USERS_FILE")
-    VLESS_NTLS=$(jq -r '.vless_ntls // empty | map(.uuid) | join(",")' "$USERS_FILE")
-    TROJAN_TLS=$(jq -r '.trojan_tls // empty | map(.uuid) | join(",")' "$USERS_FILE")
-    TROJAN_NTLS=$(jq -r '.trojan_ntls // empty | map(.uuid) | join(",")' "$USERS_FILE")
-  else
-    VMESS_TLS=""
-    VMESS_NTLS=""
-    VLESS_TLS=""
-    VLESS_NTLS=""
-    TROJAN_TLS=""
-    TROJAN_NTLS=""
+    VMESS_WS_TLS=$(jq -r '.vmess_ws_tls // empty' "$USERS_FILE")
+    VMESS_TCP_TLS=$(jq -r '.vmess_tcp_tls // empty' "$USERS_FILE")
+    VMESS_GRPC_TLS=$(jq -r '.vmess_grpc_tls // empty' "$USERS_FILE")
+    VMESS_NTLS=$(jq -r '.vmess_ntls // empty' "$USERS_FILE")
+    
+    VLESS_WS_TLS=$(jq -r '.vless_ws_tls // empty' "$USERS_FILE")
+    VLESS_TCP_TLS=$(jq -r '.vless_tcp_tls // empty' "$USERS_FILE")
+    VLESS_GRPC_TLS=$(jq -r '.vless_grpc_tls // empty' "$USERS_FILE")
+    VLESS_NTLS=$(jq -r '.vless_ntls // empty' "$USERS_FILE")
+    
+    TROJAN_WS_TLS=$(jq -r '.trojan_ws_tls // empty' "$USERS_FILE")
+    TROJAN_TCP_TLS=$(jq -r '.trojan_tcp_tls // empty' "$USERS_FILE")
+    TROJAN_GRPC_TLS=$(jq -r '.trojan_grpc_tls // empty' "$USERS_FILE")
+    TROJAN_NTLS=$(jq -r '.trojan_ntls // empty' "$USERS_FILE")
   fi
 }
 
 # Compte total des utilisateurs multi-protocole
 count_users() {
   local total=0
-  local keys=("vmess_tls" "vmess_ntls" "vless_tls" "vless_ntls" "trojan_tls" "trojan_ntls")
+  local keys=(
+    "vmess_ws_tls" "vmess_tcp_tls" "vmess_grpc_tls" "vmess_ntls"
+    "vless_ws_tls" "vless_tcp_tls" "vless_grpc_tls" "vless_ntls"
+    "trojan_ws_tls" "trojan_tcp_tls" "trojan_grpc_tls" "trojan_ntls"
+  )
+  
   for key in "${keys[@]}"; do
     local count
     count=$(jq --arg k "$key" '.[$k] | length // 0' "$USERS_FILE")
     total=$(( total + count ))
   done
+  
   echo "$total"
 }
 
