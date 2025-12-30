@@ -49,7 +49,7 @@ afficher_utilisateurs_xray() {
 
 afficher_appareils_connectes() {
   # Définir tous les ports utilisés (WS TLS, NTLS, TCP TLS, gRPC TLS)
-  ports_tls=(8443 443 9443)       # 8443=WS TLS, 443=TCP TLS, 9443=gRPC TLS (exemple)
+  ports_tls=(8443)       # 8443=WS TLS, 8443=TCP TLS, 8443=gRPC TLS (exemple)
   ports_ntls=(80)                 # WS Non-TLS
 
   declare -A connexions=( ["vmess"]=0 ["vless"]=0 ["trojan"]=0 )
