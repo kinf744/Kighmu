@@ -150,15 +150,31 @@ cat > /etc/xray/config.json << EOF
       "tag": "tls-8443",
       "settings": {
         "clients": [
-          { "id": "$uuid5" }
+          {
+            "id": "$uuid5"
+          }
         ],
         "decryption": "none",
         "fallbacks": [
-          { "path": "/vmess-tls", "dest": 3001 },
-          { "path": "/vless-tls", "dest": 3002 },
-          { "path": "/trojan-tls", "dest": 3003 },
-          { "alpn": "h2", "dest": 3004 },
-          { "dest": 3005 }
+          {
+            "path": "/vmess-tls",
+            "dest": 3001
+          },
+          {
+            "path": "/vless-tls",
+            "dest": 3002
+          },
+          {
+            "path": "/trojan-tls",
+            "dest": 3003
+          },
+          {
+            "alpn": "h2",
+            "dest": 3004
+          },
+          {
+            "dest": 3005
+          }
         ]
       },
       "streamSettings": {
@@ -180,7 +196,10 @@ cat > /etc/xray/config.json << EOF
       "protocol": "vmess",
       "settings": {
         "clients": [
-          { "id": "$uuid1", "alterId": 0 }
+          {
+            "id": "$uuid1",
+            "alterId": 0
+          }
         ]
       },
       "streamSettings": {
@@ -196,7 +215,9 @@ cat > /etc/xray/config.json << EOF
       "protocol": "vless",
       "settings": {
         "clients": [
-          { "id": "$uuid5" }
+          {
+            "id": "$uuid5"
+          }
         ],
         "decryption": "none"
       },
@@ -213,7 +234,9 @@ cat > /etc/xray/config.json << EOF
       "protocol": "trojan",
       "settings": {
         "clients": [
-          { "password": "$uuid5" }
+          {
+            "password": "$uuid5"
+          }
         ]
       },
       "streamSettings": {
@@ -229,7 +252,9 @@ cat > /etc/xray/config.json << EOF
       "protocol": "vless",
       "settings": {
         "clients": [
-          { "id": "$uuid5" }
+          {
+            "id": "$uuid5"
+          }
         ],
         "decryption": "none"
       },
@@ -246,7 +271,9 @@ cat > /etc/xray/config.json << EOF
       "protocol": "trojan",
       "settings": {
         "clients": [
-          { "password": "$uuid5" }
+          {
+            "password": "$uuid5"
+          }
         ]
       }
     },
@@ -256,12 +283,20 @@ cat > /etc/xray/config.json << EOF
       "tag": "http-80",
       "settings": {
         "clients": [
-          { "id": "$uuid6" }
+          {
+            "id": "$uuid6"
+          }
         ],
         "decryption": "none",
         "fallbacks": [
-          { "path": "/vmess-ntls", "dest": 8081 },
-          { "path": "/vless-ntls", "dest": 8082 }
+          {
+            "path": "/vmess-ntls",
+            "dest": 8081
+          },
+          {
+            "path": "/vless-ntls",
+            "dest": 8082
+          }
         ]
       },
       "streamSettings": {
@@ -275,7 +310,10 @@ cat > /etc/xray/config.json << EOF
       "protocol": "vmess",
       "settings": {
         "clients": [
-          { "id": "$uuid4", "alterId": 0 }
+          {
+            "id": "$uuid4",
+            "alterId": 0
+          }
         ]
       },
       "streamSettings": {
@@ -291,7 +329,9 @@ cat > /etc/xray/config.json << EOF
       "protocol": "vless",
       "settings": {
         "clients": [
-          { "id": "$uuid6" }
+          {
+            "id": "$uuid6"
+          }
         ],
         "decryption": "none"
       },
@@ -304,8 +344,15 @@ cat > /etc/xray/config.json << EOF
     }
   ],
   "outbounds": [
-    { "protocol": "freedom", "settings": {} },
-    { "protocol": "blackhole", "settings": {}, "tag": "blocked" }
+    {
+      "protocol": "freedom",
+      "settings": {}
+    },
+    {
+      "protocol": "blackhole",
+      "settings": {},
+      "tag": "blocked"
+    }
   ],
   "routing": {
     "rules": [
@@ -345,7 +392,9 @@ cat > /etc/xray/config.json << EOF
   },
   "stats": {},
   "api": {
-    "services": ["StatsService"],
+    "services": [
+      "StatsService"
+    ],
     "tag": "api"
   }
 }
