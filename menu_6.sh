@@ -20,15 +20,26 @@ print_header() {
 
 afficher_utilisateurs_xray() {
   if [[ -f "$USERS_FILE" ]]; then
+    # Comptage des utilisateurs pour tous les protocoles et variantes
     vmess_tls_count=$(jq '.vmess_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
     vmess_ntls_count=$(jq '.vmess_ntls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    vmess_tcp_count=$(jq '.vmess_tcp_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    vmess_grpc_count=$(jq '.vmess_grpc_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+
     vless_tls_count=$(jq '.vless_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
     vless_ntls_count=$(jq '.vless_ntls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    vless_tcp_count=$(jq '.vless_tcp_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    vless_grpc_count=$(jq '.vless_grpc_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+
     trojan_tls_count=$(jq '.trojan_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
     trojan_ntls_count=$(jq '.trojan_ntls | length' "$USERS_FILE" 2>/dev/null || echo 0)
-    vmess_count=$((vmess_tls_count + vmess_ntls_count))
-    vless_count=$((vless_tls_count + vless_ntls_count))
-    trojan_count=$((trojan_tls_count + trojan_ntls_count))
+    trojan_tcp_count=$(jq '.trojan_tcp_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    trojan_grpc_count=$(jq '.trojan_grpc_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
+
+    vmess_count=$((vmess_tls_count + vmess_ntls_count + vmess_tcp_count + vmess_grpc_count))
+    vless_count=$((vless_tls_count + vless_ntls_count + vless_tcp_count + vless_grpc_count))
+    trojan_count=$((trojan_tls_count + trojan_ntls_count + trojan_tcp_count + trojan_grpc_count))
+
     echo -e "${BOLD}Utilisateur Xray :${RESET}"
     echo -e "  • VMess: [${YELLOW}${vmess_count}${RESET}] • VLESS: [${YELLOW}${vless_count}${RESET}] • Trojan: [${YELLOW}${trojan_count}${RESET}]"
   else
@@ -37,30 +48,29 @@ afficher_utilisateurs_xray() {
 }
 
 afficher_appareils_connectes() {
-  # Ports Xray TLS et Non-TLS (adapter aux besoins)
-  ports_tls=(8443)
-  ports_ntls=(80)
+  # Définir tous les ports utilisés (WS TLS, NTLS, TCP TLS, gRPC TLS)
+  ports_tls=(8443 443 9443)       # 8443=WS TLS, 443=TCP TLS, 9443=gRPC TLS (exemple)
+  ports_ntls=(80)                 # WS Non-TLS
 
   declare -A connexions=( ["vmess"]=0 ["vless"]=0 ["trojan"]=0 )
 
+  # Comptage par port
   for port in "${ports_tls[@]}"; do
     total_conns=$(ss -tn state established "( sport = :$port )" 2>/dev/null | tail -n +2 | wc -l)
-    per_proto=$((total_conns / 3))
+    # On suppose que chaque port TLS peut servir les 3 protocoles → ajuster si nécessaire
     for proto in "${!connexions[@]}"; do
-      connexions[$proto]=$((connexions[$proto] + per_proto))
+      connexions[$proto]=$((connexions[$proto] + total_conns))
     done
   done
 
   for port in "${ports_ntls[@]}"; do
     total_conns=$(ss -tn state established "( sport = :$port )" 2>/dev/null | tail -n +2 | wc -l)
-    per_proto=$((total_conns / 3))
     for proto in "${!connexions[@]}"; do
-      connexions[$proto]=$((connexions[$proto] + per_proto))
+      connexions[$proto]=$((connexions[$proto] + total_conns))
     done
   done
 
   echo -e "${BOLD}Appareils connectés :${RESET}"
-  # Affichage précisément dans l’ordre et format que tu souhaites
   echo -e "  • Vmess: [${YELLOW}${connexions["vmess"]}${RESET}]  • Vless: [${YELLOW}${connexions["vless"]}${RESET}]  • Trojan: [${YELLOW}${connexions["trojan"]}${RESET}]"
 }
 
