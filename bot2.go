@@ -114,32 +114,45 @@ func genererUUID() string {
 // Créer utilisateur normal (jours)
 // ===============================
 func setPassword(username, password string) error {
-	fmt.Printf("[DEBUG] setPassword %s (len=%d)\n", username, len(password))
+    fmt.Printf("[DEBUG] setPassword %s (len=%d)\n", username, len(password))
 
-	cmd := exec.Command("chpasswd")
-	cmd.Stdin = strings.NewReader(fmt.Sprintf("%s:%s\n", username, password))
+    // Assurer que le home existe avant
+    home := "/home/" + username
+    if _, err := os.Stat(home); os.IsNotExist(err) {
+        os.MkdirAll(home, 0700)
+        exec.Command("chown", "-R", username+":"+username, home).Run()
+    }
 
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("chpasswd failed: %v | %s", err, string(out))
-	}
+    // Utiliser un shell login pour chpasswd
+    cmd := exec.Command("bash", "-lc",
+        fmt.Sprintf("echo '%s:%s' | chpasswd", username, password),
+    )
+    cmd.Env = append(os.Environ(),
+        "HOME="+home,
+        "SHELL=/bin/bash",
+    )
+    out, err := cmd.CombinedOutput()
+    if err != nil {
+        return fmt.Errorf("chpasswd failed: %v | %s", err, string(out))
+    }
 
-	// Déverrouiller le compte
-	exec.Command("passwd", "-u", username).Run()
-	exec.Command("usermod", "-U", username).Run()
+    // Déverrouiller le compte (optionnel, mais sûr)
+    exec.Command("passwd", "-u", username).Run()
 
-	// Debug shadow
-	shadowOut, _ := exec.Command("getent", "shadow", username).CombinedOutput()
-	fmt.Printf("[DEBUG shadow] %s\n", string(shadowOut))
+    // Debug shadow
+    shadowOut, _ := exec.Command("getent", "shadow", username).CombinedOutput()
+    fmt.Printf("[DEBUG shadow] %s\n", string(shadowOut))
 
-	return nil
+    return nil
 }
 
 func fixHome(username string) {
-	home := "/home/" + username
-	exec.Command("mkdir", "-p", home).Run()
-	exec.Command("chown", "-R", username+":"+username, home).Run()
-	exec.Command("chmod", "700", home).Run()
+    home := "/home/" + username
+    if _, err := os.Stat(home); os.IsNotExist(err) {
+        os.MkdirAll(home, 0700)
+    }
+    exec.Command("chown", "-R", username+":"+username, home).Run()
+    exec.Command("chmod", "700", home).Run()
 }
 
 func creerUtilisateurNormal(username, password string, limite, days int) string {
