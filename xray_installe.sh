@@ -152,7 +152,7 @@ cat > /etc/xray/config.json << EOF
       "tag": "tls-8443",
       "settings": {
         "clients": [
-          { "id": "UUID_VLESS_TLS" }
+          { "id": "$uuid5" }
         ],
         "decryption": "none",
         "fallbacks": [
@@ -182,7 +182,7 @@ cat > /etc/xray/config.json << EOF
       "protocol": "vmess",
       "settings": {
         "clients": [
-          { "id": "UUID_VMESS_TLS", "alterId": 0 }
+          { "id": "$uuid1", "alterId": 0 }
         ]
       },
       "streamSettings": {
@@ -198,7 +198,7 @@ cat > /etc/xray/config.json << EOF
       "protocol": "vless",
       "settings": {
         "clients": [
-          { "id": "UUID_VLESS_TLS" }
+          { "id": "$uuid5" }
         ],
         "decryption": "none"
       },
@@ -215,7 +215,7 @@ cat > /etc/xray/config.json << EOF
       "protocol": "trojan",
       "settings": {
         "clients": [
-          { "password": "UUID_TROJAN_TLS" }
+          { "password": "$uuid5" }
         ]
       },
       "streamSettings": {
@@ -231,7 +231,7 @@ cat > /etc/xray/config.json << EOF
       "protocol": "vless",
       "settings": {
         "clients": [
-          { "id": "UUID_VLESS_TLS" }
+          { "id": "$uuid5" }
         ],
         "decryption": "none"
       },
@@ -248,7 +248,7 @@ cat > /etc/xray/config.json << EOF
       "protocol": "trojan",
       "settings": {
         "clients": [
-          { "password": "UUID_TROJAN_TLS" }
+          { "password": "$uuid5" }
         ]
       }
     },
@@ -258,7 +258,7 @@ cat > /etc/xray/config.json << EOF
       "tag": "http-80",
       "settings": {
         "clients": [
-          { "id": "UUID_VLESS_NTLS" }
+          { "id": "$uuid6" }
         ],
         "decryption": "none",
         "fallbacks": [
@@ -277,7 +277,7 @@ cat > /etc/xray/config.json << EOF
       "protocol": "vmess",
       "settings": {
         "clients": [
-          { "id": "UUID_VMESS_NTLS", "alterId": 0 }
+          { "id": "$uuid4", "alterId": 0 }
         ]
       },
       "streamSettings": {
@@ -293,7 +293,7 @@ cat > /etc/xray/config.json << EOF
       "protocol": "vless",
       "settings": {
         "clients": [
-          { "id": "UUID_VLESS_NTLS" }
+          { "id": "$uuid6" }
         ],
         "decryption": "none"
       },
