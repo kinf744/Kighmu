@@ -158,6 +158,9 @@ func creerUtilisateurNormal(username, password string, limite, days int) string 
 		return fmt.Sprintf("❌ Erreur mot de passe: %v", err)
 	}
 
+	// FIX HOME (OBLIGATOIRE)
+    fixHome(username)
+
 	// Déverrouiller le compte (important HTTP Custom)
 	exec.Command("passwd", "-u", username).Run()
 
