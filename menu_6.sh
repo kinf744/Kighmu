@@ -151,7 +151,11 @@ count_users() {
 }
 
 create_config() {
-  local proto=$1 name=$2 days=$3 limit=$4
+  local proto=$1
+  local name=$2
+  local days=$3
+  local limit=$4
+
   [[ -z "$DOMAIN" ]] && { echo -e "${RED}⚠️ Domaine non défini.${RESET}"; return; }
 
   local port_tls=8443
@@ -167,98 +171,87 @@ create_config() {
       uuid_tls=$(cat /proc/sys/kernel/random/uuid)
       uuid_ntls=$(cat /proc/sys/kernel/random/uuid)
 
-      # Enregistrer UUID + limit dans users.json
-      jq --arg id "$uuid_tls" --argjson lim "$limit" '.vmess_tls += [{"uuid": $id, "limit": $lim}]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
-      jq --arg id "$uuid_ntls" --argjson lim "$limit" '.vmess_ntls += [{"uuid": $id, "limit": $lim}]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+      # Ajouter aux users.json
+      jq --arg id "$uuid_tls" --argjson lim "$limit" '.vmess.ws_tls += [{"uuid": $id, "limit": $lim}]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+      jq --arg id "$uuid_ntls" --argjson lim "$limit" '.vmess.ws_ntls += [{"uuid": $id, "limit": $lim}]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
 
-      # Mise à jour config.json
-      jq --arg id "$uuid_tls" --arg proto "vmess" \
-        '(.inbounds[] | select(.protocol == $proto and .streamSettings.security == "tls") | .settings.clients) += [{"id": $id,"alterId":0}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
-      jq --arg id "$uuid_ntls" --arg proto "vmess" \
-        '(.inbounds[] | select(.protocol == $proto and .streamSettings.security == "none") | .settings.clients) += [{"id": $id,"alterId":0}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+      # Ajouter dans config.json
+      jq --arg id "$uuid_tls" '.inbounds[] | select(.protocol=="vmess" and .streamSettings.security=="tls") | .settings.clients += [{"id": $id, "alterId":0}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+      jq --arg id "$uuid_ntls" '.inbounds[] | select(.protocol=="vmess" and .streamSettings.security=="none") | .settings.clients += [{"id": $id, "alterId":0}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
 
       # Génération liens
       link_tls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$uuid_tls\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"$path_ws_tls\",\"tls\":\"tls\",\"sni\":\"$DOMAIN\"}" | base64 -w0)"
-      link_ntls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_ntls\",\"id\":\"$uuid_ntls\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"$path_ws_ntls\",\"tls\":\"none\",\"sni\":\"$DOMAIN\"}" | base64 -w0)"
+      link_ntls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_ntls\",\"id\":\"$uuid_ntls\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"$path_ws_ntls\",\"tls\":\"none\"}" | base64 -w0)"
       link_tcp="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$uuid_tls\",\"aid\":0,\"net\":\"tcp\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"tls\":\"tls\",\"sni\":\"$DOMAIN\"}" | base64 -w0)"
       link_grpc="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$uuid_tls\",\"aid\":0,\"net\":\"grpc\",\"type\":\"none\",\"serviceName\":\"$name\",\"tls\":\"tls\",\"sni\":\"$DOMAIN\"}" | base64 -w0)"
       ;;
+      
     vless)
       path_ws_tls="/vless-tls"
       path_ws_ntls="/vless-ntls"
       uuid_tls=$(cat /proc/sys/kernel/random/uuid)
       uuid_ntls=$(cat /proc/sys/kernel/random/uuid)
 
-      jq --arg id "$uuid_tls" --argjson lim "$limit" '.vless_tls += [{"uuid": $id, "limit": $lim}]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
-      jq --arg id "$uuid_ntls" --argjson lim "$limit" '.vless_ntls += [{"uuid": $id, "limit": $lim}]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+      jq --arg id "$uuid_tls" --argjson lim "$limit" '.vless.ws_tls += [{"uuid": $id, "limit": $lim}]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+      jq --arg id "$uuid_ntls" --argjson lim "$limit" '.vless.ws_ntls += [{"uuid": $id, "limit": $lim}]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
 
-      jq --arg id "$uuid_tls" --arg proto "vless" \
-        '(.inbounds[] | select(.protocol == $proto and .streamSettings.security == "tls") | .settings.clients) += [{"id": $id}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
-      jq --arg id "$uuid_ntls" --arg proto "vless" \
-        '(.inbounds[] | select(.protocol == $proto and .streamSettings.security == "none") | .settings.clients) += [{"id": $id}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+      jq --arg id "$uuid_tls" '.inbounds[] | select(.protocol=="vless" and .streamSettings.security=="tls") | .settings.clients += [{"id": $id}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+      jq --arg id "$uuid_ntls" '.inbounds[] | select(.protocol=="vless" and .streamSettings.security=="none") | .settings.clients += [{"id": $id}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
 
-      # Génération liens
       link_tls="vless://$uuid_tls@$DOMAIN:$port_tls?security=tls&type=ws&host=$DOMAIN&path=$path_ws_tls&encryption=none&sni=$DOMAIN#$name"
       link_ntls="vless://$uuid_ntls@$DOMAIN:$port_ntls?security=none&type=ws&host=$DOMAIN&path=$path_ws_ntls&encryption=none#$name"
       link_tcp="vless://$uuid_tls@$DOMAIN:$port_tls?security=tls&type=tcp&sni=$DOMAIN#$name"
       link_grpc="vless://$uuid_tls@$DOMAIN:$port_tls?security=tls&type=grpc&serviceName=$name&sni=$DOMAIN#$name"
       ;;
+
     trojan)
       path_ws_tls="/trojan-tls"
       path_ws_ntls="/trojan-ntls"
       uuid_tls=$(cat /proc/sys/kernel/random/uuid)
       uuid_ntls=$(cat /proc/sys/kernel/random/uuid)
 
-      jq --arg id "$uuid_tls" --argjson lim "$limit" '.trojan_tls += [{"uuid": $id, "limit": $lim}]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
-      jq --arg id "$uuid_ntls" --argjson lim "$limit" '.trojan_ntls += [{"uuid": $id, "limit": $lim}]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+      jq --arg id "$uuid_tls" --argjson lim "$limit" '.trojan.ws_tls += [{"uuid": $id, "limit": $lim}]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+      jq --arg id "$uuid_ntls" --argjson lim "$limit" '.trojan.ws_ntls += [{"uuid": $id, "limit": $lim}]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
 
       jq --arg idtls "$uuid_tls" --arg idntls "$uuid_ntls" \
          '(.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="tls") | .settings.clients)+=[{"password": $idtls}] |
           (.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="none") | .settings.clients)+=[{"password": $idntls}]' \
           "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
 
-      # Génération liens
       link_tls="trojan://$uuid_tls@$DOMAIN:$port_tls?security=tls&type=ws&path=$path_ws_tls#$name"
       link_ntls="trojan://$uuid_ntls@$DOMAIN:$port_ntls?type=ws&path=$path_ws_ntls#$name"
       link_tcp="trojan://$uuid_tls@$DOMAIN:$port_tls?security=tls&type=tcp#$name"
       link_grpc="trojan://$uuid_tls@$DOMAIN:$port_tls?security=tls&type=grpc&serviceName=$name#$name"
       ;;
+      
     *)
       echo -e "${RED}Protocole inconnu.${RESET}"
       return 1
       ;;
   esac
 
+  # Sauvegarde dates d’expiration
   local exp_date_iso=$(date -d "+$days days" +"%Y-%m-%d")
   echo "$uuid_tls|$exp_date_iso" >> /etc/xray/users_expiry.list
   echo "$uuid_ntls|$exp_date_iso" >> /etc/xray/users_expiry.list
 
-  local total_users=$(count_users)
-
+  # Affichage résumé
   echo
   echo -e "${CYAN}==============================${RESET}"
   echo -e "${BOLD}🧩 ${proto^^}${RESET}"
   echo -e "${CYAN}==============================${RESET}"
   echo -e "${YELLOW}📄 Configuration générée pour :${RESET} $name"
-  echo "--------------------------------------------------"
-  echo -e "➤ DOMAINE : ${YELLOW}$DOMAIN${RESET}"
-  echo -e "${GREEN}➤ PORTs :${RESET}"
-  echo -e "   TLS   : ${MAGENTA}$port_tls${RESET}"
-  echo -e "   NTLS  : ${MAGENTA}$port_ntls${RESET}"
-  echo -e "${GREEN}➤ UUIDs générés :${RESET}"
-  echo -e "   TLS   : ${MAGENTA}$uuid_tls${RESET}"
-  echo -e "   NTLS  : ${MAGENTA}$uuid_ntls${RESET}"
-  echo -e "➤ Paths :"
-  echo -e "   TLS   : ${MAGENTA}$path_ws_tls${RESET}"
-  echo -e "   NTLS  : ${MAGENTA}$path_ws_ntls${RESET}"
+  echo -e "➤ Domaine : ${YELLOW}$DOMAIN${RESET}"
+  echo -e "➤ Ports : TLS=${MAGENTA}$port_tls${RESET} NTLS=${MAGENTA}$port_ntls${RESET}"
+  echo -e "➤ UUID TLS   : ${MAGENTA}$uuid_tls${RESET}"
+  echo -e "➤ UUID NTLS  : ${MAGENTA}$uuid_ntls${RESET}"
+  echo -e "➤ Paths : TLS=${MAGENTA}$path_ws_tls${RESET} NTLS=${MAGENTA}$path_ws_ntls${RESET}"
   echo -e "➤ Validité : ${YELLOW}$days jours${RESET} (expire le $(date -d "+$days days" +"%d/%m/%Y"))"
-  echo -e "➤ Nombre total d'utilisateurs : ${BOLD}$limit${RESET}"
-  echo
   echo -e "${CYAN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●${RESET}"
-  echo -e "${CYAN}┃ WS TLS   : ${GREEN}$link_tls${RESET}"
-  echo -e "${CYAN}┃ WS Non‑TLS : ${GREEN}$link_ntls${RESET}"
-  echo -e "${CYAN}┃ TCP TLS  : ${GREEN}$link_tcp${RESET}"
-  echo -e "${CYAN}┃ gRPC TLS : ${GREEN}$link_grpc${RESET}"
+  echo -e " WS TLS   : ${GREEN}$link_tls${RESET}"
+  echo -e " WS NTLS  : ${GREEN}$link_ntls${RESET}"
+  echo -e " TCP TLS  : ${GREEN}$link_tcp${RESET}"
+  echo -e " gRPC TLS : ${GREEN}$link_grpc${RESET}"
   echo -e "${CYAN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●${RESET}"
   echo
 
