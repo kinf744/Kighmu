@@ -317,7 +317,7 @@ delete_user_by_number() {
   cp "$USERS_FILE" "${USERS_FILE}.bak"
   cp "$CONFIG_FILE" "${CONFIG_FILE}.bak"
 
-  # Suppression dans les deux tableaux TLS et NTLS pour le même protocole
+  # Suppression dans TLS et NTLS pour le même protocole
   jq --arg tls "$tls_key" --arg ntls "$ntls_key" --arg u "$sel_uuid" '
     .[$tls] |= map(select(.uuid != $u)) |
     .[$ntls] |= map(select(.uuid != $u))
@@ -330,17 +330,25 @@ delete_user_by_number() {
   fi
 
   if [[ "$sel_proto" == "vmess" || "$sel_proto" == "vless" ]]; then
-    jq --arg proto "$sel_proto" --arg id "$sel_uuid" --arg stream "tls" '
+    # WS TLS
+    jq --arg proto "$sel_proto" --arg id "$sel_uuid" '
       (.inbounds[] | select(.protocol == $proto and .streamSettings.security == "tls") | .settings.clients) |= map(select(.id != $id))
     ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
 
-    jq --arg proto "$sel_proto" --arg id "$sel_uuid" --arg stream "none" '
+    # WS Non-TLS
+    jq --arg proto "$sel_proto" --arg id "$sel_uuid" '
       (.inbounds[] | select(.protocol == $proto and .streamSettings.security == "none") | .settings.clients) |= map(select(.id != $id))
     ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+
+    # TCP TLS & gRPC TLS
+    jq --arg proto "$sel_proto" --arg id "$sel_uuid" '
+      (.inbounds[] | select(.protocol == $proto and .streamSettings.network=="tcp") | .settings.clients) |= map(select(.id != $id)) |
+      (.inbounds[] | select(.protocol == $proto and .streamSettings.network=="grpc") | .settings.clients) |= map(select(.id != $id))
+    ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
   else
-    # Trojan
+    # Trojan (TLS WS, TCP TLS et gRPC TLS)
     jq --arg id "$sel_uuid" '
-      (.inbounds[] | select(.protocol == "trojan") | .settings.clients) |= map(select(.password != $id))
+      (.inbounds[] | select(.protocol=="trojan") | .settings.clients) |= map(select(.password != $id))
     ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
   fi
 
