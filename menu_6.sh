@@ -220,7 +220,7 @@ echo -e "${GREEN}➤ UUID NTLS:${RESET} ${MAGENTA}$uuid_ntls${RESET}"
 echo -e "➤ Validité : ${YELLOW}$days jours${RESET} (expire le $(date -d "+$days days" +"%d/%m/%Y"))"
 echo
 echo -e "${CYAN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●${RESET}"
-echo -e "${CYAN}🔗 LIENS TLS 8443 (1 UUID = 3 tunnels)${RESET}"
+echo -e "${CYAN}🔗 LIENS TLS 8443${RESET}"
 echo -e "${GREEN}┌ WS TLS     :${RESET} $link_tls_ws"
 echo -e "${GREEN}├ TCP TLS    :${RESET} $link_tls_tcp"
 echo -e "${GREEN}└ gRPC TLS   :${RESET} $link_tls_grpc"
