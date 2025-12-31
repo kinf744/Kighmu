@@ -210,10 +210,6 @@ cat > /etc/xray/config.json << EOF
           "path": "/vless-ntls",
           "host": "$DOMAIN"
         }
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": ["http", "tls"]
       }
     },
     {
@@ -221,7 +217,6 @@ cat > /etc/xray/config.json << EOF
       "protocol": "trojan",
       "settings": {
         "clients": [{"password": "$uuid5"}],
-        "fallbacks": [{"dest": 80}]
       },
       "streamSettings": {
         "network": "ws",
