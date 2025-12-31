@@ -385,7 +385,7 @@ case "$confirm" in
   [oO]|[yY]|[yY][eE][sS])
     systemctl stop xray trojan-go 2>/dev/null || true
     systemctl disable xray trojan-go 2>/dev/null || true
-    for port in 80 8443; do
+    for port in 8880 8443; do
       lsof -i tcp:$port -t | xargs -r kill -9
       lsof -i udp:$port -t | xargs -r kill -9
     done
