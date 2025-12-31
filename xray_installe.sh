@@ -167,7 +167,7 @@ cat > /etc/xray/config.json << EOF
         "security": "none",
         "wsSettings": {
           "path": "/vmess-ntls",
-          "host": "$DOMAIN"
+          "host": "*"
         }
       }
     },
@@ -208,7 +208,7 @@ cat > /etc/xray/config.json << EOF
         "security": "none",
         "wsSettings": {
           "path": "/vless-ntls",
-          "host": "$DOMAIN"
+          "host": "*"
         }
       },
       "sniffing": {
@@ -253,7 +253,7 @@ cat > /etc/xray/config.json << EOF
         "security": "none",
         "wsSettings": {
           "path": "/trojan-ntls",
-          "host": "$DOMAIN"
+          "host": "*"
         }
       }
     },
