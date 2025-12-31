@@ -39,7 +39,7 @@ afficher_utilisateurs_xray() {
 afficher_appareils_connectes() {
   # Ports Xray TLS et Non-TLS (adapter aux besoins)
   ports_tls=(8443)
-  ports_ntls=(80)
+  ports_ntls=(8880)
 
   declare -A connexions=( ["vmess"]=0 ["vless"]=0 ["trojan"]=0 )
 
@@ -134,7 +134,7 @@ create_config() {
   [[ -z "$DOMAIN" ]] && { echo -e "${RED}⚠️ Domaine non défini.${RESET}"; return; }
 
   local port_tls=8443
-  local port_ntls=80
+  local port_ntls=8880
   local path_ws_tls path_ws_ntls
   local link_tls_ws link_tls_tcp link_tls_grpc link_ntls
   local uuid_tls uuid_ntls
@@ -214,7 +214,7 @@ echo -e "${BOLD}🧩 ${proto^^} [$name]${RESET}"
 echo -e "${CYAN}==============================${RESET}"
 echo -e "${YELLOW}📄 DOMAINE :${RESET} ${MAGENTA}$DOMAIN${RESET}"
 echo -e "${GREEN}➤ PORT TLS 8443 : WS + TCP + gRPC${RESET}"
-echo -e "${GREEN}➤ PORT NTLS 80  : WS uniquement${RESET}"
+echo -e "${GREEN}➤ PORT NTLS 8880  : WS uniquement${RESET}"
 echo -e "${GREEN}➤ UUID TLS :${RESET} ${MAGENTA}$uuid_tls${RESET}"
 echo -e "${GREEN}➤ UUID NTLS:${RESET} ${MAGENTA}$uuid_ntls${RESET}"
 echo -e "➤ Validité : ${YELLOW}$days jours${RESET} (expire le $(date -d "+$days days" +"%d/%m/%Y"))"
@@ -224,7 +224,7 @@ echo -e "${CYAN}🔗 LIENS TLS 8443${RESET}"
 echo -e "${GREEN}┌ WS TLS     :${RESET} $link_tls_ws"
 echo -e "${GREEN}├ TCP TLS    :${RESET} $link_tls_tcp"
 echo -e "${GREEN}└ gRPC TLS   :${RESET} $link_tls_grpc"
-echo -e "${CYAN}🔗 LIEN NTLS 80 :${RESET} $link_ntls"
+echo -e "${CYAN}🔗 LIEN NTLS 8880 :${RESET} $link_ntls"
 echo -e "${CYAN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●${RESET}"
 echo
 
