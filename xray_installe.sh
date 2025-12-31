@@ -217,7 +217,7 @@ cat > /etc/xray/config.json << EOF
       "protocol": "trojan",
       "settings": {
         "clients": [{"password": "$uuid5"}],
-      },
+      }
       "streamSettings": {
         "network": "ws",
         "security": "tls",
