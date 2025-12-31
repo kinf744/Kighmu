@@ -30,8 +30,8 @@ fi
 # Autoriser SSH
 iptables -A INPUT -p tcp --dport 22 -j ACCEPT
 # Autoriser HTTP et WS TLS/NTLS via Xray
-iptables -A INPUT -p tcp --dport 80 -j ACCEPT
-iptables -A INPUT -p udp --dport 80 -j ACCEPT
+iptables -A INPUT -p tcp --dport 8880 -j ACCEPT
+iptables -A INPUT -p udp --dport 8880 -j ACCEPT
 iptables -A INPUT -p tcp --dport 8443 -j ACCEPT
 iptables -A INPUT -p udp --dport 8443 -j ACCEPT
 iptables -A INPUT -p tcp --dport 2083 -j ACCEPT
@@ -157,7 +157,7 @@ cat > /etc/xray/config.json << EOF
       }
     },
     {
-      "port": 80,
+      "port": 8880,
       "protocol": "vmess",
       "settings": {
         "clients": [{"id": "$uuid2", "alterId": 0}]
@@ -197,7 +197,7 @@ cat > /etc/xray/config.json << EOF
       }
     },
     {
-      "port": 80,
+      "port": 8880,
       "protocol": "vless",
       "settings": {
         "clients": [{"id": "$uuid4"}],
@@ -243,7 +243,7 @@ cat > /etc/xray/config.json << EOF
       }
     },
     {
-      "port": 80,
+      "port": 8880,
       "protocol": "trojan",
       "settings": {
         "clients": [{"password": "$uuid6"}]
