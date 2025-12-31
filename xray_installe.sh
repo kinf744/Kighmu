@@ -94,45 +94,23 @@ uuid6=$(cat /proc/sys/kernel/random/uuid)
 
 cat > /etc/xray/users.json << EOF
 {
-  "vmess": {
-    "ws_tls": [
-      { "uuid": "$uuid1", "limit": 5 }
-    ],
-    "tcp_tls": [
-      { "uuid": "$uuid2", "limit": 5 }
-    ],
-    "grpc_tls": [
-      { "uuid": "$uuid3", "limit": 5 }
-    ],
-    "ws_ntls": [
-      { "uuid": "$uuid4", "limit": 5 }
-    ]
-  },
-  "vless": {
-    "ws_tls": [
-      { "uuid": "$uuid5", "limit": 5 }
-    ],
-    "tcp_tls": [
-      { "uuid": "$uuid5", "limit": 5 }
-    ],
-    "grpc_tls": [
-      { "uuid": "$uuid5", "limit": 5 }
-    ],
-    "ws_ntls": [
-      { "uuid": "$uuid6", "limit": 5 }
-    ]
-  },
-  "trojan": {
-    "ws_tls": [
-      { "uuid": "$uuid5", "limit": 5 }
-    ],
-    "tcp_tls": [
-      { "uuid": "$uuid5", "limit": 5 }
-    ],
-    "grpc_tls": [
-      { "uuid": "$uuid5", "limit": 5 }
-    ]
-  }
+  "vmess_tls": [
+    {"uuid": "uuid1", "limit": 5},
+    {"uuid": "uuid3", "limit": 5},
+    {"uuid": "uuid5", "limit": 5}
+  ],
+  "vmess_ntls": [
+    {"uuid": "uuid2", "limit": 5}
+  ],
+  "vless_tls": [
+    {"uuid": "uuid4", "limit": 5}
+  ],
+  "vless_ntls": [],
+  "trojan_tls": [
+    {"uuid": "uuid6", "limit": 5},
+    {"uuid": "uuid7", "limit": 5}
+  ],
+  "trojan_ntls": []
 }
 EOF
 
@@ -146,213 +124,143 @@ cat > /etc/xray/config.json << EOF
   "inbounds": [
     {
       "port": 8443,
-      "protocol": "vless",
-      "tag": "tls-8443",
+      "protocol": "dokodemo-door",
       "settings": {
-        "clients": [
-          {
-            "id": "$uuid5"
-          }
-        ],
-        "decryption": "none",
-        "fallbacks": [
-          {
-            "path": "/vmess-tls",
-            "dest": 3001
-          },
-          {
-            "path": "/vless-tls",
-            "dest": 3002
-          },
-          {
-            "path": "/trojan-tls",
-            "dest": 3003
-          },
-          {
-            "alpn": "h2",
-            "dest": 3004
-          },
-          {
-            "dest": 3005
-          }
-        ]
+        "address": "0.0.0.0",
+        "port": 22,
+        "network": "tcp"
       },
-      "streamSettings": {
-        "network": "tcp",
-        "security": "tls",
-        "tlsSettings": {
-          "certificates": [
-            {
-              "certificateFile": "/etc/xray/xray.crt",
-              "keyFile": "/etc/xray/xray.key"
-            }
-          ]
-        }
-      }
+      "tag": "ssh"
     },
     {
-      "listen": "127.0.0.1",
-      "port": 3001,
+      "port": 8443,
       "protocol": "vmess",
       "settings": {
-        "clients": [
-          {
-            "id": "$uuid1",
-            "alterId": 0
-          }
-        ]
+        "clients": [{"id": "$uuid1", "alterId": 0}]
       },
       "streamSettings": {
         "network": "ws",
+        "security": "tls",
+        "tlsSettings": {
+          "certificates": [{
+            "certificateFile": "/etc/xray/xray.crt",
+            "keyFile": "/etc/xray/xray.key"
+          }],
+          "minVersion": "1.2",
+          "maxVersion": "1.3",
+          "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
+        },
         "wsSettings": {
-          "path": "/vmess-tls"
+          "path": "/vmess-tls",
+          "host": "$DOMAIN"
         }
       }
     },
     {
-      "listen": "127.0.0.1",
-      "port": 3002,
+      "port": 80,
+      "protocol": "vmess",
+      "settings": {
+        "clients": [{"id": "$uuid2", "alterId": 0}]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "none",
+        "wsSettings": {
+          "path": "/vmess-ntls",
+          "host": "$DOMAIN"
+        }
+      }
+    },
+    {
+      "port": 8443,
       "protocol": "vless",
       "settings": {
-        "clients": [
-          {
-            "id": "$uuid5"
-          }
-        ],
+        "clients": [{"id": "$uuid3"}],
         "decryption": "none"
       },
       "streamSettings": {
         "network": "ws",
+        "security": "tls",
+        "tlsSettings": {
+          "certificates": [{
+            "certificateFile": "/etc/xray/xray.crt",
+            "keyFile": "/etc/xray/xray.key"
+          }],
+          "minVersion": "1.2",
+          "maxVersion": "1.3",
+          "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
+        },
         "wsSettings": {
-          "path": "/vless-tls"
+          "path": "/vless-tls",
+          "host": "$DOMAIN"
         }
-      }
-    },
-    {
-      "listen": "127.0.0.1",
-      "port": 3003,
-      "protocol": "trojan",
-      "settings": {
-        "clients": [
-          {
-            "password": "$uuid5"
-          }
-        ]
-      },
-      "streamSettings": {
-        "network": "ws",
-        "wsSettings": {
-          "path": "/trojan-tls"
-        }
-      }
-    },
-    {
-      "listen": "127.0.0.1",
-      "port": 3004,
-      "protocol": "vless",
-      "settings": {
-        "clients": [
-          {
-            "id": "$uuid5"
-          }
-        ],
-        "decryption": "none"
-      },
-      "streamSettings": {
-        "network": "grpc",
-        "grpcSettings": {
-          "serviceName": "grpc"
-        }
-      }
-    },
-    {
-      "listen": "127.0.0.1",
-      "port": 3005,
-      "protocol": "trojan",
-      "settings": {
-        "clients": [
-          {
-            "password": "$uuid5"
-          }
-        ]
       }
     },
     {
       "port": 80,
       "protocol": "vless",
-      "tag": "http-80",
       "settings": {
-        "clients": [
-          {
-            "id": "$uuid6"
-          }
-        ],
-        "decryption": "none",
-        "fallbacks": [
-          {
-            "path": "/vmess-ntls",
-            "dest": 8081
-          },
-          {
-            "path": "/vless-ntls",
-            "dest": 8082
-          }
-        ]
-      },
-      "streamSettings": {
-        "network": "tcp",
-        "security": "none"
-      }
-    },
-    {
-      "listen": "127.0.0.1",
-      "port": 8081,
-      "protocol": "vmess",
-      "settings": {
-        "clients": [
-          {
-            "id": "$uuid4",
-            "alterId": 0
-          }
-        ]
-      },
-      "streamSettings": {
-        "network": "ws",
-        "wsSettings": {
-          "path": "/vmess-ntls"
-        }
-      }
-    },
-    {
-      "listen": "127.0.0.1",
-      "port": 8082,
-      "protocol": "vless",
-      "settings": {
-        "clients": [
-          {
-            "id": "$uuid6"
-          }
-        ],
+        "clients": [{"id": "$uuid4"}],
         "decryption": "none"
       },
       "streamSettings": {
         "network": "ws",
+        "security": "none",
         "wsSettings": {
-          "path": "/vless-ntls"
+          "path": "/vless-ntls",
+          "host": "$DOMAIN"
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls"]
+      }
+    },
+    {
+      "port": 8443,
+      "protocol": "trojan",
+      "settings": {
+        "clients": [{"password": "$uuid5"}],
+        "fallbacks": [{"dest": 80}]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "tls",
+        "tlsSettings": {
+          "certificates": [{
+            "certificateFile": "/etc/xray/xray.crt",
+            "keyFile": "/etc/xray/xray.key"
+          }],
+          "alpn": ["http/1.1"],
+          "minVersion": "1.2",
+          "maxVersion": "1.3",
+          "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
+        },
+        "wsSettings": {
+          "path": "/trojan-tls",
+          "host": "$DOMAIN"
+        }
+      }
+    },
+    {
+      "port": 80,
+      "protocol": "trojan",
+      "settings": {
+        "clients": [{"password": "$uuid6"}]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "none",
+        "wsSettings": {
+          "path": "/trojan-ntls",
+          "host": "$DOMAIN"
         }
       }
     }
   ],
   "outbounds": [
-    {
-      "protocol": "freedom",
-      "settings": {}
-    },
-    {
-      "protocol": "blackhole",
-      "settings": {},
-      "tag": "blocked"
-    }
+    {"protocol": "freedom", "settings": {}},
+    {"protocol": "blackhole", "settings": {}, "tag": "blocked"}
   ],
   "routing": {
     "rules": [
@@ -392,9 +300,7 @@ cat > /etc/xray/config.json << EOF
   },
   "stats": {},
   "api": {
-    "services": [
-      "StatsService"
-    ],
+    "services": ["StatsService"],
     "tag": "api"
   }
 }
