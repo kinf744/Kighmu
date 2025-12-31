@@ -136,7 +136,7 @@ cat > /etc/xray/config.json << EOF
       "port": 8443,
       "protocol": "vmess",
       "settings": {
-        "clients": [{"id": "$uuid1", "alterId": 0}]
+        "clients": [{ "id": "$uuid1", "alterId": 0 }]
       },
       "streamSettings": {
         "network": "ws",
@@ -151,23 +151,21 @@ cat > /etc/xray/config.json << EOF
           "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
         },
         "wsSettings": {
-          "path": "/vmess-tls",
-          "host": "$DOMAIN"
+          "path": "/vmess-tls"
         }
       }
     },
     {
-      "port": 80,
+      "port": 8880,
       "protocol": "vmess",
       "settings": {
-        "clients": [{"id": "$uuid2", "alterId": 0}]
+        "clients": [{ "id": "$uuid2", "alterId": 0 }]
       },
       "streamSettings": {
         "network": "ws",
         "security": "none",
         "wsSettings": {
-          "path": "/vmess-ntls",
-          "host": ""
+          "path": "/vmess-ntls"
         }
       }
     },
@@ -175,7 +173,7 @@ cat > /etc/xray/config.json << EOF
       "port": 8443,
       "protocol": "vless",
       "settings": {
-        "clients": [{"id": "$uuid3"}],
+        "clients": [{ "id": "$uuid3" }],
         "decryption": "none"
       },
       "streamSettings": {
@@ -191,24 +189,22 @@ cat > /etc/xray/config.json << EOF
           "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
         },
         "wsSettings": {
-          "path": "/vless-tls",
-          "host": "$DOMAIN"
+          "path": "/vless-tls"
         }
       }
     },
     {
-      "port": 80,
+      "port": 8880,
       "protocol": "vless",
       "settings": {
-        "clients": [{"id": "$uuid4"}],
+        "clients": [{ "id": "$uuid4" }],
         "decryption": "none"
       },
       "streamSettings": {
         "network": "ws",
         "security": "none",
         "wsSettings": {
-          "path": "/vless-ntls",
-          "host": ""
+          "path": "/vless-ntls"
         }
       },
       "sniffing": {
@@ -220,8 +216,8 @@ cat > /etc/xray/config.json << EOF
       "port": 8443,
       "protocol": "trojan",
       "settings": {
-        "clients": [{"password": "$uuid5"}],
-        "fallbacks": [{"dest": 80}]
+        "clients": [{ "password": "$uuid5" }],
+        "fallbacks": [{ "dest": 8880 }]
       },
       "streamSettings": {
         "network": "ws",
@@ -237,23 +233,21 @@ cat > /etc/xray/config.json << EOF
           "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
         },
         "wsSettings": {
-          "path": "/trojan-tls",
-          "host": "$DOMAIN"
+          "path": "/trojan-tls"
         }
       }
     },
     {
-      "port": 80,
+      "port": 8880,
       "protocol": "trojan",
       "settings": {
-        "clients": [{"password": "$uuid6"}]
+        "clients": [{ "password": "$uuid6" }]
       },
       "streamSettings": {
         "network": "ws",
         "security": "none",
         "wsSettings": {
-          "path": "/trojan-ntls",
-          "host": ""
+          "path": "/trojan-ntls"
         }
       }
     },
@@ -261,7 +255,7 @@ cat > /etc/xray/config.json << EOF
       "port": 8443,
       "protocol": "vmess",
       "settings": {
-        "clients": [{"id": "$uuid1", "alterId": 0}]
+        "clients": [{ "id": "$uuid1", "alterId": 0 }]
       },
       "streamSettings": {
         "network": "tcp",
@@ -281,7 +275,7 @@ cat > /etc/xray/config.json << EOF
       "port": 8443,
       "protocol": "vless",
       "settings": {
-        "clients": [{"id": "$uuid3"}],
+        "clients": [{ "id": "$uuid3" }],
         "decryption": "none"
       },
       "streamSettings": {
@@ -302,7 +296,7 @@ cat > /etc/xray/config.json << EOF
       "port": 8443,
       "protocol": "trojan",
       "settings": {
-        "clients": [{"password": "$uuid5"}]
+        "clients": [{ "password": "$uuid5" }]
       },
       "streamSettings": {
         "network": "tcp",
@@ -323,7 +317,7 @@ cat > /etc/xray/config.json << EOF
       "port": 8443,
       "protocol": "vmess",
       "settings": {
-        "clients": [{"id": "$uuid1", "alterId": 0}]
+        "clients": [{ "id": "$uuid1", "alterId": 0 }]
       },
       "streamSettings": {
         "network": "grpc",
@@ -346,7 +340,7 @@ cat > /etc/xray/config.json << EOF
       "port": 8443,
       "protocol": "vless",
       "settings": {
-        "clients": [{"id": "$uuid3"}],
+        "clients": [{ "id": "$uuid3" }],
         "decryption": "none"
       },
       "streamSettings": {
@@ -370,7 +364,7 @@ cat > /etc/xray/config.json << EOF
       "port": 8443,
       "protocol": "trojan",
       "settings": {
-        "clients": [{"password": "$uuid5"}]
+        "clients": [{ "password": "$uuid5" }]
       },
       "streamSettings": {
         "network": "grpc",
@@ -391,8 +385,8 @@ cat > /etc/xray/config.json << EOF
     }
   ],
   "outbounds": [
-    {"protocol": "freedom", "settings": {}},
-    {"protocol": "blackhole", "settings": {}, "tag": "blocked"}
+    { "protocol": "freedom", "settings": {} },
+    { "protocol": "blackhole", "settings": {}, "tag": "blocked" }
   ],
   "routing": {
     "rules": [
