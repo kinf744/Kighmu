@@ -154,10 +154,6 @@ cat > /etc/xray/config.json << EOF
           "path": "/vmess-tls",
           "host": "$DOMAIN"
         }
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": ["http", "tls", "ws"]
       }
     },
     {
@@ -171,7 +167,7 @@ cat > /etc/xray/config.json << EOF
         "security": "none",
         "wsSettings": {
           "path": "/vmess-ntls",
-          "host": ""
+          "host": "$DOMAIN"
         }
       }
     },
@@ -198,10 +194,6 @@ cat > /etc/xray/config.json << EOF
           "path": "/vless-tls",
           "host": "$DOMAIN"
         }
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": ["http", "tls", "ws"]
       }
     },
     {
@@ -216,8 +208,12 @@ cat > /etc/xray/config.json << EOF
         "security": "none",
         "wsSettings": {
           "path": "/vless-ntls",
-          "host": ""
+          "host": "$DOMAIN"
         }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls"]
       }
     },
     {
@@ -225,10 +221,7 @@ cat > /etc/xray/config.json << EOF
       "protocol": "trojan",
       "settings": {
         "clients": [{"password": "$uuid5"}],
-        "fallbacks": [
-          { "path": "/vmess-tls", "dest": 8443 },
-          { "path": "/vless-tls", "dest": 8443 }
-        ]
+        "fallbacks": [{"dest": 80}]
       },
       "streamSettings": {
         "network": "ws",
@@ -247,10 +240,6 @@ cat > /etc/xray/config.json << EOF
           "path": "/trojan-tls",
           "host": "$DOMAIN"
         }
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": ["http", "tls", "ws"]
       }
     },
     {
@@ -264,7 +253,7 @@ cat > /etc/xray/config.json << EOF
         "security": "none",
         "wsSettings": {
           "path": "/trojan-ntls",
-          "host": ""
+          "host": "$DOMAIN"
         }
       }
     },
