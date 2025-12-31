@@ -154,14 +154,10 @@ cat > /etc/xray/config.json << EOF
           "path": "/vmess-tls",
           "host": "$DOMAIN"
         }
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": ["http", "tls", "ws"]
       }
     },
     {
-      "port": 8880,
+      "port": 80,
       "protocol": "vmess",
       "settings": {
         "clients": [{"id": "$uuid2", "alterId": 0}]
@@ -198,14 +194,10 @@ cat > /etc/xray/config.json << EOF
           "path": "/vless-tls",
           "host": "$DOMAIN"
         }
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": ["http", "tls", "ws"]
       }
     },
     {
-      "port": 8880,
+      "port": 80,
       "protocol": "vless",
       "settings": {
         "clients": [{"id": "$uuid4"}],
@@ -248,14 +240,10 @@ cat > /etc/xray/config.json << EOF
           "path": "/trojan-tls",
           "host": "$DOMAIN"
         }
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": ["http", "tls", "ws"]
       }
     },
     {
-      "port": 8880,
+      "port": 80,
       "protocol": "trojan",
       "settings": {
         "clients": [{"password": "$uuid6"}]
@@ -287,10 +275,6 @@ cat > /etc/xray/config.json << EOF
           "maxVersion": "1.3",
           "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
         }
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": ["http", "tls", "ws"]
       }
     },
     {
@@ -312,10 +296,6 @@ cat > /etc/xray/config.json << EOF
           "maxVersion": "1.3",
           "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
         }
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": ["http", "tls", "ws"]
       }
     },
     {
@@ -337,10 +317,6 @@ cat > /etc/xray/config.json << EOF
           "maxVersion": "1.3",
           "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
         }
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": ["http", "tls", "ws"]
       }
     },
     {
@@ -364,10 +340,6 @@ cat > /etc/xray/config.json << EOF
         "grpcSettings": {
           "serviceName": "grpc-service"
         }
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": ["http", "tls", "ws"]
       }
     },
     {
@@ -392,10 +364,6 @@ cat > /etc/xray/config.json << EOF
         "grpcSettings": {
           "serviceName": "grpc-service"
         }
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": ["http", "tls", "ws"]
       }
     },
     {
@@ -419,10 +387,6 @@ cat > /etc/xray/config.json << EOF
         "grpcSettings": {
           "serviceName": "grpc-service"
         }
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": ["http", "tls", "ws"]
       }
     }
   ],
