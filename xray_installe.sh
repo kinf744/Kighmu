@@ -1,18 +1,25 @@
 #!/bin/bash
-# xray_installe_caddy.sh  Installation Xray + Caddy (TLS + reverse-proxy)
+# xray_caddy_install.sh - Installation Xray + Caddy (TLS + reverse-proxy)
+# Gère WebSocket TLS/Non-TLS via Caddy
+# Gère TCP TLS et gRPC TLS directement via Xray
 
 RED='\u001B[0;31m'
 GREEN='\u001B[0;32m'
 NC='\u001B[0m'
 
+# -----------------------------
+# DEMANDE DE DOMAINE
+# -----------------------------
 read -rp "Entrez votre nom de domaine (ex: monsite.com) : " DOMAIN
 if [[ -z "$DOMAIN" ]]; then
   echo -e "${RED}Erreur : nom de domaine non valide.${NC}"
   exit 1
 fi
-
 echo "$DOMAIN" > /tmp/.xray_domain
 
+# -----------------------------
+# INSTALLATION PAQUETS ESSENTIELS
+# -----------------------------
 apt update
 apt install -y iptables iptables-persistent curl socat xz-utils wget apt-transport-https \
   gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq ca-certificates libcap2-bin
@@ -23,7 +30,6 @@ iptables -A INPUT -p tcp --dport 8880 -j ACCEPT
 iptables -A INPUT -p udp --dport 8880 -j ACCEPT
 iptables -A INPUT -p tcp --dport 8443 -j ACCEPT
 iptables -A INPUT -p udp --dport 8443 -j ACCEPT
-
 netfilter-persistent flush
 netfilter-persistent save
 
@@ -67,7 +73,7 @@ cat > /etc/xray/users.json << EOF
 EOF
 
 # -----------------------------
-# CONFIG XRAY
+# CONFIG XRAY (WS + TCP + gRPC)
 # -----------------------------
 cat > /etc/xray/config.json << EOF
 {
@@ -126,12 +132,6 @@ cat > /etc/xray/config.json << EOF
       "streamSettings": {"network":"tcp","security":"tls","tlsSettings":{"certificateFile":"/etc/xray/xray.crt","keyFile":"/etc/xray/xray.key"}}
     },
     {
-      "port": 10013,
-      "protocol": "trojan",
-      "settings": {"clients":[{"password":"$uuid5"}]},
-      "streamSettings": {"network":"tcp","security":"tls","tlsSettings":{"certificateFile":"/etc/xray/xray.crt","keyFile":"/etc/xray/xray.key"}}
-    },
-    {
       "port": 10021,
       "protocol": "vmess",
       "settings": {"clients":[{"id":"$uuid1","alterId":0}]},
@@ -144,6 +144,12 @@ cat > /etc/xray/config.json << EOF
       "streamSettings": {"network":"grpc","security":"tls","tlsSettings":{"certificateFile":"/etc/xray/xray.crt","keyFile":"/etc/xray/xray.key"},"grpcSettings":{"serviceName":"vless-grpc"}}
     },
     {
+      "port": 10013,
+      "protocol": "trojan",
+      "settings": {"clients":[{"password":"$uuid5"}]},
+      "streamSettings": {"network":"tcp","security":"tls","tlsSettings":{"certificateFile":"/etc/xray/xray.crt","keyFile":"/etc/xray/xray.key"}}
+    },
+    {
       "port": 10023,
       "protocol": "trojan",
       "settings": {"clients":[{"password":"$uuid5"}]},
@@ -151,7 +157,7 @@ cat > /etc/xray/config.json << EOF
     }
   ],
   "outbounds":[{"protocol":"freedom","settings":{}},{"protocol":"blackhole","settings":{},"tag":"blocked"}],
-  "routing":{"rules":[{"type":"field","ip":["0.0.0.0/8","10.0.0.0/8","100.64.0.0/10","169.254.0.0/16","172.16.0.0/12","192.168.0.0/16","198.18.0.0/15","198.51.100.0/24","203.0.113.0/24","::1/128","fc00::/7","fe80::/10"],"outboundTag":"blocked"}]}
+  "routing":{"rules":[{"type":"field","ip":["0.0.0.0/8","10.0.0.0/8","100.64.0.0/10","192.168.0.0/16"],"outboundTag":"blocked"}]}
 }
 EOF
 
