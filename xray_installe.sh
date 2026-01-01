@@ -362,10 +362,16 @@ systemctl enable xray
 systemctl restart xray
 
 # -----------------------------
-# INSTALLATION CADDY
+# INSTALLATION CADDY (FIX GPG)
 # -----------------------------
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | apt-key add -
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
+apt install -y debian-keyring debian-archive-keyring apt-transport-https
+
+curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/gpg.key \
+  | gpg --dearmor -o /usr/share/keyrings/caddy-stable.gpg
+
+echo "deb [signed-by=/usr/share/keyrings/caddy-stable.gpg] https://dl.cloudsmith.io/public/caddy/stable/deb/debian any-version main" \
+  | tee /etc/apt/sources.list.d/caddy-stable.list
+
 apt update
 apt install -y caddy
 
