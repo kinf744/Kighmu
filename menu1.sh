@@ -141,7 +141,7 @@ echo -e "${YELLOW}🔐Pub KEY:${RESET}"
 echo -e "$SLOWDNS_KEY"
 echo -e "NameServer:"
 echo -e "${YELLOW}$SLOWDNS_NS${RESET}"
-echo -e ""
+echo ""
 echo -e "${GREEN}✅ 𝘾𝙊𝙈𝙋𝙏𝙀 𝘾𝙍𝙀‌𝙀‌ 𝘼𝙑𝙀𝘾 𝙎𝙐𝘾𝘾𝙀‌𝙎${RESET}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
