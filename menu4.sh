@@ -34,9 +34,9 @@ clear
 # ==========================================================
 # Titre du panneau de contrôle en MAGENTA vif
 # ==========================================================
-echo -e "${MAGENTA_VIF}+--------------------------------------------+${RESET}"
-echo -e "${MAGENTA_VIF}|          GESTION DES UTILISATEURS          |${RESET}"
-echo -e "${MAGENTA_VIF}+--------------------------------------------+${RESET}"
+echo -e "${CYAN}+--------------------------------------------+${RESET}"
+echo -e "${MAGENTA_VIF}|          GESTION DES UTILISATEURS           |${RESET}"
+echo -e "${CYAN}+--------------------------------------------+${RESET}"
 echo
 echo -e "${GREEN}[01]${RESET} Supprimer un utilisateur"
 echo -e "${YELLOW}[02]${RESET} Supprimer tous les utilisateurs expirés"
