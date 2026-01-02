@@ -86,7 +86,7 @@ if id "$username" &>/dev/null; then
     exit 1
 fi
 
-read -sp "Mot de passe : " password
+read -p "Mot de passe : " password
 echo
 if [[ -z "$password" ]]; then
     echo -e "${RED}Mot de passe vide, annulation.${RESET}"
