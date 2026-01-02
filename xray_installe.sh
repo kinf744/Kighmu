@@ -1,9 +1,11 @@
 #!/bin/bash
-# xray_install_nginx.sh — Installation Xray + Nginx (TLS + reverse-proxy WS)
+# =======================================================
+# xray_nginx_install.sh — Installation Xray + Nginx + Certbot
+# =======================================================
 
-RED='\u001B[0;31m'
-GREEN='\u001B[0;32m'
-NC='\u001B[0m'
+RED='\e[0;31m'
+GREEN='\e[0;32m'
+NC='\e[0m'
 
 # -----------------------------
 # DEMANDE DU DOMAINE
@@ -19,26 +21,28 @@ echo "$DOMAIN" > /tmp/.xray_domain
 # INSTALLATION DES DÉPENDANCES
 # -----------------------------
 apt update
-apt install -y iptables iptables-persistent curl socat xz-utils wget apt-transport-https \
-gnupg dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq ca-certificates \
-nginx certbot python3-certbot-nginx libcap2-bin
+apt install -y iptables iptables-persistent curl socat xz-utils wget \
+apt-transport-https gnupg lsb-release cron bash-completion ntpdate \
+chrony unzip jq ca-certificates libcap2-bin nginx certbot python3-certbot-nginx
 
 # -----------------------------
 # AUTORISATION DES PORTS
 # -----------------------------
-iptables -A INPUT -p tcp --dport 22 -j ACCEPT  # SSH
-iptables -A INPUT -p tcp --dport 8880 -j ACCEPT  # Non-TLS WS
-iptables -A INPUT -p tcp --dport 8443 -j ACCEPT  # TLS WS
-iptables -A INPUT -p tcp --dport 10011:10013 -j ACCEPT  # TCP TLS Xray
-iptables -A INPUT -p tcp --dport 10021:10023 -j ACCEPT  # gRPC TLS Xray
-
+iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+iptables -A INPUT -p tcp --dport 8880 -j ACCEPT
+iptables -A INPUT -p udp --dport 8880 -j ACCEPT
+iptables -A INPUT -p tcp --dport 8443 -j ACCEPT
+iptables -A INPUT -p udp --dport 8443 -j ACCEPT
+iptables -A INPUT -p tcp --dport 10011:10013 -j ACCEPT
+iptables -A INPUT -p tcp --dport 10021:10023 -j ACCEPT
 netfilter-persistent flush
 netfilter-persistent save
 
 # -----------------------------
 # INSTALLATION XRAY
 # -----------------------------
-latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest | grep tag_name | cut -d '"' -f4 | sed 's/v//')
+latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest \
+  | grep tag_name | cut -d '"' -f4 | sed 's/v//')
 xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v${latest_version}/xray-linux-64.zip"
 
 mkdir -p /tmp/xray_install && cd /tmp/xray_install
@@ -51,40 +55,29 @@ setcap 'cap_net_bind_service=+ep' /usr/local/bin/xray || true
 mkdir -p /var/log/xray /etc/xray
 touch /var/log/xray/access.log /var/log/xray/error.log
 chown -R root:root /var/log/xray
-chmod 644 /var/log/xray/access.log /var/log/xray/error.log
+chmod 644 /var/log/xray/*.log
 
 # -----------------------------
 # GÉNÉRATION DES UUID
 # -----------------------------
-uuid1=$(cat /proc/sys/kernel/random/uuid)  # VMess TLS
-uuid2=$(cat /proc/sys/kernel/random/uuid)  # VMess Non-TLS
-uuid3=$(cat /proc/sys/kernel/random/uuid)  # VLESS TLS
-uuid4=$(cat /proc/sys/kernel/random/uuid)  # VLESS Non-TLS
-uuid5=$(cat /proc/sys/kernel/random/uuid)  # Trojan TLS
-uuid6=$(cat /proc/sys/kernel/random/uuid)  # Trojan Non-TLS
+uuid1=$(cat /proc/sys/kernel/random/uuid)
+uuid2=$(cat /proc/sys/kernel/random/uuid)
+uuid3=$(cat /proc/sys/kernel/random/uuid)
+uuid4=$(cat /proc/sys/kernel/random/uuid)
+uuid5=$(cat /proc/sys/kernel/random/uuid)
+uuid6=$(cat /proc/sys/kernel/random/uuid)
 
 # -----------------------------
 # USERS.JSON
 # -----------------------------
 cat > /etc/xray/users.json << EOF
 {
-  "vmess_tls": [
-    {"uuid": "uuid1", "limit": 5},
-    {"uuid": "uuid3", "limit": 5},
-    {"uuid": "uuid5", "limit": 5}
-  ],
-  "vmess_ntls": [
-    {"uuid": "uuid2", "limit": 5}
-  ],
-  "vless_tls": [
-    {"uuid": "uuid4", "limit": 5}
-  ],
-  "vless_ntls": [],
-  "trojan_tls": [
-    {"uuid": "uuid6", "limit": 5},
-    {"uuid": "uuid7", "limit": 5}
-  ],
-  "trojan_ntls": []
+  "vmess_tls": [{"uuid": "$uuid1", "limit":5}],
+  "vmess_ntls": [{"uuid": "$uuid2", "limit":5}],
+  "vless_tls": [{"uuid": "$uuid3", "limit":5}],
+  "vless_ntls": [{"uuid": "$uuid4", "limit":5}],
+  "trojan_tls": [{"password": "$uuid5", "limit":5}],
+  "trojan_ntls": [{"password": "$uuid6", "limit":5}]
 }
 EOF
 
@@ -374,7 +367,17 @@ systemctl enable xray
 systemctl restart xray
 
 # -----------------------------
-# CONFIGURATION NGINX POUR WS
+# OBTENTION DU CERTIFICAT TLS
+# -----------------------------
+systemctl stop nginx
+certbot certonly --standalone -d $DOMAIN --non-interactive --agree-tos -m your-email@example.com
+if [[ ! -f /etc/letsencrypt/live/$DOMAIN/fullchain.pem ]]; then
+    echo -e "${RED}Erreur : certificat TLS non généré.${NC}"
+    exit 1
+fi
+
+# -----------------------------
+# CONFIG NGINX POUR XRAY
 # -----------------------------
 cat > /etc/nginx/sites-available/xray << EOF
 server {
@@ -386,29 +389,9 @@ server {
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers HIGH:!aNULL:!MD5;
 
-    location /vmess-tls {
-        proxy_pass http://127.0.0.1:10001;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host \$host;
-    }
-
-    location /vless-tls {
-        proxy_pass http://127.0.0.1:10003;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host \$host;
-    }
-
-    location /trojan-tls {
-        proxy_pass http://127.0.0.1:10005;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host \$host;
-    }
+    location /vmess-tls { proxy_pass http://127.0.0.1:10001; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; }
+    location /vless-tls { proxy_pass http://127.0.0.1:10003; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; }
+    location /trojan-tls { proxy_pass http://127.0.0.1:10005; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; }
 
     location / { return 404; }
 }
@@ -417,48 +400,22 @@ server {
     listen 8880;
     server_name $DOMAIN;
 
-    location /vmess-ntls {
-        proxy_pass http://127.0.0.1:10002;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host \$host;
-    }
-
-    location /vless-ntls {
-        proxy_pass http://127.0.0.1:10004;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host \$host;
-    }
-
-    location /trojan-ntls {
-        proxy_pass http://127.0.0.1:10006;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host \$host;
-    }
+    location /vmess-ntls { proxy_pass http://127.0.0.1:10002; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; }
+    location /vless-ntls { proxy_pass http://127.0.0.1:10004; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; }
+    location /trojan-ntls { proxy_pass http://127.0.0.1:10006; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; }
 
     location / { return 404; }
 }
 EOF
 
-ln -s /etc/nginx/sites-available/xray /etc/nginx/sites-enabled/xray
-nginx -t
-systemctl restart nginx
-
-# -----------------------------
-# CERTIFICAT TLS AVEC CERTBOT
-# -----------------------------
-certbot certonly --nginx -d $DOMAIN --non-interactive --agree-tos -m ton-email@example.com
-systemctl restart nginx
+ln -sf /etc/nginx/sites-available/xray /etc/nginx/sites-enabled/xray
+nginx -t && systemctl restart nginx
+systemctl enable nginx
 
 # -----------------------------
 # RÉSULTATS
 # -----------------------------
-echo -e "${GREEN}Installation terminée avec succès.${NC}"
+echo -e "${GREEN}Installation terminée avec succès !${NC}"
 echo "Domaine : $DOMAIN"
 echo "UUID VMess TLS : $uuid1"
 echo "UUID VMess Non-TLS : $uuid2"
