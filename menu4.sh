@@ -11,6 +11,7 @@ setup_colors() {
     GREEN=""
     YELLOW=""
     CYAN=""
+    MAGENTA_VIF=""
     BOLD=""
     RESET=""
 
@@ -20,6 +21,7 @@ setup_colors() {
             GREEN="$(tput setaf 2)"
             YELLOW="$(tput setaf 3)"
             CYAN="$(tput setaf 6)"
+            MAGENTA_VIF="$(tput setaf 5; tput bold)"  # titre panneau
             BOLD="$(tput bold)"
             RESET="$(tput sgr0)"
         fi
@@ -29,9 +31,12 @@ setup_colors() {
 setup_colors
 clear
 
-echo -e "${CYAN}+--------------------------------------------+${RESET}"
-echo -e "${BOLD}${MAGENTA}|          GESTION DES UTILISATEURS          |${RESET}"
-echo -e "${CYAN}+--------------------------------------------+${RESET}"
+# ==========================================================
+# Titre du panneau de contrôle en MAGENTA vif
+# ==========================================================
+echo -e "${MAGENTA_VIF}+--------------------------------------------+${RESET}"
+echo -e "${MAGENTA_VIF}|          GESTION DES UTILISATEURS          |${RESET}"
+echo -e "${MAGENTA_VIF}+--------------------------------------------+${RESET}"
 echo
 echo -e "${GREEN}[01]${RESET} Supprimer un utilisateur"
 echo -e "${YELLOW}[02]${RESET} Supprimer tous les utilisateurs expirés"
@@ -40,7 +45,7 @@ echo
 read -rp "${CYAN}Sélectionnez une option (1/2/0) : ${RESET}" option
 
 # ==========================================================
-# Fonction : supprimer un utilisateur donné
+# Fonction : supprimer un utilisateur donné (sans confirmation)
 # ==========================================================
 supprimer_utilisateur() {
     local username=$1
@@ -50,12 +55,7 @@ supprimer_utilisateur() {
         return 1
     fi
 
-    read -rp "Confirmez suppression de l'utilisateur ? (o/N) : " confirm
-    if [[ ! "$confirm" =~ ^[oO]$ ]]; then
-        echo -e "${GREEN}Suppression annulée.${RESET}"
-        return 0
-    fi
-
+    # Suppression de l'utilisateur système
     if id "$username" &>/dev/null; then
         if userdel -r "$username" &>/dev/null; then
             echo -e "${GREEN}Utilisateur système '${username}' supprimé avec succès.${RESET}"
@@ -67,6 +67,7 @@ supprimer_utilisateur() {
         echo -e "${YELLOW}Utilisateur système '${username}' non trouvé ou déjà supprimé.${RESET}"
     fi
 
+    # Suppression de la ligne dans users.list
     if grep -v "^$username|" "$USER_FILE" > "${USER_FILE}.tmp"; then
         mv "${USER_FILE}.tmp" "$USER_FILE"
         echo -e "${GREEN}Utilisateur '${username}' supprimé de la liste utilisateurs.${RESET}"
@@ -105,7 +106,7 @@ supprimer_expired() {
     echo -e "${YELLOW}Les utilisateurs suivants sont expirés :${RESET}"
     printf '%s\n' "${expired_users[@]}"
 
-    read -rp "Confirmez suppression de tous les utilisateurs expirés ? (o/N) : " confirm
+    read -rp "${RED}Confirmez suppression de tous ces utilisateurs expirés ? (o/N) : ${RESET}" confirm
     if [[ ! "$confirm" =~ ^[oO]$ ]]; then
         echo -e "${GREEN}Suppression annulée.${RESET}"
         return 0
@@ -113,7 +114,6 @@ supprimer_expired() {
 
     local errors=0
     for user in "${expired_users[@]}"; do
-        echo "Suppression de l'utilisateur : $user"
         if ! supprimer_utilisateur "$user"; then
             errors=$((errors + 1))
         fi
@@ -140,7 +140,6 @@ case "$option" in
         echo -e "${CYAN}Liste des utilisateurs :${RESET}"
         echo
 
-        # Charger utilisateurs + dates d’expiration
         mapfile -t users < <(cut -d'|' -f1 "$USER_FILE")
         mapfile -t expires < <(cut -d'|' -f4 "$USER_FILE")
 
@@ -150,7 +149,6 @@ case "$option" in
             exit 0
         fi
 
-        # Affichage numéroté avec date d’expiration
         for i in "${!users[@]}"; do
             printf "%s[%02d]%s %-20s %s(expire : %s)%s\n" \
                 "$GREEN" "$((i+1))" "$RESET" \
@@ -161,7 +159,6 @@ case "$option" in
         echo
         read -rp "${CYAN}Entrez les numéros à supprimer (ex: 1,3,5) : ${RESET}" selection
 
-        # Validation format : chiffres séparés par virgules
         if ! [[ "$selection" =~ ^[0-9]+(,[0-9]+)*$ ]]; then
             echo -e "${RED}Format invalide. Exemple valide : 1,3,5${RESET}"
             read -rp "Appuyez sur Entrée pour revenir au menu..."
@@ -169,11 +166,8 @@ case "$option" in
         fi
 
         IFS=',' read -ra indexes <<< "$selection"
-
-        # Dédupliquer + valider bornes
         declare -A seen
         selected_users=()
-
         for idx in "${indexes[@]}"; do
             if (( idx < 1 || idx > ${#users[@]} )); then
                 echo -e "${RED}Numéro invalide : $idx${RESET}"
