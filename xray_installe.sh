@@ -82,7 +82,7 @@ EOF
 cat > /etc/xray/config.json << EOF
 {
   "log": {
-    "access": "/var/log/xray/access.log",
+    "access": "none",
     "error": "/var/log/xray/error.log",
     "loglevel": "info"
   },
@@ -380,13 +380,26 @@ apt install -y caddy
 # -----------------------------
 cat > /etc/caddy/Caddyfile << EOF
 $DOMAIN {
+
     encode gzip
-    reverse_proxy /vmess-tls  localhost:10001
-    reverse_proxy /vmess-ntls localhost:10002
-    reverse_proxy /vless-tls  localhost:10003
-    reverse_proxy /vless-ntls localhost:10004
-    reverse_proxy /trojan-tls localhost:10005
-    reverse_proxy /trojan-ntls localhost:10006
+
+    @vmess_tls {
+        path /vmess-tls
+    }
+    reverse_proxy @vmess_tls localhost:10001
+
+    @vless_tls {
+        path /vless-tls
+    }
+    reverse_proxy @vless_tls localhost:10003
+
+    @trojan_tls {
+        path /trojan-tls
+    }
+    reverse_proxy @trojan_tls localhost:10005
+
+    # Tout le reste est rejeté
+    respond 404
 }
 EOF
 
