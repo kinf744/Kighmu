@@ -1,53 +1,67 @@
 #!/bin/bash
-# =======================================================
-# xray_nginx_install.sh — Installation Xray + Nginx + Certbot
-# =======================================================
+# xray_installe.sh  Installation complète Xray + Trojan Go + UFW, avec users.json pour menu
 
-RED='\e[0;31m'
-GREEN='\e[0;32m'
-NC='\e[0m'
+RED='\u001B[0;31m'
+GREEN='\u001B[0;32m'
+NC='\u001B[0m'
 
-# -----------------------------
-# DEMANDE DU DOMAINE
-# -----------------------------
 read -rp "Entrez votre nom de domaine (ex: monsite.com) : " DOMAIN
 if [[ -z "$DOMAIN" ]]; then
   echo -e "${RED}Erreur : nom de domaine non valide.${NC}"
   exit 1
 fi
+
 echo "$DOMAIN" > /tmp/.xray_domain
 
-# -----------------------------
-# INSTALLATION DES DÉPENDANCES
-# -----------------------------
-apt update
-apt install -y iptables iptables-persistent curl socat xz-utils wget \
-apt-transport-https gnupg lsb-release cron bash-completion ntpdate \
-chrony unzip jq ca-certificates libcap2-bin nginx certbot python3-certbot-nginx
+EMAIL="adrienkiaje@gmail.com"
 
-# -----------------------------
-# AUTORISATION DES PORTS
-# -----------------------------
+apt update
+apt install -y iptables iptables-persistent curl socat xz-utils wget apt-transport-https \
+  gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq ca-certificates libcap2-bin
+
+# Suppression des mentions UFW et gestion via iptables uniquement
+# Suppression des règles UFW si elles existent (aucun effet si UFW non utilisé)
+if command -v ufw >/dev/null 2>&1; then
+  ufw --help >/dev/null 2>&1 || true
+  # Ne pas désactiver UFW si il est actif; on retire toute dépendance UFW en fin de script
+fi
+
+# Configuration iptables initiale
+# Autoriser SSH
 iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+# Autoriser HTTP et WS TLS/NTLS via Xray
 iptables -A INPUT -p tcp --dport 8880 -j ACCEPT
 iptables -A INPUT -p udp --dport 8880 -j ACCEPT
 iptables -A INPUT -p tcp --dport 8443 -j ACCEPT
 iptables -A INPUT -p udp --dport 8443 -j ACCEPT
-iptables -A INPUT -p tcp --dport 10011:10013 -j ACCEPT
-iptables -A INPUT -p tcp --dport 10021:10023 -j ACCEPT
+iptables -A INPUT -p tcp --dport 2083 -j ACCEPT
+iptables -A INPUT -p udp --dport 2083 -j ACCEPT
+
+# Autoriser correspondances sortantes si nécessaire (optionnel)
+iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+# S'assurer que les règles sont persistées
 netfilter-persistent flush
 netfilter-persistent save
 
-# -----------------------------
-# INSTALLATION XRAY
-# -----------------------------
-latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest \
-  | grep tag_name | cut -d '"' -f4 | sed 's/v//')
+echo "netfilter-persistent a appliqué les règles initiales."
+
+echo "Démarrage et état des règles iptables sauvegardées dans netfilter-persistent."
+# Vérification rapide
+iptables -S
+
+# Téléchargement et extraction de la dernière version stable Xray
+latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest | grep tag_name | cut -d '"' -f4 | sed 's/v//')
 xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v${latest_version}/xray-linux-64.zip"
 
 mkdir -p /tmp/xray_install && cd /tmp/xray_install
 curl -L -o xray.zip "$xraycore_link"
 unzip -o xray.zip
+if [[ ! -f ./xray ]]; then
+  echo -e "${RED}Erreur: le binaire Xray est introuvable après extraction.${NC}" >&2
+  exit 1
+fi
 mv -f xray /usr/local/bin/xray
 chmod +x /usr/local/bin/xray
 setcap 'cap_net_bind_service=+ep' /usr/local/bin/xray || true
@@ -55,11 +69,22 @@ setcap 'cap_net_bind_service=+ep' /usr/local/bin/xray || true
 mkdir -p /var/log/xray /etc/xray
 touch /var/log/xray/access.log /var/log/xray/error.log
 chown -R root:root /var/log/xray
-chmod 644 /var/log/xray/*.log
+chmod 644 /var/log/xray/access.log /var/log/xray/error.log
 
-# -----------------------------
-# GÉNÉRATION DES UUID
-# -----------------------------
+cd /root/
+wget -q https://raw.githubusercontent.com/NevermoreSSH/hop/main/acme.sh
+bash acme.sh --install
+rm acme.sh
+cd ~/.acme.sh || exit
+bash acme.sh --register-account -m "$EMAIL"
+bash acme.sh --issue --standalone -d "$DOMAIN" --force
+bash acme.sh --installcert -d "$DOMAIN" --fullchainpath /etc/xray/xray.crt --keypath /etc/xray/xray.key
+
+if [[ ! -f "/etc/xray/xray.crt" || ! -f "/etc/xray/xray.key" ]]; then
+  echo -e "${RED}Erreur : certificats TLS non trouvés.${NC}"
+  exit 1
+fi
+
 uuid1=$(cat /proc/sys/kernel/random/uuid)
 uuid2=$(cat /proc/sys/kernel/random/uuid)
 uuid3=$(cat /proc/sys/kernel/random/uuid)
@@ -67,23 +92,28 @@ uuid4=$(cat /proc/sys/kernel/random/uuid)
 uuid5=$(cat /proc/sys/kernel/random/uuid)
 uuid6=$(cat /proc/sys/kernel/random/uuid)
 
-# -----------------------------
-# USERS.JSON
-# -----------------------------
 cat > /etc/xray/users.json << EOF
 {
-  "vmess_tls": [{"uuid": "$uuid1", "limit":5}],
-  "vmess_ntls": [{"uuid": "$uuid2", "limit":5}],
-  "vless_tls": [{"uuid": "$uuid3", "limit":5}],
-  "vless_ntls": [{"uuid": "$uuid4", "limit":5}],
-  "trojan_tls": [{"password": "$uuid5", "limit":5}],
-  "trojan_ntls": [{"password": "$uuid6", "limit":5}]
+  "vmess_tls": [
+    {"uuid": "uuid1", "limit": 5},
+    {"uuid": "uuid3", "limit": 5},
+    {"uuid": "uuid5", "limit": 5}
+  ],
+  "vmess_ntls": [
+    {"uuid": "uuid2", "limit": 5}
+  ],
+  "vless_tls": [
+    {"uuid": "uuid4", "limit": 5}
+  ],
+  "vless_ntls": [],
+  "trojan_tls": [
+    {"uuid": "uuid6", "limit": 5},
+    {"uuid": "uuid7", "limit": 5}
+  ],
+  "trojan_ntls": []
 }
 EOF
 
-# -----------------------------
-# CONFIG XRAY
-# -----------------------------
 cat > /etc/xray/config.json << EOF
 {
   "log": {
@@ -93,227 +123,276 @@ cat > /etc/xray/config.json << EOF
   },
   "inbounds": [
     {
-      "port": 10001,
+      "port": 8443,
+      "protocol": "dokodemo-door",
+      "settings": {
+        "address": "0.0.0.0",
+        "port": 22,
+        "network": "tcp"
+      },
+      "tag": "ssh"
+    },
+    {
+      "port": 8443,
       "protocol": "vmess",
       "settings": {
-        "clients": [
-          {"id": "$uuid1", "alterId": 0}
-        ]
+        "clients": [{"id": "$uuid1", "alterId": 0}]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "tls",
+        "tlsSettings": {
+          "certificates": [{
+            "certificateFile": "/etc/xray/xray.crt",
+            "keyFile": "/etc/xray/xray.key"
+          }],
+          "minVersion": "1.2",
+          "maxVersion": "1.3",
+          "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
+        },
+        "wsSettings": {
+          "path": "/vmess-tls",
+          "host": "$DOMAIN"
+        }
+      }
+    },
+    {
+      "port": 8880,
+      "protocol": "vmess",
+      "settings": {
+        "clients": [{"id": "$uuid2", "alterId": 0}]
       },
       "streamSettings": {
         "network": "ws",
         "security": "none",
         "wsSettings": {
-          "path": "/vmess-tls"
+          "path": "/vmess-ntls",
+          "host": "$DOMAIN"
         }
       }
     },
     {
-      "port": 10002,
-      "protocol": "vmess",
-      "settings": {
-        "clients": [
-          {"id": "$uuid2", "alterId": 0}
-        ]
-      },
-      "streamSettings": {
-        "network": "ws",
-        "security": "none",
-        "wsSettings": {
-          "path": "/vmess-ntls"
-        }
-      }
-    },
-    {
-      "port": 10003,
+      "port": 8443,
       "protocol": "vless",
       "settings": {
-        "clients": [
-          {"id": "$uuid3"}
-        ],
+        "clients": [{"id": "$uuid3"}],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "tls",
+        "tlsSettings": {
+          "certificates": [{
+            "certificateFile": "/etc/xray/xray.crt",
+            "keyFile": "/etc/xray/xray.key"
+          }],
+          "minVersion": "1.2",
+          "maxVersion": "1.3",
+          "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
+        },
+        "wsSettings": {
+          "path": "/vless-tls",
+          "host": "$DOMAIN"
+        }
+      }
+    },
+    {
+      "port": 8880,
+      "protocol": "vless",
+      "settings": {
+        "clients": [{"id": "$uuid4"}],
         "decryption": "none"
       },
       "streamSettings": {
         "network": "ws",
         "security": "none",
         "wsSettings": {
-          "path": "/vless-tls"
+          "path": "/vless-ntls",
+          "host": "$DOMAIN"
         }
-      }
-    },
-    {
-      "port": 10004,
-      "protocol": "vless",
-      "settings": {
-        "clients": [
-          {"id": "$uuid4"}
-        ],
-        "decryption": "none"
       },
-      "streamSettings": {
-        "network": "ws",
-        "security": "none",
-        "wsSettings": {
-          "path": "/vless-ntls"
-        }
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls"]
       }
     },
     {
-      "port": 10005,
+      "port": 8443,
       "protocol": "trojan",
       "settings": {
-        "clients": [
-          {"password": "$uuid5"}
-        ]
+        "clients": [{"password": "$uuid5"}],
+        "fallbacks": [{"dest": 8880}]
       },
       "streamSettings": {
         "network": "ws",
-        "security": "none",
+        "security": "tls",
+        "tlsSettings": {
+          "certificates": [{
+            "certificateFile": "/etc/xray/xray.crt",
+            "keyFile": "/etc/xray/xray.key"
+          }],
+          "alpn": ["http/1.1"],
+          "minVersion": "1.2",
+          "maxVersion": "1.3",
+          "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
+        },
         "wsSettings": {
-          "path": "/trojan-tls"
+          "path": "/trojan-tls",
+          "host": "$DOMAIN"
         }
       }
     },
     {
-      "port": 10006,
+      "port": 8880,
       "protocol": "trojan",
       "settings": {
-        "clients": [
-          {"password": "$uuid6"}
-        ]
+        "clients": [{"password": "$uuid6"}]
       },
       "streamSettings": {
         "network": "ws",
         "security": "none",
         "wsSettings": {
-          "path": "/trojan-ntls"
+          "path": "/trojan-ntls",
+          "host": "$DOMAIN"
         }
       }
     },
     {
-      "port": 10011,
+      "port": 8443,
       "protocol": "vmess",
       "settings": {
-        "clients": [
-          {"id": "$uuid1", "alterId": 0}
-        ]
+        "clients": [{"id": "$uuid1", "alterId": 0}]
       },
       "streamSettings": {
         "network": "tcp",
         "security": "tls",
         "tlsSettings": {
-          "certificateFile": "/etc/xray/xray.crt",
-          "keyFile": "/etc/xray/xray.key"
+          "certificates": [{
+            "certificateFile": "/etc/xray/xray.crt",
+            "keyFile": "/etc/xray/xray.key"
+          }],
+          "minVersion": "1.2",
+          "maxVersion": "1.3",
+          "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
         }
       }
     },
     {
-      "port": 10012,
+      "port": 8443,
       "protocol": "vless",
       "settings": {
-        "clients": [
-          {"id": "$uuid3"}
-        ],
+        "clients": [{"id": "$uuid3"}],
         "decryption": "none"
       },
       "streamSettings": {
         "network": "tcp",
         "security": "tls",
         "tlsSettings": {
-          "certificateFile": "/etc/xray/xray.crt",
-          "keyFile": "/etc/xray/xray.key"
+          "certificates": [{
+            "certificateFile": "/etc/xray/xray.crt",
+            "keyFile": "/etc/xray/xray.key"
+          }],
+          "minVersion": "1.2",
+          "maxVersion": "1.3",
+          "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
         }
       }
     },
     {
-      "port": 10013,
+      "port": 8443,
       "protocol": "trojan",
       "settings": {
-        "clients": [
-          {"password": "$uuid5"}
-        ]
+        "clients": [{"password": "$uuid5"}]
       },
       "streamSettings": {
         "network": "tcp",
         "security": "tls",
         "tlsSettings": {
-          "certificateFile": "/etc/xray/xray.crt",
-          "keyFile": "/etc/xray/xray.key"
+          "certificates": [{
+            "certificateFile": "/etc/xray/xray.crt",
+            "keyFile": "/etc/xray/xray.key"
+          }],
+          "alpn": ["http/1.1"],
+          "minVersion": "1.2",
+          "maxVersion": "1.3",
+          "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
         }
       }
     },
     {
-      "port": 10021,
+      "port": 8443,
       "protocol": "vmess",
       "settings": {
-        "clients": [
-          {"id": "$uuid1", "alterId": 0}
-        ]
+        "clients": [{"id": "$uuid1", "alterId": 0}]
       },
       "streamSettings": {
         "network": "grpc",
         "security": "tls",
         "tlsSettings": {
-          "certificateFile": "/etc/xray/xray.crt",
-          "keyFile": "/etc/xray/xray.key"
+          "certificates": [{
+            "certificateFile": "/etc/xray/xray.crt",
+            "keyFile": "/etc/xray/xray.key"
+          }],
+          "minVersion": "1.2",
+          "maxVersion": "1.3",
+          "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
         },
         "grpcSettings": {
-          "serviceName": "vmess-grpc"
+          "serviceName": "grpc-service"
         }
       }
     },
     {
-      "port": 10022,
+      "port": 8443,
       "protocol": "vless",
       "settings": {
-        "clients": [
-          {"id": "$uuid3"}
-        ],
+        "clients": [{"id": "$uuid3"}],
         "decryption": "none"
       },
       "streamSettings": {
         "network": "grpc",
         "security": "tls",
         "tlsSettings": {
-          "certificateFile": "/etc/xray/xray.crt",
-          "keyFile": "/etc/xray/xray.key"
+          "certificates": [{
+            "certificateFile": "/etc/xray/xray.crt",
+            "keyFile": "/etc/xray/xray.key"
+          }],
+          "minVersion": "1.2",
+          "maxVersion": "1.3",
+          "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
         },
         "grpcSettings": {
-          "serviceName": "vless-grpc"
+          "serviceName": "grpc-service"
         }
       }
     },
     {
-      "port": 10023,
+      "port": 8443,
       "protocol": "trojan",
       "settings": {
-        "clients": [
-          {"password": "$uuid5"}
-        ]
+        "clients": [{"password": "$uuid5"}]
       },
       "streamSettings": {
         "network": "grpc",
         "security": "tls",
         "tlsSettings": {
-          "certificateFile": "/etc/xray/xray.crt",
-          "keyFile": "/etc/xray/xray.key"
+          "certificates": [{
+            "certificateFile": "/etc/xray/xray.crt",
+            "keyFile": "/etc/xray/xray.key"
+          }],
+          "minVersion": "1.2",
+          "maxVersion": "1.3",
+          "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
         },
         "grpcSettings": {
-          "serviceName": "trojan-grpc"
+          "serviceName": "grpc-service"
         }
       }
     }
   ],
   "outbounds": [
-    {
-      "protocol": "freedom",
-      "settings": {}
-    },
-    {
-      "protocol": "blackhole",
-      "settings": {},
-      "tag": "blocked"
-    }
+    {"protocol": "freedom", "settings": {}},
+    {"protocol": "blackhole", "settings": {}, "tag": "blocked"}
   ],
   "routing": {
     "rules": [
@@ -338,16 +417,30 @@ cat > /etc/xray/config.json << EOF
         "outboundTag": "blocked"
       }
     ]
+  },
+  "policy": {
+    "levels": {
+      "0": {
+        "statsUserDownlink": true,
+        "statsUserUplink": true
+      }
+    },
+    "system": {
+      "statsInboundUplink": true,
+      "statsInboundDownlink": true
+    }
+  },
+  "stats": {},
+  "api": {
+    "services": ["StatsService"],
+    "tag": "api"
   }
 }
 EOF
 
-# -----------------------------
-# SYSTEMD XRAY
-# -----------------------------
 cat > /etc/systemd/system/xray.service << EOF
 [Unit]
-Description=Xray Service
+Description=Xray Service Mod By NevermoreSSH
 After=network.target nss-lookup.target
 
 [Service]
@@ -357,6 +450,7 @@ AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
 NoNewPrivileges=true
 ExecStart=/usr/local/bin/xray -config /etc/xray/config.json
 Restart=on-failure
+RestartPreventExitStatus=23
 
 [Install]
 WantedBy=multi-user.target
@@ -366,60 +460,82 @@ systemctl daemon-reload
 systemctl enable xray
 systemctl restart xray
 
-# -----------------------------
-# OBTENTION DU CERTIFICAT TLS
-# -----------------------------
-systemctl stop nginx
-certbot certonly --standalone -d $DOMAIN --non-interactive --agree-tos -m your-email@example.com
-if [[ ! -f /etc/letsencrypt/live/$DOMAIN/fullchain.pem ]]; then
-    echo -e "${RED}Erreur : certificat TLS non généré.${NC}"
-    exit 1
+if systemctl is-active --quiet xray; then
+  echo -e "${GREEN}Xray démarré avec succès.${NC}"
+else
+  echo -e "${RED}Erreur : Xray ne démarre pas.${NC}"
+  journalctl -u xray -n 20 --no-pager
+  exit 1
 fi
 
-# -----------------------------
-# CONFIG NGINX POUR XRAY
-# -----------------------------
-cat > /etc/nginx/sites-available/xray << EOF
-server {
-    listen 8443 ssl http2;
-    server_name $DOMAIN;
+latest_version_trj=$(curl -s https://api.github.com/repos/NevermoreSSH/addons/releases/latest | grep tag_name | cut -d '"' -f4 | sed 's/v//')
+trojan_link="https://github.com/NevermoreSSH/addons/releases/download/v${latest_version_trj}/trojan-go-linux-amd64.zip"
 
-    ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers HIGH:!aNULL:!MD5;
+mkdir -p /usr/bin/trojan-go /etc/trojan-go
+cd $(mktemp -d)
+curl -L -o trojan-go.zip "$trojan_link"
+unzip -o trojan-go.zip
+mv trojan-go /usr/local/bin/trojan-go
+chmod +x /usr/local/bin/trojan-go
 
-    location /vmess-tls { proxy_pass http://127.0.0.1:10001; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; }
-    location /vless-tls { proxy_pass http://127.0.0.1:10003; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; }
-    location /trojan-tls { proxy_pass http://127.0.0.1:10005; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; }
+mkdir -p /var/log/trojan-go
+touch /etc/trojan-go/akun.conf
+touch /var/log/trojan-go/trojan-go.log
 
-    location / { return 404; }
-}
-
-server {
-    listen 8880;
-    server_name $DOMAIN;
-
-    location /vmess-ntls { proxy_pass http://127.0.0.1:10002; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; }
-    location /vless-ntls { proxy_pass http://127.0.0.1:10004; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; }
-    location /trojan-ntls { proxy_pass http://127.0.0.1:10006; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; }
-
-    location / { return 404; }
+cat > /etc/trojan-go/config.json << EOF
+{
+  "run_type": "server",
+  "local_addr": "0.0.0.0",
+  "local_port": 2087,
+  "remote_addr": "127.0.0.1",
+  "remote_port": 89,
+  "log_level": 1,
+  "log_file": "/var/log/trojan-go/trojan-go.log",
+  "password": ["$uuid5"],
+  "disable_http_check": true,
+  "udp_timeout": 60,
+  "ssl": {
+    "verify": false,
+    "verify_hostname": false,
+    "cert": "/etc/xray/xray.crt",
+    "key": "/etc/xray/xray.key",
+    "key_password": "",
+    "cipher": "",
+    "curves": "",
+    "prefer_server_cipher": false,
+    "sni": "$DOMAIN",
+    "alpn": ["http/1.1"],
+    "session_ticket": true,
+    "reuse_session": true,
+    "plain_http_response": "",
+    "fallback_addr": "127.0.0.1",
+    "fallback_port": 0,
+    "fingerprint": "firefox"
+  },
+  "tcp": {"no_delay": true,"keep_alive": true,"prefer_ipv4": true},
+  "mux": {"enabled": false,"concurrency": 8,"idle_timeout": 60},
+  "websocket": {"enabled": true,"path": "/trojango","host": "$DOMAIN"},
+  "api": {"enabled": false,"api_addr": "","api_port": 0,"ssl": {"enabled": false,"key": "","cert": "","verify_client": false,"client_cert": []}}
 }
 EOF
 
-ln -sf /etc/nginx/sites-available/xray /etc/nginx/sites-enabled/xray
-nginx -t && systemctl restart nginx
-systemctl enable nginx
+# Reconfiguration accrochée aux ports via iptables
+iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+iptables -A INPUT -p tcp --dport 8880 -j ACCEPT
+iptables -A INPUT -p udp --dport 8880 -j ACCEPT
+iptables -A INPUT -p tcp --dport 8443 -j ACCEPT
+iptables -A INPUT -p udp --dport 8443 -j ACCEPT
+iptables -A INPUT -p tcp --dport 2083 -j ACCEPT
+iptables -A INPUT -p udp --dport 2083 -j ACCEPT
 
-# -----------------------------
-# RÉSULTATS
-# -----------------------------
-echo -e "${GREEN}Installation terminée avec succès !${NC}"
+# Sauvegarde des règles iptables dans netfilter-persistent
+netfilter-persistent flush
+netfilter-persistent save
+
+echo "Installation complète terminée."
 echo "Domaine : $DOMAIN"
 echo "UUID VMess TLS : $uuid1"
 echo "UUID VMess Non-TLS : $uuid2"
 echo "UUID VLESS TLS : $uuid3"
 echo "UUID VLESS Non-TLS : $uuid4"
-echo "Mot de passe Trojan TLS : $uuid5"
-echo "Mot de passe Trojan Non-TLS : $uuid6"
+echo "Mot de passe Trojan (WS TLS 8443) : $uuid5"
