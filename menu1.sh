@@ -137,10 +137,10 @@ echo -e "${GREEN}GET / HTTP/1.1[crlf]Host: [host][crlf]Connection: Upgrade[crlf]
 echo ""
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo -e "🚀 𝘾𝙊𝙉𝙁𝙄𝙂 𝙁𝘼𝙎𝙏𝘿𝙉𝙎 (5300) 
-echo -e "${YELLOW}🔐 Pub KEY:${RESET}"
-echo "$SLOWDNS_KEY"
-echo -e "${YELLOW}NameServer:
-echo -e "${RESET} $SLOWDNS_NS"
+echo -e "${YELLOW}🔐Pub KEY:${RESET}"
+echo -e "$SLOWDNS_KEY"
+echo -e "NameServer:"
+echo -e "${YELLOW}$SLOWDNS_NS${RESET}"
 echo -e ""
 echo -e "${GREEN}✅ 𝘾𝙊𝙈𝙋𝙏𝙀 𝘾𝙍𝙀‌𝙀‌ 𝘼𝙑𝙀𝘾 𝙎𝙐𝘾𝘾𝙀‌𝙎${RESET}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
