@@ -386,9 +386,7 @@ apt install -y caddy
 # -----------------------------
 cat > /etc/caddy/Caddyfile << EOF
 $DOMAIN:8443 {
-    tls {
-        on_demand
-    }
+    tls your-email@example.com
 
     encode gzip
 
