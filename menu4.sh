@@ -134,4 +134,4 @@ case "$option" in
         ;;
 esac
 
-read -rp "${BOLD}Appuyez sur Entrée pour revenir au menu...${RESET}"
+read -rp "Appuyez sur Entrée pour revenir au menu..."
