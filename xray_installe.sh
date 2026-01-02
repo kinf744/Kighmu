@@ -385,26 +385,79 @@ apt install -y caddy
 # CONFIGURATION CADDYFILE (WS TLS)
 # -----------------------------
 cat > /etc/caddy/Caddyfile << EOF
-$DOMAIN {
+$DOMAIN:8443 {
+    tls {
+        on_demand
+    }
 
     encode gzip
 
     @vmess_tls {
         path /vmess-tls
     }
-    reverse_proxy @vmess_tls localhost:10001
+    reverse_proxy @vmess_tls 127.0.0.1:10001 {
+        transport http {
+            versions h2c 1.1
+            websocket
+        }
+    }
 
     @vless_tls {
         path /vless-tls
     }
-    reverse_proxy @vless_tls localhost:10003
+    reverse_proxy @vless_tls 127.0.0.1:10003 {
+        transport http {
+            versions h2c 1.1
+            websocket
+        }
+    }
 
     @trojan_tls {
         path /trojan-tls
     }
-    reverse_proxy @trojan_tls localhost:10005
+    reverse_proxy @trojan_tls 127.0.0.1:10005 {
+        transport http {
+            versions h2c 1.1
+            websocket
+        }
+    }
 
-    # Tout le reste est rejeté
+    respond 404
+}
+
+$DOMAIN:8880 {
+    encode gzip
+
+    @vmess_ntls {
+        path /vmess-ntls
+    }
+    reverse_proxy @vmess_ntls 127.0.0.1:10002 {
+        transport http {
+            versions h2c 1.1
+            websocket
+        }
+    }
+
+    @vless_ntls {
+        path /vless-ntls
+    }
+    reverse_proxy @vless_ntls 127.0.0.1:10004 {
+        transport http {
+            versions h2c 1.1
+            websocket
+        }
+    }
+
+    @trojan_ntls {
+        path /trojan-ntls
+    }
+    reverse_proxy @trojan_ntls 127.0.0.1:10006 {
+        transport http {
+            versions h2c 1.1
+            websocket
+        }
+    }
+
     respond 404
 }
 EOF
