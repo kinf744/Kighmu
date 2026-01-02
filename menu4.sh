@@ -3,26 +3,45 @@
 
 USER_FILE="/etc/kighmu/users.list"
 
-# Couleurs
-RED="\e[31m"
-GREEN="\e[32m"
-YELLOW="\e[33m"
-CYAN="\e[36m"
-BOLD="\e[1m"
-RESET="\e[0m"
+# ==========================================================
+# Détection portable et sûre des couleurs
+# ==========================================================
+setup_colors() {
+    RED=""
+    GREEN=""
+    YELLOW=""
+    CYAN=""
+    BOLD=""
+    RESET=""
 
+    if [ -t 1 ]; then
+        if [ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]; then
+            RED="$(tput setaf 1)"
+            GREEN="$(tput setaf 2)"
+            YELLOW="$(tput setaf 3)"
+            CYAN="$(tput setaf 6)"
+            BOLD="$(tput bold)"
+            RESET="$(tput sgr0)"
+        fi
+    fi
+}
+
+setup_colors
 clear
 
 echo -e "${CYAN}+--------------------------------------------+${RESET}"
 echo -e "${BOLD}|          GESTION DES UTILISATEURS          |${RESET}"
 echo -e "${CYAN}+--------------------------------------------+${RESET}"
-echo -e ""
-echo "[01] Supprimer un utilisateur"
-echo "[02] Supprimer tous les utilisateurs expirés"
-echo "[00] Quitter"
-read -rp "Sélectionnez une option (1/2/0) : " option
+echo
+echo -e "${GREEN}[01]${RESET} Supprimer un utilisateur"
+echo -e "${YELLOW}[02]${RESET} Supprimer tous les utilisateurs expirés"
+echo -e "${RED}[00]${RESET} Quitter"
+echo
+read -rp "${CYAN}Sélectionnez une option (1/2/0) : ${RESET}" option
 
-# Fonction pour supprimer un utilisateur donné
+# ==========================================================
+# Fonction : supprimer un utilisateur donné
+# ==========================================================
 supprimer_utilisateur() {
     local username=$1
 
@@ -38,7 +57,7 @@ supprimer_utilisateur() {
     fi
 
     if id "$username" &>/dev/null; then
-        if sudo userdel -r "$username"; then
+        if userdel -r "$username" &>/dev/null; then
             echo -e "${GREEN}Utilisateur système '${username}' supprimé avec succès.${RESET}"
         else
             echo -e "${RED}Erreur lors de la suppression de l'utilisateur système '${username}'.${RESET}"
@@ -48,7 +67,6 @@ supprimer_utilisateur() {
         echo -e "${YELLOW}Utilisateur système '${username}' non trouvé ou déjà supprimé.${RESET}"
     fi
 
-    # Suppression de la ligne dans users.list
     if grep -v "^$username|" "$USER_FILE" > "${USER_FILE}.tmp"; then
         mv "${USER_FILE}.tmp" "$USER_FILE"
         echo -e "${GREEN}Utilisateur '${username}' supprimé de la liste utilisateurs.${RESET}"
@@ -60,20 +78,20 @@ supprimer_utilisateur() {
     return 0
 }
 
-# Fonction pour supprimer tous les utilisateurs expirés
+# ==========================================================
+# Fonction : supprimer tous les utilisateurs expirés
+# ==========================================================
 supprimer_expired() {
     if [ ! -f "$USER_FILE" ]; then
         echo -e "${YELLOW}Aucun fichier utilisateurs trouvé.${RESET}"
         return 1
     fi
 
-    # Date actuelle en format YYYY-MM-DD
-    local today=$(date +%Y-%m-%d)
+    local today
+    today=$(date +%Y-%m-%d)
 
-    # On parcourt le fichier users.list et on récupère les utilisateurs expirés
     local expired_users=()
     while IFS="|" read -r username password limite expire_date hostip domain slowdns_ns; do
-        # Comparer la date d'expiration avec la date actuelle
         if [[ "$expire_date" < "$today" ]]; then
             expired_users+=("$username")
         fi
@@ -87,18 +105,16 @@ supprimer_expired() {
     echo -e "${YELLOW}Les utilisateurs suivants sont expirés :${RESET}"
     printf '%s\n' "${expired_users[@]}"
 
-    read -rp "${YELLOW}Confirmez suppression de tous les utilisateurs expirés ci-dessus ? (o/N) : ${RESET}" confirm
+    read -rp "Confirmez suppression de tous les utilisateurs expirés ? (o/N) : " confirm
     if [[ ! "$confirm" =~ ^[oO]$ ]]; then
         echo -e "${GREEN}Suppression annulée.${RESET}"
         return 0
     fi
 
-    # Suppression des utilisateurs un par un
     local errors=0
     for user in "${expired_users[@]}"; do
         echo "Suppression de l'utilisateur : $user"
         if ! supprimer_utilisateur "$user"; then
-            echo -e "${RED}Erreur lors de la suppression de l'utilisateur $user.${RESET}"
             errors=$((errors + 1))
         fi
     done
@@ -106,21 +122,95 @@ supprimer_expired() {
     if [ $errors -eq 0 ]; then
         echo -e "${GREEN}Tous les utilisateurs expirés ont été supprimés avec succès.${RESET}"
     else
-        echo -e "Certaines suppressions ont échoué."
+        echo -e "${YELLOW}Certaines suppressions ont échoué.${RESET}"
     fi
 }
 
+# ==========================================================
+# Menu principal
+# ==========================================================
 case "$option" in
     1)
         if [ ! -f "$USER_FILE" ]; then
-            echo -e "Aucun utilisateur trouvé."
+            echo -e "${YELLOW}Aucun utilisateur trouvé.${RESET}"
             read -rp "Appuyez sur Entrée pour revenir au menu..."
             exit 0
         fi
-        echo -e "${CYAN}Utilisateurs existants :${RESET}"
-        cut -d'|' -f1 "$USER_FILE"
-        read -rp "Nom de l'utilisateur à supprimer : " username
-        supprimer_utilisateur "$username"
+
+        echo -e "${CYAN}Liste des utilisateurs :${RESET}"
+        echo
+
+        # Charger utilisateurs + dates d’expiration
+        mapfile -t users < <(cut -d'|' -f1 "$USER_FILE")
+        mapfile -t expires < <(cut -d'|' -f4 "$USER_FILE")
+
+        if [ ${#users[@]} -eq 0 ]; then
+            echo -e "${YELLOW}Aucun utilisateur disponible.${RESET}"
+            read -rp "Appuyez sur Entrée pour revenir au menu..."
+            exit 0
+        fi
+
+        # Affichage numéroté avec date d’expiration
+        for i in "${!users[@]}"; do
+            printf "%s[%02d]%s %-20s %s(expire : %s)%s\n" \
+                "$GREEN" "$((i+1))" "$RESET" \
+                "${users[$i]}" \
+                "$CYAN" "${expires[$i]}" "$RESET"
+        done
+
+        echo
+        read -rp "${CYAN}Entrez les numéros à supprimer (ex: 1,3,5) : ${RESET}" selection
+
+        # Validation format : chiffres séparés par virgules
+        if ! [[ "$selection" =~ ^[0-9]+(,[0-9]+)*$ ]]; then
+            echo -e "${RED}Format invalide. Exemple valide : 1,3,5${RESET}"
+            read -rp "Appuyez sur Entrée pour revenir au menu..."
+            exit 1
+        fi
+
+        IFS=',' read -ra indexes <<< "$selection"
+
+        # Dédupliquer + valider bornes
+        declare -A seen
+        selected_users=()
+
+        for idx in "${indexes[@]}"; do
+            if (( idx < 1 || idx > ${#users[@]} )); then
+                echo -e "${RED}Numéro invalide : $idx${RESET}"
+                read -rp "Appuyez sur Entrée pour revenir au menu..."
+                exit 1
+            fi
+            if [ -z "${seen[$idx]}" ]; then
+                seen[$idx]=1
+                selected_users+=("${users[$((idx-1))]}")
+            fi
+        done
+
+        echo
+        echo -e "${YELLOW}Utilisateurs sélectionnés pour suppression :${RESET}"
+        for u in "${selected_users[@]}"; do
+            echo " - $u"
+        done
+
+        echo
+        read -rp "${RED}Confirmer la suppression de TOUS ces utilisateurs ? (o/N) : ${RESET}" confirm
+
+        if [[ "$confirm" =~ ^[oO]$ ]]; then
+            errors=0
+            for u in "${selected_users[@]}"; do
+                if ! supprimer_utilisateur "$u"; then
+                    errors=$((errors + 1))
+                fi
+            done
+
+            if [ "$errors" -eq 0 ]; then
+                echo -e "${GREEN}Tous les utilisateurs sélectionnés ont été supprimés avec succès.${RESET}"
+            else
+                echo -e "${YELLOW}Certaines suppressions ont échoué.${RESET}"
+            fi
+        else
+            echo -e "${GREEN}Suppression annulée.${RESET}"
+        fi
         ;;
     2)
         supprimer_expired
