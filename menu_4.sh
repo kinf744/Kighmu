@@ -64,10 +64,12 @@ for i in "${!users[@]}"; do
 done
 echo
 
-# Lecture des numéros (ex: 1 ou 1,3,5)
+# ==========================================================
+# Lecture des numéros d'utilisateurs à modifier
+# ==========================================================
 read -rp "${CYAN}Entrez le(s) numéro(s) des utilisateurs à modifier (ex: 1,3) : ${RESET}" input_nums
 
-# Vérification et création d'un tableau des indices
+# Validation et création d'un tableau d'indices
 IFS=',' read -ra indices <<< "$input_nums"
 for idx in "${indices[@]}"; do
     if ! [[ "$idx" =~ ^[0-9]+$ ]] || (( idx < 1 || idx > ${#users[@]} )); then
@@ -77,7 +79,9 @@ for idx in "${indices[@]}"; do
     fi
 done
 
+# ==========================================================
 # Menu des actions possibles
+# ==========================================================
 echo
 echo -e "${GREEN}${BOLD}[01]${RESET} ${YELLOW}Durée d'expiration du compte${RESET}"
 echo -e "${GREEN}${BOLD}[02]${RESET} ${YELLOW}Mot de passe${RESET}"
@@ -100,7 +104,6 @@ case $choice2 in
             new_expire=$(date -d "+$new_limit days" +%Y-%m-%d)
         fi
 
-        # Modifier chaque utilisateur sélectionné
         for idx in "${indices[@]}"; do
             idx=$((idx-1))
             username="${users[$idx]}"
@@ -108,7 +111,7 @@ case $choice2 in
             IFS="|" read -r user pass limite expire_date hostip domain slowdns_ns <<< "$user_line"
 
             echo -e "${YELLOW}Modification durée de : ${BOLD}$username${RESET} (nouvelle expiration : $new_expire)"
-            read -rp "${RED}Confirmer ? (o/N) : ${RESET}" confirm
+            read -rp "${RED}Confirmer modification ? (o/N) : ${RESET}" confirm
             if [[ "$confirm" =~ ^[oO]$ ]]; then
                 new_line="${user}|${pass}|${new_limit}|${new_expire}|${hostip}|${domain}|${slowdns_ns}"
                 sed -i "s/^$user|.*/$new_line/" "$USER_FILE"
@@ -120,7 +123,7 @@ case $choice2 in
         ;;
     2|02)  # Modification mot de passe
         echo
-        read -s -rp "Nouveau mot de passe (sera appliqué à chaque utilisateur) : " pass1
+        read -rp "Nouveau mot de passe (sera appliqué à chaque utilisateur) : " pass1
         echo
         for idx in "${indices[@]}"; do
             idx=$((idx-1))
