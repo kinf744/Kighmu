@@ -393,32 +393,17 @@ $DOMAIN:8443 {
     @vmess_tls {
         path /vmess-tls
     }
-    reverse_proxy @vmess_tls 127.0.0.1:10001 {
-        transport http {
-            versions h2c 1.1
-            websocket
-        }
-    }
+    reverse_proxy @vmess_tls 127.0.0.1:10001
 
     @vless_tls {
         path /vless-tls
     }
-    reverse_proxy @vless_tls 127.0.0.1:10003 {
-        transport http {
-            versions h2c 1.1
-            websocket
-        }
-    }
+    reverse_proxy @vless_tls 127.0.0.1:10003
 
     @trojan_tls {
         path /trojan-tls
     }
-    reverse_proxy @trojan_tls 127.0.0.1:10005 {
-        transport http {
-            versions h2c 1.1
-            websocket
-        }
-    }
+    reverse_proxy @trojan_tls 127.0.0.1:10005
 
     respond 404
 }
@@ -429,32 +414,17 @@ $DOMAIN:8880 {
     @vmess_ntls {
         path /vmess-ntls
     }
-    reverse_proxy @vmess_ntls 127.0.0.1:10002 {
-        transport http {
-            versions h2c 1.1
-            websocket
-        }
-    }
+    reverse_proxy @vmess_ntls 127.0.0.1:10002
 
     @vless_ntls {
         path /vless-ntls
     }
-    reverse_proxy @vless_ntls 127.0.0.1:10004 {
-        transport http {
-            versions h2c 1.1
-            websocket
-        }
-    }
+    reverse_proxy @vless_ntls 127.0.0.1:10004
 
     @trojan_ntls {
         path /trojan-ntls
     }
-    reverse_proxy @trojan_ntls 127.0.0.1:10006 {
-        transport http {
-            versions h2c 1.1
-            websocket
-        }
-    }
+    reverse_proxy @trojan_ntls 127.0.0.1:10006
 
     respond 404
 }
