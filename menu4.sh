@@ -30,7 +30,7 @@ setup_colors
 clear
 
 echo -e "${CYAN}+--------------------------------------------+${RESET}"
-echo -e "${BOLD}|          GESTION DES UTILISATEURS          |${RESET}"
+echo -e "${BOLD}${MAGENTA}|          GESTION DES UTILISATEURS          |${RESET}"
 echo -e "${CYAN}+--------------------------------------------+${RESET}"
 echo
 echo -e "${GREEN}[01]${RESET} Supprimer un utilisateur"
