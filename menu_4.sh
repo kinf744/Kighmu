@@ -32,9 +32,9 @@ clear
 # ==========================================================
 # Titre du panneau de contrôle
 # ==========================================================
-echo -e "${MAGENTA_VIF}+--------------------------------------------+${RESET}"
-echo -e "${MAGENTA_VIF}|          MODIFIER DUREE / MOT DE PASSE    |${RESET}"
-echo -e "${MAGENTA_VIF}+--------------------------------------------+${RESET}"
+echo -e "${CYAN}+--------------------------------------------+${RESET}"
+echo -e "${MAGENTA_VIF}|          MODIFIER DUREE / MOT DE PASSE     |${RESET}"
+echo -e "${CYAN}+--------------------------------------------+${RESET}"
 
 if [ ! -f "$USER_FILE" ]; then
     echo -e "${RED}Aucun utilisateur trouvé.${RESET}"
