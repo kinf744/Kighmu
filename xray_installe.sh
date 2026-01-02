@@ -1,5 +1,5 @@
 #!/bin/bash
-# xray_installe_caddy.sh — Installation Xray + Caddy (TLS + reverse-proxy)
+# xray_install_nginx.sh — Installation Xray + Nginx (TLS + reverse-proxy WS)
 
 RED='\u001B[0;31m'
 GREEN='\u001B[0;32m'
@@ -20,16 +20,17 @@ echo "$DOMAIN" > /tmp/.xray_domain
 # -----------------------------
 apt update
 apt install -y iptables iptables-persistent curl socat xz-utils wget apt-transport-https \
-gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq ca-certificates libcap2-bin
+gnupg dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq ca-certificates \
+nginx certbot python3-certbot-nginx libcap2-bin
 
-# Autoriser ports essentiels
+# -----------------------------
+# AUTORISATION DES PORTS
+# -----------------------------
 iptables -A INPUT -p tcp --dport 22 -j ACCEPT  # SSH
-iptables -A INPUT -p tcp --dport 8880 -j ACCEPT  # Non-TLS
-iptables -A INPUT -p udp --dport 8880 -j ACCEPT
-iptables -A INPUT -p tcp --dport 8443 -j ACCEPT  # WS TLS
-iptables -A INPUT -p udp --dport 8443 -j ACCEPT
+iptables -A INPUT -p tcp --dport 8880 -j ACCEPT  # Non-TLS WS
+iptables -A INPUT -p tcp --dport 8443 -j ACCEPT  # TLS WS
 iptables -A INPUT -p tcp --dport 10011:10013 -j ACCEPT  # TCP TLS Xray
-iptables -A INPUT -p tcp --dport 10021:10022 -j ACCEPT  # gRPC TLS Xray
+iptables -A INPUT -p tcp --dport 10021:10023 -j ACCEPT  # gRPC TLS Xray
 
 netfilter-persistent flush
 netfilter-persistent save
@@ -67,12 +68,23 @@ uuid6=$(cat /proc/sys/kernel/random/uuid)  # Trojan Non-TLS
 # -----------------------------
 cat > /etc/xray/users.json << EOF
 {
-  "vmess_tls": [{"uuid": "$uuid1", "limit":5}],
-  "vmess_ntls": [{"uuid": "$uuid2", "limit":5}],
-  "vless_tls": [{"uuid": "$uuid3", "limit":5}],
-  "vless_ntls": [{"uuid": "$uuid4", "limit":5}],
-  "trojan_tls": [{"uuid": "$uuid5", "limit":5}],
-  "trojan_ntls": [{"uuid": "$uuid6", "limit":5}]
+  "vmess_tls": [
+    {"uuid": "uuid1", "limit": 5},
+    {"uuid": "uuid3", "limit": 5},
+    {"uuid": "uuid5", "limit": 5}
+  ],
+  "vmess_ntls": [
+    {"uuid": "uuid2", "limit": 5}
+  ],
+  "vless_tls": [
+    {"uuid": "uuid4", "limit": 5}
+  ],
+  "vless_ntls": [],
+  "trojan_tls": [
+    {"uuid": "uuid6", "limit": 5},
+    {"uuid": "uuid7", "limit": 5}
+  ],
+  "trojan_ntls": []
 }
 EOF
 
@@ -82,13 +94,12 @@ EOF
 cat > /etc/xray/config.json << EOF
 {
   "log": {
-    "access": "none",
+    "access": "/var/log/xray/access.log",
     "error": "/var/log/xray/error.log",
     "loglevel": "info"
   },
   "inbounds": [
     {
-      "listen": "0.0.0.0",
       "port": 10001,
       "protocol": "vmess",
       "settings": {
@@ -105,7 +116,6 @@ cat > /etc/xray/config.json << EOF
       }
     },
     {
-      "listen": "0.0.0.0",
       "port": 10002,
       "protocol": "vmess",
       "settings": {
@@ -122,7 +132,6 @@ cat > /etc/xray/config.json << EOF
       }
     },
     {
-      "listen": "0.0.0.0",
       "port": 10003,
       "protocol": "vless",
       "settings": {
@@ -140,7 +149,6 @@ cat > /etc/xray/config.json << EOF
       }
     },
     {
-      "listen": "0.0.0.0",
       "port": 10004,
       "protocol": "vless",
       "settings": {
@@ -158,7 +166,6 @@ cat > /etc/xray/config.json << EOF
       }
     },
     {
-      "listen": "0.0.0.0",
       "port": 10005,
       "protocol": "trojan",
       "settings": {
@@ -175,7 +182,6 @@ cat > /etc/xray/config.json << EOF
       }
     },
     {
-      "listen": "0.0.0.0",
       "port": 10006,
       "protocol": "trojan",
       "settings": {
@@ -368,70 +374,86 @@ systemctl enable xray
 systemctl restart xray
 
 # -----------------------------
-# INSTALLATION CADDY (FIX GPG)
+# CONFIGURATION NGINX POUR WS
 # -----------------------------
-apt install -y debian-keyring debian-archive-keyring apt-transport-https
+cat > /etc/nginx/sites-available/xray << EOF
+server {
+    listen 8443 ssl http2;
+    server_name $DOMAIN;
 
-curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/gpg.key \
-  | gpg --dearmor -o /usr/share/keyrings/caddy-stable.gpg
+    ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
 
-echo "deb [signed-by=/usr/share/keyrings/caddy-stable.gpg] https://dl.cloudsmith.io/public/caddy/stable/deb/debian any-version main" \
-  | tee /etc/apt/sources.list.d/caddy-stable.list
-
-apt update
-apt install -y caddy
-
-# -----------------------------
-# CONFIGURATION CADDYFILE (WS TLS)
-# -----------------------------
-cat > /etc/caddy/Caddyfile << EOF
-$DOMAIN:8443 {
-    tls your-email@example.com
-
-    encode gzip
-
-    @vmess_tls {
-        path /vmess-tls
+    location /vmess-tls {
+        proxy_pass http://127.0.0.1:10001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
     }
-    reverse_proxy @vmess_tls 127.0.0.1:10001
 
-    @vless_tls {
-        path /vless-tls
+    location /vless-tls {
+        proxy_pass http://127.0.0.1:10003;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
     }
-    reverse_proxy @vless_tls 127.0.0.1:10003
 
-    @trojan_tls {
-        path /trojan-tls
+    location /trojan-tls {
+        proxy_pass http://127.0.0.1:10005;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
     }
-    reverse_proxy @trojan_tls 127.0.0.1:10005
 
-    respond 404
+    location / { return 404; }
 }
 
-$DOMAIN:8880 {
-    encode gzip
+server {
+    listen 8880;
+    server_name $DOMAIN;
 
-    @vmess_ntls {
-        path /vmess-ntls
+    location /vmess-ntls {
+        proxy_pass http://127.0.0.1:10002;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
     }
-    reverse_proxy @vmess_ntls 127.0.0.1:10002
 
-    @vless_ntls {
-        path /vless-ntls
+    location /vless-ntls {
+        proxy_pass http://127.0.0.1:10004;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
     }
-    reverse_proxy @vless_ntls 127.0.0.1:10004
 
-    @trojan_ntls {
-        path /trojan-ntls
+    location /trojan-ntls {
+        proxy_pass http://127.0.0.1:10006;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
     }
-    reverse_proxy @trojan_ntls 127.0.0.1:10006
 
-    respond 404
+    location / { return 404; }
 }
 EOF
 
-systemctl enable caddy
-systemctl restart caddy
+ln -s /etc/nginx/sites-available/xray /etc/nginx/sites-enabled/xray
+nginx -t
+systemctl restart nginx
+
+# -----------------------------
+# CERTIFICAT TLS AVEC CERTBOT
+# -----------------------------
+certbot certonly --nginx -d $DOMAIN --non-interactive --agree-tos -m ton-email@example.com
+systemctl restart nginx
 
 # -----------------------------
 # RÉSULTATS
