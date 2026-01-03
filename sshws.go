@@ -1,7 +1,7 @@
 // ================================================================
 // sshws.go — TCP RAW Injector + WebSocket → SSH
 // Listener TCP brut (architecture correcte)
-// Ubuntu 18.04 → 24.04 | Go 1.13+ | systemd OK
+// Go 1.13 | systemd OK
 // Auteur : @kighmu (corrigé définitivement)
 // Licence : MIT
 // ================================================================
