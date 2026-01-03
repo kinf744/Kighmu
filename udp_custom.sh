@@ -65,7 +65,7 @@ mkdir -p "$CONFIG_DIR"
 
 cat > "$CONFIG_FILE" <<EOF
 {
-  "listen": ":$UDP_PORT",
+  "listen": "0.0.0.0:54000",
   "target": "$SSH_TARGET",
   "timeout": 600,
   "log_level": "info"
