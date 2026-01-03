@@ -268,40 +268,40 @@ uninstall_proxy_ws() {
 }
 
 install_ssl_tls() {
-    echo ">>> Installation du tunnel SSL/TLS (ssl_tls.go)..."
+    echo "🚀 Installation du tunnel SSL/TLS (ssl_tls)..."
 
-    # Vérifier que Go est installé
-    if ! command -v go >/dev/null 2>&1; then
-        echo "[ERREUR] Go n'est pas installé. Installez Go avant de continuer."
-        return 1
-    fi
+    TMP_DIR="/tmp/ssl_tls_install"
+    BIN_DST="/usr/local/bin/ssl_tls"
+    URL_BIN="https://github.com/kinf744/Kighmu/releases/download/v1.0.0/ssl_tls"
+    URL_SHA="https://github.com/kinf744/Kighmu/releases/download/v1.0.0/ssl_tls.sha256"
 
-    # Compiler le binaire
-    if [ ! -f "$HOME/Kighmu/ssl_tls.go" ]; then
-        echo "[ERREUR] Le fichier ssl_tls.go est introuvable dans $HOME/Kighmu."
-        return 1
-    fi
+    mkdir -p "$TMP_DIR"
+    cd "$TMP_DIR" || return 1
 
-    echo ">>> Compilation du binaire..."
-    sudo go build -o /usr/local/bin/ssl_tls "$HOME/Kighmu/ssl_tls.go"
-    if [ $? -ne 0 ]; then
-        echo "[ERREUR] Échec de la compilation de ssl_tls.go"
-        return 1
-    fi
-    sudo chmod +x /usr/local/bin/ssl_tls
-    echo "[OK] Binaire compilé et installé dans /usr/local/bin/ssl_tls"
+    # Télécharger le binaire et le hash
+    echo "📥 Téléchargement du binaire et du hash SHA-256..."
+    curl -LO "$URL_BIN"
+    curl -LO "$URL_SHA"
+
+    # Vérifier le hash
+    echo "🔒 Vérification du SHA-256..."
+    sha256sum -c ssl_tls.sha256 || { echo "[ERREUR] Hash SHA-256 incorrect"; return 1; }
+
+    # Installer le binaire
+    sudo install -m 0755 ssl_tls "$BIN_DST"
+    echo "[OK] Binaire installé dans $BIN_DST"
 
     # Créer le service systemd
-    echo ">>> Création du service systemd..."
-    sudo tee /etc/systemd/system/ssl_tls.service >/dev/null <<EOF
+    SERVICE_FILE="/etc/systemd/system/ssl_tls.service"
+    sudo tee "$SERVICE_FILE" >/dev/null <<EOF
 [Unit]
-Description=Tunnel SSL/TLS SSL_TLS (Kighmu)
+Description=Tunnel SSL/TLS (ssl_tls)
 After=network.target
 Wants=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/ssl_tls -listen 444 -target-host 127.0.0.1 -target-port 22
+ExecStart=$BIN_DST -listen 444 -target-host 127.0.0.1 -target-port 22
 Restart=always
 RestartSec=2
 LimitNOFILE=1048576
@@ -312,39 +312,50 @@ StandardError=journal
 WantedBy=multi-user.target
 EOF
 
-    # Recharger systemd et activer le service
     sudo systemctl daemon-reload
-    sudo systemctl enable ssl_tls
-    sudo systemctl start ssl_tls
+    sudo systemctl enable --now ssl_tls
     echo "[OK] Service systemd créé et démarré"
 
-    # Ouvrir le port 444 dans iptables
-    echo ">>> Ouverture du port 444 dans iptables..."
-    sudo iptables -I INPUT -p tcp --dport 444 -j ACCEPT
-    sudo iptables -I OUTPUT -p tcp --sport 444 -j ACCEPT
-    echo "[OK] Port 444 ouvert"
+    # Ouvrir le port TCP 444
+    sudo iptables -C INPUT -p tcp --dport 444 -j ACCEPT 2>/dev/null || \
+        sudo iptables -I INPUT -p tcp --dport 444 -j ACCEPT
+    sudo iptables -C OUTPUT -p tcp --sport 444 -j ACCEPT 2>/dev/null || \
+        sudo iptables -I OUTPUT -p tcp --sport 444 -j ACCEPT
+    echo "[OK] Port 444 ouvert dans iptables"
 
-    # Vérifier le statut du service
+    # Statut du service
     sudo systemctl status ssl_tls --no-pager
+    cd ~
+    rm -rf "$TMP_DIR"
 }
 
 uninstall_ssl_tls() {
-    echo ">>> Désinstallation complète du tunnel SSL/TLS (ssl_tls.go)..."
+    echo "🧹 Désinstallation complète du tunnel SSL/TLS (ssl_tls)..."
 
-    # Stopper et désactiver le service systemd
+    # Stopper et désactiver le service
     sudo systemctl stop ssl_tls 2>/dev/null || true
     sudo systemctl disable ssl_tls 2>/dev/null || true
 
     # Supprimer le fichier de service
-    sudo rm -f /etc/systemd/system/ssl_tls.service
+    SERVICE_FILE="/etc/systemd/system/ssl_tls.service"
+    [ -f "$SERVICE_FILE" ] && sudo rm -f "$SERVICE_FILE"
+
     sudo systemctl daemon-reload
+    sudo systemctl reset-failed 2>/dev/null || true
 
     # Supprimer le binaire
-    sudo rm -f /usr/local/bin/ssl_tls
+    BIN_DST="/usr/local/bin/ssl_tls"
+    [ -f "$BIN_DST" ] && sudo rm -f "$BIN_DST"
 
-    # Fermer le port TCP 444 via iptables
-    sudo iptables -D INPUT -p tcp --dport 444 -j ACCEPT 2>/dev/null || true
-    sudo iptables -D OUTPUT -p tcp --sport 444 -j ACCEPT 2>/dev/null || true
+    # Supprimer les règles iptables
+    for PORT in 444; do
+        while sudo iptables -C INPUT -p tcp --dport "$PORT" -j ACCEPT 2>/dev/null; do
+            sudo iptables -D INPUT -p tcp --dport "$PORT" -j ACCEPT
+        done
+        while sudo iptables -C OUTPUT -p tcp --sport "$PORT" -j ACCEPT 2>/dev/null; do
+            sudo iptables -D OUTPUT -p tcp --sport "$PORT" -j ACCEPT
+        done
+    done
 
     echo "[OK] Tunnel SSL/TLS désinstallé proprement."
 }
