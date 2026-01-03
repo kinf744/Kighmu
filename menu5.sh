@@ -462,36 +462,32 @@ uninstall_hysteria() {
     
 # --- AJOUT WS/WSS SSH ---
 install_sshws() {
-    SRC="$HOME/sshws.go"
-    BIN="$HOME/sshws"
+    BIN_SRC="$HOME/sshws"         # ton binaire compilé
     BIN_DST="/usr/local/bin/sshws"
+    SYSTEMD_FILE="/etc/systemd/system/sshws.service"
 
-    # Vérification source
-    [ -f "$SRC" ] || {
-        echo "❌ Fichier source sshws.go introuvable"
+    # Vérification du binaire
+    if [ ! -f "$BIN_SRC" ]; then
+        echo "❌ Binaire sshws introuvable dans $BIN_SRC"
         return 1
-    }
-
-    echo "⏳ Compilation statique sshws..."
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go build -trimpath -ldflags="-s -w" -o "$BIN" "$SRC" || {
-        echo "❌ Échec compilation"
-        return 1
-    }
-
-    # Installation
-    install -m 0755 "$BIN" "$BIN_DST"
-    echo "✅ SSHWS installé dans $BIN_DST"
-
-    # Firewall
-    if command -v iptables >/dev/null 2>&1; then
-        iptables -C INPUT -p tcp --dport 80 -j ACCEPT 2>/dev/null \
-        || iptables -I INPUT -p tcp --dport 80 -j ACCEPT
-        command -v netfilter-persistent >/dev/null && netfilter-persistent save
     fi
 
-    # systemd
-    cat <<EOF > /etc/systemd/system/sshws.service
+    # Installation du binaire
+    sudo install -m 0755 "$BIN_SRC" "$BIN_DST"
+    echo "✅ SSHWS installé dans $BIN_DST"
+
+    # Firewall : ouvrir le port 80 si iptables disponible
+    if command -v iptables >/dev/null 2>&1; then
+        if ! sudo iptables -C INPUT -p tcp --dport 80 -j ACCEPT 2>/dev/null; then
+            sudo iptables -I INPUT -p tcp --dport 80 -j ACCEPT
+            command -v netfilter-persistent >/dev/null && sudo netfilter-persistent save
+            echo "✅ Port 80 ouvert dans le firewall"
+        fi
+    fi
+
+    # systemd : création du service si absent
+    if [ ! -f "$SYSTEMD_FILE" ]; then
+        sudo tee "$SYSTEMD_FILE" >/dev/null <<EOF
 [Unit]
 Description=SSHWS Slipstream Tunnel
 After=network.target
@@ -507,10 +503,14 @@ LimitNOFILE=1048576
 [Install]
 WantedBy=multi-user.target
 EOF
+        sudo systemctl daemon-reload
+        sudo systemctl enable --now sshws
+        echo "✅ Service systemd sshws installé et actif"
+    else
+        echo "ℹ️ Service systemd déjà existant, aucune modification effectuée"
+    fi
 
-    systemctl daemon-reload
-    systemctl enable --now sshws
-    echo "🚀 SSHWS actif"
+    echo "🚀 SSHWS prêt à l'utilisation"
 }
 
 uninstall_sshws() {
