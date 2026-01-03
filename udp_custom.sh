@@ -1,80 +1,128 @@
 #!/bin/bash
-# udp_custom.sh
-# Installation et configuration UDP Custom pour HTTP Custom VPN
+# ==========================================================
+# UDP Custom Server v1.4 → SSH
+# Téléchargement automatique du binaire externe
+# ==========================================================
 
-set -e
+set -euo pipefail
 
-INSTALL_DIR="/root/udp-custom"
-CONFIG_FILE="$INSTALL_DIR/config/config.json"
-BIN_PATH="$INSTALL_DIR/bin/udp-custom-linux-amd64"
+# ================= VARIABLES =================
+INSTALL_DIR="/opt/udp-custom"
+BIN_DIR="/root/udp"
+BIN_PATH="$BIN_DIR/udp-custom"
+CONFIG_DIR="$INSTALL_DIR/config"
+CONFIG_FILE="$CONFIG_DIR/config.json"
+SERVICE_FILE="/etc/systemd/system/udp_custom.service"
+
 UDP_PORT=54000
+SSH_TARGET="127.0.0.1:22"
+RUN_USER="udpuser"
+LOG_DIR="/var/log/udp-custom"
+LOG_FILE="$LOG_DIR/install.log"
 
-echo "+--------------------------------------------+"
-echo "|             INSTALLATION UDP CUSTOM         |"
-echo "+--------------------------------------------+"
+# ================= LOG =================
+mkdir -p "$LOG_DIR"
+log() {
+  echo "$(date '+%Y-%m-%d %H:%M:%S') | $1" | tee -a "$LOG_FILE"
+}
 
-echo "Installation des dépendances..."
-apt-get update
-apt-get install -y git curl build-essential libssl-dev jq iptables
+log "============================================"
+log " INSTALLATION UDP CUSTOM → SSH (BINAIRE EXTERNE)"
+log "============================================"
 
-# Cloner le dépôt udp-custom si non présent
-if [ ! -d "$INSTALL_DIR" ]; then
-    echo "Clonage du dépôt udp-custom..."
-    git clone https://github.com/http-custom/udp-custom.git "$INSTALL_DIR"
-else
-    echo "udp-custom déjà présent, mise à jour..."
-    cd "$INSTALL_DIR"
-    git pull
+# ================= DEPENDANCES =================
+apt update -y
+apt install -y \
+  curl iptables ca-certificates \
+  openssh-server netfilter-persistent wget
+
+# ================= UTILISATEUR =================
+if ! id "$RUN_USER" &>/dev/null; then
+  useradd -r -m -s /usr/sbin/nologin "$RUN_USER"
+  log "Utilisateur $RUN_USER créé"
 fi
 
-cd "$INSTALL_DIR"
+# ================= TELECHARGEMENT BIN =================
+mkdir -p "$BIN_DIR"
+log "Téléchargement du binaire UDP Custom"
+wget -q --show-progress "https://github.com/NETWORKTWEAKER/AUTO-SCRIPT/raw/master/udp-custom/udp-custom-linux-amd64" -O "$BIN_PATH"
+chmod +x "$BIN_PATH"
 
-# Vérifier la présence et droits du binaire précompilé
 if [ ! -x "$BIN_PATH" ]; then
-    echo "Le binaire $BIN_PATH n'est pas exécutable, changement de permission..."
-    chmod +x "$BIN_PATH"
+  log "❌ Échec du téléchargement ou binaire non exécutable"
+  exit 1
 fi
+log "✅ Binaire téléchargé et exécutable : $BIN_PATH"
+file "$BIN_PATH" | tee -a "$LOG_FILE"
 
-if [ ! -x "$BIN_PATH" ]; then
-    echo "Erreur: Le binaire $BIN_PATH est manquant ou non exécutable."
-    exit 1
-fi
-
-# Configuration du port UDP dans config.json
-if [ ! -f "$CONFIG_FILE" ]; then
-    echo "Création du fichier de configuration UDP custom..."
-    mkdir -p "$(dirname "$CONFIG_FILE")"
-    cat > "$CONFIG_FILE" << EOF
+# ================= CONFIG JSON =================
+mkdir -p "$CONFIG_DIR"
+log "Création config.json"
+cat > "$CONFIG_FILE" <<EOF
 {
-  "server_port": $UDP_PORT,
-  "exclude_port": [],
-  "udp_timeout": 600,
-  "dns_cache": true
+  "listen": "0.0.0.0:$UDP_PORT",
+  "target": "$SSH_TARGET",
+  "timeout": 600,
+  "log_level": "info"
 }
 EOF
+
+chown -R "$RUN_USER:$RUN_USER" "$INSTALL_DIR"
+
+# ================= IPTABLES =================
+log "Ouverture UDP $UDP_PORT"
+iptables -C INPUT -p udp --dport "$UDP_PORT" -j ACCEPT 2>/dev/null \
+  || iptables -I INPUT -p udp --dport "$UDP_PORT" -j ACCEPT
+iptables-save > /etc/iptables/rules.v4
+systemctl enable netfilter-persistent
+systemctl restart netfilter-persistent
+
+# ================= SYSTEMD =================
+log "Création service systemd"
+cat > "$SERVICE_FILE" <<EOF
+[Unit]
+Description=UDP Custom Server (UDP → SSH)
+After=network-online.target ssh.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=$RUN_USER
+ExecStart=$BIN_PATH server --config $CONFIG_FILE
+Restart=always
+RestartSec=3
+LimitNOFILE=1048576
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# ================= DEMARRAGE =================
+systemctl daemon-reload
+systemctl enable udp_custom.service
+systemctl restart udp_custom.service
+
+sleep 2
+
+# ================= VERIFICATION =================
+if systemctl is-active --quiet udp_custom.service; then
+  log "✅ Service udp_custom actif"
 else
-    echo "Modification du port dans la configuration existante..."
-    jq ".server_port = $UDP_PORT" "$CONFIG_FILE" > "$CONFIG_FILE.tmp" && mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
+  log "❌ Service udp_custom en échec"
+  journalctl -u udp_custom.service --no-pager | tail -n 40
+  exit 1
 fi
 
-# Ouverture du port UDP dans iptables
-echo "Ouverture du port UDP $UDP_PORT dans iptables..."
-iptables -I INPUT -p udp --dport $UDP_PORT -j ACCEPT
-
-# Démarrage du démon udp-custom en arrière-plan
-echo "Démarrage du démon udp-custom sur le port $UDP_PORT..."
-nohup "$BIN_PATH" -c "$CONFIG_FILE" > /var/log/udp_custom.log 2>&1 &
-
-sleep 3
-
-if pgrep -f "udp-custom-linux-amd64" > /dev/null; then
-    echo "UDP Custom démarré avec succès sur le port $UDP_PORT."
+if ss -lunp | grep -q ":$UDP_PORT"; then
+  log "✅ UDP Custom écoute sur le port $UDP_PORT"
 else
-    echo "Erreur: UDP Custom ne s'est pas lancé correctement."
+  log "❌ Port UDP $UDP_PORT non actif"
+  exit 1
 fi
 
-echo "+--------------------------------------------+"
-echo "|          Configuration terminée            |"
-echo "|  Configure HTTP Custom avec IP du serveur, |"
-echo "|  port UDP $UDP_PORT, et activez UDP Custom |"
-echo "+--------------------------------------------+"
+log "============================================"
+log " INSTALLATION TERMINÉE AVEC SUCCÈS"
+log " BINAIRE : $BIN_PATH"
+log " UDP $UDP_PORT → SSH $SSH_TARGET"
+log "============================================"
