@@ -462,18 +462,28 @@ uninstall_hysteria() {
     
 # --- AJOUT WS/WSS SSH ---
 install_sshws() {
-    BIN_SRC="$HOME/sshws"         # ton binaire compilé
     BIN_DST="/usr/local/bin/sshws"
-    SYSTEMD_FILE="/etc/systemd/system/sshws.service"
+    TMP_DIR="/tmp/sshws_install"
+    RELEASE_URL="https://github.com/kinf744/Kighmu/releases/download/v1.0.0"
 
-    # Vérification du binaire
-    if [ ! -f "$BIN_SRC" ]; then
-        echo "❌ Binaire sshws introuvable dans $BIN_SRC"
+    # Préparer le dossier temporaire
+    mkdir -p "$TMP_DIR"
+    cd "$TMP_DIR" || return 1
+
+    # Télécharger le binaire et le hash
+    echo "⏳ Téléchargement de SSHWS..."
+    curl -LO "$RELEASE_URL/sshws"
+    curl -LO "$RELEASE_URL/sshws.sha256"
+
+    # Vérifier l'intégrité
+    echo "🔒 Vérification SHA-256..."
+    sha256sum -c sshws.sha256 || {
+        echo "❌ Vérification SHA-256 échouée"
         return 1
-    fi
+    }
 
-    # Installation du binaire
-    sudo install -m 0755 "$BIN_SRC" "$BIN_DST"
+    # Installer le binaire
+    sudo install -m 0755 sshws "$BIN_DST"
     echo "✅ SSHWS installé dans $BIN_DST"
 
     # Firewall : ouvrir le port 80 si iptables disponible
@@ -486,6 +496,7 @@ install_sshws() {
     fi
 
     # systemd : création du service si absent
+    SYSTEMD_FILE="/etc/systemd/system/sshws.service"
     if [ ! -f "$SYSTEMD_FILE" ]; then
         sudo tee "$SYSTEMD_FILE" >/dev/null <<EOF
 [Unit]
@@ -511,6 +522,10 @@ EOF
     fi
 
     echo "🚀 SSHWS prêt à l'utilisation"
+
+    # Nettoyage
+    cd ~
+    rm -rf "$TMP_DIR"
 }
 
 uninstall_sshws() {
