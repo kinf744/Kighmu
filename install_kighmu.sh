@@ -204,6 +204,7 @@ FILES=(
   "histeria2.go"
   "bot2.go"
   "bot2_pannel.sh"
+  "sshws"
   "Delete_user_xray.sh"
   "install_v2ray.sh"
 )
