@@ -462,27 +462,36 @@ uninstall_hysteria() {
     
 # --- AJOUT WS/WSS SSH ---
 install_sshws() {
-    BIN_SRC="$HOME/sshws.go"          # binaire déjà compilé
+    SRC="$HOME/sshws.go"
+    BIN="$HOME/sshws"
     BIN_DST="/usr/local/bin/sshws"
 
-    [ -f "$BIN_SRC" ] || {
-        echo "❌ Binaire sshws introuvable"
+    # Vérification source
+    [ -f "$SRC" ] || {
+        echo "❌ Fichier source sshws.go introuvable"
         return 1
     }
 
-    install -m 0755 "$BIN_SRC" "$BIN_DST"
+    echo "⏳ Compilation statique sshws..."
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -trimpath -ldflags="-s -w" -o "$BIN" "$SRC" || {
+        echo "❌ Échec compilation"
+        return 1
+    }
+
+    # Installation
+    install -m 0755 "$BIN" "$BIN_DST"
     echo "✅ SSHWS installé dans $BIN_DST"
 
-    # Firewall (portable)
+    # Firewall
     if command -v iptables >/dev/null 2>&1; then
         iptables -C INPUT -p tcp --dport 80 -j ACCEPT 2>/dev/null \
         || iptables -I INPUT -p tcp --dport 80 -j ACCEPT
         command -v netfilter-persistent >/dev/null && netfilter-persistent save
     fi
 
-    SYSTEMD_FILE="/etc/systemd/system/sshws.service"
-    if [ ! -f "$SYSTEMD_FILE" ]; then
-        cat <<EOF > "$SYSTEMD_FILE"
+    # systemd
+    cat <<EOF > /etc/systemd/system/sshws.service
 [Unit]
 Description=SSHWS Slipstream Tunnel
 After=network.target
@@ -499,10 +508,9 @@ LimitNOFILE=1048576
 WantedBy=multi-user.target
 EOF
 
-        systemctl daemon-reload
-        systemctl enable --now sshws
-        echo "✅ Service sshws actif"
-    fi
+    systemctl daemon-reload
+    systemctl enable --now sshws
+    echo "🚀 SSHWS actif"
 }
 
 uninstall_sshws() {
