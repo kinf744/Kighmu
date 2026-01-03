@@ -2,13 +2,14 @@
 # ==========================================================
 # UDP Custom Server v1.4 → SSH
 # Téléchargement automatique du binaire externe
+# Compatible Debian/Ubuntu
 # ==========================================================
 
 set -euo pipefail
 
 # ================= VARIABLES =================
 INSTALL_DIR="/opt/udp-custom"
-BIN_DIR="/root/udp"
+BIN_DIR="$INSTALL_DIR/bin"
 BIN_PATH="$BIN_DIR/udp-custom"
 CONFIG_DIR="$INSTALL_DIR/config"
 CONFIG_FILE="$CONFIG_DIR/config.json"
@@ -32,9 +33,7 @@ log "============================================"
 
 # ================= DEPENDANCES =================
 apt update -y
-apt install -y \
-  curl iptables ca-certificates \
-  openssh-server netfilter-persistent wget
+apt install -y curl iptables ca-certificates openssh-server netfilter-persistent wget
 
 # ================= UTILISATEUR =================
 if ! id "$RUN_USER" &>/dev/null; then
@@ -45,8 +44,11 @@ fi
 # ================= TELECHARGEMENT BIN =================
 mkdir -p "$BIN_DIR"
 log "Téléchargement du binaire UDP Custom"
-wget -q --show-progress "https://github.com/NETWORKTWEAKER/AUTO-SCRIPT/raw/master/udp-custom/udp-custom-linux-amd64" -O "$BIN_PATH"
+wget -q --show-progress \
+ "https://github.com/NETWORKTWEAKER/AUTO-SCRIPT/raw/master/udp-custom/udp-custom-linux-amd64" \
+ -O "$BIN_PATH"
 chmod +x "$BIN_PATH"
+chown "$RUN_USER:$RUN_USER" "$BIN_PATH"
 
 if [ ! -x "$BIN_PATH" ]; then
   log "❌ Échec du téléchargement ou binaire non exécutable"
@@ -66,7 +68,6 @@ cat > "$CONFIG_FILE" <<EOF
   "log_level": "info"
 }
 EOF
-
 chown -R "$RUN_USER:$RUN_USER" "$INSTALL_DIR"
 
 # ================= IPTABLES =================
@@ -88,6 +89,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=$RUN_USER
+WorkingDirectory=$INSTALL_DIR
 ExecStart=$BIN_PATH server --config $CONFIG_FILE
 Restart=always
 RestartSec=3
