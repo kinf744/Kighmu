@@ -105,9 +105,11 @@ ask_mtu() {
 }
 
 disable_systemd_resolved() {
-    log "Désactivation non-destructive du stub DNS systemd-resolved..."
-    systemctl stop systemd-resolved
-    systemctl disable systemd-resolved
+    log "Désactivation non-destructive de systemd-resolved..."
+    if systemctl list-unit-files | grep -q "^systemd-resolved.service"; then
+        systemctl stop systemd-resolved || true
+        systemctl disable systemd-resolved || true
+    fi
     rm -f /etc/resolv.conf
     echo "nameserver 8.8.8.8" > /etc/resolv.conf
 }
