@@ -529,7 +529,7 @@ EOF
 }
 
 uninstall_sshws() {
-    echo "🧹 Désinstallation complète de SSHWS (sshws)..."
+    echo "🧹 Désinstallation complète de SSHWS..."
 
     if pgrep -f "/usr/local/bin/sshws" >/dev/null; then
         pkill -9 -f "/usr/local/bin/sshws"
@@ -568,7 +568,7 @@ uninstall_sshws() {
     fi
 
     if command -v screen >/dev/null 2>&1; then
-        screen -ls | awk '/sshws/ {print $1}' | xargs -r screen -S {} -X quit
+        screen -ls | awk '/sshws/ {print $1}' | xargs -r -n1 screen -S {} -X quit
         echo "🧼 Sessions screen sshws nettoyées"
     fi
 
