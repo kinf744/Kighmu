@@ -8,168 +8,206 @@
 package main
 
 import (
-	"bufio"
+	"encoding/base64"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
-	"strings"
-	"sync"
-	"time"
 )
 
+// =====================
+// Constantes et chemins
+// =====================
 const (
-	binPath     = "/usr/local/bin/udp-custom"
-	servicePath = "/etc/systemd/system/udp-custom.service"
+	logDir     = "/var/log/udp-http-tunnel"
+	logFile    = "/var/log/udp-http-tunnel/udp-http-tunnel.log"
+	servicePath = "/etc/systemd/system/udp-http-tunnel.service"
+	binPath     = "/usr/local/bin/udp-http-tunnel"
 )
 
-// ===================== SYSTEMD =====================
+// =====================
+// Logging
+// =====================
+func setupLogging() {
+	_ = os.MkdirAll(logDir, 0755)
+	f, err := os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.SetOutput(io.MultiWriter(os.Stdout, f))
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+}
 
-func ensureSystemd(httpPort, udpPort, target string) {
+// =====================
+// Service systemd
+// =====================
+func ensureSystemd(httpPort, udpPort string) {
 	if _, err := os.Stat(servicePath); err == nil {
+		// Service déjà existant
 		return
 	}
 
 	unit := fmt.Sprintf(`[Unit]
-Description=UDP Custom Tunnel + HTTP Custom
+Description=UDP-over-HTTP Custom Tunnel
 After=network.target
 Wants=network.target
 
 [Service]
 Type=simple
 User=root
-ExecStart=%s -http %s -udp %s -target %s
+ExecStart=%s -http %s -udp %s
 Restart=always
-RestartSec=1
+RestartSec=2
 LimitNOFILE=1048576
 StandardOutput=journal
 StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
-`, binPath, httpPort, udpPort, target)
+`, binPath, httpPort, udpPort)
 
-	// Compatible Go 1.13
-	_ = ioutil.WriteFile(servicePath, []byte(unit), 0644)
-
-	exec.Command("systemctl", "daemon-reload").Run()
-	exec.Command("systemctl", "enable", "udp-custom").Run()
-	exec.Command("systemctl", "restart", "udp-custom").Run()
-}
-
-// ===================== UDP SESSION =====================
-
-type session struct {
-	udpAddr  *net.UDPAddr
-	tcpConn  net.Conn
-	lastSeen time.Time
-}
-
-var (
-	sessions = make(map[string]*session)
-	mutex    sync.Mutex
-)
-
-// ===================== MAIN =====================
-
-func main() {
-	httpPort := flag.String("http", "85", "HTTP custom port par défaut")
-	udpPort := flag.String("udp", "54000", "UDP custom port")
-	target := flag.String("target", "127.0.0.1:22", "SSH backend")
-	flag.Parse()
-
-	ensureSystemd(*httpPort, *udpPort, *target)
-
-	go startUDPTunnel(*udpPort, *target)
-	startHTTPFake(*httpPort)
-}
-
-// ================= HTTP CUSTOM (FAKE) =================
-
-func startHTTPFake(port string) {
-	ln, err := net.Listen("tcp", ":"+port)
+	err := os.WriteFile(servicePath, []byte(unit), 0644)
 	if err != nil {
-		log.Fatal(err)
-	}
-	log.Println("[HTTP CUSTOM] Actif sur", port)
-
-	for {
-		c, _ := ln.Accept()
-		go handleHTTP(c)
-	}
-}
-
-func handleHTTP(c net.Conn) {
-	defer c.Close()
-	r := bufio.NewReader(c)
-	line, _ := r.ReadString('\n')
-
-	if !strings.Contains(strings.ToLower(line), "http") {
+		log.Printf("[SYSTEMD] Erreur écriture fichier service: %v", err)
 		return
 	}
 
-	resp := "HTTP/1.1 200 OK\r\nConnection: keep-alive\r\n\r\n"
-	c.Write([]byte(resp))
+	exec.Command("systemctl", "daemon-reload").Run()
+	exec.Command("systemctl", "enable", "udp-http-tunnel").Run()
+	exec.Command("systemctl", "restart", "udp-http-tunnel").Run()
+	log.Println("[SYSTEMD] Service systemd créé et lancé")
 }
 
-// ================= UDP CUSTOM =================
-
-func startUDPTunnel(port, target string) {
-	addr, _ := net.ResolveUDPAddr("udp", ":"+port)
-	udpConn, err := net.ListenUDP("udp", addr)
+// =====================
+// Tunnel UDP
+// =====================
+func startUDPTunnel(udpPort string) {
+	addr, err := net.ResolveUDPAddr("udp", ":"+udpPort)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("[UDP] Erreur résolution adresse: %v", err)
 	}
-	log.Println("[UDP CUSTOM] Tunnel actif sur", port)
 
-	buf := make([]byte, 2048)
+	conn, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		log.Fatalf("[UDP] Impossible d'écouter le port %s: %v", udpPort, err)
+	}
+	defer conn.Close()
+	log.Printf("[UDP] Tunnel actif sur %s", udpPort)
 
+	buf := make([]byte, 4096)
 	for {
-		n, clientAddr, err := udpConn.ReadFromUDP(buf)
+		n, remoteAddr, err := conn.ReadFromUDP(buf)
 		if err != nil {
+			log.Printf("[UDP] Erreur lecture depuis %s: %v", remoteAddr, err)
 			continue
 		}
+		log.Printf("[UDP] Paquet reçu de %s, %d bytes", remoteAddr, n)
 
-		key := clientAddr.String()
-
-		mutex.Lock()
-		sess, ok := sessions[key]
-		if !ok {
-			tcp, err := net.Dial("tcp", target)
-			if err != nil {
-				mutex.Unlock()
-				continue
-			}
-			sess = &session{
-				udpAddr:  clientAddr,
-				tcpConn:  tcp,
-				lastSeen: time.Now(),
-			}
-			sessions[key] = sess
-			go tcpToUDP(udpConn, sess)
-			log.Println("[SESSION]", key)
+		_, err = conn.WriteToUDP(buf[:n], remoteAddr)
+		if err != nil {
+			log.Printf("[UDP] Erreur écriture vers %s: %v", remoteAddr, err)
 		}
-		sess.lastSeen = time.Now()
-		mutex.Unlock()
-
-		sess.tcpConn.Write(buf[:n])
 	}
 }
 
-func tcpToUDP(udp *net.UDPConn, sess *session) {
-	buf := make([]byte, 2048)
-	for {
-		n, err := sess.tcpConn.Read(buf)
-		if err != nil {
-			mutex.Lock()
-			delete(sessions, sess.udpAddr.String())
-			mutex.Unlock()
-			sess.tcpConn.Close()
+// =====================
+// HTTP custom + WebSocket
+// =====================
+func startHTTPServer(httpPort, udpPort string) {
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.Header.Get("Upgrade") == "websocket" {
+			handleWebSocket(w, r, udpPort)
 			return
 		}
-		udp.WriteToUDP(buf[:n], sess.udpAddr)
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(200)
+		fmt.Fprintf(w, "<html><body><h2>UDP Tunnel Actif</h2></body></html>")
+	})
+
+	log.Printf("[HTTP] HTTP custom actif sur %s", httpPort)
+	err := http.ListenAndServe(":"+httpPort, nil)
+	if err != nil {
+		log.Fatalf("[HTTP] Erreur serveur HTTP: %v", err)
 	}
+}
+
+// =====================
+// WebSocket pour UDP-over-TCP
+// =====================
+func handleWebSocket(w http.ResponseWriter, r *http.Request, udpPort string) {
+	hijacker, ok := w.(http.Hijacker)
+	if !ok {
+		log.Println("[WS] Hijacking non supporté")
+		http.Error(w, "Hijacking non supporté", http.StatusInternalServerError)
+		return
+	}
+
+	conn, _, err := hijacker.Hijack()
+	if err != nil {
+		log.Printf("[WS] Erreur hijack: %v", err)
+		return
+	}
+
+	key := r.Header.Get("Sec-WebSocket-Key")
+	if key == "" {
+		key = "dGhlIHNhbXBsZSBub25jZQ=="
+		log.Println("[WS] Pas de clé WebSocket fournie, valeur par défaut utilisée")
+	}
+
+	acceptKey := base64.StdEncoding.EncodeToString([]byte(key))
+	resp := "HTTP/1.1 101 Switching Protocols\r\n" +
+		"Upgrade: websocket\r\n" +
+		"Connection: Upgrade\r\n" +
+		"Sec-WebSocket-Accept: " + acceptKey + "\r\n\r\n"
+
+	_, err = conn.Write([]byte(resp))
+	if err != nil {
+		log.Printf("[WS] Erreur réponse WS: %v", err)
+		return
+	}
+
+	udpAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:"+udpPort)
+	if err != nil {
+		log.Printf("[WS] Erreur résolution UDP: %v", err)
+		return
+	}
+
+	udpConn, err := net.DialUDP("udp", nil, udpAddr)
+	if err != nil {
+		log.Printf("[WS] Erreur dial UDP: %v", err)
+		return
+	}
+
+	go func() {
+		_, err := io.Copy(udpConn, conn)
+		if err != nil {
+			log.Printf("[WS->UDP] Erreur copie: %v", err)
+		}
+	}()
+
+	go func() {
+		_, err := io.Copy(conn, udpConn)
+		if err != nil {
+			log.Printf("[UDP->WS] Erreur copie: %v", err)
+		}
+	}()
+}
+
+// =====================
+// MAIN
+// =====================
+func main() {
+	udpPort := flag.String("udp", "54000", "UDP Tunnel port")
+	httpPort := flag.String("http", "85", "HTTP custom port")
+	flag.Parse()
+
+	setupLogging()
+	ensureSystemd(*httpPort, *udpPort)
+
+	go startUDPTunnel(*udpPort)
+	startHTTPServer(*httpPort, *udpPort)
 }
