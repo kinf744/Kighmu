@@ -1,5 +1,5 @@
 // ================================================================
-// udp-only.go — Tunnel UDP Custom
+// udp-http-compatible.go — Tunnel UDP pour HTTP Custom
 // Ubuntu 20.04 | Go 1.13
 // Auteur : @kighmu
 // Licence : MIT
@@ -15,11 +15,9 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"time"
 )
 
-// =====================
-// Constantes
-// =====================
 const (
 	logDir     = "/var/log/udp-custom"
 	logFile    = "/var/log/udp-custom/udp-custom.log"
@@ -27,9 +25,7 @@ const (
 	binPath     = "/usr/local/bin/udp-custom"
 )
 
-// =====================
-// Logging
-// =====================
+// Logging avec création automatique du dossier
 func setupLogging() {
 	_ = os.MkdirAll(logDir, 0755)
 	f, err := os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
@@ -40,16 +36,14 @@ func setupLogging() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 }
 
-// =====================
-// Service systemd
-// =====================
+// Création et lancement service systemd
 func ensureSystemd(udpPort string) {
 	if _, err := os.Stat(servicePath); err == nil {
 		return
 	}
 
 	unit := fmt.Sprintf(`[Unit]
-Description=UDP Custom Tunnel
+Description=UDP Custom Tunnel compatible HTTP Custom
 After=network.target
 Wants=network.target
 
@@ -81,9 +75,7 @@ WantedBy=multi-user.target
 	log.Println("[SYSTEMD] Service systemd créé et lancé")
 }
 
-// =====================
-// Tunnel UDP
-// =====================
+// Tunnel UDP pur compatible HTTP Custom
 func startUDPTunnel(udpPort string) {
 	addr, err := net.ResolveUDPAddr("udp", ":"+udpPort)
 	if err != nil {
@@ -95,9 +87,9 @@ func startUDPTunnel(udpPort string) {
 		log.Fatalf("[UDP] Impossible d'écouter le port %s: %v", udpPort, err)
 	}
 	defer conn.Close()
-	log.Printf("[UDP] Tunnel actif sur %s", udpPort)
+	log.Printf("[UDP] Tunnel UDP actif sur %s (HTTP Custom compatible)", udpPort)
 
-	buf := make([]byte, 4096)
+	buf := make([]byte, 65535)
 	for {
 		n, remoteAddr, err := conn.ReadFromUDP(buf)
 		if err != nil {
@@ -106,16 +98,17 @@ func startUDPTunnel(udpPort string) {
 		}
 		log.Printf("[UDP] Paquet reçu de %s, %d bytes", remoteAddr, n)
 
+		// Echo pour tester la connexion
 		_, err = conn.WriteToUDP(buf[:n], remoteAddr)
 		if err != nil {
 			log.Printf("[UDP] Erreur écriture vers %s: %v", remoteAddr, err)
 		}
+
+		// Ajout log session par IP
+		log.Printf("[SESSION] %s:%d traité à %s", remoteAddr.IP, remoteAddr.Port, time.Now().Format(time.RFC3339))
 	}
 }
 
-// =====================
-// MAIN
-// =====================
 func main() {
 	udpPort := flag.String("udp", "54000", "UDP Tunnel port")
 	flag.Parse()
