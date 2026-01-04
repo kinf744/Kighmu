@@ -56,25 +56,30 @@ install_fixed_keys() {
 }
 
 configure_sysctl() {
-    log "Optimisation sysctl..."
+    log "Optimisation sysctl pour VPS léger..."
+
+    # Supprimer ancienne section SlowDNS si existante
     sed -i '/# Optimisations SlowDNS/,+20d' /etc/sysctl.conf || true
+
     cat <<EOF >> /etc/sysctl.conf
 
-# Optimisations SlowDNS
-net.core.rmem_max=8388608
-net.core.wmem_max=8388608
-net.core.rmem_default=262144
-net.core.wmem_default=262144
-net.core.optmem_max=25165824
-net.ipv4.udp_rmem_min=16384
-net.ipv4.udp_wmem_min=16384
+# Optimisations SlowDNS légères pour VPS 2c/2Go
+net.core.rmem_max=2097152       # 2MB
+net.core.wmem_max=2097152       # 2MB
+net.core.rmem_default=131072    # 128KB
+net.core.wmem_default=131072    # 128KB
+net.core.optmem_max=8388608     # 8MB
+net.ipv4.udp_rmem_min=8192
+net.ipv4.udp_wmem_min=8192
 net.ipv4.tcp_fastopen=3
 net.ipv4.tcp_fin_timeout=10
 net.ipv4.tcp_tw_reuse=1
-net.ipv4.tcp_mtu_probing=1
+net.ipv4.tcp_mtu_probing=0       # Désactivé pour réduire CPU
 net.ipv4.ip_forward=1
 EOF
+
     sysctl -p
+    log "✅ Paramètres sysctl appliqués"
 }
 
 disable_systemd_resolved() {
