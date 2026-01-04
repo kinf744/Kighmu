@@ -21,10 +21,10 @@ import (
 )
 
 const (
-	logDir      = "/var/log/udp-http-custom"
-	logFile     = "/var/log/udp-http-custom/udp-http-custom.log"
-	servicePath = "/etc/systemd/system/udp-http-custom.service"
-	binPath     = "/usr/local/bin/udp-http-custom"
+	logDir      = "/var/log/udp-custom"
+	logFile     = "/var/log/udp-custom/udp-custom.log"
+	servicePath = "/etc/systemd/system/udp-custom.service"
+	binPath     = "/usr/local/bin/udp-custom"
 	defaultUDP  = "54000"
 	defaultHTTP = "85"
 )
