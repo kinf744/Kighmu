@@ -1,5 +1,5 @@
 // ================================================================
-// udp-http-compatible.go — Tunnel UDP pour HTTP Custom
+// udp-custom.go — Tunnel UDP Custom (HTTP Custom compatible)
 // Ubuntu 20.04 | Go 1.13
 // Auteur : @kighmu
 // Licence : MIT
@@ -15,14 +15,16 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 )
 
 const (
-	logDir     = "/var/log/udp-custom"
-	logFile    = "/var/log/udp-custom/udp-custom.log"
+	logDir      = "/var/log/udp-custom"
+	logFile     = "/var/log/udp-custom/udp-custom.log"
 	servicePath = "/etc/systemd/system/udp-custom.service"
 	binPath     = "/usr/local/bin/udp-custom"
+	defaultUDP  = "54000"
 )
 
 // Logging avec création automatique du dossier
@@ -69,13 +71,38 @@ WantedBy=multi-user.target
 	defer f.Close()
 	_, _ = f.Write([]byte(unit))
 
+	// Reload et activation systemd
 	exec.Command("systemctl", "daemon-reload").Run()
 	exec.Command("systemctl", "enable", "udp-custom").Run()
 	exec.Command("systemctl", "restart", "udp-custom").Run()
 	log.Println("[SYSTEMD] Service systemd créé et lancé")
 }
 
-// Tunnel UDP pur compatible HTTP Custom
+// Ouverture du port UDP via iptables
+func setupIptables(udpPort string) {
+	// Vérifie si la règle existe déjà
+	checkInput := exec.Command("iptables", "-C", "INPUT", "-p", "udp", "--dport", udpPort, "-j", "ACCEPT")
+	if checkInput.Run() != nil {
+		exec.Command("iptables", "-I", "INPUT", "-p", "udp", "--dport", udpPort, "-j", "ACCEPT").Run()
+	}
+
+	checkOutput := exec.Command("iptables", "-C", "OUTPUT", "-p", "udp", "--sport", udpPort, "-j", "ACCEPT")
+	if checkOutput.Run() != nil {
+		exec.Command("iptables", "-I", "OUTPUT", "-p", "udp", "--sport", udpPort, "-j", "ACCEPT").Run()
+	}
+
+	// Sauvegarde iptables
+	if _, err := os.Stat("/etc/iptables/rules.v4"); err == nil {
+		exec.Command("sh", "-c", "iptables-save > /etc/iptables/rules.v4").Run()
+	} else {
+		os.MkdirAll("/etc/iptables", 0755)
+		exec.Command("sh", "-c", "iptables-save > /etc/iptables/rules.v4").Run()
+	}
+
+	log.Printf("[IPTABLES] Port UDP %s ouvert et règles sauvegardées", udpPort)
+}
+
+// Tunnel UDP pur
 func startUDPTunnel(udpPort string) {
 	addr, err := net.ResolveUDPAddr("udp", ":"+udpPort)
 	if err != nil {
@@ -98,22 +125,23 @@ func startUDPTunnel(udpPort string) {
 		}
 		log.Printf("[UDP] Paquet reçu de %s, %d bytes", remoteAddr, n)
 
-		// Echo pour tester la connexion
+		// Echo pour compatibilité test client
 		_, err = conn.WriteToUDP(buf[:n], remoteAddr)
 		if err != nil {
 			log.Printf("[UDP] Erreur écriture vers %s: %v", remoteAddr, err)
 		}
 
-		// Ajout log session par IP
+		// Session log
 		log.Printf("[SESSION] %s:%d traité à %s", remoteAddr.IP, remoteAddr.Port, time.Now().Format(time.RFC3339))
 	}
 }
 
 func main() {
-	udpPort := flag.String("udp", "54000", "UDP Tunnel port")
+	udpPort := flag.String("udp", defaultUDP, "UDP Tunnel port")
 	flag.Parse()
 
 	setupLogging()
+	setupIptables(*udpPort)
 	ensureSystemd(*udpPort)
 	startUDPTunnel(*udpPort)
 }
