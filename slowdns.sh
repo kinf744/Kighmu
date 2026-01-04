@@ -114,30 +114,21 @@ disable_systemd_resolved() {
     echo "nameserver 8.8.8.8" > /etc/resolv.conf
 }
 
-configure_iptables() {
-    log "Configuration du pare-feu via iptables..."
+configure_nftables() {
+    log "Configuration du pare-feu via nftables..."
 
-    # Autoriser DNS entrant
-    if ! iptables -C INPUT -p udp --dport 53 -j ACCEPT &>/dev/null; then
-        iptables -I INPUT -p udp --dport 53 -j ACCEPT
-    fi
+    # Créer table et chaînes si elles n'existent pas
+    nft list tables slowdns &>/dev/null || nft add table inet slowdns
+    nft list chain inet slowdns input &>/dev/null || nft add chain inet slowdns input { type filter hook input priority 0 \; policy accept \; }
+    nft list chain inet slowdns prerouting &>/dev/null || nft add chain inet slowdns prerouting { type nat hook prerouting priority 0 \; policy accept \; }
 
-    # Autoriser le port SlowDNS
-    if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
-        iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
-    fi
+    # Autoriser SlowDNS sur le port UDP spécifique
+    nft add rule inet slowdns input udp dport $PORT accept 2>/dev/null || true
 
-    # REDIRECT UDP 53 -> PORT SlowDNS (NAT)
-    if ! iptables -t nat -C PREROUTING -p udp --dport 53 -j REDIRECT --to-ports "$PORT" &>/dev/null; then
-        iptables -t nat -I PREROUTING -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
-    fi
+    # Redirection DNS uniquement si port 53 vers SlowDNS
+    nft add rule inet slowdns prerouting udp dport 53 redirect to :$PORT 2>/dev/null || true
 
-    # Sauvegarde pour persistance
-    iptables-save > /etc/iptables/rules.v4
-    systemctl enable netfilter-persistent
-    systemctl restart netfilter-persistent
-
-    log "Persistance iptables activée via netfilter-persistent."
+    log "✅ Règles nftables SlowDNS appliquées"
 }
 
 # ============================
@@ -296,11 +287,9 @@ get_mtu() {
     ip link show "$iface" | awk '/mtu/ {for(i=1;i<=NF;i++){if($i=="mtu"){print $(i+1);exit}}}'
 }
 
-setup_iptables() {
-    interface="$1"
-    if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
-        iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
-    fi
+setup_nftables() {
+    # Autoriser le port SlowDNS si pas déjà présent
+    nft add rule inet slowdns input udp dport $PORT accept 2>/dev/null || true
 }
 
 log "Attente de l'interface réseau..."
@@ -317,7 +306,7 @@ REAL_MTU=$(get_mtu "$interface")
 log "MTU demandé : $SLOWDNS_MTU"
 log "MTU réel appliqué sur $interface : $REAL_MTU"
 
-setup_iptables "$interface"
+setup_nftables "$interface"
 
 NS=$(cat "$CONFIG_FILE")
 
@@ -391,7 +380,7 @@ main() {
     disable_systemd_resolved
     configure_sysctl
     ask_mtu
-    configure_iptables
+    configure_nftables
 
     choose_backend
     choose_mode
