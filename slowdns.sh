@@ -85,33 +85,6 @@ EOF
     sysctl -p
 }
 
-# ============================
-# GESTION DU MTU
-# ============================
-set_mtu() {
-    local mtu="$1"
-
-    if ! [[ "$mtu" =~ ^[0-9]+$ ]] || [ "$mtu" -lt 90 ] || [ "$mtu" -gt 1500 ]; then
-        echo "❌ MTU invalide (90–1500 requis)"
-        exit 1
-    fi
-
-    SLOWDNS_MTU="$mtu"
-    export SLOWDNS_MTU
-}
-
-ask_mtu() {
-    local mtu
-    while true; do
-        read -rp "Entrez le MTU à utiliser pour SlowDNS (ex: 1350) : " mtu
-        if [[ -n "$mtu" ]]; then
-            set_mtu "$mtu"
-            break
-        fi
-        echo "❌ Le MTU est obligatoire."
-    done
-}
-
 disable_systemd_resolved() {
     log "Désactivation non-destructive de systemd-resolved..."
     if systemctl list-unit-files | grep -q "^systemd-resolved.service"; then
@@ -393,7 +366,6 @@ main() {
     install_fixed_keys
     disable_systemd_resolved
     configure_sysctl
-    ask_mtu
     configure_nftables
 
     choose_backend
