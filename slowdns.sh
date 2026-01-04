@@ -312,9 +312,9 @@ log "Interface détectée : $interface"
 
 source /etc/slowdns/slowdns.env
 
-SLOWDNS_MTU="${MTU:?MTU non défini dans slowdns.env}"
+# SLOWDNS_MTU="${MTU:?MTU non défini dans slowdns.env}"
 
-ip link set dev "$interface" mtu "$SLOWDNS_MTU"
+# ip link set dev "$interface" mtu "$SLOWDNS_MTU"
 
 REAL_MTU=$(get_mtu "$interface")
 log "MTU demandé : $SLOWDNS_MTU"
