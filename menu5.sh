@@ -158,6 +158,7 @@ install_udp_custom() {
     LOG_DIR="/var/log/udp-custom"
     LOG_FILE="$LOG_DIR/udp-custom.log"
     UDP_PORT="54000"
+    HTTP_PORT="85"
 
     # Vérifie script Go
     [ ! -f "$SCRIPT_PATH" ] && { echo "[ERREUR] Script Go introuvable : $SCRIPT_PATH"; return 1; }
@@ -203,9 +204,11 @@ EOF
     systemctl enable udp-custom
     systemctl restart udp-custom
 
-    # Ouverture du port UDP via iptables
-    iptables -C INPUT -p udp --dport "$UDP_PORT" -j ACCEPT 2>/dev/null || iptables -I INPUT -p udp --dport "$UDP_PORT" -j ACCEPT
-    iptables -C OUTPUT -p udp --sport "$UDP_PORT" -j ACCEPT 2>/dev/null || iptables -I OUTPUT -p udp --sport "$UDP_PORT" -j ACCEPT
+    # Ouverture des ports UDP et TCP via iptables
+    iptables -w -C INPUT -p udp --dport "$UDP_PORT" -j ACCEPT 2>/dev/null || iptables -w -I INPUT -p udp --dport "$UDP_PORT" -j ACCEPT
+    iptables -w -C OUTPUT -p udp --sport "$UDP_PORT" -j ACCEPT 2>/dev/null || iptables -w -I OUTPUT -p udp --sport "$UDP_PORT" -j ACCEPT
+    iptables -w -C INPUT -p tcp --dport "$HTTP_PORT" -j ACCEPT 2>/dev/null || iptables -w -I INPUT -p tcp --dport "$HTTP_PORT" -j ACCEPT
+    iptables -w -C OUTPUT -p tcp --sport "$HTTP_PORT" -j ACCEPT 2>/dev/null || iptables -w -I OUTPUT -p tcp --sport "$HTTP_PORT" -j ACCEPT
 
     # Sauvegarde iptables si netfilter-persistent présent
     if command -v netfilter-persistent >/dev/null 2>&1; then
@@ -213,9 +216,9 @@ EOF
         systemctl restart netfilter-persistent || true
     fi
 
-    echo "[OK] UDP Custom installé, service activé et port $UDP_PORT ouvert."
+    echo "[OK] UDP Custom installé, service activé, ports UDP $UDP_PORT et TCP $HTTP_PORT ouverts."
 }
-
+    
 uninstall_udp_custom() {
     pids=$(pgrep -f udp-custom || true)
     [ -n "$pids" ] && { kill -15 $pids; sleep 2; pids=$(pgrep -f udp-custom || true); [ -n "$pids" ] && kill -9 $pids; }
