@@ -46,8 +46,8 @@ log "🔹 Création config.json"
 cat > "$CONFIG_FILE" <<EOF
 {
   "listen": ":$UDP_PORT",
-  "stream_buffer": 33554432,
-  "receive_buffer": 83886080,
+  "stream_buffer": 8388608,
+  "receive_buffer": 16777216,
   "auth": {
     "mode": "passwords"
   }
