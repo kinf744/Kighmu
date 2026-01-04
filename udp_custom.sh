@@ -58,29 +58,33 @@ log "✅ config.json créé"
 # ================= NFTABLES =================
 log "🔹 Configuration nftables isolées pour UDP $UDP_PORT"
 
-# Activer nftables
 systemctl enable nftables
 systemctl start nftables
 
-# Créer table dédiée si elle n'existe pas
 nft list tables udp_custom &>/dev/null || nft add table inet udp_custom
 
-# Chaîne input dédiée
 nft list chain inet udp_custom input &>/dev/null || \
-    nft add chain inet udp_custom input { type filter hook input priority 0 \; policy drop \; }
+nft add chain inet udp_custom input { type filter hook input priority 0 \; policy drop \; }
 
-# Chaîne output dédiée
 nft list chain inet udp_custom output &>/dev/null || \
-    nft add chain inet udp_custom output { type filter hook output priority 0 \; policy accept \; }
+nft add chain inet udp_custom output { type filter hook output priority 0 \; policy accept \; }
 
-# Autoriser le port UDP Custom
-nft add rule inet udp_custom input udp dport "$UDP_PORT" accept 2>/dev/null || true
+# 🔥 OBLIGATOIRE – autoriser flux existants
+nft add rule inet udp_custom input ct state established,related accept
 
-# Autoriser loopback et SSH
-nft add rule inet udp_custom input iif lo accept 2>/dev/null || true
-nft add rule inet udp_custom input tcp dport 22 accept 2>/dev/null || true
+# Loopback
+nft add rule inet udp_custom input iif lo accept
 
-log "✅ Règles nftables UDP Custom appliquées en isolation"
+# ICMP (MTU, stabilité)
+nft add rule inet udp_custom input ip protocol icmp accept
+
+# UDP Custom
+nft add rule inet udp_custom input udp dport "$UDP_PORT" accept
+
+# SSH
+nft add rule inet udp_custom input tcp dport 22 accept
+
+log "✅ Règles nftables UDP Custom appliquées (CORRIGÉES)"
 
 # ================= SYSTEMD =================
 log "🔹 Création service systemd"
@@ -127,7 +131,6 @@ fi
 
 # ================= SUIVI UDP EN TEMPS RÉEL =================
 log "🔹 Démarrage suivi temps réel des paquets UDP entrants sur le port $UDP_PORT"
-nohup tcpdump -n -i eth0 udp port "$UDP_PORT" -v >> "$TCPDUMP_LOG" 2>&1 &
 
 log "✅ Suivi UDP lancé, logs disponibles dans $TCPDUMP_LOG"
 log "============================================"
