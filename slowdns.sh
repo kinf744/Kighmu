@@ -123,20 +123,26 @@ disable_systemd_resolved() {
 }
 
 configure_nftables() {
-    log "Configuration du pare-feu via nftables..."
+    log "Configuration du pare-feu SlowDNS (isolée, non globale)..."
 
-    # Créer table et chaînes si elles n'existent pas
+    # Créer table spécifique SlowDNS si elle n'existe pas
     nft list tables slowdns &>/dev/null || nft add table inet slowdns
-    nft list chain inet slowdns input &>/dev/null || nft add chain inet slowdns input { type filter hook input priority 0 \; policy accept \; }
-    nft list chain inet slowdns prerouting &>/dev/null || nft add chain inet slowdns prerouting { type nat hook prerouting priority 0 \; policy accept \; }
 
-    # Autoriser SlowDNS sur le port UDP spécifique
+    # Chaîne INPUT dédiée
+    nft list chain inet slowdns input &>/dev/null || \
+        nft add chain inet slowdns input { type filter hook input priority 0 \; policy accept \; }
+
+    # Chaîne PREROUTING dédiée pour NAT
+    nft list chain inet slowdns prerouting &>/dev/null || \
+        nft add chain inet slowdns prerouting { type nat hook prerouting priority 0 \; policy accept \; }
+
+    # Autoriser uniquement le port SlowDNS
     nft add rule inet slowdns input udp dport $PORT accept 2>/dev/null || true
 
-    # Redirection DNS uniquement si port 53 vers SlowDNS
+    # Redirection DNS uniquement vers SlowDNS
     nft add rule inet slowdns prerouting udp dport 53 redirect to :$PORT 2>/dev/null || true
 
-    log "✅ Règles nftables SlowDNS appliquées"
+    log "✅ Règles nftables SlowDNS appliquées en isolation"
 }
 
 # ============================
