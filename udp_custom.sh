@@ -31,7 +31,7 @@ log "============================================"
 # ================= INSTALLATION DEPENDANCES =================
 log "🔹 Mise à jour & installation des dépendances"
 apt update -y
-apt install -y wget iptables net-tools openssh-server tcpdump
+apt install -y wget nftables net-tools openssh-server tcpdump
 
 # ================= BINAIRE =================
 log "🔹 Téléchargement du binaire UDP Custom"
@@ -55,14 +55,28 @@ cat > "$CONFIG_FILE" <<EOF
 EOF
 log "✅ config.json créé"
 
-# ================= IPTABLES =================
-log "🔹 Configuration iptables pour UDP $UDP_PORT"
-iptables -C INPUT -p udp --dport "$UDP_PORT" -j ACCEPT 2>/dev/null \
-  || iptables -I INPUT -p udp --dport "$UDP_PORT" -j ACCEPT
-iptables -C OUTPUT -p udp --sport "$UDP_PORT" -j ACCEPT 2>/dev/null \
-  || iptables -I OUTPUT -p udp --sport "$UDP_PORT" -j ACCEPT
-iptables-save > /etc/iptables/rules.v4
-log "✅ Règles iptables appliquées"
+# ================= NFTABLES =================
+log "🔹 Configuration nftables pour UDP $UDP_PORT"
+
+systemctl enable nftables
+systemctl start nftables
+
+nft flush ruleset
+
+nft add table inet filter
+
+nft add chain inet filter input \
+  { type filter hook input priority 0 \; policy drop \; }
+
+nft add chain inet filter output \
+  { type filter hook output priority 0 \; policy accept \; }
+
+nft add rule inet filter input ct state established,related accept
+nft add rule inet filter input iif lo accept
+nft add rule inet filter input udp dport "$UDP_PORT" accept
+nft add rule inet filter input tcp dport 22 accept
+
+log "✅ Règles nftables appliquées"
 
 # ================= SYSTEMD =================
 log "🔹 Création service systemd"
