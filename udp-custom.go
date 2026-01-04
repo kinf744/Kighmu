@@ -23,8 +23,8 @@ import (
 // Constantes et chemins
 // =====================
 const (
-	logDir     = "/var/log/udp-http-tunnel"
-	logFile    = "/var/log/udp-http-tunnel/udp-http-tunnel.log"
+	logDir      = "/var/log/udp-http-tunnel"
+	logFile     = "/var/log/udp-http-tunnel/udp-http-tunnel.log"
 	servicePath = "/etc/systemd/system/udp-http-tunnel.service"
 	binPath     = "/usr/local/bin/udp-http-tunnel"
 )
@@ -43,11 +43,10 @@ func setupLogging() {
 }
 
 // =====================
-// Service systemd
+// Service systemd compatible Go 1.13
 // =====================
 func ensureSystemd(httpPort, udpPort string) {
 	if _, err := os.Stat(servicePath); err == nil {
-		// Service déjà existant
 		return
 	}
 
@@ -70,9 +69,17 @@ StandardError=journal
 WantedBy=multi-user.target
 `, binPath, httpPort, udpPort)
 
-	err := os.WriteFile(servicePath, []byte(unit), 0644)
+	// Compatible Go 1.13 : écriture manuelle du fichier
+	f, err := os.OpenFile(servicePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		log.Printf("[SYSTEMD] Erreur écriture fichier service: %v", err)
+		return
+	}
+	defer f.Close()
+
+	_, err = f.Write([]byte(unit))
+	if err != nil {
+		log.Printf("[SYSTEMD] Erreur écriture contenu service: %v", err)
 		return
 	}
 
