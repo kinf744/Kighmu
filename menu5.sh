@@ -98,22 +98,34 @@ uninstall_slowdns() {
     rm -f /etc/systemd/system/slowdns.service
     systemctl daemon-reload
 
-    pkill -f dnstt-server || true
-    pkill -f slowdns-start.sh || true
+    pkill -15 -f dnstt-server 2>/dev/null || true
+    pkill -15 -f slowdns-start.sh 2>/dev/null || true
+    sleep 2
+    pkill -9 -f dnstt-server 2>/dev/null || true
+    pkill -9 -f slowdns-start.sh 2>/dev/null || true
 
     rm -f /usr/local/bin/dnstt-server
     rm -f /usr/local/bin/slowdns-start.sh
     rm -rf /etc/slowdns
+    rm -f /var/log/slowdns.log
 
-    iptables -D INPUT -p udp --dport 5300 -j ACCEPT 2>/dev/null || true
-    while iptables -t nat -C PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 5300 &>/dev/null; do
-        iptables -t nat -D PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 5300
-    done
+    if command -v nft >/dev/null 2>&1; then
+        nft list ruleset | grep -q '5300' && {
+            nft delete rule inet filter input udp dport 5300 accept 2>/dev/null || true
+            nft delete rule inet nat prerouting udp dport 53 redirect to :5300 2>/dev/null || true
+        }
+    fi
 
-    iptables-save > /etc/iptables/rules.v4
-    systemctl restart netfilter-persistent
+    if command -v iptables >/dev/null 2>&1; then
+        iptables -D INPUT -p udp --dport 5300 -j ACCEPT 2>/dev/null || true
+        while iptables -t nat -C PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 5300 2>/dev/null; do
+            iptables -t nat -D PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 5300
+        done
+        iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
+        systemctl restart netfilter-persistent 2>/dev/null || true
+    fi
 
-    echo "[OK] SlowDNS désinstallé et toutes traces supprimées."
+    echo "[OK] SlowDNS désinstallé proprement"
 }
 
 install_openssh() {
