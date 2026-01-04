@@ -167,35 +167,32 @@ install_udp_custom() {
 uninstall_udp_custom() {
     echo ">>> Désinstallation UDP Custom..."
 
-    # Arrêt des processus
-    pids=$(pgrep -f udp-custom-linux-amd64 || true)
-    if [ -n "$pids" ]; then
-        kill -15 $pids
-        sleep 2
-        pids=$(pgrep -f udp-custom-linux-amd64 || true)
-        if [ -n "$pids" ]; then
-            kill -9 $pids
-        fi
+    systemctl stop udp_custom.service 2>/dev/null || true
+    systemctl disable udp_custom.service 2>/dev/null || true
+    rm -f /etc/systemd/system/udp_custom.service
+    systemctl daemon-reload
+
+    pkill -15 -f udp-custom-linux-amd64 2>/dev/null || true
+    sleep 2
+    pkill -9 -f udp-custom-linux-amd64 2>/dev/null || true
+
+    rm -rf /opt/udp-custom
+    rm -rf /var/log/udp-custom
+
+    if command -v nft >/dev/null 2>&1; then
+        nft list table inet filter >/dev/null 2>&1 && {
+            nft delete rule inet filter input udp dport 36712 accept 2>/dev/null || true
+        }
     fi
 
-    # Arrêt et suppression du service systemd
-    if systemctl list-units --full -all | grep -Fq 'udp_custom.service'; then
-        systemctl stop udp_custom.service || true
-        systemctl disable udp_custom.service || true
-        rm -f /etc/systemd/system/udp_custom.service
-        systemctl daemon-reload
+    if command -v iptables >/dev/null 2>&1; then
+        iptables -D INPUT -p udp --dport 36712 -j ACCEPT 2>/dev/null || true
+        iptables -D OUTPUT -p udp --sport 36712 -j ACCEPT 2>/dev/null || true
+        iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
+        systemctl restart netfilter-persistent 2>/dev/null || true
     fi
 
-    # Suppression des fichiers d’installation
-    rm -rf /root/udp-custom
-
-    # Suppression des règles iptables persistantes
-    iptables -D INPUT -p udp --dport 54000 -j ACCEPT 2>/dev/null || true
-    iptables -D OUTPUT -p udp --sport 54000 -j ACCEPT 2>/dev/null || true
-    iptables-save > /etc/iptables/rules.v4
-    systemctl restart netfilter-persistent || true
-
-    echo -e "${GREEN}[OK] UDP Custom désinstallé.${RESET}"
+    echo "[OK] UDP Custom désinstallé proprement"
 }
 
 install_socks_python() {
