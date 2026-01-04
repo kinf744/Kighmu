@@ -268,7 +268,7 @@ get_mtu() {
 
 setup_nftables() {
     # Autoriser le port SlowDNS si pas déjà présent
-    nft add rule inet slowdns input udp dport $PORT accept 2>/dev/null || true
+    nft add rule inet slowdns input udp dport $PORT limit rate 1000/second burst 50 packets accept
 }
 
 log "Attente de l'interface réseau..."
@@ -325,7 +325,7 @@ StandardOutput=append:/var/log/slowdns.log
 StandardError=append:/var/log/slowdns.log
 SyslogIdentifier=slowdns
 LimitNOFILE=1048576
-Nice=0
+Nice=10
 CPUSchedulingPolicy=other
 IOSchedulingClass=best-effort
 IOSchedulingPriority=4
