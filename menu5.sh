@@ -154,11 +154,15 @@ uninstall_dropbear() {
 install_udp_custom() {
     SCRIPT_PATH="$HOME/Kighmu/udp-custom.go"
     BINARY_PATH="/usr/local/bin/udp-custom"
+    SERVICE_PATH="/etc/systemd/system/udp-custom.service"
+    LOG_DIR="/var/log/udp-custom"
+    LOG_FILE="$LOG_DIR/udp-custom.log"
     UDP_PORT="54000"
-    HTTP_PORT="85"
 
+    # Vérifie script Go
     [ ! -f "$SCRIPT_PATH" ] && { echo "[ERREUR] Script Go introuvable : $SCRIPT_PATH"; return 1; }
 
+    # Compilation
     echo "[INFO] Compilation du script Go..."
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o udp-custom "$SCRIPT_PATH"
     [ $? -ne 0 ] && { echo "[ERREUR] Compilation échouée."; return 1; }
@@ -166,37 +170,42 @@ install_udp_custom() {
     mv udp-custom "$BINARY_PATH"
     chmod +x "$BINARY_PATH"
 
-    SERVICE_PATH="/etc/systemd/system/udp-custom.service"
+    # Création du dossier de logs
+    mkdir -p "$LOG_DIR"
+    chown root:root "$LOG_DIR"
+    chmod 755 "$LOG_DIR"
+    touch "$LOG_FILE"
+    chmod 644 "$LOG_FILE"
+
+    # Création du service systemd
     cat > "$SERVICE_PATH" <<EOF
 [Unit]
-Description=UDP Custom Tunnel + HTTP Custom
+Description=UDP Custom Tunnel compatible HTTP Custom
 After=network.target
 Wants=network.target
 
 [Service]
 Type=simple
 User=root
-ExecStart=$BINARY_PATH -udp $UDP_PORT -http $HTTP_PORT
+ExecStart=$BINARY_PATH -udp $UDP_PORT
 Restart=always
-RestartSec=1
+RestartSec=2
 LimitNOFILE=1048576
-StandardOutput=journal
-StandardError=journal
+StandardOutput=append:$LOG_FILE
+StandardError=append:$LOG_FILE
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-    echo "[INFO] Reload et activation du service systemd..."
+    echo "[INFO] Reload systemd et activation du service..."
     systemctl daemon-reload
     systemctl enable udp-custom
     systemctl restart udp-custom
 
-    echo "[INFO] Ouverture du port UDP $UDP_PORT et TCP $HTTP_PORT via iptables..."
-    iptables -I INPUT -p udp --dport "$UDP_PORT" -j ACCEPT
-    iptables -I OUTPUT -p udp --sport "$UDP_PORT" -j ACCEPT
-    iptables -I INPUT -p tcp --dport "$HTTP_PORT" -j ACCEPT
-    iptables -I OUTPUT -p tcp --sport "$HTTP_PORT" -j ACCEPT
+    # Ouverture du port UDP via iptables
+    iptables -C INPUT -p udp --dport "$UDP_PORT" -j ACCEPT 2>/dev/null || iptables -I INPUT -p udp --dport "$UDP_PORT" -j ACCEPT
+    iptables -C OUTPUT -p udp --sport "$UDP_PORT" -j ACCEPT 2>/dev/null || iptables -I OUTPUT -p udp --sport "$UDP_PORT" -j ACCEPT
 
     # Sauvegarde iptables si netfilter-persistent présent
     if command -v netfilter-persistent >/dev/null 2>&1; then
@@ -204,7 +213,7 @@ EOF
         systemctl restart netfilter-persistent || true
     fi
 
-    echo "[OK] UDP Custom installé, service activé et ports ouverts."
+    echo "[OK] UDP Custom installé, service activé et port $UDP_PORT ouvert."
 }
 
 uninstall_udp_custom() {
