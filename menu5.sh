@@ -92,20 +92,28 @@ install_slowdns() {
 
 uninstall_slowdns() {
     echo ">>> Désinstallation complète SlowDNS..."
-    pkill -f slowdns || true
-    rm -rf "$HOME/.slowdns"
-    rm -f /usr/local/bin/slowdns
+
     systemctl stop slowdns.service 2>/dev/null || true
     systemctl disable slowdns.service 2>/dev/null || true
     rm -f /etc/systemd/system/slowdns.service
     systemctl daemon-reload
 
-    # Suppression des règles iptables
+    pkill -f dnstt-server || true
+    pkill -f slowdns-start.sh || true
+
+    rm -f /usr/local/bin/dnstt-server
+    rm -f /usr/local/bin/slowdns-start.sh
+    rm -rf /etc/slowdns
+
     iptables -D INPUT -p udp --dport 5300 -j ACCEPT 2>/dev/null || true
+    while iptables -t nat -C PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 5300 &>/dev/null; do
+        iptables -t nat -D PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 5300
+    done
+
     iptables-save > /etc/iptables/rules.v4
     systemctl restart netfilter-persistent
 
-    echo -e "${GREEN}[OK] SlowDNS désinstallé.${RESET}"
+    echo "[OK] SlowDNS désinstallé et toutes traces supprimées."
 }
 
 install_openssh() {
