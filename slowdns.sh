@@ -32,7 +32,7 @@ check_root() {
 install_dependencies() {
     log "Installation des dépendances..."
     apt-get update -q
-    apt-get install -y iptables iptables-persistent wget tcpdump curl jq python3 python3-venv python3-pip
+    apt-get install -y nftables nftables-persistent wget tcpdump curl jq python3 python3-venv python3-pip
 }
 
 install_slowdns_bin() {
