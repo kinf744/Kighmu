@@ -275,11 +275,8 @@ log "Attente de l'interface réseau..."
 interface=$(wait_for_interface)
 log "Interface détectée : $interface"
 
-source /etc/slowdns/slowdns.env
-
-REAL_MTU=$(get_mtu "$interface")
-log "MTU demandé : $SLOWDNS_MTU"
-log "MTU réel appliqué sur $interface : $REAL_MTU"
+REAL_MTU=$(ip link show "$interface" | awk '/mtu/ {for(i=1;i<=NF;i++){if($i=="mtu"){print $(i+1);exit}}}')
+log "MTU actuel de l'interface $interface : $REAL_MTU"
 
 setup_nftables "$interface"
 
