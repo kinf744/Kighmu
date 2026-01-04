@@ -203,6 +203,7 @@ FILES=(
   "ssl_tls.go"
   "histeria2.go"
   "bot2.go"
+  "udp-custom.go"
   "bot2_pannel.sh"
   "Delete_user_xray.sh"
   "install_v2ray.sh"
