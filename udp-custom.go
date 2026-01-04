@@ -1,6 +1,6 @@
 // ================================================================
 // udp-custom.go — Tunnel UDP Custom (HTTP Custom compatible)
-// Ubuntu 20.04 | Go 1.13+
+// Ubuntu 20.04 | Go 1.13
 // Auteur : @kighmu
 // Licence : MIT
 // ================================================================
@@ -24,20 +24,11 @@ const (
 	servicePath = "/etc/systemd/system/udp-custom.service"
 	binPath     = "/usr/local/bin/udp-custom"
 	defaultUDP  = "54000"
-	maxLogSize  = 10 * 1024 * 1024 // 10 MB
 )
 
-// =====================
-// Logging avec rotation simple
-// =====================
+// Logging avec création automatique du dossier
 func setupLogging() {
 	_ = os.MkdirAll(logDir, 0755)
-
-	// Rotation simple : renommer si trop grand
-	if fi, err := os.Stat(logFile); err == nil && fi.Size() > maxLogSize {
-		os.Rename(logFile, logFile+"."+time.Now().Format("20060102-150405"))
-	}
-
 	f, err := os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Fatal(err)
@@ -46,9 +37,7 @@ func setupLogging() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 }
 
-// =====================
-// Service systemd
-// =====================
+// Création et lancement service systemd
 func ensureSystemd(udpPort string) {
 	if _, err := os.Stat(servicePath); err == nil {
 		return
@@ -73,7 +62,16 @@ StandardError=journal
 WantedBy=multi-user.target
 `, binPath, udpPort)
 
-	if err := os.WriteFile(servicePath, []byte(unit), 0644); err != nil {
+	// Remplacement de os.WriteFile pour compat Go 1.13
+	f, err := os.OpenFile(servicePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		log.Printf("[SYSTEMD] Erreur écriture fichier service: %v", err)
+		return
+	}
+	defer f.Close()
+
+	_, err = f.Write([]byte(unit))
+	if err != nil {
 		log.Printf("[SYSTEMD] Erreur écriture fichier service: %v", err)
 		return
 	}
@@ -85,32 +83,30 @@ WantedBy=multi-user.target
 	log.Println("[SYSTEMD] Service systemd créé et lancé")
 }
 
-// =====================
-// Ouverture port UDP avec gestion du verrou iptables
-// =====================
+// Ouverture du port UDP via iptables
 func setupIptables(udpPort string) {
-	runIptables := func(args ...string) error {
-		cmd := exec.Command("iptables", args...)
-		return cmd.Run()
+	checkInput := exec.Command("iptables", "-C", "INPUT", "-p", "udp", "--dport", udpPort, "-j", "ACCEPT")
+	if checkInput.Run() != nil {
+		exec.Command("iptables", "-I", "INPUT", "-p", "udp", "--dport", udpPort, "-j", "ACCEPT").Run()
 	}
 
-	// INPUT
-	if err := runIptables("-C", "INPUT", "-p", "udp", "--dport", udpPort, "-j", "ACCEPT"); err != nil {
-		runIptables("-I", "INPUT", "-p", "udp", "--dport", udpPort, "-j", "ACCEPT")
-	}
-	// OUTPUT
-	if err := runIptables("-C", "OUTPUT", "-p", "udp", "--sport", udpPort, "-j", "ACCEPT"); err != nil {
-		runIptables("-I", "OUTPUT", "-p", "udp", "--sport", udpPort, "-j", "ACCEPT")
+	checkOutput := exec.Command("iptables", "-C", "OUTPUT", "-p", "udp", "--sport", udpPort, "-j", "ACCEPT")
+	if checkOutput.Run() != nil {
+		exec.Command("iptables", "-I", "OUTPUT", "-p", "udp", "--sport", udpPort, "-j", "ACCEPT").Run()
 	}
 
-	// Sauvegarde iptables (avec -w pour éviter les verrous)
-	exec.Command("sh", "-c", fmt.Sprintf("iptables-save -w > /etc/iptables/rules.v4")).Run()
+	// Sauvegarde iptables
+	if _, err := os.Stat("/etc/iptables/rules.v4"); err == nil {
+		exec.Command("sh", "-c", "iptables-save > /etc/iptables/rules.v4").Run()
+	} else {
+		os.MkdirAll("/etc/iptables", 0755)
+		exec.Command("sh", "-c", "iptables-save > /etc/iptables/rules.v4").Run()
+	}
+
 	log.Printf("[IPTABLES] Port UDP %s ouvert et règles sauvegardées", udpPort)
 }
 
-// =====================
 // Tunnel UDP pur
-// =====================
 func startUDPTunnel(udpPort string) {
 	addr, err := net.ResolveUDPAddr("udp", ":"+udpPort)
 	if err != nil {
@@ -128,23 +124,22 @@ func startUDPTunnel(udpPort string) {
 	for {
 		n, remoteAddr, err := conn.ReadFromUDP(buf)
 		if err != nil {
-			log.Printf("[UDP][ERREUR] Lecture depuis %s échouée: %v", remoteAddr, err)
+			log.Printf("[UDP] Erreur lecture depuis %s: %v", remoteAddr, err)
 			continue
 		}
+		log.Printf("[UDP] Paquet reçu de %s, %d bytes", remoteAddr, n)
 
-		log.Printf("[UDP] Paquet reçu de %s:%d, %d bytes", remoteAddr.IP, remoteAddr.Port, n)
-		log.Printf("[SESSION] %s:%d traité à %s", remoteAddr.IP, remoteAddr.Port, time.Now().Format(time.RFC3339))
-
+		// Echo pour compatibilité test client
 		_, err = conn.WriteToUDP(buf[:n], remoteAddr)
 		if err != nil {
-			log.Printf("[UDP][ERREUR] Écriture vers %s:%d échouée: %v", remoteAddr.IP, remoteAddr.Port, err)
+			log.Printf("[UDP] Erreur écriture vers %s: %v", remoteAddr, err)
 		}
+
+		// Session log
+		log.Printf("[SESSION] %s:%d traité à %s", remoteAddr.IP, remoteAddr.Port, time.Now().Format(time.RFC3339))
 	}
 }
 
-// =====================
-// MAIN
-// =====================
 func main() {
 	udpPort := flag.String("udp", defaultUDP, "UDP Tunnel port")
 	flag.Parse()
