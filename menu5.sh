@@ -154,10 +154,12 @@ uninstall_dropbear() {
 install_udp_custom() {
     SCRIPT_PATH="$HOME/Kighmu/udp-custom.go"
     BINARY_PATH="/usr/local/bin/udp-custom"
+    UDP_PORT="54000"
+    HTTP_PORT="85"
 
     [ ! -f "$SCRIPT_PATH" ] && { echo "[ERREUR] Script Go introuvable : $SCRIPT_PATH"; return 1; }
 
-    echo "Compilation du script Go..."
+    echo "[INFO] Compilation du script Go..."
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o udp-custom "$SCRIPT_PATH"
     [ $? -ne 0 ] && { echo "[ERREUR] Compilation échouée."; return 1; }
 
@@ -174,7 +176,7 @@ Wants=network.target
 [Service]
 Type=simple
 User=root
-ExecStart=$BINARY_PATH -http 85 -udp 54000 -target 127.0.0.1:22
+ExecStart=$BINARY_PATH -udp $UDP_PORT -http $HTTP_PORT
 Restart=always
 RestartSec=1
 LimitNOFILE=1048576
@@ -185,23 +187,24 @@ StandardError=journal
 WantedBy=multi-user.target
 EOF
 
+    echo "[INFO] Reload et activation du service systemd..."
     systemctl daemon-reload
     systemctl enable udp-custom
+    systemctl restart udp-custom
 
-    if command -v ufw >/dev/null 2>&1; then
-        ufw allow 54000/udp
-        ufw allow 85/tcp
-        ufw reload
-    elif command -v iptables >/dev/null 2>&1; then
-        iptables -I INPUT -p udp --dport 54000 -j ACCEPT
-        iptables -I OUTPUT -p udp --sport 54000 -j ACCEPT
-        iptables -I INPUT -p tcp --dport 85 -j ACCEPT
-        iptables -I OUTPUT -p tcp --sport 85 -j ACCEPT
-        command -v netfilter-persistent >/dev/null 2>&1 && { iptables-save > /etc/iptables/rules.v4; systemctl restart netfilter-persistent || true; }
+    echo "[INFO] Ouverture du port UDP $UDP_PORT et TCP $HTTP_PORT via iptables..."
+    iptables -I INPUT -p udp --dport "$UDP_PORT" -j ACCEPT
+    iptables -I OUTPUT -p udp --sport "$UDP_PORT" -j ACCEPT
+    iptables -I INPUT -p tcp --dport "$HTTP_PORT" -j ACCEPT
+    iptables -I OUTPUT -p tcp --sport "$HTTP_PORT" -j ACCEPT
+
+    # Sauvegarde iptables si netfilter-persistent présent
+    if command -v netfilter-persistent >/dev/null 2>&1; then
+        iptables-save > /etc/iptables/rules.v4
+        systemctl restart netfilter-persistent || true
     fi
 
-    systemctl restart udp-custom
-    echo "[OK] UDP Custom installé et service activé."
+    echo "[OK] UDP Custom installé, service activé et ports ouverts."
 }
 
 uninstall_udp_custom() {
