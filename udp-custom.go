@@ -33,6 +33,7 @@ func setupLogging() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer f.Close()
 	log.SetOutput(io.MultiWriter(os.Stdout, f))
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 }
@@ -79,7 +80,6 @@ WantedBy=multi-user.target
 
 // Ouverture du port UDP via iptables
 func setupIptables(udpPort string) {
-	// Vérifie si la règle existe déjà
 	checkInput := exec.Command("iptables", "-C", "INPUT", "-p", "udp", "--dport", udpPort, "-j", "ACCEPT")
 	if checkInput.Run() != nil {
 		exec.Command("iptables", "-I", "INPUT", "-p", "udp", "--dport", udpPort, "-j", "ACCEPT").Run()
@@ -90,7 +90,6 @@ func setupIptables(udpPort string) {
 		exec.Command("iptables", "-I", "OUTPUT", "-p", "udp", "--sport", udpPort, "-j", "ACCEPT").Run()
 	}
 
-	// Sauvegarde iptables
 	if _, err := os.Stat("/etc/iptables/rules.v4"); err == nil {
 		exec.Command("sh", "-c", "iptables-save > /etc/iptables/rules.v4").Run()
 	} else {
