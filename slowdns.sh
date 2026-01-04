@@ -93,26 +93,34 @@ disable_systemd_resolved() {
 }
 
 configure_nftables() {
-    log "Configuration du pare-feu SlowDNS (isolée, non globale)..."
+    log "Configuration nftables SlowDNS (corrigée, safe)..."
 
-    # Créer table spécifique SlowDNS si elle n'existe pas
-    nft list tables slowdns &>/dev/null || nft add table inet slowdns
+    # Créer table SlowDNS
+    nft list table inet slowdns &>/dev/null || nft add table inet slowdns
 
-    # Chaîne INPUT dédiée
+    # Chaîne INPUT (PAS de policy drop)
     nft list chain inet slowdns input &>/dev/null || \
-        nft add chain inet slowdns input { type filter hook input priority 0 \; policy accept \; }
+        nft add chain inet slowdns input { type filter hook input priority 0 \; }
 
-    # Chaîne PREROUTING dédiée pour NAT
-    nft list chain inet slowdns prerouting &>/dev/null || \
-        nft add chain inet slowdns prerouting { type nat hook prerouting priority 0 \; policy accept \; }
+    # 🔥 OBLIGATOIRE – flux retour
+    nft add rule inet slowdns input ct state established,related accept 2>/dev/null || true
 
-    # Autoriser uniquement le port SlowDNS
+    # Loopback
+    nft add rule inet slowdns input iif lo accept 2>/dev/null || true
+
+    # ICMP (MTU + DNS stabilité)
+    nft add rule inet slowdns input ip protocol icmp accept 2>/dev/null || true
+
+    # SlowDNS UDP
     nft add rule inet slowdns input udp dport $PORT accept 2>/dev/null || true
 
-    # Redirection DNS uniquement vers SlowDNS
-    nft add rule inet slowdns prerouting udp dport 53 redirect to :$PORT 2>/dev/null || true
+    # DNS standard (au cas où client utilise 53)
+    nft add rule inet slowdns input udp dport 53 accept 2>/dev/null || true
 
-    log "✅ Règles nftables SlowDNS appliquées en isolation"
+    # Backend SSH
+    nft add rule inet slowdns input tcp dport 22 accept 2>/dev/null || true
+
+    log "✅ nftables SlowDNS configuré correctement"
 }
 
 # ============================
@@ -272,7 +280,6 @@ get_mtu() {
 }
 
 setup_nftables() {
-    # Autoriser le port SlowDNS si pas déjà présent
     nft add rule inet slowdns input udp dport $PORT limit rate 1000/second burst 50 packets accept
 }
 
@@ -282,8 +289,6 @@ log "Interface détectée : $interface"
 
 REAL_MTU=$(ip link show "$interface" | awk '/mtu/ {for(i=1;i<=NF;i++){if($i=="mtu"){print $(i+1);exit}}}')
 log "MTU actuel de l'interface $interface : $REAL_MTU"
-
-setup_nftables "$interface"
 
 NS=$(cat "$CONFIG_FILE")
 
