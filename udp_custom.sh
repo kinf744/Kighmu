@@ -98,6 +98,8 @@ LimitNOFILE=1048576
 StandardOutput=append:$BIN_LOG
 StandardError=append:$BIN_LOG
 NoNewPrivileges=true
+CPUSchedulingPolicy=other
+Nice=10
 
 [Install]
 WantedBy=multi-user.target
@@ -125,7 +127,7 @@ fi
 
 # ================= SUIVI UDP EN TEMPS RÉEL =================
 log "🔹 Démarrage suivi temps réel des paquets UDP entrants sur le port $UDP_PORT"
-nohup tcpdump -n -i any udp port "$UDP_PORT" -vvv -l >> "$TCPDUMP_LOG" 2>&1 &
+nohup tcpdump -n -i eth0 udp port "$UDP_PORT" -v >> "$TCPDUMP_LOG" 2>&1 &
 
 log "✅ Suivi UDP lancé, logs disponibles dans $TCPDUMP_LOG"
 log "============================================"
