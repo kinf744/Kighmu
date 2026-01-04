@@ -33,6 +33,14 @@ install_dependencies() {
     log "Installation des dépendances..."
     apt-get update -q
     apt-get install -y nftables wget tcpdump curl jq python3 python3-venv python3-pip
+    systemctl enable nftables
+    systemctl start nftables
+    if [ ! -f /etc/nftables.conf ]; then
+        echo 'flush ruleset' > /etc/nftables.conf
+    fi
+    nft flush ruleset
+    nft -f /etc/nftables.conf
+    log "✅ Dépendances installées et nftables prêt pour persistance"
 }
 
 install_slowdns_bin() {
