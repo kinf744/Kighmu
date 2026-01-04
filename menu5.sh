@@ -17,7 +17,7 @@ afficher_modes_ports() {
     if systemctl is-active --quiet ssh || pgrep -x sshd >/dev/null 2>&1; then any_active=1; fi
     if systemctl is-active --quiet dropbear || pgrep -x dropbear >/dev/null 2>&1; then any_active=1; fi
     if systemctl is-active --quiet slowdns.service || pgrep -f "sldns-server" >/dev/null 2>&1 || screen -list | grep -q slowdns_session; then any_active=1; fi
-    if systemctl is-active --quiet udp-custom.service || pgrep -f udp-custom-linux-amd64 >/dev/null 2>&1 || screen -list | grep -q udp-custom; then any_active=1; fi
+    if systemctl is-active --quiet udp_custom.service || pgrep -f udp_custom-linux-amd64 >/dev/null 2>&1 || screen -list | grep -q udp_custom; then any_active=1; fi
     if systemctl is-active --quiet socks_python.service || pgrep -f KIGHMUPROXY.py >/dev/null 2>&1 || screen -list | grep -q socks_python; then any_active=1; fi
     if systemctl is-active --quiet socks_python_ws.service || pgrep -f ws2_proxy.py >/dev/null 2>&1; then any_active=1; fi
     if systemctl is-active --quiet ssl_tls.service || pgrep -f stunnel >/dev/null 2>&1; then any_active=1; fi
@@ -41,7 +41,7 @@ afficher_modes_ports() {
     if systemctl is-active --quiet slowdns.service || pgrep -f "sldns-server" >/dev/null 2>&1 || screen -list | grep -q slowdns_session; then
         echo -e "  - SlowDNS: ${GREEN}ports UDP 5300${RESET}"
     fi
-    if systemctl is-active --quiet udp-custom.service || pgrep -f udp-custom-linux-amd64 >/dev/null 2>&1 || screen -list | grep -q udp-custom; then
+    if systemctl is-active --quiet udp_custom.service || pgrep -f ud_custom-linux-amd64 >/dev/null 2>&1 || screen -list | grep -q udp_custom; then
         echo -e "  - UDP Custom: ${GREEN}port UDP 54000${RESET}"
     fi
     if systemctl is-active --quiet socks_python.service || pgrep -f KIGHMUPROXY.py >/dev/null 2>&1 || screen -list | grep -q socks_python; then
@@ -152,90 +152,42 @@ uninstall_dropbear() {
 }
 
 install_udp_custom() {
-    SCRIPT_PATH="$HOME/Kighmu/udp-custom.go"
-    BINARY_PATH="/usr/local/bin/udp-custom"
-    SERVICE_PATH="/etc/systemd/system/udp-custom.service"
-    LOG_DIR="/var/log/udp-custom"
-    LOG_FILE="$LOG_DIR/udp-custom.log"
-    UDP_PORT="54000"
-    HTTP_PORT="85"
+    echo ">>> Installation UDP Custom via script..."
+    bash "$HOME/Kighmu/udp_custom.sh" || echo "Script introuvable."
+}
 
-    # Vérifie script Go
-    [ ! -f "$SCRIPT_PATH" ] && { echo "[ERREUR] Script Go introuvable : $SCRIPT_PATH"; return 1; }
+uninstall_udp_custom() {
+    echo ">>> Désinstallation UDP Custom..."
 
-    # Compilation
-    echo "[INFO] Compilation du script Go..."
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o udp-custom "$SCRIPT_PATH"
-    [ $? -ne 0 ] && { echo "[ERREUR] Compilation échouée."; return 1; }
-
-    mv udp-custom "$BINARY_PATH"
-    chmod +x "$BINARY_PATH"
-
-    # Création du dossier de logs
-    mkdir -p "$LOG_DIR"
-    chown root:root "$LOG_DIR"
-    chmod 755 "$LOG_DIR"
-    touch "$LOG_FILE"
-    chmod 644 "$LOG_FILE"
-
-    # Création du service systemd
-    cat > "$SERVICE_PATH" <<EOF
-[Unit]
-Description=UDP Custom Tunnel compatible HTTP Custom
-After=network.target
-Wants=network.target
-
-[Service]
-Type=simple
-User=root
-ExecStart=$BINARY_PATH -udp $UDP_PORT
-Restart=always
-RestartSec=2
-LimitNOFILE=1048576
-StandardOutput=append:$LOG_FILE
-StandardError=append:$LOG_FILE
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-    echo "[INFO] Reload systemd et activation du service..."
-    systemctl daemon-reload
-    systemctl enable udp-custom
-    systemctl restart udp-custom
-
-    # Ouverture des ports UDP et TCP via iptables
-    iptables -w -C INPUT -p udp --dport "$UDP_PORT" -j ACCEPT 2>/dev/null || iptables -w -I INPUT -p udp --dport "$UDP_PORT" -j ACCEPT
-    iptables -w -C OUTPUT -p udp --sport "$UDP_PORT" -j ACCEPT 2>/dev/null || iptables -w -I OUTPUT -p udp --sport "$UDP_PORT" -j ACCEPT
-    iptables -w -C INPUT -p tcp --dport "$HTTP_PORT" -j ACCEPT 2>/dev/null || iptables -w -I INPUT -p tcp --dport "$HTTP_PORT" -j ACCEPT
-    iptables -w -C OUTPUT -p tcp --sport "$HTTP_PORT" -j ACCEPT 2>/dev/null || iptables -w -I OUTPUT -p tcp --sport "$HTTP_PORT" -j ACCEPT
-
-    # Sauvegarde iptables si netfilter-persistent présent
-    if command -v netfilter-persistent >/dev/null 2>&1; then
-        iptables-save > /etc/iptables/rules.v4
-        systemctl restart netfilter-persistent || true
+    # Arrêt des processus
+    pids=$(pgrep -f udp-custom-linux-amd64 || true)
+    if [ -n "$pids" ]; then
+        kill -15 $pids
+        sleep 2
+        pids=$(pgrep -f udp-custom-linux-amd64 || true)
+        if [ -n "$pids" ]; then
+            kill -9 $pids
+        fi
     fi
 
-    echo "[OK] UDP Custom installé, service activé, ports UDP $UDP_PORT et TCP $HTTP_PORT ouverts."
-}
-    
-uninstall_udp_custom() {
-    pids=$(pgrep -f udp-custom || true)
-    [ -n "$pids" ] && { kill -15 $pids; sleep 2; pids=$(pgrep -f udp-custom || true); [ -n "$pids" ] && kill -9 $pids; }
+    # Arrêt et suppression du service systemd
+    if systemctl list-units --full -all | grep -Fq 'udp_custom.service'; then
+        systemctl stop udp_custom.service || true
+        systemctl disable udp_custom.service || true
+        rm -f /etc/systemd/system/udp_custom.service
+        systemctl daemon-reload
+    fi
 
-    SERVICE_PATH="/etc/systemd/system/udp-custom.service"
-    [ -f "$SERVICE_PATH" ] && { systemctl stop udp-custom || true; systemctl disable udp-custom || true; rm -f "$SERVICE_PATH"; systemctl daemon-reload; }
+    # Suppression des fichiers d’installation
+    rm -rf /root/udp-custom
 
-    [ -f "/usr/local/bin/udp-custom" ] && rm -f /usr/local/bin/udp-custom
-    rm -rf "$HOME/Kighmu/udp-custom.go"
-
+    # Suppression des règles iptables persistantes
     iptables -D INPUT -p udp --dport 54000 -j ACCEPT 2>/dev/null || true
     iptables -D OUTPUT -p udp --sport 54000 -j ACCEPT 2>/dev/null || true
-    iptables -D INPUT -p tcp --dport 85 -j ACCEPT 2>/dev/null || true
-    iptables -D OUTPUT -p tcp --sport 85 -j ACCEPT 2>/dev/null || true
-    command -v netfilter-persistent >/dev/null 2>&1 && { iptables-save > /etc/iptables/rules.v4; systemctl restart netfilter-persistent || true; }
+    iptables-save > /etc/iptables/rules.v4
+    systemctl restart netfilter-persistent || true
 
-    echo "[OK] UDP Custom désinstallé."
+    echo -e "${GREEN}[OK] UDP Custom désinstallé.${RESET}"
 }
 
 install_socks_python() {
