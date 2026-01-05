@@ -98,34 +98,26 @@ configure_nftables() {
     systemctl enable nftables
     systemctl start nftables
 
-    # Table SlowDNS
+    # Création table slowdns
     nft list table inet slowdns &>/dev/null || nft add table inet slowdns
 
-    # INPUT chain (priority safe)
+    # Chain input pour filtrage
     nft list chain inet slowdns input &>/dev/null || \
-        nft add chain inet slowdns input { type filter hook input priority 100 \; policy accept \; }
+        nft add chain inet slowdns input { type filter hook input priority 0 \; policy drop \; }
 
-    # PREROUTING NAT pour redirection DNS
+    # Chain prerouting pour NAT / redirection
     nft list chain inet slowdns prerouting &>/dev/null || \
         nft add chain inet slowdns prerouting { type nat hook prerouting priority -100 \; policy accept \; }
 
-    # Flux retour
+    # INPUT chain rules
     nft add rule inet slowdns input ct state established,related accept 2>/dev/null || true
-
-    # Loopback
     nft add rule inet slowdns input iif lo accept 2>/dev/null || true
-
-    # ICMP
     nft add rule inet slowdns input ip protocol icmp accept 2>/dev/null || true
-
-    # SlowDNS port
     nft add rule inet slowdns input udp dport $PORT accept 2>/dev/null || true
-
-    # Redirection DNS 53 → SlowDNS 5300
-    nft add rule inet slowdns prerouting udp dport 53 dnat to :$PORT 2>/dev/null || true
-
-    # SSH
     nft add rule inet slowdns input tcp dport 22 accept 2>/dev/null || true
+
+    # PREROUTING NAT
+    nft add rule inet slowdns prerouting udp dport 53 redirect to :$PORT 2>/dev/null || true
 
     log "✅ nftables SlowDNS configuré correctement"
 }
