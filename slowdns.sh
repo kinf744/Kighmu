@@ -1,7 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
-# --- Configuration principale ---
+# ============================
+# VARIABLES PRINCIPALES
+# ============================
 SLOWDNS_DIR="/etc/slowdns"
 SLOWDNS_BIN="/usr/local/bin/dnstt-server"
 PORT=5300
@@ -9,270 +11,348 @@ CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 SERVER_PUB="$SLOWDNS_DIR/server.pub"
 ENV_FILE="$SLOWDNS_DIR/slowdns.env"
-BACKEND_CONF="$SLOWDNS_DIR/backend.conf"
 
-# --- Cloudflare API (actuel) ---
+# ⚠️ Remplacez par vos infos Cloudflare si nécessaire
 CF_API_TOKEN="7mn4LKcZARvdbLlCVFTtaX7LGM2xsnyjHkiTAt37"
 CF_ZONE_ID="7debbb8ea4946898a889c4b5745ab7eb"
+DOMAIN="kingom.ggff.net"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
-# --- Vérification root ---
-if [ "$EUID" -ne 0 ]; then
-  echo "Ce script doit être exécuté en root." >&2
-  exit 1
-fi
+# ============================
+# FONCTIONS DE BASE
+# ============================
+check_root() {
+    if [ "$EUID" -ne 0 ]; then
+        echo "Ce script doit être exécuté en root." >&2
+        exit 1
+    fi
+}
 
-# --- Création dossier ---
-mkdir -p "$SLOWDNS_DIR"
+install_dependencies() {
+    log "Installation des dépendances..."
+    apt-get update -q
+    apt-get install -y iptables iptables-persistent wget tcpdump curl jq python3 python3-venv python3-pip
+}
 
-# --- Désactivation propre de systemd-resolved + gestion resolv.conf SANS chattr ---
-log "Désactivation systemd-resolved et configuration DNS..."
-systemctl disable --now systemd-resolved.service || true
+install_slowdns_bin() {
+    if [ ! -x "$SLOWDNS_BIN" ]; then
+        log "Téléchargement du binaire SlowDNS..."
+        wget -q -O "$SLOWDNS_BIN" https://dnstt.network/dnstt-server-linux-amd64
+        chmod +x "$SLOWDNS_BIN"
+        if [ ! -x "$SLOWDNS_BIN" ]; then
+            echo "ERREUR : Échec du téléchargement du binaire SlowDNS." >&2
+            exit 1
+        fi
+    fi
+}
 
-# Supprimer attribut immuable si présent, puis recréer resolv.conf
-chattr -i /etc/resolv.conf 2>/dev/null || true
-rm -f /etc/resolv.conf
-cat <<EOF > /etc/resolv.conf
-nameserver 1.1.1.1
-nameserver 8.8.8.8
-options timeout:1
-options attempts:1
+install_fixed_keys() {
+    mkdir -p "$SLOWDNS_DIR"
+    echo "4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa" > "$SERVER_KEY"
+    echo "2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c" > "$SERVER_PUB"
+    chmod 600 "$SERVER_KEY"
+    chmod 644 "$SERVER_PUB"
+}
+
+configure_sysctl() {
+    log "Optimisation sysctl..."
+    sed -i '/# Optimisations SlowDNS/,+20d' /etc/sysctl.conf || true
+    cat <<EOF >> /etc/sysctl.conf
+
+# Optimisations SlowDNS
+net.core.rmem_max=8388608
+net.core.wmem_max=8388608
+net.core.rmem_default=262144
+net.core.wmem_default=262144
+net.core.optmem_max=25165824
+net.ipv4.udp_rmem_min=16384
+net.ipv4.udp_wmem_min=16384
+net.ipv4.tcp_fastopen=3
+net.ipv4.tcp_fin_timeout=10
+net.ipv4.tcp_tw_reuse=1
+net.ipv4.tcp_mtu_probing=1
+net.ipv4.ip_forward=1
 EOF
-chmod 644 /etc/resolv.conf
+    sysctl -p
+}
 
-# --- Dépendances ---
-log "Installation des dépendances..."
-export DEBIAN_FRONTEND=noninteractive
-apt update -y
-apt install -y nftables curl tcpdump jq python3 python3-venv python3-pip iproute2
+# ============================
+# GESTION DU MTU
+# ============================
+set_mtu() {
+    local mtu="$1"
 
-# Activer nftables au boot
-systemctl enable nftables
-systemctl start nftables
+    if ! [[ "$mtu" =~ ^[0-9]+$ ]] || [ "$mtu" -lt 90 ] || [ "$mtu" -gt 1500 ]; then
+        echo "❌ MTU invalide (90–1500 requis)"
+        exit 1
+    fi
 
-# --- Création venv et paquet Cloudflare python ---
-if [ ! -d "$SLOWDNS_DIR/venv" ]; then
-  python3 -m venv "$SLOWDNS_DIR/venv"
-fi
-source "$SLOWDNS_DIR/venv/bin/activate"
-pip install --upgrade pip >/dev/null
-pip install cloudflare >/dev/null || log "pip install cloudflare failed (non fatal here)"
+    SLOWDNS_MTU="$mtu"
+    export SLOWDNS_MTU
+}
 
-# --- DNSTT (binaire) ---
-if [ ! -x "$SLOWDNS_BIN" ]; then
-  log "Téléchargement du binaire DNSTT..."
-  curl -fsSL -o "$SLOWDNS_BIN" https://dnstt.network/dnstt-server-linux-amd64
-  chmod +x "$SLOWDNS_BIN"
-fi
+ask_mtu() {
+    local mtu
+    while true; do
+        read -rp "Entrez le MTU à utiliser pour SlowDNS (ex: 1350) : " mtu
+        if [[ -n "$mtu" ]]; then
+            set_mtu "$mtu"
+            break
+        fi
+        echo "❌ Le MTU est obligatoire."
+    done
+}
 
-# --- Choix du backend (SSH / V2Ray / MIX) ---
+disable_systemd_resolved() {
+    log "Désactivation non-destructive de systemd-resolved..."
+    if systemctl list-unit-files | grep -q "^systemd-resolved.service"; then
+        systemctl stop systemd-resolved || true
+        systemctl disable systemd-resolved || true
+    fi
+    rm -f /etc/resolv.conf
+    echo "nameserver 8.8.8.8" > /etc/resolv.conf
+}
+
+configure_iptables() {
+    log "Configuration du pare-feu via iptables..."
+
+    # Autoriser DNS entrant
+    if ! iptables -C INPUT -p udp --dport 53 -j ACCEPT &>/dev/null; then
+        iptables -I INPUT -p udp --dport 53 -j ACCEPT
+    fi
+
+    # Autoriser le port SlowDNS
+    if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
+        iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
+    fi
+
+    # REDIRECT UDP 53 -> PORT SlowDNS (NAT)
+    if ! iptables -t nat -C PREROUTING -p udp --dport 53 -j REDIRECT --to-ports "$PORT" &>/dev/null; then
+        iptables -t nat -I PREROUTING -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
+    fi
+
+    # Sauvegarde pour persistance
+    iptables-save > /etc/iptables/rules.v4
+    systemctl enable netfilter-persistent
+    systemctl restart netfilter-persistent
+
+    log "Persistance iptables activée via netfilter-persistent."
+}
+
+# ============================
+# CHOIX BACKEND
+# ============================
 choose_backend() {
     echo ""
     echo "+--------------------------------------------+"
     echo "|      CHOIX DU MODE BACKEND SLOWDNS         |"
     echo "+--------------------------------------------+"
-    echo "1) SSH direct"
-    echo "2) V2Ray direct"
-    echo "3) WS direct"
+    echo "1) SSH"
+    echo "2) V2Ray"
+    echo "3) WS"
     echo ""
-    read -rp "Sélectionnez le mode [1-3] : " mode
-    case "$mode" in
-        1) BACKEND_MODE="ssh" ;;
-        2) BACKEND_MODE="v2ray" ;;
-        3) BACKEND_MODE="mix" ;;
-        *) echo "Mode invalide."; exit 1 ;;
+    read -rp "Sélectionnez le backend [1-3] : " BACKEND_CHOICE
+    case "$BACKEND_CHOICE" in
+        1) BACKEND="ssh" ;;
+        2) BACKEND="v2ray" ;;
+        3) BACKEND="mix" ;;
+        *) echo "Choix invalide." >&2; exit 1 ;;
     esac
-    echo "BACKEND_MODE=$BACKEND_MODE" > "$BACKEND_CONF"
-    log "Mode backend sélectionné : $BACKEND_MODE"
+    echo "Backend sélectionné : $BACKEND"
 }
 
-# --- Choix du mode NS ---
-read -rp "Choisissez le mode d'installation [auto/man] : " MODE
-MODE=${MODE,,}
-
-generate_ns_auto() {
-  DOMAIN="kingom.ggff.net"
-  VPS_IP=$(curl -s ipv4.icanhazip.com || echo "127.0.0.1")
-  SUB_A="vpn-$(date +%s | sha256sum | head -c 6)"
-  FQDN_A="$SUB_A.$DOMAIN"
-  log "Création du A : $FQDN_A -> $VPS_IP"
-
-  curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
-    -H "Authorization: Bearer $CF_API_TOKEN" \
-    -H "Content-Type: application/json" \
-    --data "{"type":"A","name":"$FQDN_A","content":"$VPS_IP","ttl":120,"proxied":false}" \
-    | jq . || log "Création A Cloudflare retournée avec erreur"
-
-  SUB_NS="ns-$(date +%s | sha256sum | head -c 6)"
-  NS="$SUB_NS.$DOMAIN"
-  log "Création du NS : $NS -> $FQDN_A"
-
-  curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
-    -H "Authorization: Bearer $CF_API_TOKEN" \
-    -H "Content-Type: application/json" \
-    --data "{"type":"NS","name":"$NS","content":"$FQDN_A","ttl":120}" \
-    | jq . || log "Création NS Cloudflare retournée avec erreur"
-
-  echo -e "NS=$NS
-ENV_MODE=auto" > "$ENV_FILE"
-  chmod 600 "$ENV_FILE"
-  log "NS auto sauvegardé : $NS"
-  echo "$NS"
+# ============================
+# CHOIX MODE AUTO / MAN
+# ============================
+choose_mode() {
+    echo ""
+    echo "+--------------------------------------------+"
+    echo "|        CHOIX MODE AUTO / MANUEL            |"
+    echo "+--------------------------------------------+"
+    echo "1) AUTO (NS Cloudflare généré automatiquement)"
+    echo "2) MAN (NS à saisir manuellement)"
+    echo ""
+    read -rp "Sélectionnez le mode [1-2] : " MODE_CHOICE
+    case "$MODE_CHOICE" in
+        1) MODE="auto" ;;
+        2) MODE="man" ;;
+        *) echo "Choix invalide." >&2; exit 1 ;;
+    esac
+    echo "Mode sélectionné : $MODE"
 }
 
-# --- Gestion du NS persistant ---
-if [[ "$MODE" == "auto" ]]; then
-  if [[ -f "$ENV_FILE" ]]; then
-    source "$ENV_FILE"
-    if [[ "${ENV_MODE:-}" == "auto" && -n "${NS:-}" ]]; then
-      log "NS auto existant détecté : $NS"
-    else
-      log "NS manuel existant → génération d'un nouveau NS auto..."
-      NS=$(generate_ns_auto)
+# ============================
+# GESTION NS
+# ============================
+
+create_ns_cloudflare() {
+    VPS_IP=$(curl -s https://ipv4.icanhazip.com || curl -s https://ifconfig.me)
+
+    if [[ -z "$VPS_IP" ]]; then
+        echo "Impossible de détecter l'IP publique du VPS" >&2
+        exit 1
     fi
-  else
-    log "Aucun fichier NS existant → génération NS auto..."
-    NS=$(generate_ns_auto)
-  fi
-elif [[ "$MODE" == "man" ]]; then
-  read -rp "Entrez le NameServer (NS) à utiliser : " NS
-  echo -e "NS=$NS
-ENV_MODE=man" > "$ENV_FILE"
-  chmod 600 "$ENV_FILE"
-  log "NS manuel sauvegardé : $NS"
-else
-  echo "Mode invalide." >&2
-  exit 1
-fi
 
-# --- Choix backend AVANT écriture config ---
-choose_backend
+    SUB_A="a$(date +%s | tail -c 6)"
+    SUB_NS="ns$(date +%s | tail -c 6)"
 
-# --- Écriture du NS dans la config ---
-echo "$NS" > "$CONFIG_FILE"
-chmod 644 "$CONFIG_FILE"
-log "NS utilisé : $NS"
+    A_FQDN="$SUB_A.$DOMAIN"
+    NS_FQDN="$SUB_NS.$DOMAIN"
 
-# --- Clés fixes ---
-cat > "$SERVER_KEY" <<'KEY'
-4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa
-KEY
-cat > "$SERVER_PUB" <<'PUB'
-2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c
-PUB
-chmod 600 "$SERVER_KEY"
-chmod 644 "$SERVER_PUB"
+    log "Création A record : $A_FQDN → $VPS_IP"
 
-# --- Kernel tuning optimisé pour tunnel UDP ---
-log "Application des optimisations réseau..."
-cat > /etc/sysctl.d/99-slowdns.conf <<'EOF'
-net.core.rmem_max=67108864
-net.core.wmem_max=67108864
-net.core.rmem_default=8192000
-net.core.wmem_default=8192000
-net.core.netdev_max_backlog=60000
-net.core.somaxconn=4096
-net.ipv4.udp_rmem_min=32768
-net.ipv4.udp_wmem_min=32768
-net.ipv4.udp_mem=4096 87380 268435456
-net.core.optmem_max=65536
-net.ipv4.ip_forward=1
-net.ipv4.conf.all.rp_filter=0
-net.ipv4.conf.default.rp_filter=0
-net.ipv4.neigh.default.gc_thresh1=4096
-net.ipv4.neigh.default.gc_thresh2=8192
-net.ipv4.neigh.default.gc_thresh3=16384
-EOF
-sysctl --system >/dev/null || log "sysctl apply returned non-zero"
+    curl -fsSL -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
+        -H "Authorization: Bearer $CF_API_TOKEN" \
+        -H "Content-Type: application/json" \
+        --data "{
+            \"type\":\"A\",
+            \"name\":\"$A_FQDN\",
+            \"content\":\"$VPS_IP\",
+            \"ttl\":120,
+            \"proxied\":false
+        }" | jq -e '.success' >/dev/null || {
+            echo "Erreur création A record Cloudflare" >&2
+            exit 1
+        }
 
-# --- Wrapper SlowDNS startup ---
-cat > /usr/local/bin/slowdns-start.sh << 'EOF'
+    log "Création NS record : $NS_FQDN → $A_FQDN"
+
+    curl -fsSL -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
+        -H "Authorization: Bearer $CF_API_TOKEN" \
+        -H "Content-Type: application/json" \
+        --data "{
+            \"type\":\"NS\",
+            \"name\":\"$NS_FQDN\",
+            \"content\":\"$A_FQDN\",
+            \"ttl\":120
+        }" | jq -e '.success' >/dev/null || {
+            echo "Erreur création NS record Cloudflare" >&2
+            exit 1
+        }
+
+    echo "$NS_FQDN"
+}
+
+get_ns() {
+    if [[ "$MODE" == "auto" ]]; then
+        if [[ -f "$CONFIG_FILE" ]]; then
+            NS=$(cat "$CONFIG_FILE")
+            log "NS auto existant détecté : $NS"
+        else
+            log "Aucun NS auto trouvé, création via Cloudflare..."
+            NS=$(create_ns_cloudflare)
+            echo "$NS" > "$CONFIG_FILE"
+            log "NS Cloudflare créé et sauvegardé : $NS"
+        fi
+    else
+        read -rp "Entrez le NameServer (NS) (ex: ns.example.com) : " NS
+        if [[ -z "$NS" ]]; then
+            echo "NameServer invalide." >&2
+            exit 1
+        fi
+        echo "$NS" > "$CONFIG_FILE"
+    fi
+}
+
+# ============================
+# GESTION DU WRAPPER
+# ============================
+create_wrapper_script() {
+    cat <<'EOF' > /usr/local/bin/slowdns-start.sh
 #!/bin/bash
 set -euo pipefail
+
 SLOWDNS_DIR="/etc/slowdns"
 SLOWDNS_BIN="/usr/local/bin/dnstt-server"
 PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
-BACKEND_CONF="$SLOWDNS_DIR/backend.conf"
+ENV_FILE="$SLOWDNS_DIR/slowdns.env"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
+if [[ -f "$ENV_FILE" ]]; then
+    source "$ENV_FILE"
+else
+    echo "Fichier $ENV_FILE manquant !" >&2
+    exit 1
+fi
+
 wait_for_interface() {
-  local iface=""
-  while [ -z "$iface" ]; do
-    iface=$(ip -o link show up | awk -F': ' '{print $2}' \
-      | grep -v '^lo$' \
-      | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' \
-      | head -n1)
-    [ -z "$iface" ] && sleep 1
-  done
-  echo "$iface"
+    interface=""
+    while [ -z "$interface" ]; do
+        interface=$(ip -o link show up | awk -F': ' '{print $2}' \
+                    | grep -v '^lo$' \
+                    | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' \
+                    | head -n1)
+        [ -z "$interface" ] && sleep 2
+    done
+    echo "$interface"
 }
 
-select_backend_target() {
-    local mode target ssh_port
-    mode="ssh"
-    if [ -f "$BACKEND_CONF" ]; then
-        source "$BACKEND_CONF"
-        mode="${BACKEND_MODE:-ssh}"
+get_mtu() {
+    local iface="$1"
+    ip link show "$iface" | awk '/mtu/ {for(i=1;i<=NF;i++){if($i=="mtu"){print $(i+1);exit}}}'
+}
+
+setup_iptables() {
+    interface="$1"
+    if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
+        iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
     fi
-
-    case "$mode" in
-        ssh)
-            ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2 || echo 22)
-            [ -z "$ssh_port" ] && ssh_port=22
-            target="127.0.0.1:$ssh_port"
-            printf '[%s] Mode backend : SSH (%s)
-' "$(date '+%Y-%m-%d %H:%M:%S')" "$target" >&2
-            ;;
-        v2ray)
-            target="127.0.0.1:5401"
-            printf '[%s] Mode backend : V2Ray (%s)
-' "$(date '+%Y-%m-%d %H:%M:%S')" "$target" >&2
-            ;;
-        mix)
-            target="127.0.0.1:80"
-            printf '[%s] Mode backend : MIX (via V2Ray %s)
-' "$(date '+%Y-%m-%d %H:%M:%S')" "$target" >&2
-            ;;
-        *)
-            target="127.0.0.1:22"
-            printf '[%s] Mode backend inconnu, fallback SSH (%s)
-' "$(date '+%Y-%m-%d %H:%M:%S')" "$target" >&2
-            ;;
-    esac
-    echo "$target"
 }
 
-iface=$(wait_for_interface)
-log "Interface détectée : $iface"
+log "Attente de l'interface réseau..."
+interface=$(wait_for_interface)
+log "Interface détectée : $interface"
 
-# MTU dynamique
-for mtu in 1500 1450 1400 1350 932; do
-  if ping -M do -s $((mtu-28)) -c 1 1.1.1.1 >/dev/null 2>&1; then
-    ip link set dev "$iface" mtu $mtu || true
-    log "MTU réglée à $mtu"
-    break
-  fi
-done
+source /etc/slowdns/slowdns.env
 
-NS=$(cat "$CONFIG_FILE" 2>/dev/null || echo "")
-backend_target=$(select_backend_target)
+SLOWDNS_MTU="${MTU:?MTU non défini dans slowdns.env}"
 
-log "Démarrage SlowDNS → $backend_target"
-exec nice -n 0 "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" "$backend_target"
+ip link set dev "$interface" mtu "$SLOWDNS_MTU"
+
+REAL_MTU=$(get_mtu "$interface")
+log "MTU demandé : $SLOWDNS_MTU"
+log "MTU réel appliqué sur $interface : $REAL_MTU"
+
+setup_iptables "$interface"
+
+NS=$(cat "$CONFIG_FILE")
+
+case "$BACKEND" in
+    ssh)
+        backend_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
+        [ -z "$backend_port" ] && backend_port=22
+        ;;
+    v2ray)
+        backend_port=5401
+        ;;
+    mix)
+        backend_port=80
+        ;;
+    *)
+        backend_port=22
+        ;;
+esac
+
+exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 127.0.0.1:$backend_port
 EOF
 
-chmod +x /usr/local/bin/slowdns-start.sh
+    chmod +x /usr/local/bin/slowdns-start.sh
+}
 
-# --- Service systemd ---
-cat > /etc/systemd/system/slowdns.service <<'EOF'
+# ============================
+# SERVICE SYSTEMD
+# ============================
+create_systemd_service() {
+    cat <<EOF > /etc/systemd/system/slowdns.service
 [Unit]
-Description=SlowDNS Server Tunnel (DNSTT) - Multi Backend
+Description=SlowDNS Server Tunnel
 After=network-online.target
 Wants=network-online.target
+Documentation=https://github.com/fisabiliyusri/SLDNS
 
 [Service]
 Type=simple
@@ -280,61 +360,78 @@ User=root
 ExecStart=/usr/local/bin/slowdns-start.sh
 Restart=on-failure
 RestartSec=3
-LimitNOFILE=1048576
-LimitNPROC=65535
-TasksMax=infinity
 StandardOutput=append:/var/log/slowdns.log
 StandardError=append:/var/log/slowdns.log
+SyslogIdentifier=slowdns
+LimitNOFILE=1048576
+Nice=0
+CPUSchedulingPolicy=other
+IOSchedulingClass=best-effort
+IOSchedulingPriority=4
+TimeoutStartSec=20
+NoNewPrivileges=yes
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# --- nftables optimisée pour SlowDNS ---
-mkdir -p /etc/nftables.d
-cat > /etc/nftables.d/slowdns.nft <<'EOF'
-table inet slowdns {
-  chain prerouting {
-    type nat hook prerouting priority -100; policy accept;
-    udp dport 53 redirect to :5300
-  }
-  chain input {
-    type filter hook input priority 0; policy accept;
-    udp dport 5300 accept
-  }
+    systemctl daemon-reload
+    systemctl enable slowdns.service
+    systemctl restart slowdns.service
 }
+
+# ============================
+# MAIN
+# ============================
+main() {
+    check_root
+    install_dependencies
+    install_slowdns_bin
+    install_fixed_keys
+    disable_systemd_resolved
+    configure_sysctl
+    ask_mtu
+    configure_iptables
+
+    choose_backend
+    choose_mode
+    get_ns
+
+    # Génération fichier slowdns.env avant le wrapper
+    cat <<EOF > "$ENV_FILE"
+NS=$NS
+PUB_KEY=$(cat "$SERVER_PUB")
+PRIV_KEY=$(cat "$SERVER_KEY")
+BACKEND=$BACKEND
+MODE=$MODE
+MTU=$SLOWDNS_MTU
 EOF
+    chmod 600 "$ENV_FILE"
+    log "Fichier slowdns.env généré avec succès."
 
-# Ajout persistant
-if ! grep -q "/etc/nftables.d/slowdns.nft" /etc/nftables.conf 2>/dev/null; then
-  echo 'include "/etc/nftables.d/slowdns.nft"' >> /etc/nftables.conf
-fi
+    create_wrapper_script
+    create_systemd_service
 
-# --- systemd pour nftables SlowDNS ---
-cat > /etc/systemd/system/nftables-slowdns.service <<'EOF'
-[Unit]
-Description=nftables NAT redirect UDP 53 -> 5300 for SlowDNS
-After=network-online.target nftables.service
-Wants=network-online.target nftables.service
+    PUB_KEY=$(cat "$SERVER_PUB")
+    echo ""
+    echo "+--------------------------------------------+"
+    echo "|          CONFIGURATION SLOWDNS             |"
+    echo "+--------------------------------------------+"
+    echo ""
+    echo "Clé publique : $PUB_KEY"
+    echo "NameServer  : $NS"
+    echo "Backend     : $BACKEND"
+    echo "Mode        : $MODE"
+    echo "MTU         : $SLOWDNS_MTU"
+    echo ""
+    echo "IMPORTANT : Pour améliorer le débit SSH, modifiez /etc/ssh/sshd_config :"
+    echo "Ciphers aes128-ctr,aes192-ctr,aes128-gcm@openssh.com"
+    echo "MACs hmac-sha2-256-etm@openssh.com,hmac-sha2-256"
+    echo "Compression yes"
+    echo "Puis redémarrez SSH : systemctl restart sshd"
+    echo ""
+    echo ""
+    log "Installation et configuration SlowDNS terminées."
+}
 
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-ExecStart=/usr/sbin/nft -f /etc/nftables.d/slowdns.nft
-ExecStop=/usr/sbin/nft delete table inet slowdns || true
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# --- Activation services ---
-systemctl daemon-reload
-systemctl enable nftables-slowdns.service
-systemctl start nftables-slowdns.service
-systemctl enable slowdns.service
-systemctl restart slowdns.service
-
-log "Installation terminée."
-log "SlowDNS démarré avec nftables (REDIRECT UDP 53 -> 5300). NS: $NS | Backend: $BACKEND_MODE"
-echo "Clé publique : $(cat "$SERVER_PUB")"
-echo "Configuration : $NS → $BACKEND_MODE"
+main "$@"
