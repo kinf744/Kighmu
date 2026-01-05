@@ -93,47 +93,31 @@ disable_systemd_resolved() {
 }
 
 configure_nftables() {
-    log "Configuration nftables SlowDNS (corrigée et stable)..."
+    log "⚡ Configuration nftables SlowDNS (prioritaire, sans conflit UDP Custom)..."
 
-    # Activation nftables
-    systemctl enable nftables >/dev/null 2>&1 || true
-    systemctl restart nftables || true
+    systemctl enable nftables
+    systemctl start nftables
 
-    # Variables
-    DNS_PORT=53
-    SLOWDNS_PORT="$PORT"
+    # Table SlowDNS
+    nft list table inet slowdns &>/dev/null || nft add table inet slowdns
 
-    # Nettoyage complet pour éviter conflits / doublons
-    nft delete table inet slowdns 2>/dev/null || true
+    # INPUT
+    nft list chain inet slowdns input &>/dev/null || \
+        nft add chain inet slowdns input { type filter hook input priority -300 \; policy accept \; }
 
-    # Création table
-    nft add table inet slowdns
+    nft add rule inet slowdns input ct state established,related accept 2>/dev/null || true
+    nft add rule inet slowdns input iif lo accept 2>/dev/null || true
+    nft add rule inet slowdns input ip protocol icmp accept 2>/dev/null || true
+    nft add rule inet slowdns input udp dport 5300 accept 2>/dev/null || true
+    nft add rule inet slowdns input tcp dport 22 accept 2>/dev/null || true
 
-    # ==============================
-    # INPUT CHAIN (filtrage)
-    # ==============================
-    nft add chain inet slowdns input { \
-        type filter hook input priority 0 \; policy accept \; }
+    # PREROUTING NAT (AVANT UDP Custom)
+    nft list chain inet slowdns prerouting &>/dev/null || \
+        nft add chain inet slowdns prerouting { type nat hook prerouting priority -300 \; policy accept \; }
 
-    nft add rule inet slowdns input ct state established,related accept
-    nft add rule inet slowdns input iif lo accept
-    nft add rule inet slowdns input ip protocol icmp accept
+    nft add rule inet slowdns prerouting udp dport 53 redirect to :5300 2>/dev/null || true
 
-    # Autoriser SlowDNS
-    nft add rule inet slowdns input udp dport "$SLOWDNS_PORT" accept
-
-    # Autoriser SSH
-    nft add rule inet slowdns input tcp dport 22 accept
-
-    # ==============================
-    # PREROUTING NAT (DNS → SlowDNS)
-    # ==============================
-    nft add chain inet slowdns prerouting { \
-        type nat hook prerouting priority dstnat \; policy accept \; }
-
-    nft add rule inet slowdns prerouting udp dport "$DNS_PORT" counter redirect to :"$SLOWDNS_PORT"
-
-    log "✅ nftables SlowDNS configuré correctement"
+    log "✅ SlowDNS prioritaire (port 53 protégé)"
 }
 
 # ============================
