@@ -32,7 +32,7 @@ check_root() {
 install_dependencies() {
     log "Installation des dépendances..."
     apt-get update -q
-    apt-get install -y iptables iptables-persistent wget tcpdump curl jq python3 python3-venv python3-pip
+    apt-get install -y nftables wget tcpdump curl jq python3 python3-venv python3-pip
 }
 
 install_slowdns_bin() {
@@ -56,52 +56,30 @@ install_fixed_keys() {
 }
 
 configure_sysctl() {
-    log "Optimisation sysctl..."
+    log "Optimisation sysctl pour VPS léger..."
+
+    # Supprimer ancienne section SlowDNS si existante
     sed -i '/# Optimisations SlowDNS/,+20d' /etc/sysctl.conf || true
+
     cat <<EOF >> /etc/sysctl.conf
 
-# Optimisations SlowDNS
-net.core.rmem_max=8388608
-net.core.wmem_max=8388608
-net.core.rmem_default=262144
-net.core.wmem_default=262144
-net.core.optmem_max=25165824
-net.ipv4.udp_rmem_min=16384
-net.ipv4.udp_wmem_min=16384
+# Optimisations SlowDNS légères pour VPS 2c/2Go
+net.core.rmem_max=2097152       # 2MB
+net.core.wmem_max=2097152       # 2MB
+net.core.rmem_default=131072    # 128KB
+net.core.wmem_default=131072    # 128KB
+net.core.optmem_max=8388608     # 8MB
+net.ipv4.udp_rmem_min=8192
+net.ipv4.udp_wmem_min=8192
 net.ipv4.tcp_fastopen=3
 net.ipv4.tcp_fin_timeout=10
 net.ipv4.tcp_tw_reuse=1
-net.ipv4.tcp_mtu_probing=1
+net.ipv4.tcp_mtu_probing=0       # Désactivé pour réduire CPU
 net.ipv4.ip_forward=1
 EOF
+
     sysctl -p
-}
-
-# ============================
-# GESTION DU MTU
-# ============================
-set_mtu() {
-    local mtu="$1"
-
-    if ! [[ "$mtu" =~ ^[0-9]+$ ]] || [ "$mtu" -lt 90 ] || [ "$mtu" -gt 1500 ]; then
-        echo "❌ MTU invalide (90–1500 requis)"
-        exit 1
-    fi
-
-    SLOWDNS_MTU="$mtu"
-    export SLOWDNS_MTU
-}
-
-ask_mtu() {
-    local mtu
-    while true; do
-        read -rp "Entrez le MTU à utiliser pour SlowDNS (ex: 1350) : " mtu
-        if [[ -n "$mtu" ]]; then
-            set_mtu "$mtu"
-            break
-        fi
-        echo "❌ Le MTU est obligatoire."
-    done
+    log "✅ Paramètres sysctl appliqués"
 }
 
 disable_systemd_resolved() {
@@ -114,30 +92,33 @@ disable_systemd_resolved() {
     echo "nameserver 8.8.8.8" > /etc/resolv.conf
 }
 
-configure_iptables() {
-    log "Configuration du pare-feu via iptables..."
+configure_nftables() {
+    log "⚡ Configuration nftables SlowDNS (stable et isolée)..."
 
-    # Autoriser DNS entrant
-    if ! iptables -C INPUT -p udp --dport 53 -j ACCEPT &>/dev/null; then
-        iptables -I INPUT -p udp --dport 53 -j ACCEPT
-    fi
+    # Activation nftables
+    systemctl enable nftables >/dev/null 2>&1 || true
+    systemctl start nftables >/dev/null 2>&1 || true
 
-    # Autoriser le port SlowDNS
-    if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
-        iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
-    fi
+    DNS_PORT=53
+    SLOWDNS_PORT="$PORT"
 
-    # REDIRECT UDP 53 -> PORT SlowDNS (NAT)
-    if ! iptables -t nat -C PREROUTING -p udp --dport 53 -j REDIRECT --to-ports "$PORT" &>/dev/null; then
-        iptables -t nat -I PREROUTING -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
-    fi
+    # Nettoyage de la table SlowDNS
+    nft delete table inet slowdns 2>/dev/null || true
+    nft add table inet slowdns
 
-    # Sauvegarde pour persistance
-    iptables-save > /etc/iptables/rules.v4
-    systemctl enable netfilter-persistent
-    systemctl restart netfilter-persistent
+    # Chaîne INPUT
+    nft add chain inet slowdns input { type filter hook input priority 0 \; policy accept \; }
+    nft add rule inet slowdns input ct state established,related accept
+    nft add rule inet slowdns input iif lo accept
+    nft add rule inet slowdns input ip protocol icmp accept
+    nft add rule inet slowdns input udp dport "$SLOWDNS_PORT" accept
+    nft add rule inet slowdns input tcp dport 22 accept
 
-    log "Persistance iptables activée via netfilter-persistent."
+    # PREROUTING NAT (DNS → SlowDNS)
+    nft add chain inet slowdns prerouting { type nat hook prerouting priority dstnat \; policy accept \; }
+    nft add rule inet slowdns prerouting udp dport "$DNS_PORT" redirect to :"$SLOWDNS_PORT"
+
+    log "✅ nftables SlowDNS appliqué correctement"
 }
 
 # ============================
@@ -296,28 +277,16 @@ get_mtu() {
     ip link show "$iface" | awk '/mtu/ {for(i=1;i<=NF;i++){if($i=="mtu"){print $(i+1);exit}}}'
 }
 
-setup_iptables() {
-    interface="$1"
-    if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
-        iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
-    fi
+setup_nftables() {
+    nft add rule inet slowdns input udp dport $PORT limit rate 1000/second burst 50 packets accept
 }
 
 log "Attente de l'interface réseau..."
 interface=$(wait_for_interface)
 log "Interface détectée : $interface"
 
-source /etc/slowdns/slowdns.env
-
-SLOWDNS_MTU="${MTU:?MTU non défini dans slowdns.env}"
-
-ip link set dev "$interface" mtu "$SLOWDNS_MTU"
-
-REAL_MTU=$(get_mtu "$interface")
-log "MTU demandé : $SLOWDNS_MTU"
-log "MTU réel appliqué sur $interface : $REAL_MTU"
-
-setup_iptables "$interface"
+REAL_MTU=$(ip link show "$interface" | awk '/mtu/ {for(i=1;i<=NF;i++){if($i=="mtu"){print $(i+1);exit}}}')
+log "MTU actuel de l'interface $interface : $REAL_MTU"
 
 NS=$(cat "$CONFIG_FILE")
 
@@ -364,7 +333,7 @@ StandardOutput=append:/var/log/slowdns.log
 StandardError=append:/var/log/slowdns.log
 SyslogIdentifier=slowdns
 LimitNOFILE=1048576
-Nice=0
+Nice=10
 CPUSchedulingPolicy=other
 IOSchedulingClass=best-effort
 IOSchedulingPriority=4
@@ -390,8 +359,7 @@ main() {
     install_fixed_keys
     disable_systemd_resolved
     configure_sysctl
-    ask_mtu
-    configure_iptables
+    configure_nftables
 
     choose_backend
     choose_mode
@@ -404,7 +372,6 @@ PUB_KEY=$(cat "$SERVER_PUB")
 PRIV_KEY=$(cat "$SERVER_KEY")
 BACKEND=$BACKEND
 MODE=$MODE
-MTU=$SLOWDNS_MTU
 EOF
     chmod 600 "$ENV_FILE"
     log "Fichier slowdns.env généré avec succès."
@@ -422,7 +389,6 @@ EOF
     echo "NameServer  : $NS"
     echo "Backend     : $BACKEND"
     echo "Mode        : $MODE"
-    echo "MTU         : $SLOWDNS_MTU"
     echo ""
     echo "IMPORTANT : Pour améliorer le débit SSH, modifiez /etc/ssh/sshd_config :"
     echo "Ciphers aes128-ctr,aes192-ctr,aes128-gcm@openssh.com"
