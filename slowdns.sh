@@ -93,31 +93,43 @@ disable_systemd_resolved() {
 }
 
 configure_nftables() {
-    log "Configuration nftables SlowDNS (stable)..."
+    log "⚡ Configuration nftables SlowDNS optimisée..."
 
+    # Activer nftables au boot
     systemctl enable nftables
     systemctl start nftables
 
-    # Création table slowdns
+    # --- Création table SlowDNS si absente ---
     nft list table inet slowdns &>/dev/null || nft add table inet slowdns
 
-    # Chain input pour filtrage
+    # --- Chain INPUT (filtrage) ---
     nft list chain inet slowdns input &>/dev/null || \
-        nft add chain inet slowdns input { type filter hook input priority 0 \; policy drop \; }
+        nft add chain inet slowdns input { type filter hook input priority 0 \; policy accept \; }
 
-    # Chain prerouting pour NAT / redirection
-    nft list chain inet slowdns prerouting &>/dev/null || \
-        nft add chain inet slowdns prerouting { type nat hook prerouting priority -100 \; policy accept \; }
-
-    # INPUT chain rules
+    # Accept etablis, loopback, ICMP
     nft add rule inet slowdns input ct state established,related accept 2>/dev/null || true
     nft add rule inet slowdns input iif lo accept 2>/dev/null || true
     nft add rule inet slowdns input ip protocol icmp accept 2>/dev/null || true
+
+    # Accept DNSTT port
     nft add rule inet slowdns input udp dport $PORT accept 2>/dev/null || true
+
+    # Accept SSH
     nft add rule inet slowdns input tcp dport 22 accept 2>/dev/null || true
 
-    # PREROUTING NAT
+    # --- Chain PREROUTING NAT pour redirection DNS ---
+    nft list chain inet slowdns prerouting &>/dev/null || \
+        nft add chain inet slowdns prerouting { type nat hook prerouting priority -100 \; policy accept \; }
+
+    # Redirection DNS 53 → SlowDNS $PORT
     nft add rule inet slowdns prerouting udp dport 53 redirect to :$PORT 2>/dev/null || true
+
+    # --- Bonus : flux retour pour DNSTT (masquerade si nécessaire) ---
+    nft list chain inet slowdns postrouting &>/dev/null || \
+        nft add chain inet slowdns postrouting { type nat hook postrouting priority 100 \; policy accept \; }
+
+    # Masquerade optionnel si VPS NAT derrière provider
+    # nft add rule inet slowdns postrouting oif != "lo" masquerade 2>/dev/null || true
 
     log "✅ nftables SlowDNS configuré correctement"
 }
