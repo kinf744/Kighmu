@@ -56,32 +56,25 @@ EOF
 log "✅ config.json créé"
 
 # ================= NFTABLES =================
-log "🔹 Configuration nftables isolées pour UDP $UDP_PORT"
+log "🔹 Configuration nftables UDP Custom..."
 
-systemctl enable nftables
-systemctl start nftables
+# Activation nftables
+systemctl enable nftables >/dev/null 2>&1 || true
+systemctl start nftables >/dev/null 2>&1 || true
 
-nft list tables udp_custom &>/dev/null || nft add table inet udp_custom
+# Création table UDP Custom
+nft delete table inet udp_custom 2>/dev/null || true
+nft add table inet udp_custom
 
-nft list chain inet udp_custom input &>/dev/null || \
+# Chaîne INPUT
 nft add chain inet udp_custom input { type filter hook input priority 0 \; policy accept \; }
-
-nft list chain inet udp_custom output &>/dev/null || \
-nft add chain inet udp_custom output { type filter hook output priority 0 \; policy accept \; }
-
-# Autoriser explicitement UDP Custom
+nft add rule inet udp_custom input ct state established,related accept
+nft add rule inet udp_custom input iif lo accept
+nft add rule inet udp_custom input ip protocol icmp accept
 nft add rule inet udp_custom input udp dport "$UDP_PORT" accept
-
-# SSH (sécurité)
 nft add rule inet udp_custom input tcp dport 22 accept
 
-# Loopback
-nft add rule inet udp_custom input iif lo accept
-
-# ICMP (MTU, stabilité)
-nft add rule inet udp_custom input ip protocol icmp accept
-
-log "✅ Règles nftables UDP Custom appliquées (SAFE)"
+log "✅ nftables UDP Custom appliqué correctement"
 
 # ================= SYSTEMD =================
 log "🔹 Création service systemd"
