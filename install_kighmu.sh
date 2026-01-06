@@ -206,6 +206,7 @@ FILES=(
   "udp-custom.go"
   "bot2_pannel.sh"
   "Delete_user_xray.sh"
+  "udp_request.sh"
   "install_v2ray.sh"
 )
 
