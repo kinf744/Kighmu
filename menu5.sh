@@ -607,9 +607,9 @@ uninstall_sshws() {
     echo "✅ SSHWS totalement désinstallé, système propre."
 }
 
-install_udp_resquest() {
-    echo ">>> Installation udp_resquest via script udp_resquest.sh..."
-    bash "$HOME/Kighmu/udp_resquest.sh" || echo "Script udp_resquest introuvable."
+install_udp_request() {
+    echo ">>> Installation udp_request via script udp_request.sh..."
+    bash "$HOME/Kighmu/udp_request.sh" || echo "Script udp_request introuvable."
 }
 
 uninstall_udp_request() {
@@ -700,7 +700,7 @@ while true; do
         8) manage_mode "proxy ws" install_proxy_ws uninstall_proxy_ws ;;
         9) manage_mode "Hysteria" install_hysteria uninstall_hysteria ;;
         10) manage_mode "Tunnel WS/WSS SSH" install_sshws uninstall_sshws ;;
-        11) manage_mode "UDP_request" install_udp_resquest uninstall_udp_request ;;
+        11) manage_mode "UDP_request" install_udp_request uninstall_udp_request ;;
         0) echo -e "${RED}🚪 Sortie du panneau de contrôle.${RESET}" ; exit 0 ;;
         *) echo -e "${RED}❌ Option invalide, réessayez.${RESET}" ;;
     esac
