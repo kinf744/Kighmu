@@ -1,12 +1,27 @@
 #!/bin/bash
 # ==========================================================
-# UDP Custom Server v1.4 → SSH
-# Avec logs détaillés et suivi temps réel des paquets UDP
+# udp_custom_install.sh
+# UDP Custom Server → SSH
 # Compatible HTTP Custom (Android)
-# Ubuntu 20.04+
+# OS : Ubuntu 20.04+ / Debian 10+
 # ==========================================================
 
 set -euo pipefail
+
+# ================= COULEURS =================
+setup_colors() {
+  RED=""; GREEN=""; YELLOW=""; BLUE=""; CYAN=""; BOLD=""; RESET=""
+  if [ -t 1 ] && [ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]; then
+    RED="$(tput setaf 1)"
+    GREEN="$(tput setaf 2)"
+    YELLOW="$(tput setaf 3)"
+    BLUE="$(tput setaf 4)"
+    CYAN="$(tput setaf 6)"
+    BOLD="$(tput bold)"
+    RESET="$(tput sgr0)"
+  fi
+}
+setup_colors
 
 # ================= VARIABLES =================
 INSTALL_DIR="/opt/udp-custom"
@@ -14,35 +29,52 @@ BIN_PATH="$INSTALL_DIR/udp-custom-linux-amd64"
 CONFIG_FILE="$INSTALL_DIR/config.json"
 SERVICE_FILE="/etc/systemd/system/udp_custom.service"
 
-UDP_PORT=36712  # Port UDP à écouter (à ajuster)
 LOG_DIR="/var/log/udp-custom"
 BIN_LOG="$LOG_DIR/udp-custom.log"
-TCPDUMP_LOG="$LOG_DIR/udp_packets.log"
-SSH_TEST_LOG="$LOG_DIR/ssh_test.log"
+
+exec > >(tee -a "$BIN_LOG") 2>&1
+
+# ================= FONCTIONS =================
+banner() {
+  clear
+  echo -e "${CYAN}${BOLD}============================================${RESET}"
+  echo -e "${GREEN}${BOLD}        UDP Custom Server Installer${RESET}"
+  echo -e "${YELLOW}${BOLD}        Tunnel UDP → SSH${RESET}"
+  echo -e "${CYAN}${BOLD}============================================${RESET}"
+  echo
+}
+
+log()  { echo -e "${GREEN}[+]${RESET} $*"; }
+warn() { echo -e "${YELLOW}[!]${RESET} $*"; }
+err()  { echo -e "${RED}[ERREUR]${RESET} $*" >&2; }
+
+# ================= CHECKS =================
+[[ "$EUID" -ne 0 ]] && err "Exécuter en root" && exit 1
+
+. /etc/os-release || { err "OS indétectable"; exit 1; }
+[[ "$ID" != "ubuntu" && "$ID" != "debian" ]] && err "OS non supporté" && exit 1
+
+banner
+
+# ================= INSTALL =================
+log "Mise à jour des paquets..."
+apt update -y >/dev/null 2>&1 || warn "apt update ignoré"
+
+log "Installation des dépendances..."
+apt install -y wget net-tools openssh-server
 
 mkdir -p "$INSTALL_DIR" "$LOG_DIR"
 
-log() { echo "$(date '+%Y-%m-%d %H:%M:%S') | $1" | tee -a "$BIN_LOG"; }
+# ================= CONFIG =================
+read -rp "$(echo -e "${YELLOW}[?]${RESET} Port UDP à écouter : ")" UDP_PORT
 
-log "============================================"
-log "INSTALLATION UDP CUSTOM AVEC SUIVI UDP"
-log "============================================"
-
-# ================= INSTALLATION DEPENDANCES =================
-log "🔹 Mise à jour & installation des dépendances"
-apt update -y
-apt install -y wget nftables net-tools openssh-server tcpdump
-
-# ================= BINAIRE =================
-log "🔹 Téléchargement du binaire UDP Custom"
-wget -q --show-progress \
+log "Téléchargement du binaire UDP Custom..."
+wget -q -O "$BIN_PATH" \
 "https://raw.githubusercontent.com/noobconner21/UDP-Custom-Script/main/udp-custom-linux-amd64" \
--O "$BIN_PATH"
-chmod +x "$BIN_PATH"
-log "✅ Binaire prêt : $BIN_PATH"
+|| { err "Téléchargement échoué"; exit 1; }
 
-# ================= CONFIG JSON =================
-log "🔹 Création config.json"
+chmod +x "$BIN_PATH"
+
 cat > "$CONFIG_FILE" <<EOF
 {
   "listen": ":$UDP_PORT",
@@ -53,38 +85,17 @@ cat > "$CONFIG_FILE" <<EOF
   }
 }
 EOF
-log "✅ config.json créé"
 
-# ================= NFTABLES =================
-log "🔹 Configuration nftables UDP Custom..."
-
-# Activation nftables
-systemctl enable nftables >/dev/null 2>&1 || true
-systemctl start nftables >/dev/null 2>&1 || true
-
-# Création table UDP Custom
-nft delete table inet udp_custom 2>/dev/null || true
-nft add table inet udp_custom
-
-# Chaîne INPUT
-nft add chain inet udp_custom input { type filter hook input priority 0 \; policy accept \; }
-nft add rule inet udp_custom input ct state established,related accept
-nft add rule inet udp_custom input iif lo accept
-nft add rule inet udp_custom input ip protocol icmp accept
-nft add rule inet udp_custom input udp dport "$UDP_PORT" accept
-nft add rule inet udp_custom input tcp dport 22 accept
-
-log "✅ nftables UDP Custom appliqué correctement"
+log "config.json créé"
 
 # ================= SYSTEMD =================
-log "🔹 Création service systemd"
+log "Création service systemd..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=UDP Custom Server (UDP → HTTP Custom)
+Description=UDP Custom Server
 After=network.target
 
 [Service]
-Type=simple
 ExecStart=$BIN_PATH server --config $CONFIG_FILE
 Restart=always
 RestartSec=3
@@ -92,40 +103,37 @@ LimitNOFILE=1048576
 StandardOutput=append:$BIN_LOG
 StandardError=append:$BIN_LOG
 NoNewPrivileges=true
-CPUSchedulingPolicy=other
-Nice=10
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable udp_custom.service
-systemctl restart udp_custom.service
+systemctl enable udp_custom >/dev/null 2>&1
+systemctl restart udp_custom
 sleep 2
 
 # ================= VERIFICATION =================
-if systemctl is-active --quiet udp_custom.service; then
-  log "✅ Service udp_custom actif"
+if systemctl is-active --quiet udp_custom; then
+  log "Service udp_custom actif"
 else
-  log "❌ Service udp_custom en échec"
-  journalctl -u udp_custom.service --no-pager | tail -n 40 | tee -a "$BIN_LOG"
+  err "Service udp_custom en échec"
+  journalctl -u udp_custom --no-pager | tail -n 40
   exit 1
 fi
 
 if ss -lunp | grep -q ":$UDP_PORT"; then
-  log "✅ UDP Custom écoute sur le port $UDP_PORT"
+  log "UDP Custom écoute sur le port $UDP_PORT"
 else
-  log "❌ Port UDP $UDP_PORT non actif"
+  warn "Le port UDP $UDP_PORT n'écoute pas (vérifier config)"
 fi
 
-# ================= SUIVI UDP EN TEMPS RÉEL =================
-log "🔹 Démarrage suivi temps réel des paquets UDP entrants sur le port $UDP_PORT"
-
-log "✅ Suivi UDP lancé, logs disponibles dans $TCPDUMP_LOG"
-log "============================================"
-log "INSTALLATION TERMINÉE"
-log "UDP $UDP_PORT → prêt pour HTTP Custom"
-log "Logs du binaire : $BIN_LOG"
-log "Logs UDP (tcpdump) : $TCPDUMP_LOG"
-log "============================================"
+# ================= FIN =================
+echo
+echo -e "${CYAN}${BOLD}============================================${RESET}"
+echo -e "${GREEN}${BOLD} Installation terminée${RESET}"
+echo -e "${CYAN}${BOLD}============================================${RESET}"
+echo -e "Port UDP : ${GREEN}$UDP_PORT${RESET}"
+echo -e "Service  : ${GREEN}udp_custom${RESET}"
+echo -e "Logs     : ${GREEN}$BIN_LOG${RESET}"
+echo -e "${CYAN}${BOLD}============================================${RESET}"
