@@ -70,7 +70,7 @@ afficher_modes_ports() {
         echo -e "  - WS/WSS Tunnel: ${GREEN}WS port 80 | WSS port 443${RESET}"
     fi
     if systemctl is-active --quiet UDPserver.service || pgrep -f udp_reuest >/dev/null 2>&1 || screen -list | grep -q udp_request; then
-        echo -e "  - WS/WSS Tunnel: ${GREEN}WS port 80 | WSS port 443${RESET}"
+        echo -e "  - UDP_request: ${GREEN}4466${RESET}"
     fi
 }
 
