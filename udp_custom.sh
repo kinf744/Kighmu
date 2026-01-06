@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==========================================================
-# udp_custom_install.sh
+# udp_custom.sh
 # UDP Custom Server → SSH
 # Compatible HTTP Custom (Android)
 # OS : Ubuntu 20.04+ / Debian 10+
