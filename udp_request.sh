@@ -8,135 +8,84 @@
 
 set -euo pipefail
 
+setup_colors() {
+  RED=""; GREEN=""; YELLOW=""; BLUE=""; CYAN=""; BOLD=""; RESET=""
+  if [ -t 1 ] && [ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]; then
+    RED="$(tput setaf 1)"
+    GREEN="$(tput setaf 2)"
+    YELLOW="$(tput setaf 3)"
+    BLUE="$(tput setaf 4)"
+    CYAN="$(tput setaf 6)"
+    BOLD="$(tput bold)"
+    RESET="$(tput sgr0)"
+  fi
+}
+setup_colors
+
 UDP_BIN="/usr/bin/udpServer"
 SERVICE_FILE="/etc/systemd/system/UDPserver.service"
 LOG_FILE="/var/log/udp-request-install.log"
 
-# -------- Log global du script --------
 exec > >(tee -a "$LOG_FILE") 2>&1
 
-# -------- Couleurs simples --------
-GREEN="e[32m"
-RED="e[31m"
-YELLOW="e[33m"
-BLUE="e[34m"
-NC="e[0m"
-
-# -------- Logo / Bannière --------
 banner() {
   clear
-  echo -e "e[1;36m============================================e[0m"
-  echo -e "e[1;32m      UDP Request Server Installere[0m"
-  echo -e "e[1;33m      SocksIP Tunnel - udpServere[0m"
-  echo -e "e[1;36m============================================e[0m"
+  echo -e "${CYAN}${BOLD}============================================${RESET}"
+  echo -e "${GREEN}${BOLD}      UDP Request Server Installer${RESET}"
+  echo -e "${YELLOW}${BOLD}      SocksIP Tunnel - udpServer${RESET}"
+  echo -e "${CYAN}${BOLD}============================================${RESET}"
   echo
 }
 
-log() {
-  echo -e "${GREEN}[+]${NC} $*"
-}
+log() { echo -e "${GREEN}[+]${RESET} $*"; }
+warn() { echo -e "${YELLOW}[!]${RESET} $*"; }
+err() { echo -e "${RED}[ERREUR]${RESET} $*" >&2; }
 
-err() {
-  echo -e "${RED}[!]${NC} $*" >&2
-}
-
-# -------- Vérification root --------
-if [[ "$EUID" -ne 0 ]]; then
-  err "Ce script doit être exécuté en root."
-  exit 1
-fi
+[[ "$EUID" -ne 0 ]] && err "Exécuter en root" && exit 1
 
 banner
 
-# -------- Vérification OS --------
-if [[ -e /etc/os-release ]]; then
-  . /etc/os-release
-else
-  err "Impossible de détecter l’OS (/etc/os-release manquant)."
-  exit 1
-fi
+. /etc/os-release || { err "OS indétectable"; exit 1; }
+[[ "$ID" != "ubuntu" && "$ID" != "debian" ]] && err "OS non supporté" && exit 1
 
-case "$ID" in
-  ubuntu|debian)
-    :
-    ;;
-  *)
-    err "OS non supporté : $ID. Utilise Ubuntu/Debian."
-    exit 1
-    ;;
-esac
+log "Mise à jour paquets..."
+apt update -y >/dev/null 2>&1 || warn "apt update ignoré"
 
-# -------- Mise à jour minimale --------
-log "Mise à jour de la liste des paquets..."
-apt update -y >/dev/null 2>&1 || true
+ip=$(ip -4 addr show | awk '/inet / && $2 !~ /^127./ {print $2}' | head -n1 | cut -d/ -f1)
+iface=$(ip -4 addr show | awk '/inet / && $2 !~ /^127./ {print $7}' | head -n1)
+[[ -z "$ip" || -z "$iface" ]] && err "IP/interface introuvable" && exit 1
 
-# -------- Détection IP & interface --------
-detect_ip_iface() {
-  local ip iface
+SERVER_IP="$ip"
+SERVER_IFACE="$iface"
 
-  ip=$(ip -4 addr show | awk '/inet / && $2 !~ /^127./ {print $2}' | head -n1 | cut -d'/' -f1)
-  iface=$(ip -4 addr show | awk '/inet / && $2 !~ /^127./ {print $7}' | head -n1)
+log "IP        : ${CYAN}${SERVER_IP}${RESET}"
+log "Interface : ${CYAN}${SERVER_IFACE}${RESET}"
 
-  if [[ -z "$ip" || -z "$iface" ]]; then
-    err "Impossible de détecter l’IP ou l’interface réseau."
-    exit 1
-  fi
+read -rp "$(echo -e "${YELLOW}[?]${RESET} Ports UDP à exclure [ENTER = aucun] : ")" EXCLUDE_PORTS
 
-  SERVER_IP="$ip"
-  SERVER_IFACE="$iface"
-}
-
-detect_ip_iface
-log "IP détectée       : ${SERVER_IP}"
-log "Interface détectée: ${SERVER_IFACE}"
-
-# -------- Saisie ports à exclure (optionnel) --------
-read -rp "$(echo -e "${YELLOW}[?]${NC} Saisir les ports UDP à exclure (slowdns 53, 5300, WG 51820, OVPN 1194, etc. séparés par espaces) [ENTER pour aucun] : ")" EXCLUDE_PORTS
+PORT_LIST=()
+for p in $EXCLUDE_PORTS; do
+  [[ "$p" =~ ^[0-9]+$ && "$p" -gt 0 ]] && PORT_LIST+=("$p")
+done
 
 EXCLUDE_OPT=""
-if [[ -n "${EXCLUDE_PORTS:-}" ]]; then
-  # Nettoyage, ne garder que des nombres > 0
-  PORT_LIST=()
-  for p in $EXCLUDE_PORTS; do
-    if [[ "$p" =~ ^[0-9]+$ ]] && [[ "$p" -gt 0 ]]; then
-      PORT_LIST+=("$p")
-    fi
-  done
-
-  if [[ "${#PORT_LIST[@]}" -gt 0 ]]; then
-    PORT_CSV=$(printf "%s," "${PORT_LIST[@]}")
-    PORT_CSV="${PORT_CSV%,}"
-    EXCLUDE_OPT=" -exclude=${PORT_CSV}"
-    log "Ports exclus UDP : ${PORT_LIST[*]}"
-  else
-    log "Aucun port valide à exclure, on ignore."
-  fi
+if [[ "${#PORT_LIST[@]}" -gt 0 ]]; then
+  EXCLUDE_OPT=" -exclude=$(IFS=,; echo "${PORT_LIST[*]}")"
+  log "Ports exclus : ${PORT_LIST[*]}"
 fi
 
-# -------- Téléchargement binaire udpServer --------
-log "Téléchargement du binaire udpServer (UDP Request)..."
-if wget -O "${UDP_BIN}" "https://bitbucket.org/iopmx/udprequestserver/downloads/udpServer" >/dev/null 2>&1; then
-  chmod +x "${UDP_BIN}"
-  log "Binaire udpServer installé dans ${UDP_BIN}"
-else
-  err "Échec du téléchargement de udpServer."
-  exit 1
-fi
+log "Téléchargement udpServer..."
+wget -q -O "$UDP_BIN" "https://bitbucket.org/iopmx/udprequestserver/downloads/udpServer" \
+  && chmod +x "$UDP_BIN" \
+  || { err "Téléchargement échoué"; exit 1; }
 
-# -------- Création du service systemd --------
-log "Création du service systemd UDPserver..."
-
-cat > "${SERVICE_FILE}" <<EOF
+cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=UDP Request Server (udpServer) - SocksIP Tunnel
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=simple
-User=root
-WorkingDirectory=/root
-ExecStart=${UDP_BIN} -ip=${SERVER_IP} -net=${SERVER_IFACE}${EXCLUDE_OPT} -mode=system >> /var/log/udp-request-server.log 2>&1
+ExecStart=$UDP_BIN -ip=$SERVER_IP -net=$SERVER_IFACE$EXCLUDE_OPT -mode=system >> /var/log/udp-request-server.log 2>&1
 Restart=always
 RestartSec=3
 
@@ -144,42 +93,16 @@ RestartSec=3
 WantedBy=multi-user.target
 EOF
 
-log "Service écrit dans ${SERVICE_FILE}"
-
-# -------- Recharge systemd et démarrage --------
-log "Recharge de systemd..."
 systemctl daemon-reload
+systemctl start UDPserver || { err "Démarrage échoué"; exit 1; }
+systemctl enable UDPserver >/dev/null 2>&1
 
-log "Démarrage du service UDPserver..."
-systemctl start UDPserver || {
-  err "Échec de démarrage de UDPserver. Vérifie journalctl -u UDPserver."
-  exit 1
-}
-
-if systemctl is-active --quiet UDPserver; then
-  log "Service UDPserver actif."
-  systemctl enable UDPserver >/dev/null 2>&1
-else
-  err "UDPserver n’est pas actif après le démarrage."
-  exit 1
-fi
-
-# -------- Infos finales --------
-echo -e "
-${BLUE}============================================${NC}"
-echo -e "${GREEN} Installation UDP Request terminée avec succès${NC}"
-echo -e "${BLUE}============================================${NC}"
-echo -e "IP serveur      : ${GREEN}${SERVER_IP}${NC}"
-echo -e "Interface NET   : ${GREEN}${SERVER_IFACE}${NC}"
-if [[ -n "${PORT_LIST:-}" ]]; then
-  echo -e "Ports UDP exclus: ${GREEN}${PORT_LIST[*]}${NC}"
-else
-  echo -e "Ports UDP exclus: ${YELLOW}aucun (tous couverts)${NC}"
-fi
-echo -e "Service         : ${GREEN}UDPserver${NC}"
-echo -e "Log installation: ${GREEN}${LOG_FILE}${NC}"
-echo -e "Log serveur     : ${GREEN}/var/log/udp-request-server.log${NC}"
-echo -e "Commande état   : systemctl status UDPserver"
-echo -e "Journal         : journalctl -u UDPserver -f"
-echo -e "${BLUE}============================================${NC}
-"
+echo
+echo -e "${CYAN}${BOLD}============================================${RESET}"
+echo -e "${GREEN}${BOLD} Installation terminée${RESET}"
+echo -e "${CYAN}${BOLD}============================================${RESET}"
+echo -e "IP        : ${GREEN}${SERVER_IP}${RESET}"
+echo -e "Interface : ${GREEN}${SERVER_IFACE}${RESET}"
+echo -e "Ports UDP : ${GREEN}${PORT_LIST[*]:-aucun}${RESET}"
+echo -e "Service   : ${GREEN}UDPserver${RESET}"
+echo -e "${CYAN}${BOLD}============================================${RESET}"
