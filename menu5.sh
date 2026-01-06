@@ -637,6 +637,7 @@ uninstall_udp_request() {
     rm -f "$UDP_LOG"
 
     echo ">>> Tunnel UDP Request désinstallé proprement."
+    read -p "Appuyez sur Entrée..."
 }
 
 # --- Interface utilisateur ---
