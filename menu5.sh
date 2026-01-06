@@ -615,30 +615,28 @@ install_udp_request() {
 uninstall_udp_request() {
     echo ">>> Désinstallation du tunnel UDP Request..."
 
-    # Arrêt du service systemd s'il existe
-    if systemctl list-units --full -all | grep -Fq 'UDPserver.service'; then
+    # Arrêt propre du service s'il existe
+    if systemctl is-enabled --quiet UDPserver 2>/dev/null || systemctl is-active --quiet UDPserver 2>/dev/null; then
         systemctl stop UDPserver 2>/dev/null || true
         systemctl disable UDPserver 2>/dev/null || true
-        rm -f "$UDP_SERVICE"
-        systemctl daemon-reload
     fi
 
-    # Arrêt de tout processus udpServer résiduel
+    # Suppression du service systemd (sans daemon-reload)
+    rm -f "$UDP_SERVICE"
+
+    # Arrêt doux des processus udpServer encore actifs
     PIDS=$(pgrep -f "$UDP_BIN" || true)
     if [[ -n "$PIDS" ]]; then
-        echo "Arrêt des processus udpServer existants (PID: $PIDS)..."
+        echo "Arrêt des processus udpServer (PID: $PIDS)..."
         kill -15 $PIDS 2>/dev/null || true
-        sleep 2
-        PIDS=$(pgrep -f "$UDP_BIN" || true)
-        [[ -n "$PIDS" ]] && kill -9 $PIDS 2>/dev/null || true
+        sleep 1
     fi
 
     # Suppression du binaire et du log
     rm -f "$UDP_BIN"
-    # Optionnel : commenter si tu veux garder l’historique
     rm -f "$UDP_LOG"
 
-    echo ">>> Tunnel UDP Request désinstallé."
+    echo ">>> Tunnel UDP Request désinstallé proprement."
 }
 
 # --- Interface utilisateur ---
