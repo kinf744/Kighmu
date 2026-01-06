@@ -607,6 +607,40 @@ uninstall_sshws() {
     echo "✅ SSHWS totalement désinstallé, système propre."
 }
 
+install_udp_resquest() {
+    echo ">>> Installation udp_resquest via script udp_resquest.sh..."
+    bash "$HOME/Kighmu/udp_resquest.sh" || echo "Script udp_resquest introuvable."
+}
+
+uninstall_udp_request() {
+    echo ">>> Désinstallation du tunnel UDP Request..."
+
+    # Arrêt du service systemd s'il existe
+    if systemctl list-units --full -all | grep -Fq 'UDPserver.service'; then
+        systemctl stop UDPserver 2>/dev/null || true
+        systemctl disable UDPserver 2>/dev/null || true
+        rm -f "$UDP_SERVICE"
+        systemctl daemon-reload
+    fi
+
+    # Arrêt de tout processus udpServer résiduel
+    PIDS=$(pgrep -f "$UDP_BIN" || true)
+    if [[ -n "$PIDS" ]]; then
+        echo "Arrêt des processus udpServer existants (PID: $PIDS)..."
+        kill -15 $PIDS 2>/dev/null || true
+        sleep 2
+        PIDS=$(pgrep -f "$UDP_BIN" || true)
+        [[ -n "$PIDS" ]] && kill -9 $PIDS 2>/dev/null || true
+    fi
+
+    # Suppression du binaire et du log
+    rm -f "$UDP_BIN"
+    # Optionnel : commenter si tu veux garder l’historique
+    rm -f "$UDP_LOG"
+
+    echo ">>> Tunnel UDP Request désinstallé."
+}
+
 # --- Interface utilisateur ---
 manage_mode() {
     MODE_NAME=$1; INSTALL_FUNC=$2; UNINSTALL_FUNC=$3
@@ -650,6 +684,7 @@ while true; do
     echo -e "${GREEN}${BOLD}[08]${RESET} ${YELLOW}proxy ws${RESET}"
     echo -e "${GREEN}${BOLD}[09]${RESET} ${YELLOW}Hysteria${RESET}"
     echo -e "${GREEN}${BOLD}[10]${RESET} ${YELLOW}Tunnel WS/WSS SSH${RESET}"
+    echo -e "${GREEN}${BOLD}[11]${RESET} ${YELLOW}UDP_request${RESET}"
     echo -e "${GREEN}${BOLD}[00]${RESET} ${YELLOW}Quitter${RESET}"
     echo -e "${CYAN}+======================================================+${RESET}"
     echo -ne "${BOLD}${YELLOW}👉 Choisissez un mode : ${RESET}"
@@ -665,6 +700,7 @@ while true; do
         8) manage_mode "proxy ws" install_proxy_ws uninstall_proxy_ws ;;
         9) manage_mode "Hysteria" install_hysteria uninstall_hysteria ;;
         10) manage_mode "Tunnel WS/WSS SSH" install_sshws uninstall_sshws ;;
+        11) manage_mode "UDP_request" install_udp_resquest uninstall_udp_request ;;
         0) echo -e "${RED}🚪 Sortie du panneau de contrôle.${RESET}" ; exit 0 ;;
         *) echo -e "${RED}❌ Option invalide, réessayez.${RESET}" ;;
     esac
