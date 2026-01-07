@@ -244,45 +244,40 @@ get_ns() {
 # GESTION DU WRAPPER
 # ============================
 create_wrapper_script() {
-    cat <<'EOF' > /usr/local/bin/slowdns-start.sh
+cat <<'EOF' > /usr/local/bin/slowdns-start.sh
 #!/bin/bash
 set -euo pipefail
 
-SLOWDNS_DIR="/etc/slowdns"
 SLOWDNS_BIN="/usr/local/bin/dnstt-server"
+SLOWDNS_DIR="/etc/slowdns"
 PORT=5300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
-SERVER_KEY="$SLOWDNS_DIR/server.key"
 ENV_FILE="$SLOWDNS_DIR/slowdns.env"
+SERVER_KEY="$SLOWDNS_DIR/server.key"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
-# Charger les variables
-if [[ -f "$ENV_FILE" ]]; then
-    source "$ENV_FILE"
-else
-    echo "Fichier $ENV_FILE manquant !" >&2
-    exit 1
-fi
+[ -f "$ENV_FILE" ] || { echo "slowdns.env manquant"; exit 1; }
+source "$ENV_FILE"
 
-# Attente interface réseau active
 wait_for_interface() {
-    interface=""
-    while [ -z "$interface" ]; do
-        interface=$(ip -o link show up | awk -F': ' '{print $2}' | grep -v '^lo$' | head -n1)
-        [ -z "$interface" ] && sleep 2
+    while true; do
+        iface=$(ip -o link show up | awk -F': ' '{print $2}' \
+            | grep -Ev 'lo|docker|veth|br-|tun|tap|virbr|wl')
+        [ -n "$iface" ] && echo "$iface" && return
+        sleep 2
     done
-    echo "$interface"
 }
 
 log "Attente de l'interface réseau..."
-interface=$(wait_for_interface)
-log "Interface détectée : $interface"
+IFACE=$(wait_for_interface)
+log "Interface détectée : $IFACE"
 
-# Résolution NS
+MTU=$(ip link show "$IFACE" | awk '/mtu/ {print $5}')
+log "MTU détecté : $MTU"
+
 NS=$(cat "$CONFIG_FILE")
 
-# Détermination du port backend
 case "$BACKEND" in
     ssh) backend_port=22 ;;
     v2ray) backend_port=5401 ;;
@@ -290,52 +285,13 @@ case "$BACKEND" in
     *) backend_port=22 ;;
 esac
 
-# Lancement SlowDNS
-exec "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NS" 127.0.0.1:$backend_port -v
+exec "$SLOWDNS_BIN" \
+    -udp :$PORT \
+    -privkey-file "$SERVER_KEY" \
+    "$NS" 127.0.0.1:$backend_port
 EOF
 
-    chmod +x /usr/local/bin/slowdns-start.sh
-    log "Wrapper slowdns-start.sh créé"
-} 
-
-get_mtu() {
-    local iface="$1"
-    ip link show "$iface" | awk '/mtu/ {for(i=1;i<=NF;i++){if($i=="mtu"){print $(i+1);exit}}}'
-}
-
-setup_nftables() {
-    nft add rule inet slowdns input udp dport $PORT limit rate 1000/second burst 50 packets accept
-}
-
-log "Attente de l'interface réseau..."
-interface=$(wait_for_interface)
-log "Interface détectée : $interface"
-
-REAL_MTU=$(ip link show "$interface" | awk '/mtu/ {for(i=1;i<=NF;i++){if($i=="mtu"){print $(i+1);exit}}}')
-log "MTU actuel de l'interface $interface : $REAL_MTU"
-
-NS=$(cat "$CONFIG_FILE")
-
-case "$BACKEND" in
-    ssh)
-        backend_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2)
-        [ -z "$backend_port" ] && backend_port=22
-        ;;
-    v2ray)
-        backend_port=5401
-        ;;
-    mix)
-        backend_port=80
-        ;;
-    *)
-        backend_port=22
-        ;;
-esac
-
-exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 127.0.0.1:$backend_port
-EOF
-
-    chmod +x /usr/local/bin/slowdns-start.sh
+chmod +x /usr/local/bin/slowdns-start.sh
 }
 
 # ============================
