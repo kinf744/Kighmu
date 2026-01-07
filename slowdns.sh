@@ -53,7 +53,7 @@ pip install cloudflare >/dev/null || log "pip install cloudflare failed (non fat
 # DNSTT binaire
 if [[ ! -x "$SLOWDNS_BIN" ]]; then
     log "Téléchargement DNSTT..."
-    curl -fsSL -o "$SLOWDNS_BIN" https://www.bamsoftware.com/software/dnstt/dnstt-server-linux-amd64
+    curl -fsSL -o "$SLOWDNS_BIN" https://dnstt.network/dnstt-server-linux-amd64
     chmod +x "$SLOWDNS_BIN"
 fi
 
