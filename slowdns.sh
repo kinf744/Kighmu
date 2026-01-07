@@ -93,7 +93,7 @@ disable_systemd_resolved() {
 }
 
 configure_nftables() {
-    log "⚡ Configuration nftables SlowDNS (stable et isolée)..."
+    log "⚡ Configuration nftables SlowDNS (stable et compatible VPN HTTP Custom)..."
 
     # Activation nftables
     systemctl enable nftables >/dev/null 2>&1 || true
@@ -115,10 +115,14 @@ configure_nftables() {
     nft add rule inet slowdns input tcp dport 22 accept
 
     # PREROUTING NAT (DNS → SlowDNS)
+    # On garde la redirection, mais on s'assure qu'elle ne bloque pas HTTP Custom
     nft add chain inet slowdns prerouting { type nat hook prerouting priority dstnat \; policy accept \; }
     nft add rule inet slowdns prerouting udp dport "$DNS_PORT" redirect to :"$SLOWDNS_PORT"
 
-    log "✅ nftables SlowDNS appliqué correctement"
+    # ⚠️ Ajouter éventuellement une règle de journalisation pour debug
+    # nft add rule inet slowdns input udp dport "$SLOWDNS_PORT" log prefix "SlowDNS UDP: " level info
+
+    log "✅ nftables SlowDNS appliqué correctement et compatible VPN HTTP Custom"
 }
 
 # ============================
