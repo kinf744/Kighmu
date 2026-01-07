@@ -2,14 +2,13 @@
 set -euo pipefail
 
 # ==========================================================
-# SlowDNS Server v3 - Compatible HTTP Custom / VPN mobile
-# Stable 24/7, logs détaillés, MTU 1300, UDP direct
+# INSTALLATION COMPLETE SLOWDNS - HTTP CUSTOM READY
 # ==========================================================
 
 SLOWDNS_DIR="/etc/slowdns"
 SLOWDNS_BIN="/usr/local/bin/dnstt-server"
 PORT=5300               # Port UDP direct
-MTU=1300                # MTU mobile-friendly
+MTU=1300
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 SERVER_PUB="$SLOWDNS_DIR/server.pub"
@@ -20,6 +19,19 @@ CF_ZONE_ID="7debbb8ea4946898a889c4b5745ab7eb"
 DOMAIN="kingom.ggff.net"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
+
+# ============================
+# CLEAN INSTALL
+# ============================
+cleanup() {
+    log "Nettoyage avant installation SlowDNS..."
+    systemctl stop slowdns.service 2>/dev/null || true
+    systemctl disable slowdns.service 2>/dev/null || true
+    rm -f /etc/systemd/system/slowdns.service
+    rm -f /usr/local/bin/slowdns-start.sh
+    rm -rf "$SLOWDNS_DIR"
+    systemctl daemon-reload
+}
 
 # ============================
 # BASE
@@ -35,12 +47,13 @@ install_dependencies() {
 }
 
 install_slowdns_bin() {
-    [[ ! -x "$SLOWDNS_BIN" ]] && {
+    mkdir -p "$(dirname "$SLOWDNS_BIN")"
+    if [[ ! -x "$SLOWDNS_BIN" ]]; then
         log "Téléchargement du binaire SlowDNS..."
         wget -q -O "$SLOWDNS_BIN" https://dnstt.network/dnstt-server-linux-amd64
         chmod +x "$SLOWDNS_BIN"
         [[ ! -x "$SLOWDNS_BIN" ]] && { echo "Erreur téléchargement SlowDNS"; exit 1; }
-    }
+    fi
 }
 
 install_fixed_keys() {
@@ -76,7 +89,7 @@ configure_nftables() {
 }
 
 # ============================
-# BACKEND
+# BACKEND & MODE
 # ============================
 choose_backend() {
     echo "1) SSH"
@@ -154,26 +167,25 @@ ENV_FILE="$SLOWDNS_DIR/slowdns.env"
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 [[ -f "$ENV_FILE" ]] || { echo "Fichier $ENV_FILE manquant"; exit 1; }
 source "$ENV_FILE"
-
 interface=$(ip -o link show up | awk -F': ' '{print $2}' | grep -v '^lo$' | head -n1)
 ip link set dev "$interface" mtu $MTU
 log "Interface $interface MTU=$MTU"
-
 NS=$(cat "$CONFIG_FILE")
 for i in {1..5}; do dig +short "$NS" @8.8.8.8 && break || { log "DNS $NS non résolu ($i/5)"; sleep 2; }; done
-
 case "$BACKEND" in
 ssh) backend_port=22 ;;
 v2ray) backend_port=5401 ;;
 mix) backend_port=80 ;;
 *) backend_port=22 ;;
 esac
-
 exec "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NS" 127.0.0.1:$backend_port -v
 EOF
     chmod +x /usr/local/bin/slowdns-start.sh
 }
 
+# ============================
+# SYSTEMD
+# ============================
 create_systemd_service() {
     cat <<EOF > /etc/systemd/system/slowdns.service
 [Unit]
@@ -204,6 +216,7 @@ EOF
 # ============================
 main() {
     check_root
+    cleanup
     install_dependencies
     install_slowdns_bin
     install_fixed_keys
@@ -226,7 +239,7 @@ EOF
     create_wrapper_script
     create_systemd_service
 
-    log "SlowDNS prêt pour HTTP Custom sur port $PORT (MTU=$MTU)"
+    log "✅ SlowDNS prêt pour HTTP Custom sur port $PORT (MTU=$MTU)"
     echo "NS=$NS"
     echo "Port UDP=$PORT"
 }
