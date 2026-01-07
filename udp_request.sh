@@ -1,8 +1,8 @@
 #!/bin/bash
 # ==========================================================
 # udp_request.sh
-# UDP Request Server (udpServer)
-# Compatible avec UDP Custom / SlowDNS
+# UDP Request Server MAÎTRE (udpServer)
+# Cohabitation UDP Custom / SlowDNS
 # OS : Ubuntu 20.04+ / Debian 10+
 # ==========================================================
 
@@ -25,10 +25,11 @@ setup_colors
 # ================= VARIABLES =================
 UDP_BIN="/usr/bin/udpServer"
 SERVICE_FILE="/etc/systemd/system/UDPserver.service"
-LOG_FILE="/var/log/udp-request-install.log"
+
+INSTALL_LOG="/var/log/udp-request-install.log"
 RUNTIME_LOG="/var/log/udp-request-server.log"
 
-# ⚠️ Ports à EXCLURE (UDP Custom + autres tunnels)
+# ⚠️ Ports UDP À EXCLURE (UDP Custom / SlowDNS / Web / SSH)
 EXCLUDED_PORTS=(
   36712   # UDP Custom
   53
@@ -37,25 +38,26 @@ EXCLUDED_PORTS=(
   444
   8443
   5300
-  5401
   5400
+  5401
+  8880
   9090
   22000
 )
 
 # ================= LOGGING =================
-exec > >(tee -a "$LOG_FILE") 2>&1
+exec > >(tee -a "$INSTALL_LOG") 2>&1
 
 log()  { echo -e "${GREEN}[+]${RESET} $*"; }
 warn() { echo -e "${YELLOW}[!]${RESET} $*"; }
 err()  { echo -e "${RED}[ERREUR]${RESET} $*" >&2; }
 
-# ================= CHECK ROOT =================
+# ================= ROOT =================
 [[ "$EUID" -ne 0 ]] && err "Exécuter en root" && exit 1
 
 clear
 echo -e "${CYAN}${BOLD}============================================${RESET}"
-echo -e "${GREEN}${BOLD}     UDP Request Server Installer${RESET}"
+echo -e "${GREEN}${BOLD}     UDP REQUEST — MODE MAÎTRE${RESET}"
 echo -e "${YELLOW}${BOLD}  Compatible UDP Custom / SlowDNS${RESET}"
 echo -e "${CYAN}${BOLD}============================================${RESET}"
 echo
@@ -65,46 +67,48 @@ echo
 [[ "$ID" != "ubuntu" && "$ID" != "debian" ]] && err "OS non supporté" && exit 1
 
 # ================= DEPENDANCES =================
-log "Installation dépendances..."
+log "Installation des dépendances minimales..."
 apt update -y >/dev/null 2>&1 || warn "apt update ignoré"
-apt install -y wget net-tools nftables >/dev/null 2>&1
+apt install -y wget net-tools >/dev/null 2>&1
 
 # ================= IP / IFACE =================
-SERVER_IP=$(ip -4 addr show | awk '/inet / && $2 !~ /^127./ {print $2}' | head -n1 | cut -d/ -f1)
-SERVER_IFACE=$(ip route | awk '/default/ {print $5}' | head -n1)
+SERVER_IP=$(ip -4 route get 1 | awk '{print $7; exit}')
+SERVER_IFACE=$(ip -4 route get 1 | awk '{print $5; exit}')
 
-[[ -z "$SERVER_IP" || -z "$SERVER_IFACE" ]] && err "IP ou interface introuvable" && exit 1
+[[ -z "$SERVER_IP" || -z "$SERVER_IFACE" ]] && err "Impossible de détecter IP ou interface" && exit 1
 
-log "IP        : ${CYAN}${SERVER_IP}${RESET}"
-log "Interface : ${CYAN}${SERVER_IFACE}${RESET}"
+log "IP serveur   : ${CYAN}$SERVER_IP${RESET}"
+log "Interface    : ${CYAN}$SERVER_IFACE${RESET}"
 
-# ================= TELECHARGEMENT =================
+# ================= BINAIRE =================
 log "Téléchargement udpServer..."
-wget -q -O "$UDP_BIN" "https://bitbucket.org/iopmx/udprequestserver/downloads/udpServer" \
+wget -q -O "$UDP_BIN" \
+  "https://bitbucket.org/iopmx/udprequestserver/downloads/udpServer" \
   && chmod +x "$UDP_BIN" \
-  || { err "Téléchargement échoué"; exit 1; }
+  || { err "Échec du téléchargement"; exit 1; }
 
 # ================= EXCLUDE =================
 EXCLUDE_OPT="-exclude=$(IFS=,; echo "${EXCLUDED_PORTS[*]}")"
 log "Ports UDP exclus : ${EXCLUDED_PORTS[*]}"
 
 # ================= SYSTEMD =================
-log "Création service systemd..."
+log "Création du service systemd UDP Request (MAÎTRE)..."
 
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=UDP Request Server (cohabitation UDP Custom)
+Description=UDP Request Server (MAÎTRE UDP)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=$UDP_BIN -ip=0.0.0.0 -net=$SERVER_IFACE $EXCLUDE_OPT -mode=system
+ExecStart=$UDP_BIN -ip=$SERVER_IP -net=$SERVER_IFACE $EXCLUDE_OPT -mode=system
 Restart=always
 RestartSec=3
 StandardOutput=append:$RUNTIME_LOG
 StandardError=append:$RUNTIME_LOG
 NoNewPrivileges=true
+LimitNOFILE=1048576
 
 [Install]
 WantedBy=multi-user.target
@@ -118,20 +122,21 @@ sleep 2
 
 # ================= VERIFICATION =================
 if systemctl is-active --quiet UDPserver; then
-  log "UDP Request actif et fonctionnel"
+  log "UDP Request MAÎTRE actif"
 else
   err "UDP Request ne démarre pas"
-  journalctl -u UDPserver -n 30 --no-pager
+  journalctl -u UDPserver -n 40 --no-pager
   exit 1
 fi
 
+# ================= RÉSUMÉ =================
 echo
 echo -e "${CYAN}${BOLD}============================================${RESET}"
-echo -e "${GREEN}${BOLD} Installation terminée${RESET}"
+echo -e "${GREEN}${BOLD} INSTALLATION TERMINÉE${RESET}"
 echo -e "${CYAN}${BOLD}============================================${RESET}"
-echo -e "IP        : ${GREEN}${SERVER_IP}${RESET}"
-echo -e "Interface : ${GREEN}${SERVER_IFACE}${RESET}"
+echo -e "IP serveur   : ${GREEN}$SERVER_IP${RESET}"
+echo -e "Interface    : ${GREEN}$SERVER_IFACE${RESET}"
 echo -e "Ports exclus : ${GREEN}${EXCLUDED_PORTS[*]}${RESET}"
-echo -e "Service   : ${GREEN}UDPserver${RESET}"
-echo -e "Logs      : ${GREEN}$RUNTIME_LOG${RESET}"
+echo -e "Service      : ${GREEN}UDPserver (MAÎTRE)${RESET}"
+echo -e "Logs runtime : ${GREEN}$RUNTIME_LOG${RESET}"
 echo -e "${CYAN}${BOLD}============================================${RESET}"
