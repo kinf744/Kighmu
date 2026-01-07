@@ -1,6 +1,7 @@
 #!/bin/bash
 # ==========================================================
 # UDP Custom Server v1.4 → SSH
+# Mode BACKEND pour cohabitation avec UDP Request MAÎTRE
 # Avec logs détaillés et suivi temps réel des paquets UDP
 # Compatible HTTP Custom (Android)
 # Ubuntu 20.04+
@@ -14,7 +15,7 @@ BIN_PATH="$INSTALL_DIR/udp-custom-linux-amd64"
 CONFIG_FILE="$INSTALL_DIR/config.json"
 SERVICE_FILE="/etc/systemd/system/udp_custom.service"
 
-UDP_PORT=36712  # Port UDP à écouter (à ajuster)
+UDP_PORT=36712  # Port interne (backend TCP via le maître UDP)
 LOG_DIR="/var/log/udp-custom"
 BIN_LOG="$LOG_DIR/udp-custom.log"
 TCPDUMP_LOG="$LOG_DIR/udp_packets.log"
@@ -22,16 +23,17 @@ SSH_TEST_LOG="$LOG_DIR/ssh_test.log"
 
 mkdir -p "$INSTALL_DIR" "$LOG_DIR"
 
+# ================= LOG =================
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') | $1" | tee -a "$BIN_LOG"; }
 
 log "============================================"
-log "INSTALLATION UDP CUSTOM AVEC SUIVI UDP"
+log "INSTALLATION UDP CUSTOM (MODE BACKEND)"
 log "============================================"
 
-# ================= INSTALLATION DEPENDANCES =================
+# ================= DEPENDANCES =================
 log "🔹 Mise à jour & installation des dépendances"
 apt update -y
-apt install -y wget nftables net-tools openssh-server tcpdump
+apt install -y wget net-tools openssh-server tcpdump >/dev/null 2>&1
 
 # ================= BINAIRE =================
 log "🔹 Téléchargement du binaire UDP Custom"
@@ -42,7 +44,7 @@ chmod +x "$BIN_PATH"
 log "✅ Binaire prêt : $BIN_PATH"
 
 # ================= CONFIG JSON =================
-log "🔹 Création config.json"
+log "🔹 Création config.json (écoute backend, pas UDP direct)"
 cat > "$CONFIG_FILE" <<EOF
 {
   "listen": ":$UDP_PORT",
@@ -55,39 +57,11 @@ cat > "$CONFIG_FILE" <<EOF
 EOF
 log "✅ config.json créé"
 
-# ================= NFTABLES =================
-log "🔹 Configuration nftables isolées pour UDP $UDP_PORT"
-
-systemctl enable nftables
-systemctl start nftables
-
-nft list tables udp_custom &>/dev/null || nft add table inet udp_custom
-
-nft list chain inet udp_custom input &>/dev/null || \
-nft add chain inet udp_custom input { type filter hook input priority 0 \; policy accept \; }
-
-nft list chain inet udp_custom output &>/dev/null || \
-nft add chain inet udp_custom output { type filter hook output priority 0 \; policy accept \; }
-
-# Autoriser explicitement UDP Custom
-nft add rule inet udp_custom input udp dport "$UDP_PORT" accept
-
-# SSH (sécurité)
-nft add rule inet udp_custom input tcp dport 22 accept
-
-# Loopback
-nft add rule inet udp_custom input iif lo accept
-
-# ICMP (MTU, stabilité)
-nft add rule inet udp_custom input ip protocol icmp accept
-
-log "✅ Règles nftables UDP Custom appliquées (SAFE)"
-
 # ================= SYSTEMD =================
 log "🔹 Création service systemd"
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=UDP Custom Server (UDP → HTTP Custom)
+Description=UDP Custom Server (backend TCP via UDP Request)
 After=network.target
 
 [Service]
@@ -120,19 +94,9 @@ else
   exit 1
 fi
 
-if ss -lunp | grep -q ":$UDP_PORT"; then
-  log "✅ UDP Custom écoute sur le port $UDP_PORT"
-else
-  log "❌ Port UDP $UDP_PORT non actif"
-fi
-
-# ================= SUIVI UDP EN TEMPS RÉEL =================
-log "🔹 Démarrage suivi temps réel des paquets UDP entrants sur le port $UDP_PORT"
-
-log "✅ Suivi UDP lancé, logs disponibles dans $TCPDUMP_LOG"
-log "============================================"
-log "INSTALLATION TERMINÉE"
-log "UDP $UDP_PORT → prêt pour HTTP Custom"
+log "✅ UDP Custom backend prêt sur le port $UDP_PORT"
 log "Logs du binaire : $BIN_LOG"
-log "Logs UDP (tcpdump) : $TCPDUMP_LOG"
+
+log "============================================"
+log "INSTALLATION TERMINÉE — MODE BACKEND"
 log "============================================"
