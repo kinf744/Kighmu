@@ -83,13 +83,19 @@ EOF
 }
 
 disable_systemd_resolved() {
-    log "Désactivation non-destructive de systemd-resolved..."
+    log "Gestion sûre de systemd-resolved (Ubuntu compatible)..."
+
     if systemctl list-unit-files | grep -q "^systemd-resolved.service"; then
         systemctl stop systemd-resolved || true
         systemctl disable systemd-resolved || true
     fi
-    rm -f /etc/resolv.conf
-    echo "nameserver 8.8.8.8" > /etc/resolv.conf
+
+    # Ne jamais supprimer resolv.conf (Ubuntu 22+/24+)
+    if [ -L /etc/resolv.conf ]; then
+        log "/etc/resolv.conf est un lien symbolique – laissé intact"
+    else
+        log "/etc/resolv.conf protégé – aucune modification"
+    fi
 }
 
 configure_nftables() {
