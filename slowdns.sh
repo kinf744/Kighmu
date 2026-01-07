@@ -66,13 +66,21 @@ EOF
 }
 
 disable_systemd_resolved() {
-    log "Désactivation non-destructive du stub DNS systemd-resolved (libère le port 53 localement)..."
-    systemctl stop systemd-resolved
-    systemctl disable systemd-resolved
-    rm -f /etc/resolv.conf
-    echo "nameserver 8.8.8.8" > /etc/resolv.conf
-}
+    log "Gestion sûre de systemd-resolved (Ubuntu compatible)..."
 
+    if systemctl list-unit-files | grep -q "^systemd-resolved.service"; then
+        systemctl stop systemd-resolved || true
+        systemctl disable systemd-resolved || true
+    fi
+
+    # Ne jamais supprimer resolv.conf (Ubuntu 22+/24+)
+    if [ -L /etc/resolv.conf ]; then
+        log "/etc/resolv.conf est un lien symbolique – laissé intact"
+    else
+        log "/etc/resolv.conf protégé – aucune modification"
+    fi
+}
+    
 configure_iptables() {
     log "Configuration du pare-feu via iptables..."
     if ! iptables -C INPUT -p udp --dport 53 -j ACCEPT &>/dev/null; then
