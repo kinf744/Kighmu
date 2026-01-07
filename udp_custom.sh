@@ -2,6 +2,7 @@
 # ==========================================================
 # UDP Custom Server v1.4 → SSH
 # Mode BACKEND pour cohabitation avec UDP Request MAÎTRE
+# Authentification désactivée pour compatibilité avec ton script
 # Avec logs détaillés et suivi temps réel des paquets UDP
 # Compatible HTTP Custom (Android)
 # Ubuntu 20.04+
@@ -18,8 +19,6 @@ SERVICE_FILE="/etc/systemd/system/udp_custom.service"
 UDP_PORT=36712  # Port interne (backend TCP via le maître UDP)
 LOG_DIR="/var/log/udp-custom"
 BIN_LOG="$LOG_DIR/udp-custom.log"
-TCPDUMP_LOG="$LOG_DIR/udp_packets.log"
-SSH_TEST_LOG="$LOG_DIR/ssh_test.log"
 
 mkdir -p "$INSTALL_DIR" "$LOG_DIR"
 
@@ -44,14 +43,14 @@ chmod +x "$BIN_PATH"
 log "✅ Binaire prêt : $BIN_PATH"
 
 # ================= CONFIG JSON =================
-log "🔹 Création config.json (écoute backend, pas UDP direct)"
+log "🔹 Création config.json (écoute backend, auth désactivée)"
 cat > "$CONFIG_FILE" <<EOF
 {
   "listen": ":$UDP_PORT",
   "stream_buffer": 8388608,
   "receive_buffer": 16777216,
   "auth": {
-    "mode": "passwords"
+    "mode": "none"
   }
 }
 EOF
