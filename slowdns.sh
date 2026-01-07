@@ -6,7 +6,7 @@ set -euo pipefail
 # ============================
 SLOWDNS_DIR="/etc/slowdns"
 SLOWDNS_BIN="/usr/local/bin/dnstt-server"
-PORT=5300
+PORT=53  # ⚡ Bind direct sur 53 pour éviter NAT
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 SERVER_PUB="$SLOWDNS_DIR/server.pub"
@@ -122,15 +122,13 @@ configure_iptables() {
         iptables -I INPUT -p udp --dport 53 -j ACCEPT
     fi
 
-    # Autoriser le port SlowDNS
+    # Autoriser le port SlowDNS (direct bind)
     if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
         iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
     fi
 
-    # REDIRECT UDP 53 -> PORT SlowDNS (NAT)
-    if ! iptables -t nat -C PREROUTING -p udp --dport 53 -j REDIRECT --to-ports "$PORT" &>/dev/null; then
-        iptables -t nat -I PREROUTING -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
-    fi
+    # ❌ REDIRECT supprimé → cohabitation multi-tunnels
+    # iptables -t nat -I PREROUTING -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
 
     # Sauvegarde pour persistance
     iptables-save > /etc/iptables/rules.v4
@@ -185,7 +183,6 @@ choose_mode() {
 # ============================
 # GESTION NS
 # ============================
-
 create_ns_cloudflare() {
     VPS_IP=$(curl -s https://ipv4.icanhazip.com || curl -s https://ifconfig.me)
 
@@ -265,7 +262,7 @@ set -euo pipefail
 
 SLOWDNS_DIR="/etc/slowdns"
 SLOWDNS_BIN="/usr/local/bin/dnstt-server"
-PORT=5300
+PORT=53
 CONFIG_FILE="$SLOWDNS_DIR/ns.conf"
 SERVER_KEY="$SLOWDNS_DIR/server.key"
 ENV_FILE="$SLOWDNS_DIR/slowdns.env"
@@ -337,7 +334,7 @@ case "$BACKEND" in
         ;;
 esac
 
-exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" 127.0.0.1:$backend_port
+exec "$SLOWDNS_BIN" -udp :53 -privkey-file "$SERVER_KEY" "$NS" 127.0.0.1:$backend_port
 EOF
 
     chmod +x /usr/local/bin/slowdns-start.sh
