@@ -253,6 +253,7 @@ ENV_FILE="$SLOWDNS_DIR/slowdns.env"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
+# Charger les variables
 if [[ -f "$ENV_FILE" ]]; then
     source "$ENV_FILE"
 else
@@ -260,17 +261,38 @@ else
     exit 1
 fi
 
+# Attente interface réseau active
 wait_for_interface() {
     interface=""
     while [ -z "$interface" ]; do
-        interface=$(ip -o link show up | awk -F': ' '{print $2}' \
-                    | grep -v '^lo$' \
-                    | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' \
-                    | head -n1)
+        interface=$(ip -o link show up | awk -F': ' '{print $2}' | grep -v '^lo$' | head -n1)
         [ -z "$interface" ] && sleep 2
     done
     echo "$interface"
 }
+
+log "Attente de l'interface réseau..."
+interface=$(wait_for_interface)
+log "Interface détectée : $interface"
+
+# Résolution NS
+NS=$(cat "$CONFIG_FILE")
+
+# Détermination du port backend
+case "$BACKEND" in
+    ssh) backend_port=22 ;;
+    v2ray) backend_port=5401 ;;
+    mix) backend_port=80 ;;
+    *) backend_port=22 ;;
+esac
+
+# Lancement SlowDNS
+exec "$SLOWDNS_BIN" -udp ":$PORT" -privkey-file "$SERVER_KEY" "$NS" 127.0.0.1:$backend_port -v
+EOF
+
+    chmod +x /usr/local/bin/slowdns-start.sh
+    log "Wrapper slowdns-start.sh créé"
+} 
 
 get_mtu() {
     local iface="$1"
@@ -321,23 +343,18 @@ create_systemd_service() {
 Description=SlowDNS Server Tunnel
 After=network-online.target
 Wants=network-online.target
-Documentation=https://github.com/fisabiliyusri/SLDNS
 
 [Service]
 Type=simple
 User=root
 ExecStart=/usr/local/bin/slowdns-start.sh
 Restart=on-failure
-RestartSec=3
+RestartSec=5
 StandardOutput=append:/var/log/slowdns.log
 StandardError=append:/var/log/slowdns.log
-SyslogIdentifier=slowdns
 LimitNOFILE=1048576
-Nice=10
-CPUSchedulingPolicy=other
-IOSchedulingClass=best-effort
-IOSchedulingPriority=4
-TimeoutStartSec=20
+TimeoutStartSec=60
+SyslogIdentifier=slowdns
 NoNewPrivileges=yes
 
 [Install]
@@ -345,8 +362,8 @@ WantedBy=multi-user.target
 EOF
 
     systemctl daemon-reload
-    systemctl enable slowdns.service
-    systemctl restart slowdns.service
+    systemctl enable --now slowdns.service
+    log "Service systemd slowdns créé et démarré"
 }
 
 # ============================
