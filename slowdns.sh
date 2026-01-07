@@ -1,7 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-# --- Configuration principale ---
 SLOWDNS_DIR="/etc/slowdns"
 SLOWDNS_BIN="/usr/local/bin/dnstt-server"
 PORT=5300
@@ -11,28 +10,20 @@ SERVER_PUB="$SLOWDNS_DIR/server.pub"
 ENV_FILE="$SLOWDNS_DIR/slowdns.env"
 BACKEND_CONF="$SLOWDNS_DIR/backend.conf"
 
-# --- Cloudflare API (actuel) ---
 CF_API_TOKEN="7mn4LKcZARvdbLlCVFTtaX7LGM2xsnyjHkiTAt37"
 CF_ZONE_ID="7debbb8ea4946898a889c4b5745ab7eb"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
-# --- Vérification root ---
-if [ "$EUID" -ne 0 ]; then
-  echo "Ce script doit être exécuté en root." >&2
-  exit 1
-fi
+# Vérification root
+[[ "$EUID" -ne 0 ]] && echo "Ce script doit être exécuté en root." >&2 && exit 1
 
-# --- Création dossier ---
 mkdir -p "$SLOWDNS_DIR"
 
-# --- Désactivation propre de systemd-resolved + gestion resolv.conf SANS chattr ---
+# Désactivation systemd-resolved et config resolv.conf
 log "Désactivation systemd-resolved et configuration DNS..."
 systemctl disable --now systemd-resolved.service || true
-
-# Supprimer attribut immuable si présent, puis recréer resolv.conf
 chattr -i /etc/resolv.conf 2>/dev/null || true
-rm -f /etc/resolv.conf
 cat <<EOF > /etc/resolv.conf
 nameserver 1.1.1.1
 nameserver 8.8.8.8
@@ -41,120 +32,106 @@ options attempts:1
 EOF
 chmod 644 /etc/resolv.conf
 
-# --- Dépendances ---
+# Dépendances
 log "Installation des dépendances..."
 export DEBIAN_FRONTEND=noninteractive
 apt update -y
 apt install -y nftables curl tcpdump jq python3 python3-venv python3-pip iproute2
 
-# Activer nftables au boot
+# Activer nftables
 systemctl enable nftables
 systemctl start nftables
 
-# --- Création venv et paquet Cloudflare python ---
-if [ ! -d "$SLOWDNS_DIR/venv" ]; then
-  python3 -m venv "$SLOWDNS_DIR/venv"
+# venv et cloudflare python
+if [[ ! -d "$SLOWDNS_DIR/venv" ]]; then
+    python3 -m venv "$SLOWDNS_DIR/venv"
 fi
 source "$SLOWDNS_DIR/venv/bin/activate"
 pip install --upgrade pip >/dev/null
-pip install cloudflare >/dev/null || log "pip install cloudflare failed (non fatal here)"
+pip install cloudflare >/dev/null || log "pip install cloudflare failed (non fatal)"
 
-# --- DNSTT (binaire) ---
-if [ ! -x "$SLOWDNS_BIN" ]; then
-  log "Téléchargement du binaire DNSTT..."
-  curl -fsSL -o "$SLOWDNS_BIN" https://www.bamsoftware.com/software/dnstt/dnstt-server-linux-amd64
-  chmod +x "$SLOWDNS_BIN"
+# DNSTT binaire
+if [[ ! -x "$SLOWDNS_BIN" ]]; then
+    log "Téléchargement DNSTT..."
+    curl -fsSL -o "$SLOWDNS_BIN" https://www.bamsoftware.com/software/dnstt/dnstt-server-linux-amd64
+    chmod +x "$SLOWDNS_BIN"
 fi
 
-# --- Choix du backend (SSH / V2Ray / MIX) ---
+# Backend
 choose_backend() {
-    echo ""
-    echo "+--------------------------------------------+"
-    echo "|      CHOIX DU MODE BACKEND SLOWDNS         |"
-    echo "+--------------------------------------------+"
-    echo "1) SSH direct (DNSTT → 127.0.0.1:22)"
-    echo "2) V2Ray direct (DNSTT → 127.0.0.1:8443)"
-    echo "3) MIX (DNSTT → 127.0.0.1:8443, V2Ray gère SSH + VLESS/VMESS/Trojan)"
-    echo ""
-    read -rp "Sélectionnez le mode [1-3] : " mode
+    echo -e "\nChoix du backend SlowDNS :"
+    echo "1) SSH direct"
+    echo "2) V2Ray direct"
+    echo "3) MIX"
+    read -rp "Sélectionnez [1-3] : " mode
     case "$mode" in
         1) BACKEND_MODE="ssh" ;;
         2) BACKEND_MODE="v2ray" ;;
         3) BACKEND_MODE="mix" ;;
-        *) echo "Mode invalide."; exit 1 ;;
+        *) echo "Mode invalide"; exit 1 ;;
     esac
     echo "BACKEND_MODE=$BACKEND_MODE" > "$BACKEND_CONF"
-    log "Mode backend sélectionné : $BACKEND_MODE"
+    log "Backend : $BACKEND_MODE"
 }
 
-# --- Choix du mode NS ---
-read -rp "Choisissez le mode d'installation [auto/man] : " MODE
+# NS
+read -rp "Mode d'installation NS [auto/man] : " MODE
 MODE=${MODE,,}
 
 generate_ns_auto() {
-  DOMAIN="kingom.ggff.net"
-  VPS_IP=$(curl -s ipv4.icanhazip.com || echo "127.0.0.1")
-  SUB_A="vpn-$(date +%s | sha256sum | head -c 6)"
-  FQDN_A="$SUB_A.$DOMAIN"
-  log "Création du A : $FQDN_A -> $VPS_IP"
+    DOMAIN="kingom.ggff.net"
+    VPS_IP=$(curl -s ipv4.icanhazip.com || echo "127.0.0.1")
+    SUB_A="vpn-$(date +%s | sha256sum | head -c 6)"
+    FQDN_A="$SUB_A.$DOMAIN"
+    log "Création A : $FQDN_A -> $VPS_IP"
 
-  curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
-    -H "Authorization: Bearer $CF_API_TOKEN" \
-    -H "Content-Type: application/json" \
-    --data "{"type":"A","name":"$FQDN_A","content":"$VPS_IP","ttl":120,"proxied":false}" \
-    | jq . || log "Création A Cloudflare retournée avec erreur"
+    curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
+         -H "Authorization: Bearer $CF_API_TOKEN" \
+         -H "Content-Type: application/json" \
+         --data "{\"type\":\"A\",\"name\":\"$FQDN_A\",\"content\":\"$VPS_IP\",\"ttl\":120,\"proxied\":false}" \
+         | jq . || log "Erreur Cloudflare A record"
 
-  SUB_NS="ns-$(date +%s | sha256sum | head -c 6)"
-  NS="$SUB_NS.$DOMAIN"
-  log "Création du NS : $NS -> $FQDN_A"
+    SUB_NS="ns-$(date +%s | sha256sum | head -c 6)"
+    NS="$SUB_NS.$DOMAIN"
+    log "Création NS : $NS -> $FQDN_A"
 
-  curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
-    -H "Authorization: Bearer $CF_API_TOKEN" \
-    -H "Content-Type: application/json" \
-    --data "{"type":"NS","name":"$NS","content":"$FQDN_A","ttl":120}" \
-    | jq . || log "Création NS Cloudflare retournée avec erreur"
+    curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
+         -H "Authorization: Bearer $CF_API_TOKEN" \
+         -H "Content-Type: application/json" \
+         --data "{\"type\":\"NS\",\"name\":\"$NS\",\"content\":\"$FQDN_A\",\"ttl\":120}" \
+         | jq . || log "Erreur Cloudflare NS record"
 
-  echo -e "NS=$NS
-ENV_MODE=auto" > "$ENV_FILE"
-  chmod 600 "$ENV_FILE"
-  log "NS auto sauvegardé : $NS"
-  echo "$NS"
+    echo -e "NS=$NS\nENV_MODE=auto" > "$ENV_FILE"
+    chmod 600 "$ENV_FILE"
+    log "NS auto sauvegardé : $NS"
+    echo "$NS"
 }
 
-# --- Gestion du NS persistant ---
+# Gestion NS persistant
 if [[ "$MODE" == "auto" ]]; then
-  if [[ -f "$ENV_FILE" ]]; then
-    source "$ENV_FILE"
-    if [[ "${ENV_MODE:-}" == "auto" && -n "${NS:-}" ]]; then
-      log "NS auto existant détecté : $NS"
+    if [[ -f "$ENV_FILE" ]]; then
+        source "$ENV_FILE"
+        [[ "${ENV_MODE:-}" == "auto" && -n "${NS:-}" ]] && log "NS auto existant : $NS" || NS=$(generate_ns_auto)
     else
-      log "NS manuel existant → génération d'un nouveau NS auto..."
-      NS=$(generate_ns_auto)
+        NS=$(generate_ns_auto)
     fi
-  else
-    log "Aucun fichier NS existant → génération NS auto..."
-    NS=$(generate_ns_auto)
-  fi
 elif [[ "$MODE" == "man" ]]; then
-  read -rp "Entrez le NameServer (NS) à utiliser : " NS
-  echo -e "NS=$NS
-ENV_MODE=man" > "$ENV_FILE"
-  chmod 600 "$ENV_FILE"
-  log "NS manuel sauvegardé : $NS"
+    read -rp "Entrez NS : " NS
+    echo -e "NS=$NS\nENV_MODE=man" > "$ENV_FILE"
+    chmod 600 "$ENV_FILE"
+    log "NS manuel sauvegardé : $NS"
 else
-  echo "Mode invalide." >&2
-  exit 1
+    echo "Mode invalide" >&2
+    exit 1
 fi
 
-# --- Choix backend AVANT écriture config ---
 choose_backend
 
-# --- Écriture du NS dans la config ---
 echo "$NS" > "$CONFIG_FILE"
 chmod 644 "$CONFIG_FILE"
 log "NS utilisé : $NS"
 
-# --- Clés fixes ---
+# Clés fixes
 cat > "$SERVER_KEY" <<'KEY'
 4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa
 KEY
@@ -164,8 +141,8 @@ PUB
 chmod 600 "$SERVER_KEY"
 chmod 644 "$SERVER_PUB"
 
-# --- Kernel tuning optimisé pour tunnel UDP ---
-log "Application des optimisations réseau..."
+# Kernel tuning
+log "Optimisations réseau..."
 cat > /etc/sysctl.d/99-slowdns.conf <<'EOF'
 net.core.rmem_max=67108864
 net.core.wmem_max=67108864
@@ -186,7 +163,7 @@ net.ipv4.neigh.default.gc_thresh3=16384
 EOF
 sysctl --system >/dev/null || log "sysctl apply returned non-zero"
 
-# --- Wrapper SlowDNS startup ---
+# Wrapper startup
 cat > /usr/local/bin/slowdns-start.sh << 'EOF'
 #!/bin/bash
 set -euo pipefail
@@ -199,13 +176,10 @@ BACKEND_CONF="$SLOWDNS_DIR/backend.conf"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
-wait_for_interface() {
+wait_for_iface() {
   local iface=""
   while [ -z "$iface" ]; do
-    iface=$(ip -o link show up | awk -F': ' '{print $2}' \
-      | grep -v '^lo$' \
-      | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' \
-      | head -n1)
+    iface=$(ip -o link show up | awk -F': ' '{print $2}' | grep -v '^lo$' | grep -vE '^(docker|veth|br|virbr|tun|tap|wl|vmnet|vboxnet)' | head -n1)
     [ -z "$iface" ] && sleep 1
   done
   echo "$iface"
@@ -214,63 +188,32 @@ wait_for_interface() {
 select_backend_target() {
     local mode target ssh_port
     mode="ssh"
-    if [ -f "$BACKEND_CONF" ]; then
-        source "$BACKEND_CONF"
-        mode="${BACKEND_MODE:-ssh}"
-    fi
+    [ -f "$BACKEND_CONF" ] && source "$BACKEND_CONF" && mode="${BACKEND_MODE:-ssh}"
 
     case "$mode" in
         ssh)
             ssh_port=$(ss -tlnp | grep sshd | head -1 | awk '{print $4}' | cut -d: -f2 || echo 22)
             [ -z "$ssh_port" ] && ssh_port=22
             target="127.0.0.1:$ssh_port"
-            printf '[%s] Mode backend : SSH (%s)
-' "$(date '+%Y-%m-%d %H:%M:%S')" "$target" >&2
             ;;
-        v2ray)
-            target="127.0.0.1:5401"
-            printf '[%s] Mode backend : V2Ray (%s)
-' "$(date '+%Y-%m-%d %H:%M:%S')" "$target" >&2
-            ;;
-        mix)
-            target="127.0.0.1:8443"
-            printf '[%s] Mode backend : MIX (via V2Ray %s)
-' "$(date '+%Y-%m-%d %H:%M:%S')" "$target" >&2
-            ;;
-        *)
-            target="127.0.0.1:22"
-            printf '[%s] Mode backend inconnu, fallback SSH (%s)
-' "$(date '+%Y-%m-%d %H:%M:%S')" "$target" >&2
-            ;;
+        v2ray) target="127.0.0.1:5401" ;;
+        mix) target="127.0.0.1:8443" ;;
+        *) target="127.0.0.1:22" ;;
     esac
     echo "$target"
 }
 
-iface=$(wait_for_interface)
-log "Interface détectée : $iface"
-
-# MTU dynamique
-for mtu in 1500 1450 1400 1350 932; do
-  if ping -M do -s $((mtu-28)) -c 1 1.1.1.1 >/dev/null 2>&1; then
-    ip link set dev "$iface" mtu $mtu || true
-    log "MTU réglée à $mtu"
-    break
-  fi
-done
-
-NS=$(cat "$CONFIG_FILE" 2>/dev/null || echo "")
+iface=$(wait_for_iface)
 backend_target=$(select_backend_target)
 
-log "Démarrage SlowDNS → $backend_target"
-exec nice -n 0 "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$NS" "$backend_target"
+exec "$SLOWDNS_BIN" -udp :$PORT -privkey-file "$SERVER_KEY" "$(cat "$CONFIG_FILE")" "$backend_target"
 EOF
-
 chmod +x /usr/local/bin/slowdns-start.sh
 
-# --- Service systemd ---
+# Service systemd SlowDNS
 cat > /etc/systemd/system/slowdns.service <<'EOF'
 [Unit]
-Description=SlowDNS Server Tunnel (DNSTT) - Multi Backend
+Description=SlowDNS Server (DNSTT) - Multi Backend
 After=network-online.target
 Wants=network-online.target
 
@@ -290,7 +233,7 @@ StandardError=append:/var/log/slowdns.log
 WantedBy=multi-user.target
 EOF
 
-# --- nftables optimisée pour SlowDNS ---
+# nftables SlowDNS
 mkdir -p /etc/nftables.d
 cat > /etc/nftables.d/slowdns.nft <<'EOF'
 table inet slowdns {
@@ -305,12 +248,10 @@ table inet slowdns {
 }
 EOF
 
-# Ajout persistant
-if ! grep -q "/etc/nftables.d/slowdns.nft" /etc/nftables.conf 2>/dev/null; then
-  echo 'include "/etc/nftables.d/slowdns.nft"' >> /etc/nftables.conf
-fi
+# Inclure la config si nécessaire
+grep -q "/etc/nftables.d/slowdns.nft" /etc/nftables.conf || echo 'include "/etc/nftables.d/slowdns.nft"' >> /etc/nftables.conf
 
-# --- systemd pour nftables SlowDNS ---
+# Service nftables SlowDNS
 cat > /etc/systemd/system/nftables-slowdns.service <<'EOF'
 [Unit]
 Description=nftables NAT redirect UDP 53 -> 5300 for SlowDNS
@@ -327,14 +268,11 @@ ExecStop=/usr/sbin/nft delete table inet slowdns || true
 WantedBy=multi-user.target
 EOF
 
-# --- Activation services ---
+# Activation services
 systemctl daemon-reload
 systemctl enable nftables-slowdns.service
 systemctl start nftables-slowdns.service
 systemctl enable slowdns.service
 systemctl restart slowdns.service
 
-log "Installation terminée."
-log "SlowDNS démarré avec nftables (REDIRECT UDP 53 -> 5300). NS: $NS | Backend: $BACKEND_MODE"
-echo "Clé publique : $(cat "$SERVER_PUB")"
-echo "Configuration : $NS → $BACKEND_MODE"
+log "Installation terminée. SlowDNS prêt et sécurisé via nftables."
