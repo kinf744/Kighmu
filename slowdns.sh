@@ -108,6 +108,7 @@ configure_nftables() {
     # Sauvegarder règles pour persistance
     nft list ruleset > /etc/nftables.conf
     systemctl restart nftables
+    systemctl enable nftables
     log "Règles nftables appliquées et persistées."
 }
 
@@ -266,11 +267,8 @@ get_mtu() {
     ip link show "$iface" | awk '/mtu/ {for(i=1;i<=NF;i++){if($i=="mtu"){print $(i+1);exit}}}'
 }
 
-setup_iptables() {
-    interface="$1"
-    if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
-        iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
-    fi
+setup_nftables() {
+    log "Les règles nftables ont déjà été appliquées côté script principal."
 }
 
 log "Attente de l'interface réseau..."
