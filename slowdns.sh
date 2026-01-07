@@ -32,7 +32,7 @@ check_root() {
 install_dependencies() {
     log "Installation des dépendances..."
     apt-get update -q
-    apt-get install -y iptables iptables-persistent wget tcpdump curl jq python3 python3-venv python3-pip
+    apt-get install -y nftables wget tcpdump curl jq python3 python3-venv python3-pip
 }
 
 install_slowdns_bin() {
@@ -87,28 +87,28 @@ disable_systemd_resolved() {
     echo "nameserver 8.8.8.8" > /etc/resolv.conf
 }
 
-configure_iptables() {
-    log "Configuration du pare-feu via iptables..."
+configure_nftables() {
+    log "Configuration du pare-feu via nftables..."
 
-    # Autoriser DNS entrant
-    if ! iptables -C INPUT -p udp --dport 53 -j ACCEPT &>/dev/null; then
-        iptables -I INPUT -p udp --dport 53 -j ACCEPT
-    fi
+    # Création table inet slowdns si elle n'existe pas
+    nft list tables inet slowdns &>/dev/null || nft add table inet slowdns
 
-    # Autoriser le port SlowDNS (direct bind)
-    if ! iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; then
-        iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
-    fi
+    # Création chain input si elle n'existe pas
+    nft list chain inet slowdns input &>/dev/null || \
+        nft add chain inet slowdns input { type filter hook input priority 0 \; policy accept \; }
 
-    # ❌ REDIRECT supprimé → cohabitation multi-tunnels
-    # iptables -t nat -I PREROUTING -p udp --dport 53 -j REDIRECT --to-ports "$PORT"
+    # Autoriser UDP 53 et le port SlowDNS (ici 53)
+    nft delete rule inet slowdns input udp dport 53 counter &>/dev/null || true
+    nft add rule inet slowdns input udp dport 53 counter accept
 
-    # Sauvegarde pour persistance
-    iptables-save > /etc/iptables/rules.v4
-    systemctl enable netfilter-persistent
-    systemctl restart netfilter-persistent
+    # Si backend est SSH (22), ouvrir TCP 22
+    nft delete rule inet slowdns input tcp dport 22 counter &>/dev/null || true
+    nft add rule inet slowdns input tcp dport 22 counter accept
 
-    log "Persistance iptables activée via netfilter-persistent."
+    # Sauvegarder règles pour persistance
+    nft list ruleset > /etc/nftables.conf
+    systemctl restart nftables
+    log "Règles nftables appliquées et persistées."
 }
 
 # ============================
@@ -280,7 +280,7 @@ log "Interface détectée : $interface"
 REAL_MTU=$(ip link show "$interface" | awk '/mtu/ {for(i=1;i<=NF;i++){if($i=="mtu"){print $(i+1);exit}}}')
 log "MTU actuel de $interface : $REAL_MTU (par défaut du VPS, inchangé)"
 
-setup_iptables "$interface"
+setup_nftables "$interface"
 
 NS=$(cat "$CONFIG_FILE")
 
@@ -353,7 +353,7 @@ main() {
     install_fixed_keys
     disable_systemd_resolved
     configure_sysctl
-    configure_iptables
+    configure_nftables
 
     choose_backend
     choose_mode
