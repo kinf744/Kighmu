@@ -613,31 +613,32 @@ install_udp_request() {
 }
 
 uninstall_udp_request() {
-    echo ">>> Désinstallation du tunnel UDP Request..."
+    echo "============================================"
+    echo "        Désinstallation UDP Request"
+    echo "============================================"
 
-    # Arrêt propre du service s'il existe
-    if systemctl is-enabled --quiet UDPserver 2>/dev/null || systemctl is-active --quiet UDPserver 2>/dev/null; then
+    PID=$(pgrep -f "udpServer")
+    if [[ -n "$PID" ]]; then
+        UDP_PORT=$(ss -lunp | grep "$PID" | awk '{print $5}' | cut -d':' -f2 | head -n1)
         systemctl stop UDPserver 2>/dev/null || true
         systemctl disable UDPserver 2>/dev/null || true
     fi
 
-    # Suppression du service systemd (sans daemon-reload)
-    rm -f "$UDP_SERVICE"
+    [[ -f /etc/systemd/system/UDPserver.service ]] && rm -f /etc/systemd/system/UDPserver.service
+    systemctl daemon-reload
 
-    # Arrêt doux des processus udpServer encore actifs
-    PIDS=$(pgrep -f "$UDP_BIN" || true)
-    if [[ -n "$PIDS" ]]; then
-        echo "Arrêt des processus udpServer (PID: $PIDS)..."
-        kill -15 $PIDS 2>/dev/null || true
-        sleep 1
+    [[ -f /usr/bin/udpServer ]] && rm -f /usr/bin/udpServer
+    [[ -f /var/log/udp-request-server.log ]] && rm -f /var/log/udp-request-server.log
+
+    if [[ -n "$UDP_PORT" ]]; then
+        iptables -D INPUT -p udp --dport "$UDP_PORT" -j ACCEPT 2>/dev/null || true
+        iptables -t nat -D PREROUTING -p udp --dport "$UDP_PORT" -j REDIRECT --to-ports "$UDP_PORT" 2>/dev/null || true
+        iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
+        systemctl restart netfilter-persistent 2>/dev/null || true
     fi
 
-    # Suppression du binaire et du log
-    rm -f "$UDP_BIN"
-    rm -f "$UDP_LOG"
-
-    echo ">>> Tunnel UDP Request désinstallé proprement."
-    read -p "Appuyez sur Entrée..."
+    echo "[+] UDP Request désinstallé."
+    echo "============================================"
 }
 
 # --- Interface utilisateur ---
