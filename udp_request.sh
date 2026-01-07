@@ -31,7 +31,6 @@ RUNTIME_LOG="/var/log/udp-request-server.log"
 
 # ⚠️ Ports UDP À EXCLURE (UDP Custom / SlowDNS / Web / SSH)
 EXCLUDED_PORTS=(
-  36712   # UDP Custom
   53
   80
   443
