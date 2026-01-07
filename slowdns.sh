@@ -77,33 +77,6 @@ EOF
     sysctl -p
 }
 
-# ============================
-# GESTION DU MTU
-# ============================
-set_mtu() {
-    local mtu="$1"
-
-    if ! [[ "$mtu" =~ ^[0-9]+$ ]] || [ "$mtu" -lt 90 ] || [ "$mtu" -gt 1500 ]; then
-        echo "❌ MTU invalide (90–1500 requis)"
-        exit 1
-    fi
-
-    SLOWDNS_MTU="$mtu"
-    export SLOWDNS_MTU
-}
-
-ask_mtu() {
-    local mtu
-    while true; do
-        read -rp "Entrez le MTU à utiliser pour SlowDNS (ex: 1350) : " mtu
-        if [[ -n "$mtu" ]]; then
-            set_mtu "$mtu"
-            break
-        fi
-        echo "❌ Le MTU est obligatoire."
-    done
-}
-
 disable_systemd_resolved() {
     log "Désactivation non-destructive de systemd-resolved..."
     if systemctl list-unit-files | grep -q "^systemd-resolved.service"; then
@@ -304,15 +277,8 @@ log "Attente de l'interface réseau..."
 interface=$(wait_for_interface)
 log "Interface détectée : $interface"
 
-source /etc/slowdns/slowdns.env
-
-SLOWDNS_MTU="${MTU:?MTU non défini dans slowdns.env}"
-
-ip link set dev "$interface" mtu "$SLOWDNS_MTU"
-
-REAL_MTU=$(get_mtu "$interface")
-log "MTU demandé : $SLOWDNS_MTU"
-log "MTU réel appliqué sur $interface : $REAL_MTU"
+REAL_MTU=$(ip link show "$interface" | awk '/mtu/ {for(i=1;i<=NF;i++){if($i=="mtu"){print $(i+1);exit}}}')
+log "MTU actuel de $interface : $REAL_MTU (par défaut du VPS, inchangé)"
 
 setup_iptables "$interface"
 
@@ -387,7 +353,6 @@ main() {
     install_fixed_keys
     disable_systemd_resolved
     configure_sysctl
-    ask_mtu
     configure_iptables
 
     choose_backend
@@ -401,7 +366,6 @@ PUB_KEY=$(cat "$SERVER_PUB")
 PRIV_KEY=$(cat "$SERVER_KEY")
 BACKEND=$BACKEND
 MODE=$MODE
-MTU=$SLOWDNS_MTU
 EOF
     chmod 600 "$ENV_FILE"
     log "Fichier slowdns.env généré avec succès."
@@ -419,7 +383,6 @@ EOF
     echo "NameServer  : $NS"
     echo "Backend     : $BACKEND"
     echo "Mode        : $MODE"
-    echo "MTU         : $SLOWDNS_MTU"
     echo ""
     echo "IMPORTANT : Pour améliorer le débit SSH, modifiez /etc/ssh/sshd_config :"
     echo "Ciphers aes128-ctr,aes192-ctr,aes128-gcm@openssh.com"
