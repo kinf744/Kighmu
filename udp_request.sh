@@ -69,7 +69,7 @@ for p in $EXCLUDE_PORTS; do
 done
 
 # Ajouter automatiquement le port UDP Custom (36712) à la liste des exclusions
-PORT_LIST+=("36712")
+PORT_LIST+=("36712" "53" "5300" "80" "443" "8443" "5401" "5400" "8880" "9090" "444" "22000")
 
 EXCLUDE_OPT=""
 if [[ "${#PORT_LIST[@]}" -gt 0 ]]; then
