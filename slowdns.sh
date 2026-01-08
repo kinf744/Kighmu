@@ -1,17 +1,12 @@
 #!/bin/bash
 set -euo pipefail
 
-==========================================================
-
-SlowDNS DNSTT Server - Version finale consolidée
-
-Compatible Debian 11/12 & Ubuntu 20.04+
-
-Backend : SSH / V2Ray / MIX
-
-Sécurisé via nftables (sans casser UDP Request)
-
-==========================================================
+# ==========================================================
+# SlowDNS DNSTT Server - Version finale consolidée
+# Compatible Debian 11/12 & Ubuntu 20.04+
+# Backend : SSH / V2Ray / MIX
+# Sécurisé via nftables (sans casser UDP Request)
+# ==========================================================
 
 SLOWDNS_DIR="/etc/slowdns"
 SLOWDNS_BIN="/usr/local/bin/dnstt-server"
@@ -28,20 +23,18 @@ CF_ZONE_ID="7debbb8ea4946898a889c4b5745ab7eb"
 PUB_IFACE="eth0"   # ⚠️ interface publique VPS
 
 log() {
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
 }
 
-===================== CHECK ROOT =====================
-
+# ===================== CHECK ROOT =====================
 if [[ "$EUID" -ne 0 ]]; then
-echo "Ce script doit être exécuté en root" >&2
-exit 1
+  echo "Ce script doit être exécuté en root" >&2
+  exit 1
 fi
 
 mkdir -p "$SLOWDNS_DIR"
 
-===================== DNS LOCAL =====================
-
+# ===================== DNS LOCAL =====================
 log "Configuration DNS système..."
 systemctl disable --now systemd-resolved.service >/dev/null 2>&1 || true
 chattr -i /etc/resolv.conf 2>/dev/null || true
@@ -55,96 +48,84 @@ EOF
 
 chmod 644 /etc/resolv.conf
 
-===================== DEPENDANCES =====================
-
+# ===================== DEPENDANCES =====================
 log "Installation des dépendances..."
 export DEBIAN_FRONTEND=noninteractive
 apt update -y
 apt install -y nftables curl tcpdump jq python3 python3-venv python3-pip iproute2
 systemctl enable --now nftables
 
-===================== PYTHON VENV =====================
-
+# ===================== PYTHON VENV =====================
 if [[ ! -d "$SLOWDNS_DIR/venv" ]]; then
-python3 -m venv "$SLOWDNS_DIR/venv"
+  python3 -m venv "$SLOWDNS_DIR/venv"
 fi
 
 source "$SLOWDNS_DIR/venv/bin/activate"
 pip install --upgrade pip >/dev/null
 pip install cloudflare >/dev/null || log "cloudflare lib non critique"
 
-===================== DNSTT =====================
-
+# ===================== DNSTT =====================
 if [[ ! -x "$SLOWDNS_BIN" ]]; then
-log "Téléchargement DNSTT server..."
-curl -fsSL https://dnstt.network/dnstt-server-linux-amd64 -o "$SLOWDNS_BIN"
-chmod +x "$SLOWDNS_BIN"
+  log "Téléchargement DNSTT server..."
+  curl -fsSL https://dnstt.network/dnstt-server-linux-amd64 -o "$SLOWDNS_BIN"
+  chmod +x "$SLOWDNS_BIN"
 fi
 
-===================== BACKEND =====================
-
+# ===================== BACKEND =====================
 choose_backend() {
-echo
-echo "Choix du backend SlowDNS"
-echo "1) SSH"
-echo "2) V2Ray"
-echo "3) MIX"
-read -rp "Sélection [1-3] : " c
+  echo
+  echo "Choix du backend SlowDNS"
+  echo "1) SSH"
+  echo "2) V2Ray"
+  echo "3) MIX"
+  read -rp "Sélection [1-3] : " c
 
-case "$c" in
+  case "$c" in
+    1) BACKEND_MODE="ssh" ;;
+    2) BACKEND_MODE="v2ray" ;;
+    3) BACKEND_MODE="mix" ;;
+    *) echo "Choix invalide"; exit 1 ;;
+  esac
 
-1. BACKEND_MODE="ssh" ;;
-
-
-2. BACKEND_MODE="v2ray" ;;
-
-
-3. BACKEND_MODE="mix" ;;
-*) echo "Choix invalide"; exit 1 ;;
-esac
-
-
-
-echo "BACKEND_MODE=$BACKEND_MODE" > "$BACKEND_CONF"
-log "Backend sélectionné : $BACKEND_MODE"
+  echo "BACKEND_MODE=$BACKEND_MODE" > "$BACKEND_CONF"
+  log "Backend sélectionné : $BACKEND_MODE"
 }
 
-===================== NS =====================
-
+# ===================== NS =====================
 read -rp "Mode NS [auto/man] : " MODE
 MODE=${MODE,,}
 
 generate_ns_auto() {
-DOMAIN="kingom.ggff.net"
-VPS_IP=$(curl -s ipv4.icanhazip.com || echo "127.0.0.1")
+  DOMAIN="kingom.ggff.net"
+  VPS_IP=$(curl -s ipv4.icanhazip.com || echo "127.0.0.1")
 
-SUB="$(date +%s | sha256sum | cut -c1-6)"
-FQDN_A="vpn-$SUB.$DOMAIN"
-NS="ns-$SUB.$DOMAIN"
+  SUB="$(date +%s | sha256sum | cut -c1-6)"
+  FQDN_A="vpn-$SUB.$DOMAIN"
+  NS="ns-$SUB.$DOMAIN"
 
-curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
--H "Authorization: Bearer $CF_API_TOKEN" \
--H "Content-Type: application/json" \
---data "{"type":"A","name":"$FQDN_A","content":"$VPS_IP","ttl":120,"proxied":false}" >/dev/null
+  curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
+    -H "Authorization: Bearer $CF_API_TOKEN" \
+    -H "Content-Type: application/json" \
+    --data "{\"type\":\"A\",\"name\":\"$FQDN_A\",\"content\":\"$VPS_IP\",\"ttl\":120,\"proxied\":false}" >/dev/null
 
-curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
--H "Authorization: Bearer $CF_API_TOKEN" \
--H "Content-Type: application/json" \
---data "{"type":"NS","name":"$NS","content":"$FQDN_A","ttl":120}" >/dev/null
+  curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
+    -H "Authorization: Bearer $CF_API_TOKEN" \
+    -H "Content-Type: application/json" \
+    --data "{\"type\":\"NS\",\"name\":\"$NS\",\"content\":\"$FQDN_A\",\"ttl\":120}" >/dev/null
 
-echo -e "NS=$NS\nENV_MODE=auto" > "$ENV_FILE"
-chmod 600 "$ENV_FILE"
-echo "$NS"
+  echo -e "NS=$NS\nENV_MODE=auto" > "$ENV_FILE"
+  chmod 600 "$ENV_FILE"
+  echo "$NS"
 }
 
 if [[ "$MODE" == "auto" ]]; then
-[[ -f "$ENV_FILE" ]] && source "$ENV_FILE"
-[[ "${ENV_MODE:-}" == "auto" && -n "${NS:-}" ]] || NS=$(generate_ns_auto)
+  [[ -f "$ENV_FILE" ]] && source "$ENV_FILE"
+  [[ "${ENV_MODE:-}" == "auto" && -n "${NS:-}" ]] || NS=$(generate_ns_auto)
 elif [[ "$MODE" == "man" ]]; then
-read -rp "Entrez NS : " NS
-echo -e "NS=$NS\nENV_MODE=man" > "$ENV_FILE"
+  read -rp "Entrez NS : " NS
+  echo -e "NS=$NS\nENV_MODE=man" > "$ENV_FILE"
 else
-echo "Mode invalide"; exit 1
+  echo "Mode invalide"; exit 1
 fi
 
 choose_backend
@@ -152,8 +133,7 @@ choose_backend
 echo "$NS" > "$CONFIG_FILE"
 chmod 644 "$CONFIG_FILE"
 
-===================== KEYS =====================
-
+# ===================== KEYS =====================
 cat > "$SERVER_KEY" <<'EOF'
 4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa
 EOF
@@ -165,8 +145,7 @@ EOF
 chmod 600 "$SERVER_KEY"
 chmod 644 "$SERVER_PUB"
 
-===================== SYSCTL =====================
-
+# ===================== SYSCTL =====================
 log "Optimisation réseau kernel..."
 cat > /etc/sysctl.d/99-slowdns.conf <<EOF
 net.ipv4.ip_forward=1
@@ -178,8 +157,7 @@ EOF
 
 sysctl --system >/dev/null
 
-===================== START SCRIPT =====================
-
+# ===================== START SCRIPT =====================
 cat > /usr/local/bin/slowdns-start.sh <<'EOF'
 #!/bin/bash
 set -euo pipefail
@@ -190,21 +168,20 @@ BIN="/usr/local/bin/dnstt-server"
 source "$DIR/backend.conf" 2>/dev/null || BACKEND_MODE="ssh"
 
 case "$BACKEND_MODE" in
-ssh) TARGET="127.0.0.1:22" ;;
-v2ray) TARGET="127.0.0.1:5401" ;;
-mix) TARGET="127.0.0.1:8443" ;;
-*) TARGET="127.0.0.1:22" ;;
+  ssh) TARGET="127.0.0.1:22" ;;
+  v2ray) TARGET="127.0.0.1:5401" ;;
+  mix) TARGET="127.0.0.1:8443" ;;
+  *) TARGET="127.0.0.1:22" ;;
 esac
 
 exec "$BIN" -udp :5300 \
--privkey-file "$DIR/server.key" \
-"$(cat "$DIR/ns.conf")" "$TARGET"
+  -privkey-file "$DIR/server.key" \
+  "$(cat "$DIR/ns.conf")" "$TARGET"
 EOF
 
 chmod +x /usr/local/bin/slowdns-start.sh
 
-===================== SYSTEMD =====================
-
+# ===================== SYSTEMD =====================
 cat > /etc/systemd/system/slowdns.service <<'EOF'
 [Unit]
 Description=SlowDNS DNSTT Server
@@ -223,18 +200,17 @@ StandardError=append:/var/log/slowdns.log
 WantedBy=multi-user.target
 EOF
 
-===================== NFTABLES (SAFE) =====================
-
+# ===================== NFTABLES (SAFE) =====================
 cat > /etc/nftables.d/slowdns.nft <<EOF
 table inet slowdns {
-chain prerouting {
-type nat hook prerouting priority -100;
-iifname "$PUB_IFACE" udp dport 53 redirect to :5300
-}
-chain input {
-type filter hook input priority 0;
-udp dport 5300 accept
-}
+  chain prerouting {
+    type nat hook prerouting priority -100;
+    iifname "$PUB_IFACE" udp dport 53 redirect to :5300
+  }
+  chain input {
+    type filter hook input priority 0;
+    udp dport 5300 accept
+  }
 }
 EOF
 
