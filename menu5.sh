@@ -176,8 +176,30 @@ uninstall_dropbear() {
 }
 
 install_udp_custom() {
+    local SCRIPT="$HOME/Kighmu/udp_custom.sh"
+
     echo ">>> Installation UDP Custom via script..."
-    bash "$HOME/Kighmu/udp_custom.sh" || echo "Script introuvable."
+
+    if [[ ! -f "$SCRIPT" ]]; then
+        echo "❌ Script introuvable : $SCRIPT"
+        read -r -p "Appuyez sur Entrée..."
+        return 1
+    fi
+
+    if [[ ! -x "$SCRIPT" ]]; then
+        chmod +x "$SCRIPT"
+    fi
+
+    bash "$SCRIPT"
+    local status=$?
+
+    if [[ $status -ne 0 ]]; then
+        echo "⚠️ Le script UDP Custom s'est terminé avec une erreur (code $status)."
+        read -r -p "Appuyez sur Entrée..."
+        return $status
+    fi
+
+    echo "✅ Installation UDP Custom terminée avec succès."
 }
 
 uninstall_udp_custom() {
