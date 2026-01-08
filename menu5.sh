@@ -17,7 +17,7 @@ afficher_modes_ports() {
     if systemctl is-active --quiet ssh || pgrep -x sshd >/dev/null 2>&1; then any_active=1; fi
     if systemctl is-active --quiet dropbear || pgrep -x dropbear >/dev/null 2>&1; then any_active=1; fi
     if systemctl is-active --quiet slowdns.service || pgrep -f "sldns-server" >/dev/null 2>&1 || screen -list | grep -q slowdns_session; then any_active=1; fi
-    if systemctl is-active --quiet udp_custom.service || pgrep -f udp_custom-linux-amd64 >/dev/null 2>&1 || screen -list | grep -q udp_custom; then any_active=1; fi
+    if systemctl is-active --quiet udp-custom.service || pgrep -f udp-custom-linux-amd64 >/dev/null 2>&1 || screen -list | grep -q udp-custom; then any_active=1; fi
     if systemctl is-active --quiet socks_python.service || pgrep -f KIGHMUPROXY.py >/dev/null 2>&1 || screen -list | grep -q socks_python; then any_active=1; fi
     if systemctl is-active --quiet socks_python_ws.service || pgrep -f ws2_proxy.py >/dev/null 2>&1; then any_active=1; fi
     if systemctl is-active --quiet ssl_tls.service || pgrep -f stunnel >/dev/null 2>&1; then any_active=1; fi
@@ -42,7 +42,7 @@ afficher_modes_ports() {
     if systemctl is-active --quiet slowdns.service || pgrep -f "sldns-server" >/dev/null 2>&1 || screen -list | grep -q slowdns_session; then
         echo -e "  - SlowDNS: ${GREEN}ports UDP 5300${RESET}"
     fi
-    if systemctl is-active --quiet udp_custom.service || pgrep -f ud_custom-linux-amd64 >/dev/null 2>&1 || screen -list | grep -q udp_custom; then
+    if systemctl is-active --quiet udp-custom.service || pgrep -f ud-custom-linux-amd64 >/dev/null 2>&1 || screen -list | grep -q udp-custom; then
         echo -e "  - UDP Custom: ${GREEN}port UDP 54000${RESET}"
     fi
     if systemctl is-active --quiet socks_python.service || pgrep -f KIGHMUPROXY.py >/dev/null 2>&1 || screen -list | grep -q socks_python; then
@@ -181,34 +181,24 @@ install_udp_custom() {
 }
 
 uninstall_udp_custom() {
-    echo ">>> Désinstallation UDP Custom..."
+    echo -e "\u001B[1;33m>>> Désinstallation UDP Custom...\u001B[0m"
 
-    systemctl stop udp_custom.service 2>/dev/null || true
-    systemctl disable udp_custom.service 2>/dev/null || true
-    rm -f /etc/systemd/system/udp_custom.service
+    systemctl stop udp-custom.service udpgw.service 2>/dev/null || true
+    systemctl disable udp-custom.service udpgw.service 2>/dev/null || true
+    
+    rm -f /etc/systemd/system/udp-custom.service /etc/systemd/system/udpgw.service
     systemctl daemon-reload
 
-    pkill -15 -f udp-custom-linux-amd64 2>/dev/null || true
+    pkill -15 -f "udp-custom|udpgw" 2>/dev/null || true
     sleep 2
-    pkill -9 -f udp-custom-linux-amd64 2>/dev/null || true
+    pkill -9 -f "udp-custom|udpgw" 2>/dev/null || true
 
-    rm -rf /opt/udp-custom
-    rm -rf /var/log/udp-custom
+    rm -rf /root/udp /usr/bin/udpgw /var/log/udp-custom-install.log /etc/UDPCustom /etc/limiter.sh
 
-    if command -v nft >/dev/null 2>&1; then
-        nft list table inet filter >/dev/null 2>&1 && {
-            nft delete rule inet filter input udp dport 36712 accept 2>/dev/null || true
-        }
-    fi
+    journalctl --vacuum-time=2s --unit=udp-custom.service 2>/dev/null || true
+    journalctl --vacuum-time=2s --unit=udpgw.service 2>/dev/null || true
 
-    if command -v iptables >/dev/null 2>&1; then
-        iptables -D INPUT -p udp --dport 36712 -j ACCEPT 2>/dev/null || true
-        iptables -D OUTPUT -p udp --sport 36712 -j ACCEPT 2>/dev/null || true
-        iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
-        systemctl restart netfilter-persistent 2>/dev/null || true
-    fi
-
-    echo "[OK] UDP Custom désinstallé proprement"
+    echo -e "\u001B[1;32m[OK] UDP Custom désinstallé\u001B[0m"
 }
 
 install_socks_python() {
