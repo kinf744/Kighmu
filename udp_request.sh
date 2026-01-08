@@ -90,7 +90,7 @@ ExecStart=$UDP_BIN \
   -ip=$SERVER_IP \
   -net=$SERVER_IFACE \
   $EXCLUDE_OPT \
-  -mode=udp
+  -mode=system
 Restart=always
 RestartSec=2
 StandardOutput=append:$RUNTIME_LOG
