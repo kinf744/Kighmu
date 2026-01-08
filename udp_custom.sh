@@ -1,122 +1,118 @@
 #!/bin/bash
-# =====================================================
+# ==========================================================
 # UDP Custom Server - Installation Complète + Exclude Ports
-# Compatible HTTP Custom VPN - Port 36712
+# Version stable inspirée de UDP Request
 # Ubuntu 20.04+ / Debian 12+
-# =====================================================
+# ==========================================================
 
-set -eo pipefail   # Retirer le -u
+set -euo pipefail
 
-# Couleurs
-RED='\u001B[1;31m'
-GREEN='\u001B[1;32m'
-YELLOW='\u001B[1;33m'
-BLUE='\u001B[1;34m'
-NC='\u001B[0m'
+# ================= COULEURS =================
+setup_colors() {
+  RED=""; GREEN=""; YELLOW=""; CYAN=""; BOLD=""; RESET=""
+  if [ -t 1 ] && [ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]; then
+    RED="$(tput setaf 1)"
+    GREEN="$(tput setaf 2)"
+    YELLOW="$(tput setaf 3)"
+    CYAN="$(tput setaf 6)"
+    BOLD="$(tput bold)"
+    RESET="$(tput sgr0)"
+  fi
+}
+setup_colors
 
-LOG_FILE="/var/log/udp-custom-install.log"
+# ================= VARIABLES =================
+UDP_PORT=36712
 UDP_DIR="/root/udp"
 UDP_BIN="$UDP_DIR/udp-custom"
 CONFIG_FILE="$UDP_DIR/config.json"
 UDPGW_BIN="/usr/bin/udpgw"
 SERVICE_UDP="udp-custom.service"
 SERVICE_UDPGW="udpgw.service"
-UDP_PORT=36712
-
+LOG_INSTALL="/var/log/udp-custom-install.log"
+LOG_RUNTIME="/var/log/udp-custom-runtime.log"
 DEFAULT_EXCLUDE_PORTS="53,80,8443,8880,5300,9090,4466,444,5401,54000"
 
-# Logging
-log() { echo -e "$(date '+%Y-%m-%d %H:%M:%S') - $*" | tee -a "$LOG_FILE"; }
-print_center() { local msg="$*"; local cols=80; cols=$(tput cols 2>/dev/null || echo 80); printf "%*s\n" $(( (${#msg} + cols) / 2 )) "$msg"; }
-msg_ok() { log "${GREEN}[OK]${NC} $*"; }
-msg_info() { log "${BLUE}[INFO]${NC} $*"; }
-msg_warn() { log "${YELLOW}[WARN]${NC} $*"; }
-msg_error() { log "${RED}[ERROR]${NC} $*"; exit 1; }
+exec > >(tee -a "$LOG_INSTALL") 2>&1
 
-# ================= Fonctions =================
+log()  { echo -e "${GREEN}[+]${RESET} $*"; }
+warn() { echo -e "${YELLOW}[!]${RESET} $*"; }
+err()  { echo -e "${RED}[ERREUR]${RESET} $*" >&2; }
 
-setup_exclude_ports() {
-    echo ""
-    print_center "Configuration des ports à EXCLURE"
-    echo "Ports par défaut à exclure: $DEFAULT_EXCLUDE_PORTS"
-    echo "(DNS:53, SlowDNS:5300, WireGuard:51820, OpenVPN:1194, etc.)"
-    echo ""
+# ================= ROOT =================
+[[ "$EUID" -ne 0 ]] && err "Exécuter ce script en root" && exit 1
 
-    read -p "Ports à exclure (Entrée=par défaut '$DEFAULT_EXCLUDE_PORTS'): " EXCLUDE_INPUT
-    EXCLUDE_PORTS="${EXCLUDE_INPUT:-$DEFAULT_EXCLUDE_PORTS}"
+# ================= CLEAR =================
+clear
+echo -e "${CYAN}${BOLD}============================================${RESET}"
+echo -e "${GREEN}${BOLD}     UDP CUSTOM — INSTALLATION STABLE${RESET}"
+echo -e "${YELLOW}${BOLD}  Compatible SlowDNS / UDP Request${RESET}"
+echo -e "${CYAN}${BOLD}============================================${RESET}"
+echo
 
-    if [[ ! "$EXCLUDE_PORTS" =~ ^[0-9]+(,[0-9]+)*$ ]]; then
-        msg_warn "Format invalide, utilisation des ports par défaut"
-        EXCLUDE_PORTS="$DEFAULT_EXCLUDE_PORTS"
-    fi
+# ================= OS CHECK =================
+. /etc/os-release || { err "OS indétectable"; exit 1; }
+[[ "$ID" != "ubuntu" && "$ID" != "debian" ]] && err "OS non supporté: $ID" && exit 1
+log "OS détecté: $PRETTY_NAME"
 
-    if echo ",$EXCLUDE_PORTS," | grep -q ",$UDP_PORT,"; then
-        msg_error "ERREUR: Le port principal $UDP_PORT ne peut pas être exclu !"
-    fi
+# ================= DEPENDANCES =================
+log "Installation des dépendances minimales..."
+apt update -y >/dev/null 2>&1 || warn "apt update ignoré"
+apt install -y wget curl jq ca-certificates net-tools iproute2 dos2unix || warn "Certaines dépendances n'ont pas pu être installées"
+log "Dépendances installées"
 
-    msg_ok "Ports exclus: $EXCLUDE_PORTS"
-}
+# ================= IP / INTERFACE =================
+SERVER_IP=$(ip -4 route get 1 | awk '{print $7; exit}')
+SERVER_IFACE=$(ip -4 route get 1 | awk '{print $5; exit}')
+[[ -z "$SERVER_IP" || -z "$SERVER_IFACE" ]] && warn "Impossible de détecter IP ou interface, utilisation par défaut" && SERVER_IP="0.0.0.0" && SERVER_IFACE="eth0"
+log "IP serveur   : $SERVER_IP"
+log "Interface    : $SERVER_IFACE"
 
-check_root() { [[ "$(whoami)" != "root" ]] && msg_error "Ce script doit être exécuté en root"; }
+# ================= CLEAN PREVIOUS =================
+log "Nettoyage des anciennes installations..."
+systemctl stop $SERVICE_UDP 2>/dev/null || true
+systemctl disable $SERVICE_UDP 2>/dev/null || true
+rm -rf "$UDP_DIR" "$UDPGW_BIN"
+rm -f /etc/systemd/system/$SERVICE_UDP /etc/systemd/system/$SERVICE_UDPGW
+rm -f /usr/local/bin/udp-custom
+log "Anciennes installations nettoyées"
 
-check_os() {
-    if [[ -f /etc/os-release ]]; then
-        . /etc/os-release
-        case "$ID" in
-            ubuntu)
-                (( ${VERSION_ID%%.*} < 20 )) && msg_warn "Ubuntu < 20 détecté, installation possible mais non garantie"
-                ;;
-            debian)
-                (( ${VERSION_ID%%.*} < 12 )) && msg_warn "Debian < 12 détecté, installation possible mais non garantie"
-                ;;
-            *)
-                msg_warn "OS non standard détecté: $ID"
-                ;;
-        esac
-        msg_ok "OS détecté: ${PRETTY_NAME:-$ID}"
-    else
-        msg_warn "/etc/os-release non trouvé, continuation forcée"
-    fi
-}
+# ================= CREATE DIR =================
+mkdir -p "$UDP_DIR"
 
-cleanup_previous() {
-    msg_info "Nettoyage des installations précédentes..."
-    systemctl stop $SERVICE_UDP 2>/dev/null || true
-    systemctl stop $SERVICE_UDPGW 2>/dev/null || true
-    systemctl disable $SERVICE_UDP 2>/dev/null || true
-    systemctl disable $SERVICE_UDPGW 2>/dev/null || true
-    rm -rf "$UDP_DIR" "$UDPGW_BIN" 2>/dev/null || true
-    rm -f /etc/systemd/system/$SERVICE_UDP /etc/systemd/system/$SERVICE_UDPGW 2>/dev/null || true
-    rm -f /usr/local/bin/udp-custom 2>/dev/null || true
-    msg_ok "Nettoyage terminé"
-}
+# ================= DOWNLOAD BINAIRES =================
+log "Téléchargement des binaires UDP Custom..."
+wget -q "https://raw.github.com/http-custom/udp-custom/main/bin/udp-custom-linux-amd64" -O "$UDP_BIN" \
+  && chmod +x "$UDP_BIN" \
+  || warn "Impossible de télécharger $UDP_BIN"
+ln -sf "$UDP_BIN" /usr/local/bin/udp-custom
 
-install_dependencies() {
-    msg_info "Installation des dépendances..."
-    apt update || true
-    apt install -y wget curl dos2unix ca-certificates jq || true
-    msg_ok "Dépendances installées"
-}
+wget -q "https://raw.github.com/http-custom/udp-custom/main/module/udpgw" -O "$UDPGW_BIN" \
+  && chmod +x "$UDPGW_BIN" \
+  || warn "Impossible de télécharger $UDPGW_BIN"
 
-download_binaries() {
-    msg_info "Téléchargement des binaires UDP Custom..."
-    mkdir -p "$UDP_DIR"
-    wget -q "https://raw.github.com/http-custom/udp-custom/main/bin/udp-custom-linux-amd64" -O "$UDP_BIN" || true
-    chmod +x "$UDP_BIN" || true
-    ln -sf "$UDP_BIN" /usr/local/bin/udp-custom || true
-    wget -q "https://raw.github.com/http-custom/udp-custom/main/module/udpgw" -O "$UDPGW_BIN" || true
-    chmod +x "$UDPGW_BIN" || true
-    msg_ok "Binaires téléchargés"
-}
+# ================= CONFIG EXCLUDE PORTS =================
+read -p "Ports à exclure (Entrée pour défaut: $DEFAULT_EXCLUDE_PORTS) : " EXCLUDE_INPUT
+EXCLUDE_PORTS="${EXCLUDE_INPUT:-$DEFAULT_EXCLUDE_PORTS}"
 
-create_config() {
-    msg_info "Création de la configuration (port $UDP_PORT)..."
-    setup_exclude_ports
-    IFS=',' read -ra PORTS <<< "$EXCLUDE_PORTS"
-    EXCLUDE_JSON=$(printf "%s," "${PORTS[@]}")
-    EXCLUDE_JSON="[${EXCLUDE_JSON%,}]"
+# Validation simple
+if [[ ! "$EXCLUDE_PORTS" =~ ^[0-9]+(,[0-9]+)*$ ]]; then
+  warn "Format invalide, utilisation des ports par défaut"
+  EXCLUDE_PORTS="$DEFAULT_EXCLUDE_PORTS"
+fi
 
-    cat > "$CONFIG_FILE" << EOF
+# Vérifier que le port principal n’est pas exclu
+if echo ",$EXCLUDE_PORTS," | grep -q ",$UDP_PORT,"; then
+  warn "Le port principal $UDP_PORT était dans la liste, il sera retiré automatiquement"
+  EXCLUDE_PORTS=$(echo "$EXCLUDE_PORTS" | sed "s/\b$UDP_PORT\b//g" | sed 's/,,/,/g' | sed 's/^,//;s/,$//')
+fi
+
+# Convertir en JSON
+IFS=',' read -ra PORTS <<< "$EXCLUDE_PORTS"
+EXCLUDE_JSON="[${PORTS[*]// /,}]"
+
+# ================= CONFIG JSON =================
+cat > "$CONFIG_FILE" << EOF
 {
   "listen": ":$UDP_PORT",
   "stream_buffer": 33554432,
@@ -127,82 +123,54 @@ create_config() {
   }
 }
 EOF
+chmod 644 "$CONFIG_FILE"
+log "Configuration créée : $CONFIG_FILE"
+log "Ports exclus : $EXCLUDE_PORTS"
 
-    chmod 644 "$CONFIG_FILE" || true
-    msg_ok "Config créée: $CONFIG_FILE"
-}
-
-create_services() {
-    msg_info "Création des services systemd..."
-
-    cat > "/etc/systemd/system/$SERVICE_UDP" << EOF
+# ================= SYSTEMD =================
+log "Création du service systemd UDP Custom..."
+cat > "/etc/systemd/system/$SERVICE_UDP" <<EOF
 [Unit]
-Description=UDP Custom by ePro Dev. Team
+Description=UDP Custom Server
+After=network-online.target
+Wants=network-online.target
+
 [Service]
-User=root
 Type=simple
-ExecStart=/root/udp/udp-custom server
-WorkingDirectory=/root/udp/
+ExecStart=$UDP_BIN server -config=$CONFIG_FILE
 Restart=always
-RestartSec=2s
-StandardOutput=journal
-StandardError=journal
-[Install]
-WantedBy=default.target
-EOF
+RestartSec=2
+StandardOutput=append:$LOG_RUNTIME
+StandardError=append:$LOG_RUNTIME
+NoNewPrivileges=true
+LimitNOFILE=1048576
 
-    cat > "/etc/systemd/system/$SERVICE_UDPGW" << EOF
-[Unit]
-Description=UDP Gateway for Custom Protocols
-After=network.target
-[Service]
-Type=simple
-User=root
-ExecStart=/usr/bin/udpgw --listen-addr 0.0.0.0:7300
-Restart=on-failure
-RestartSec=3
-StandardOutput=journal
-StandardError=journal
 [Install]
 WantedBy=multi-user.target
 EOF
 
-    systemctl daemon-reload || true
-    systemctl enable $SERVICE_UDP || true
-    systemctl enable $SERVICE_UDPGW || true
-    msg_ok "Services créés et activés"
-}
+systemctl daemon-reexec
+systemctl daemon-reload
+systemctl enable $SERVICE_UDP >/dev/null 2>&1
+systemctl restart $SERVICE_UDP || warn "Impossible de démarrer le service automatiquement"
 
-start_services() {
-    msg_info "Démarrage des services..."
-    systemctl start $SERVICE_UDPGW || true
-    sleep 2
-    systemctl start $SERVICE_UDP || true
-    sleep 3
-    msg_ok "Services démarrés (vérifiez avec systemctl status $SERVICE_UDP)"
-}
+sleep 3
 
-show_status() {
-    clear
-    print_center "=============================================="
-    print_center "UDP Custom - Installation Réussie ✅"
-    print_center "=============================================="
-    msg_info "Configuration:"
-    echo "Port UDP: $UDP_PORT"
-    echo "Ports exclus: $EXCLUDE_PORTS"
-    echo "Config: $CONFIG_FILE"
-}
+# ================= VERIFICATION =================
+if systemctl is-active --quiet $SERVICE_UDP; then
+  log "UDP Custom actif sur le port $UDP_PORT"
+else
+  warn "UDP Custom ne démarre pas. Vérifiez les logs : journalctl -u $SERVICE_UDP -n 50 --no-pager"
+fi
 
-# ================= MAIN =================
-log "=== Début installation UDP Custom ==="
-check_root
-check_os
-cleanup_previous
-install_dependencies
-download_binaries
-create_config
-create_services
-start_services
-msg_ok "Installation terminée!"
-show_status
-log "=== Installation terminée ==="
+# ================= FIN =================
+echo
+echo -e "${CYAN}${BOLD}============================================${RESET}"
+echo -e "${GREEN}${BOLD} INSTALLATION TERMINÉE${RESET}"
+echo -e "${CYAN}${BOLD}============================================${RESET}"
+echo -e "IP serveur   : $SERVER_IP"
+echo -e "Port UDP     : $UDP_PORT"
+echo -e "Ports exclus : $EXCLUDE_PORTS"
+echo -e "Service      : $SERVICE_UDP"
+echo -e "Logs runtime : $LOG_RUNTIME"
+echo -e "${CYAN}${BOLD}============================================${RESET}"
