@@ -186,11 +186,9 @@ install_udp_custom() {
         return 1
     fi
 
-    if [[ ! -x "$SCRIPT" ]]; then
-        chmod +x "$SCRIPT"
-    fi
+    chmod +x "$SCRIPT"
 
-    bash "$SCRIPT"
+    sudo bash "$SCRIPT"
     local status=$?
 
     if [[ $status -ne 0 ]]; then
