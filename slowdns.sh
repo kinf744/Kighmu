@@ -5,7 +5,7 @@ set -euo pipefail
 # SlowDNS DNSTT Server - Version finale consolidée
 # Compatible Debian 11/12 & Ubuntu 20.04+
 # Backend : SSH / V2Ray / MIX
-# Sécurisé via nftables
+# Sécurisé via nftables (sans casser UDP Request)
 # ==========================================================
 
 SLOWDNS_DIR="/etc/slowdns"
@@ -19,6 +19,8 @@ BACKEND_CONF="$SLOWDNS_DIR/backend.conf"
 
 CF_API_TOKEN="7mn4LKcZARvdbLlCVFTtaX7LGM2xsnyjHkiTAt37"
 CF_ZONE_ID="7debbb8ea4946898a889c4b5745ab7eb"
+
+PUB_IFACE="eth0"   # ⚠️ interface publique VPS
 
 log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
@@ -51,7 +53,6 @@ log "Installation des dépendances..."
 export DEBIAN_FRONTEND=noninteractive
 apt update -y
 apt install -y nftables curl tcpdump jq python3 python3-venv python3-pip iproute2
-
 systemctl enable --now nftables
 
 # ===================== PYTHON VENV =====================
@@ -98,16 +99,14 @@ generate_ns_auto() {
   DOMAIN="kingom.ggff.net"
   VPS_IP=$(curl -s ipv4.icanhazip.com || echo "127.0.0.1")
 
-  SUB_A="vpn-$(date +%s | sha256sum | cut -c1-6)"
-  FQDN_A="$SUB_A.$DOMAIN"
+  SUB="$(date +%s | sha256sum | cut -c1-6)"
+  FQDN_A="vpn-$SUB.$DOMAIN"
+  NS="ns-$SUB.$DOMAIN"
 
   curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
     -H "Authorization: Bearer $CF_API_TOKEN" \
     -H "Content-Type: application/json" \
     --data "{\"type\":\"A\",\"name\":\"$FQDN_A\",\"content\":\"$VPS_IP\",\"ttl\":120,\"proxied\":false}" >/dev/null
-
-  SUB_NS="ns-$(date +%s | sha256sum | cut -c1-6)"
-  NS="$SUB_NS.$DOMAIN"
 
   curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
     -H "Authorization: Bearer $CF_API_TOKEN" \
@@ -163,9 +162,8 @@ cat > /usr/local/bin/slowdns-start.sh <<'EOF'
 #!/bin/bash
 set -euo pipefail
 
-SLOWDNS_BIN="/usr/local/bin/dnstt-server"
 DIR="/etc/slowdns"
-PORT=5300
+BIN="/usr/local/bin/dnstt-server"
 
 source "$DIR/backend.conf" 2>/dev/null || BACKEND_MODE="ssh"
 
@@ -176,7 +174,7 @@ case "$BACKEND_MODE" in
   *) TARGET="127.0.0.1:22" ;;
 esac
 
-exec "$SLOWDNS_BIN" -udp :$PORT \
+exec "$BIN" -udp :5300 \
   -privkey-file "$DIR/server.key" \
   "$(cat "$DIR/ns.conf")" "$TARGET"
 EOF
@@ -202,15 +200,13 @@ StandardError=append:/var/log/slowdns.log
 WantedBy=multi-user.target
 EOF
 
-# ===================== NFTABLES =====================
-cat > /etc/nftables.d/slowdns.nft <<'EOF'
-table ip nat {
+# ===================== NFTABLES (SAFE) =====================
+cat > /etc/nftables.d/slowdns.nft <<EOF
+table inet slowdns {
   chain prerouting {
     type nat hook prerouting priority -100;
-    udp dport 53 redirect to :5300
+    iifname "$PUB_IFACE" udp dport 53 redirect to :5300
   }
-}
-table inet filter {
   chain input {
     type filter hook input priority 0;
     udp dport 5300 accept
@@ -219,10 +215,10 @@ table inet filter {
 EOF
 
 grep -q slowdns.nft /etc/nftables.conf || \
-  echo 'include "/etc/nftables.d/slowdns.nft"' >> /etc/nftables.conf
+echo 'include "/etc/nftables.d/slowdns.nft"' >> /etc/nftables.conf
 
 systemctl daemon-reload
-systemctl restart nftables
+nft -f /etc/nftables.d/slowdns.nft
 systemctl enable --now slowdns.service
 
-log "✅ SlowDNS installé et opérationnel"
+log "✅ SlowDNS installé, sécurisé et compatible UDP Request"
