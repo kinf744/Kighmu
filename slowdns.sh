@@ -2,10 +2,10 @@
 set -euo pipefail
 
 # ==========================================================
-# SlowDNS DNSTT Server – Version finale consolidée
-# Debian 11/12 – Ubuntu 20.04+
+# SlowDNS DNSTT Server - Version finale consolidée
+# Compatible Debian 11/12 & Ubuntu 20.04+
 # Backend : SSH / V2Ray / MIX
-# nftables sécurisé – Compatible UDP Request
+# Sécurisé via nftables (sans casser UDP Request)
 # ==========================================================
 
 SLOWDNS_DIR="/etc/slowdns"
@@ -17,52 +17,78 @@ SERVER_PUB="$SLOWDNS_DIR/server.pub"
 ENV_FILE="$SLOWDNS_DIR/slowdns.env"
 BACKEND_CONF="$SLOWDNS_DIR/backend.conf"
 
-CF_API_TOKEN="REMPLACE_ICI"
-CF_ZONE_ID="REMPLACE_ICI"
+CF_API_TOKEN="7mn4LKcZARvdbLlCVFTtaX7LGM2xsnyjHkiTAt37"
+CF_ZONE_ID="7debbb8ea4946898a889c4b5745ab7eb"
 
-PUB_IFACE="eth0"   # ⚠️ ADAPTER À TON VPS
+PUB_IFACE="eth0"   # ⚠️ interface publique VPS
 
-log() { echo "[$(date '+%F %T')] $*"; }
+log() {
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+}
 
-# ===================== ROOT =====================
-[[ "$EUID" -ne 0 ]] && { echo "Exécuter en root"; exit 1; }
+# ===================== CHECK ROOT =====================
+if [[ "$EUID" -ne 0 ]]; then
+  echo "Ce script doit être exécuté en root" >&2
+  exit 1
+fi
 
 mkdir -p "$SLOWDNS_DIR"
 
 # ===================== DNS LOCAL =====================
-log "Configuration DNS système"
-systemctl disable --now systemd-resolved 2>/dev/null || true
+log "Configuration DNS système..."
+systemctl disable --now systemd-resolved.service >/dev/null 2>&1 || true
 chattr -i /etc/resolv.conf 2>/dev/null || true
 
 cat > /etc/resolv.conf <<EOF
 nameserver 1.1.1.1
 nameserver 8.8.8.8
-options timeout:1 attempts:1
+options timeout:1
+options attempts:1
 EOF
 
+chmod 644 /etc/resolv.conf
+
 # ===================== DEPENDANCES =====================
-log "Installation dépendances"
+log "Installation des dépendances..."
+export DEBIAN_FRONTEND=noninteractive
 apt update -y
-apt install -y nftables curl jq python3 python3-venv python3-pip iproute2
+apt install -y nftables curl tcpdump jq python3 python3-venv python3-pip iproute2
 systemctl enable --now nftables
+
+# ===================== PYTHON VENV =====================
+if [[ ! -d "$SLOWDNS_DIR/venv" ]]; then
+  python3 -m venv "$SLOWDNS_DIR/venv"
+fi
+
+source "$SLOWDNS_DIR/venv/bin/activate"
+pip install --upgrade pip >/dev/null
+pip install cloudflare >/dev/null || log "cloudflare lib non critique"
 
 # ===================== DNSTT =====================
 if [[ ! -x "$SLOWDNS_BIN" ]]; then
+  log "Téléchargement DNSTT server..."
   curl -fsSL https://dnstt.network/dnstt-server-linux-amd64 -o "$SLOWDNS_BIN"
   chmod +x "$SLOWDNS_BIN"
 fi
 
 # ===================== BACKEND =====================
 choose_backend() {
-  echo "1) SSH  2) V2Ray  3) MIX"
-  read -rp "Choix : " c
+  echo
+  echo "Choix du backend SlowDNS"
+  echo "1) SSH"
+  echo "2) V2Ray"
+  echo "3) MIX"
+  read -rp "Sélection [1-3] : " c
+
   case "$c" in
     1) BACKEND_MODE="ssh" ;;
     2) BACKEND_MODE="v2ray" ;;
     3) BACKEND_MODE="mix" ;;
-    *) exit 1 ;;
+    *) echo "Choix invalide"; exit 1 ;;
   esac
+
   echo "BACKEND_MODE=$BACKEND_MODE" > "$BACKEND_CONF"
+  log "Backend sélectionné : $BACKEND_MODE"
 }
 
 # ===================== NS =====================
@@ -71,56 +97,84 @@ MODE=${MODE,,}
 
 generate_ns_auto() {
   DOMAIN="kingom.ggff.net"
-  VPS_IP=$(curl -s ipv4.icanhazip.com)
-  SUB=$(date +%s | sha256sum | cut -c1-6)
-  A="vpn-$SUB.$DOMAIN"
+  VPS_IP=$(curl -s ipv4.icanhazip.com || echo "127.0.0.1")
+
+  SUB="$(date +%s | sha256sum | cut -c1-6)"
+  FQDN_A="vpn-$SUB.$DOMAIN"
   NS="ns-$SUB.$DOMAIN"
 
   curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
     -H "Authorization: Bearer $CF_API_TOKEN" \
     -H "Content-Type: application/json" \
-    --data "{\"type\":\"A\",\"name\":\"$A\",\"content\":\"$VPS_IP\",\"ttl\":120,\"proxied\":false}" >/dev/null
+    --data "{\"type\":\"A\",\"name\":\"$FQDN_A\",\"content\":\"$VPS_IP\",\"ttl\":120,\"proxied\":false}" >/dev/null
 
   curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
     -H "Authorization: Bearer $CF_API_TOKEN" \
     -H "Content-Type: application/json" \
-    --data "{\"type\":\"NS\",\"name\":\"$NS\",\"content\":\"$A\",\"ttl\":120}" >/dev/null
+    --data "{\"type\":\"NS\",\"name\":\"$NS\",\"content\":\"$FQDN_A\",\"ttl\":120}" >/dev/null
 
   echo -e "NS=$NS\nENV_MODE=auto" > "$ENV_FILE"
+  chmod 600 "$ENV_FILE"
   echo "$NS"
 }
 
-[[ "$MODE" == "auto" ]] && NS=$(generate_ns_auto) || read -rp "NS : " NS
-echo "$NS" > "$CONFIG_FILE"
+if [[ "$MODE" == "auto" ]]; then
+  [[ -f "$ENV_FILE" ]] && source "$ENV_FILE"
+  [[ "${ENV_MODE:-}" == "auto" && -n "${NS:-}" ]] || NS=$(generate_ns_auto)
+elif [[ "$MODE" == "man" ]]; then
+  read -rp "Entrez NS : " NS
+  echo -e "NS=$NS\nENV_MODE=man" > "$ENV_FILE"
+else
+  echo "Mode invalide"; exit 1
+fi
 
 choose_backend
 
+echo "$NS" > "$CONFIG_FILE"
+chmod 644 "$CONFIG_FILE"
+
 # ===================== KEYS =====================
-cat > "$SERVER_KEY" <<EOF
+cat > "$SERVER_KEY" <<'EOF'
 4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa
 EOF
 
-cat > "$SERVER_PUB" <<EOF
+cat > "$SERVER_PUB" <<'EOF'
 2cb39d63928451bd67f5954ffa5ac16c8d903562a10c4b21756de4f1a82d581c
 EOF
 
 chmod 600 "$SERVER_KEY"
+chmod 644 "$SERVER_PUB"
+
+# ===================== SYSCTL =====================
+log "Optimisation réseau kernel..."
+cat > /etc/sysctl.d/99-slowdns.conf <<EOF
+net.ipv4.ip_forward=1
+net.core.rmem_max=67108864
+net.core.wmem_max=67108864
+net.core.netdev_max_backlog=60000
+net.core.somaxconn=4096
+EOF
+
+sysctl --system >/dev/null
 
 # ===================== START SCRIPT =====================
 cat > /usr/local/bin/slowdns-start.sh <<'EOF'
 #!/bin/bash
 set -euo pipefail
-DIR="/etc/slowdns"
 
-source "$DIR/backend.conf" || BACKEND_MODE="ssh"
+DIR="/etc/slowdns"
+BIN="/usr/local/bin/dnstt-server"
+
+source "$DIR/backend.conf" 2>/dev/null || BACKEND_MODE="ssh"
 
 case "$BACKEND_MODE" in
   ssh) TARGET="127.0.0.1:22" ;;
   v2ray) TARGET="127.0.0.1:5401" ;;
   mix) TARGET="127.0.0.1:8443" ;;
+  *) TARGET="127.0.0.1:22" ;;
 esac
 
-exec /usr/local/bin/dnstt-server -udp :5300 \
+exec "$BIN" -udp :5300 \
   -privkey-file "$DIR/server.key" \
   "$(cat "$DIR/ns.conf")" "$TARGET"
 EOF
@@ -128,17 +182,25 @@ EOF
 chmod +x /usr/local/bin/slowdns-start.sh
 
 # ===================== SYSTEMD =====================
-cat > /etc/systemd/system/slowdns.service <<EOF
+cat > /etc/systemd/system/slowdns.service <<'EOF'
 [Unit]
+Description=SlowDNS DNSTT Server
 After=network-online.target
+Wants=network-online.target
+
 [Service]
 ExecStart=/usr/local/bin/slowdns-start.sh
 Restart=always
+RestartSec=3
+LimitNOFILE=1048576
+StandardOutput=append:/var/log/slowdns.log
+StandardError=append:/var/log/slowdns.log
+
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# ===================== NFTABLES (SOLUTION 1) =====================
+# ===================== NFTABLES (SAFE) =====================
 cat > /etc/nftables.d/slowdns.nft <<EOF
 table inet slowdns {
   chain prerouting {
@@ -157,6 +219,6 @@ echo 'include "/etc/nftables.d/slowdns.nft"' >> /etc/nftables.conf
 
 systemctl daemon-reload
 nft -f /etc/nftables.d/slowdns.nft
-systemctl enable --now slowdns
+systemctl enable --now slowdns.service
 
-log "✅ SlowDNS opérationnel – UDP Request NON impacté"
+log "✅ SlowDNS installé, sécurisé et compatible UDP Request"
