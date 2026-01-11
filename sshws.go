@@ -140,7 +140,7 @@ func handleWebSocket(client net.Conn, first []byte, target string) {
 	}
 
 	resp := fmt.Sprintf(
-		"HTTP/1.1 101 Switching Protocols\r\n"+
+		"HTTP/1.1 101 KIGHMU-KIAJE\r\n"+
 			"Upgrade: websocket\r\n"+
 			"Connection: Upgrade\r\n"+
 			"Sec-WebSocket-Accept: %s\r\n\r\n",
@@ -165,7 +165,7 @@ func handleWebSocket(client net.Conn, first []byte, target string) {
 func handleTCP(client net.Conn, target string) {
 	// Réponse HTTP d’ouverture du tunnel
 	_, _ = client.Write([]byte(
-		"HTTP/1.1 200 OK\r\n"+
+		"HTTP/1.1 200 OK KIGHMU-KIAJE\r\n"+
 			"Connection: keep-alive\r\n\r\n",
 	))
 
