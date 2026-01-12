@@ -12,7 +12,9 @@ if [[ -z "$DOMAIN" ]]; then
 fi
 
 mkdir -p /etc/xray
-echo "$DOMAIN" > /etc/xray/domain
+if [[ ! -f /etc/xray/domain ]]; then
+  echo "$DOMAIN" > /etc/xray/domain
+fi
 
 EMAIL="adrienkiaje@gmail.com"
 
