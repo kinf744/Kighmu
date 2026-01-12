@@ -136,7 +136,7 @@ create_config() {
   local port_tls=8443
   local port_ntls=8880
   local path_ws_tls path_ws_ntls
-  local link_tls_ws link_tls_tcp link_tls_grpc link_ntls
+  local link_tls link_ntls
   local uuid_tls uuid_ntls
 
   case "$proto" in
@@ -150,15 +150,15 @@ create_config() {
       jq --arg id "$uuid_tls" --argjson lim "$limit" '.vmess_tls += [{"uuid": $id, "limit": $lim}]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
       jq --arg id "$uuid_ntls" --argjson lim "$limit" '.vmess_ntls += [{"uuid": $id, "limit": $lim}]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
 
-      # Mise à jour config.json (TOUS les inbounds TLS)
-      jq --arg id "$uuid_tls" '(.inbounds[] | select(.protocol=="vmess" and .streamSettings.security=="tls") | .settings.clients) += [{"id": $id,"alterId":0}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
-      jq --arg id "$uuid_ntls" '(.inbounds[] | select(.protocol=="vmess" and .streamSettings.security=="none") | .settings.clients) += [{"id": $id,"alterId":0}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+      # Mise à jour config.json
+      jq --arg id "$uuid_tls" --arg proto "vmess" \
+        '(.inbounds[] | select(.protocol == $proto and .streamSettings.security == "tls") | .settings.clients) += [{"id": $id,"alterId":0}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+      jq --arg id "$uuid_ntls" --arg proto "vmess" \
+        '(.inbounds[] | select(.protocol == $proto and .streamSettings.security == "none") | .settings.clients) += [{"id": $id,"alterId":0}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
 
-      # Génération 4 liens (1 UUID TLS = WS + TCP + gRPC)
-      link_tls_ws="vmess://$(echo -n '{"ps":"'${name}'-WS-TLS","add":"'$DOMAIN'","port":"'$port_tls'","id":"'$uuid_tls'","aid":0,"net":"ws","type":"none","host":"'$DOMAIN'","path":"'$path_ws_tls'","tls":"tls","sni":"'$DOMAIN'","alpn":"h2","fp":"chrome"}' | base64 -w0)"
-      link_tls_tcp="vmess://$(echo -n '{"ps":"'${name}'-TCP-TLS","add":"'$DOMAIN'","port":"'$port_tls'","id":"'$uuid_tls'","aid":"0","scy":"auto","net":"tcp","type":"none","host":"'$DOMAIN'","path":"","tls":"tls","sni":"'$DOMAIN'","alpn":"h2","fp":"chrome"}' | base64 -w0)"
-      link_tls_grpc="vmess://$(echo -n '{"ps":"'${name}'-gRPC-TLS","add":"'$DOMAIN'","port":"'$port_tls'","id":"'$uuid_tls'","aid":"0","scy":"auto","net":"grpc","type":"gun","host":"'$DOMAIN'","path":"/grpc-service","tls":"tls","sni":"'$DOMAIN'","alpn":"h2","fp":"chrome"}' | base64 -w0)"
-      link_ntls="vmess://$(echo -n '{"ps":"'${name}'-NTLS","add":"'$DOMAIN'","port":"'$port_ntls'","id":"'$uuid_ntls'","aid":0,"net":"ws","type":"none","host":"'$DOMAIN'","path":"'$path_ws_ntls'","tls":"none","sni":"'$DOMAIN'"}' | base64 -w0)"
+      # Génération liens
+      link_tls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$uuid_tls\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"$path_ws_tls\",\"tls\":\"tls\",\"sni\":\"$DOMAIN\"}" | base64 -w0)"
+      link_ntls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_ntls\",\"id\":\"$uuid_ntls\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"$path_ws_ntls\",\"tls\":\"none\",\"sni\":\"$DOMAIN\"}" | base64 -w0)"
       ;;
     vless)
       path_ws_tls="/vless-tls"
@@ -169,13 +169,13 @@ create_config() {
       jq --arg id "$uuid_tls" --argjson lim "$limit" '.vless_tls += [{"uuid": $id, "limit": $lim}]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
       jq --arg id "$uuid_ntls" --argjson lim "$limit" '.vless_ntls += [{"uuid": $id, "limit": $lim}]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
 
-      jq --arg id "$uuid_tls" '(.inbounds[] | select(.protocol=="vless" and .streamSettings.security=="tls") | .settings.clients) += [{"id": $id}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
-      jq --arg id "$uuid_ntls" '(.inbounds[] | select(.protocol=="vless" and .streamSettings.security=="none") | .settings.clients) += [{"id": $id}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+      jq --arg id "$uuid_tls" --arg proto "vless" \
+        '(.inbounds[] | select(.protocol == $proto and .streamSettings.security == "tls") | .settings.clients) += [{"id": $id}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+      jq --arg id "$uuid_ntls" --arg proto "vless" \
+        '(.inbounds[] | select(.protocol == $proto and .streamSettings.security == "none") | .settings.clients) += [{"id": $id}]' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
 
-      link_tls_ws="vless://$uuid_tls@$DOMAIN:$port_tls?security=tls&type=ws&host=$DOMAIN&path=$path_ws_tls&encryption=none&sni=$DOMAIN#$name-WS"
-      link_tls_tcp="vless://$uuid_tls@$DOMAIN:$port_tls?security=tls&type=tcp&encryption=none&sni=$DOMAIN#$name-TCP"
-      link_tls_grpc="vless://$uuid_tls@$DOMAIN:$port_tls?security=tls&type=grpc&serviceName=grpc-service&encryption=none&sni=$DOMAIN#$name-gRPC"
-      link_ntls="vless://$uuid_ntls@$DOMAIN:$port_ntls?security=none&type=ws&host=$DOMAIN&path=$path_ws_ntls&encryption=none#$name-NTLS"
+      link_tls="vless://$uuid_tls@$DOMAIN:$port_tls?security=tls&type=ws&host=$DOMAIN&path=$path_ws_tls&encryption=none&sni=$DOMAIN#$name"
+      link_ntls="vless://$uuid_ntls@$DOMAIN:$port_ntls?security=none&type=ws&host=$DOMAIN&path=$path_ws_ntls&encryption=none#$name"
       ;;
     trojan)
       path_ws_tls="/trojan-tls"
@@ -191,10 +191,8 @@ create_config() {
           (.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="none") | .settings.clients)+=[{"password": $idntls}]' \
           "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
 
-      link_tls_ws="trojan://$uuid_tls@$DOMAIN:$port_tls?security=tls&type=ws&path=$path_ws_tls&sni=$DOMAIN#$name-WS"
-      link_tls_tcp="trojan://$uuid_tls@$DOMAIN:$port_tls?security=tls&type=tcp&sni=$DOMAIN#$name-TCP"
-      link_tls_grpc="trojan://$uuid_tls@$DOMAIN:$port_tls?security=tls&type=grpc&serviceName=grpc-service&sni=$DOMAIN#$name-gRPC"
-      link_ntls="trojan://$uuid_ntls@$DOMAIN:$port_ntls?type=ws&path=$path_ws_ntls#$name-NTLS"
+      link_tls="trojan://$uuid_tls@$DOMAIN:$port_tls?security=tls&type=ws&path=$path_ws_tls#$name"
+      link_ntls="trojan://$uuid_ntls@$DOMAIN:$port_ntls?type=ws&path=$path_ws_ntls#$name"
       ;;
     *)
       echo -e "${RED}Protocole inconnu.${RESET}"
@@ -210,21 +208,27 @@ create_config() {
 
 echo
 echo -e "${CYAN}==============================${RESET}"
-echo -e "${BOLD}🧩 ${proto^^} [$name]${RESET}"
+echo -e "${BOLD}🧩 ${proto^^}${RESET}"
 echo -e "${CYAN}==============================${RESET}"
-echo -e "${YELLOW}📄 DOMAINE :${RESET} ${MAGENTA}$DOMAIN${RESET}"
-echo -e "${GREEN}➤ PORT TLS 8443 : WS + TCP + gRPC${RESET}"
-echo -e "${GREEN}➤ PORT NTLS 8880  : WS uniquement${RESET}"
-echo -e "${GREEN}➤ UUID TLS :${RESET} ${MAGENTA}$uuid_tls${RESET}"
-echo -e "${GREEN}➤ UUID NTLS:${RESET} ${MAGENTA}$uuid_ntls${RESET}"
+echo -e "${YELLOW}📄 Configuration générée pour :${RESET} $name"
+echo "--------------------------------------------------"
+echo -e "➤ DOMAINE : ${YELLOW}$DOMAIN${RESET}"
+echo -e "${GREEN}➤ PORTs :${RESET}"
+echo -e "   TLS   : ${MAGENTA}$port_tls${RESET}"
+echo -e "   NTLS  : ${MAGENTA}$port_ntls${RESET}"
+echo -e "${GREEN}➤ UUIDs générés :${RESET}"
+echo -e "   TLS   : ${MAGENTA}$uuid_tls${RESET}"
+echo -e "   NTLS  : ${MAGENTA}$uuid_ntls${RESET}"
+echo -e "➤ Paths :"
+echo -e "   TLS   : ${MAGENTA}$path_ws_tls${RESET}"
+echo -e "   NTLS  : ${MAGENTA}$path_ws_ntls${RESET}"
 echo -e "➤ Validité : ${YELLOW}$days jours${RESET} (expire le $(date -d "+$days days" +"%d/%m/%Y"))"
+echo -e "➤ Nombre total d'utilisateurs : ${BOLD}$limit${RESET}"
 echo
 echo -e "${CYAN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●${RESET}"
-echo -e "${CYAN}🔗 LIENS TLS 8443${RESET}"
-echo -e "${GREEN}┌ WS TLS     :${RESET} $link_tls_ws"
-echo -e "${GREEN}├ TCP TLS    :${RESET} $link_tls_tcp"
-echo -e "${GREEN}└ gRPC TLS   :${RESET} $link_tls_grpc"
-echo -e "${CYAN}🔗 LIEN NTLS 8880 :${RESET} $link_ntls"
+echo -e "${CYAN}┃ TLS     : ${GREEN}$link_tls${RESET}"
+echo
+echo -e "${CYAN}┃ Non‑TLS : ${GREEN}$link_ntls${RESET}"
 echo -e "${CYAN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●${RESET}"
 echo
 
