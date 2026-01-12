@@ -37,36 +37,34 @@ afficher_utilisateurs_xray() {
 }
 
 afficher_appareils_connectes() {
-  # Ports Xray TLS et Non-TLS (adapter aux besoins)
-  ports_tls=(8443)
-  ports_ntls=(8880)
-
   declare -A connexions=( ["vmess"]=0 ["vless"]=0 ["trojan"]=0 )
 
-  for port in "${ports_tls[@]}"; do
-    total_conns=$(ss -tn state established "( sport = :$port )" 2>/dev/null | tail -n +2 | wc -l)
-    per_proto=$((total_conns / 3))
-    for proto in "${!connexions[@]}"; do
-      connexions[$proto]=$((connexions[$proto] + per_proto))
-    done
-  done
+  # Ports par protocole
+  declare -A ports_tls=( ["vmess"]=8443 ["vless"]=8443 ["trojan"]=8443 )
+  declare -A ports_ntls=( ["vmess"]=8880 ["vless"]=8880 ["trojan"]=8880 )
 
-  for port in "${ports_ntls[@]}"; do
-    total_conns=$(ss -tn state established "( sport = :$port )" 2>/dev/null | tail -n +2 | wc -l)
-    per_proto=$((total_conns / 3))
-    for proto in "${!connexions[@]}"; do
-      connexions[$proto]=$((connexions[$proto] + per_proto))
-    done
+  for proto in "${!connexions[@]}"; do
+    # TLS
+    port=${ports_tls[$proto]}
+    if [[ -n "$port" ]]; then
+      tls_count=$(ss -tn state established "( sport = :$port )" 2>/dev/null | tail -n +2 | wc -l)
+      connexions[$proto]=$((connexions[$proto] + tls_count))
+    fi
+    # Non-TLS
+    port=${ports_ntls[$proto]}
+    if [[ -n "$port" ]]; then
+      ntls_count=$(ss -tn state established "( sport = :$port )" 2>/dev/null | tail -n +2 | wc -l)
+      connexions[$proto]=$((connexions[$proto] + ntls_count))
+    fi
   done
 
   echo -e "${BOLD}Appareils connectés :${RESET}"
-  # Affichage précisément dans l’ordre et format que tu souhaites
   echo -e "  • Vmess: [${YELLOW}${connexions["vmess"]}${RESET}]  • Vless: [${YELLOW}${connexions["vless"]}${RESET}]  • Trojan: [${YELLOW}${connexions["trojan"]}${RESET}]"
 }
 
 print_consommation_xray() {
-  VN_INTERFACE="eth0"
-
+  VN_INTERFACE=$(ip route get 1.1.1.1 | awk '{for(i=1;i<=NF;i++){if($i=="dev"){print $(i+1);exit}}}')
+  
   today_bytes=$(vnstat -i "$VN_INTERFACE" --json | jq '.interfaces[0].traffic.day[0].rx + .interfaces[0].traffic.day[0].tx')
   month_bytes=$(vnstat -i "$VN_INTERFACE" --json | jq '.interfaces[0].traffic.month[0].rx + .interfaces[0].traffic.month[0].tx')
 
