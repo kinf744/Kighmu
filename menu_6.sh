@@ -382,25 +382,38 @@ while true; do
     6)
       echo -e "${YELLOW}Désinstallation complète de Xray et Trojan en cours...${RESET}"
 
-read -rp "Es-tu sûr de vouloir désinstaller Xray et Trojan-Go ? (o/n) : " confirm
+read -rp "Es-tu sûr de vouloir désinstaller Xray, Trojan-Go et X-UI ? (o/n) : " confirm
 case "$confirm" in
   [oO]|[yY]|[yY][eE][sS])
-    systemctl stop xray trojan-go 2>/dev/null || true
-    systemctl disable xray trojan-go 2>/dev/null || true
-    for port in 8880 8443; do
+    echo -e "${GREEN}Arrêt des services...${NC}"
+    systemctl stop xray trojan-go x-ui 2>/dev/null || true
+    systemctl disable xray trojan-go x-ui 2>/dev/null || true
+
+    echo -e "${GREEN}Fermeture des ports utilisés...${NC}"
+    for port in 8880 8443 2087 2083; do
       lsof -i tcp:$port -t | xargs -r kill -9
       lsof -i udp:$port -t | xargs -r kill -9
     done
+
+    echo -e "${GREEN}Suppression des fichiers et dossiers...${NC}"
+    # Xray
     rm -rf /etc/xray /var/log/xray /usr/local/bin/xray /etc/systemd/system/xray.service
+    # Trojan-Go
     rm -rf /etc/trojan-go /var/log/trojan-go /usr/local/bin/trojan-go /etc/systemd/system/trojan-go.service
+    # X-UI
+    rm -rf /usr/local/bin/x-ui /usr/local/x-ui-bin /etc/x-ui /etc/systemd/system/x-ui.service
+    # Fichiers temporaires et configs
     rm -f /tmp/.xray_domain /etc/xray/users_expiry.list /etc/xray/users.json /etc/xray/config.json
+
+    echo -e "${GREEN}Reload des services systemd...${NC}"
     systemctl daemon-reload
-    echo -e "${GREEN}Désinstallation terminée.${RESET}"
-     ;;
-   *)
-    echo "Désinstallation annulée."
-     ;;
-esac
+
+    echo -e "${GREEN}✅ Désinstallation complète terminée : Xray, Trojan-Go et X-UI ont été supprimés.${NC}"
+      ;;
+    *)
+      echo -e "${YELLOW}Annulé.${NC}"
+      ;;
+   esac
 
 read -p "Appuyez sur Entrée pour continuer..."
       ;; 
