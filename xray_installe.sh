@@ -349,11 +349,11 @@ mkdir -p /etc/x-ui/cert
 cp /etc/xray/xray.crt /etc/x-ui/cert/x-ui.crt
 cp /etc/xray/xray.key /etc/x-ui/cert/x-ui.key
 
-# Configurer le panneau X-UI sur le port 8443 avec TLS
-echo -e "${GREEN}⚙️ Configuration du panneau X-UI sur le port 8443 avec TLS...${NC}"
-/usr/bin/x-ui setting -port 8443 -tls true -cert /etc/x-ui/cert/x-ui.crt -key /etc/x-ui/cert/x-ui.key
+# Configurer le panneau X-UI sur le port 8444 avec TLS (port libre)
+echo -e "${GREEN}⚙️ Configuration du panneau X-UI sur le port 8444 avec TLS...${NC}"
+x-ui setting -port 8444 -tls true -cert /etc/x-ui/cert/x-ui.crt -key /etc/x-ui/cert/x-ui.key
 
-# Créer un service systemd robuste pour X-UI (optionnel si le script officiel ne l’a pas fait)
+# Créer un service systemd robuste pour X-UI
 cat > /etc/systemd/system/x-ui.service << 'EOF'
 [Unit]
 Description=X-UI Web Panel Service
@@ -377,10 +377,11 @@ EOF
 
 # Activer et démarrer le service
 systemctl daemon-reload
-systemctl enable x-ui
-systemctl restart x-ui
+systemctl enable x-ui --now
 
-echo -e "${GREEN}✅ X-UI installé et démarré sur le port 8443 avec TLS.${NC}"
+# Vérification du statut
+systemctl status x-ui --no-pager
+echo -e "${GREEN}✅ X-UI installé et démarré sur le port 8444 avec TLS.${NC}"
 
 echo -e "${GREEN}✅ Installation complète terminée : Xray, Trojan-Go et X-UI sur 8443 avec TLS ACME.${NC}"
 echo "Domaine : $DOMAIN"
