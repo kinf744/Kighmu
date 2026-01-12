@@ -113,7 +113,7 @@ cat > /etc/xray/config.json << EOF
       "port": 8443,
       "protocol": "vmess",
       "settings": {
-        "clients": [{"id": "$uuid1", "alterId": 0}]
+        "clients": [{"id": "$uuid", "alterId": 0}]
       },
       "streamSettings": {
         "network": "ws",
@@ -137,7 +137,7 @@ cat > /etc/xray/config.json << EOF
       "port": 8880,
       "protocol": "vmess",
       "settings": {
-        "clients": [{"id": "$uuid2", "alterId": 0}]
+        "clients": [{"id": "$uuid", "alterId": 0}]
       },
       "streamSettings": {
         "network": "ws",
@@ -152,7 +152,7 @@ cat > /etc/xray/config.json << EOF
       "port": 8443,
       "protocol": "vless",
       "settings": {
-        "clients": [{"id": "$uuid3"}],
+        "clients": [{"id": "$uuid"}],
         "decryption": "none"
       },
       "streamSettings": {
@@ -177,7 +177,7 @@ cat > /etc/xray/config.json << EOF
       "port": 8880,
       "protocol": "vless",
       "settings": {
-        "clients": [{"id": "$uuid4"}],
+        "clients": [{"id": "$uuid"}],
         "decryption": "none"
       },
       "streamSettings": {
@@ -197,8 +197,8 @@ cat > /etc/xray/config.json << EOF
       "port": 8443,
       "protocol": "trojan",
       "settings": {
-        "clients": [{"password": "$uuid5"}],
-        "fallbacks": [{"dest": 80}]
+        "clients": [{"password": "$uuid"}],
+        "fallbacks": [{"dest": 8880}]
       },
       "streamSettings": {
         "network": "ws",
@@ -223,7 +223,7 @@ cat > /etc/xray/config.json << EOF
       "port": 8880,
       "protocol": "trojan",
       "settings": {
-        "clients": [{"password": "$uuid6"}]
+        "clients": [{"password": "$uuid"}]
       },
       "streamSettings": {
         "network": "ws",
@@ -336,7 +336,7 @@ cat > /etc/trojan-go/config.json << EOF
   "remote_port": 89,
   "log_level": 1,
   "log_file": "/var/log/trojan-go/trojan-go.log",
-  "password": ["$uuid5"],
+  "password": ["$uuid"],
   "disable_http_check": true,
   "udp_timeout": 60,
   "ssl": {
@@ -379,8 +379,4 @@ netfilter-persistent save
 
 echo "Installation complète terminée."
 echo "Domaine : $DOMAIN"
-echo "UUID VMess TLS : $uuid1"
-echo "UUID VMess Non-TLS : $uuid2"
-echo "UUID VLESS TLS : $uuid3"
-echo "UUID VLESS Non-TLS : $uuid4"
-echo "Mot de passe Trojan (WS TLS 8443) : $uuid5"
+echo "UUID non-TLS ET TLS : $uuid"
