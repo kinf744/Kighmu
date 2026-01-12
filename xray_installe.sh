@@ -124,16 +124,6 @@ cat > /etc/xray/config.json << EOF
   "inbounds": [
     {
       "port": 8443,
-      "protocol": "dokodemo-door",
-      "settings": {
-        "address": "0.0.0.0",
-        "port": 22,
-        "network": "tcp"
-      },
-      "tag": "ssh"
-    },
-    {
-      "port": 8443,
       "protocol": "vmess",
       "settings": {
         "clients": [{"id": "$uuid1", "alterId": 0}]
@@ -221,7 +211,7 @@ cat > /etc/xray/config.json << EOF
       "protocol": "trojan",
       "settings": {
         "clients": [{"password": "$uuid5"}],
-        "fallbacks": [{"dest": 8880}]
+        "fallbacks": [{"dest": 80}]
       },
       "streamSettings": {
         "network": "ws",
@@ -254,138 +244,6 @@ cat > /etc/xray/config.json << EOF
         "wsSettings": {
           "path": "/trojan-ntls",
           "host": "$DOMAIN"
-        }
-      }
-    },
-    {
-      "port": 8443,
-      "protocol": "vmess",
-      "settings": {
-        "clients": [{"id": "$uuid1", "alterId": 0}]
-      },
-      "streamSettings": {
-        "network": "tcp",
-        "security": "tls",
-        "tlsSettings": {
-          "certificates": [{
-            "certificateFile": "/etc/xray/xray.crt",
-            "keyFile": "/etc/xray/xray.key"
-          }],
-          "minVersion": "1.2",
-          "maxVersion": "1.3",
-          "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
-        }
-      }
-    },
-    {
-      "port": 8443,
-      "protocol": "vless",
-      "settings": {
-        "clients": [{"id": "$uuid3"}],
-        "decryption": "none"
-      },
-      "streamSettings": {
-        "network": "tcp",
-        "security": "tls",
-        "tlsSettings": {
-          "certificates": [{
-            "certificateFile": "/etc/xray/xray.crt",
-            "keyFile": "/etc/xray/xray.key"
-          }],
-          "minVersion": "1.2",
-          "maxVersion": "1.3",
-          "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
-        }
-      }
-    },
-    {
-      "port": 8443,
-      "protocol": "trojan",
-      "settings": {
-        "clients": [{"password": "$uuid5"}]
-      },
-      "streamSettings": {
-        "network": "tcp",
-        "security": "tls",
-        "tlsSettings": {
-          "certificates": [{
-            "certificateFile": "/etc/xray/xray.crt",
-            "keyFile": "/etc/xray/xray.key"
-          }],
-          "alpn": ["http/1.1"],
-          "minVersion": "1.2",
-          "maxVersion": "1.3",
-          "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
-        }
-      }
-    },
-    {
-      "port": 8443,
-      "protocol": "vmess",
-      "settings": {
-        "clients": [{"id": "$uuid1", "alterId": 0}]
-      },
-      "streamSettings": {
-        "network": "grpc",
-        "security": "tls",
-        "tlsSettings": {
-          "certificates": [{
-            "certificateFile": "/etc/xray/xray.crt",
-            "keyFile": "/etc/xray/xray.key"
-          }],
-          "minVersion": "1.2",
-          "maxVersion": "1.3",
-          "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
-        },
-        "grpcSettings": {
-          "serviceName": "grpc-service"
-        }
-      }
-    },
-    {
-      "port": 8443,
-      "protocol": "vless",
-      "settings": {
-        "clients": [{"id": "$uuid3"}],
-        "decryption": "none"
-      },
-      "streamSettings": {
-        "network": "grpc",
-        "security": "tls",
-        "tlsSettings": {
-          "certificates": [{
-            "certificateFile": "/etc/xray/xray.crt",
-            "keyFile": "/etc/xray/xray.key"
-          }],
-          "minVersion": "1.2",
-          "maxVersion": "1.3",
-          "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
-        },
-        "grpcSettings": {
-          "serviceName": "grpc-service"
-        }
-      }
-    },
-    {
-      "port": 8443,
-      "protocol": "trojan",
-      "settings": {
-        "clients": [{"password": "$uuid5"}]
-      },
-      "streamSettings": {
-        "network": "grpc",
-        "security": "tls",
-        "tlsSettings": {
-          "certificates": [{
-            "certificateFile": "/etc/xray/xray.crt",
-            "keyFile": "/etc/xray/xray.key"
-          }],
-          "minVersion": "1.2",
-          "maxVersion": "1.3",
-          "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
-        },
-        "grpcSettings": {
-          "serviceName": "grpc-service"
         }
       }
     }
