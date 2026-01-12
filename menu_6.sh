@@ -229,7 +229,7 @@ create_config() {
   echo -e "${CYAN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●${RESET}"
   echo
   
-  systemctl reload xray 2>/dev/null || systemctl restart xray
+  systemctl reload xray 2>/dev/null ||
   systemctl restart xray
 }
 
