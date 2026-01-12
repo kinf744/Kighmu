@@ -85,32 +85,19 @@ if [[ ! -f "/etc/xray/xray.crt" || ! -f "/etc/xray/xray.key" ]]; then
   exit 1
 fi
 
-uuid1=$(cat /proc/sys/kernel/random/uuid)
-uuid2=$(cat /proc/sys/kernel/random/uuid)
-uuid3=$(cat /proc/sys/kernel/random/uuid)
-uuid4=$(cat /proc/sys/kernel/random/uuid)
-uuid5=$(cat /proc/sys/kernel/random/uuid)
-uuid6=$(cat /proc/sys/kernel/random/uuid)
+uuid=$(cat /proc/sys/kernel/random/uuid)
 
 cat > /etc/xray/users.json << EOF
 {
-  "vmess_tls": [
-    {"uuid": "uuid1", "limit": 5},
-    {"uuid": "uuid3", "limit": 5},
-    {"uuid": "uuid5", "limit": 5}
+  "vmess": [
+    { "uuid": "$uuid", "limit": 5 }
   ],
-  "vmess_ntls": [
-    {"uuid": "uuid2", "limit": 5}
+  "vless": [
+    { "uuid": "$uuid", "limit": 5 }
   ],
-  "vless_tls": [
-    {"uuid": "uuid4", "limit": 5}
-  ],
-  "vless_ntls": [],
-  "trojan_tls": [
-    {"uuid": "uuid6", "limit": 5},
-    {"uuid": "uuid7", "limit": 5}
-  ],
-  "trojan_ntls": []
+  "trojan": [
+    { "uuid": "$uuid", "limit": 5 }
+  ]
 }
 EOF
 
