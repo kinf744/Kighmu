@@ -339,34 +339,21 @@ systemctl restart trojan-go
 # Installation et configuration X-UI
 # ===============================
 
-# Télécharger la dernière version stable
-latest_xui=$(curl -s https://api.github.com/repos/vaxilu/x-ui/releases/latest | grep tag_name | cut -d '"' -f4)
-xui_link="https://github.com/vaxilu/x-ui/releases/download/${latest_xui}/x-ui-linux-amd64.tar.gz"
+echo -e "\n${GREEN}📥 Installation de X-UI...${NC}"
 
-# Préparer dossier temporaire
-mkdir -p /tmp/x-ui && cd /tmp/x-ui
-curl -L -o x-ui.tar.gz "$xui_link"
+# Télécharger et installer la dernière version stable via le script officiel (plus simple et fiable)
+bash <(curl -Ls https://raw.githubusercontent.com/vaxilu/x-ui/master/install.sh)
 
-# Extraire les fichiers
-tar -xzf x-ui.tar.gz
-
-# Copier l'exécutable et donner les droits
-cp x-ui/x-ui /usr/local/bin/x-ui
-chmod +x /usr/local/bin/x-ui
-
-# Copier les fichiers binaires additionnels
-mkdir -p /usr/local/x-ui-bin
-cp -r x-ui/bin/* /usr/local/x-ui-bin/
-
-# Copier les certificats TLS existants pour X-UI
+# Copier les certificats TLS existants de Xray pour X-UI
 mkdir -p /etc/x-ui/cert
 cp /etc/xray/xray.crt /etc/x-ui/cert/x-ui.crt
 cp /etc/xray/xray.key /etc/x-ui/cert/x-ui.key
 
 # Configurer le panneau X-UI sur le port 8443 avec TLS
+echo -e "${GREEN}⚙️ Configuration du panneau X-UI sur le port 8443 avec TLS...${NC}"
 /usr/local/bin/x-ui setting -port 8443 -tls true -cert /etc/x-ui/cert/x-ui.crt -key /etc/x-ui/cert/x-ui.key
 
-# Créer le service systemd robuste pour X-UI
+# Créer un service systemd robuste pour X-UI
 cat > /etc/systemd/system/x-ui.service << 'EOF'
 [Unit]
 Description=X-UI Web Panel Service
@@ -382,6 +369,7 @@ StartLimitBurst=0
 StandardOutput=syslog
 StandardError=syslog
 SyslogIdentifier=x-ui
+User=root
 
 [Install]
 WantedBy=multi-user.target
@@ -392,7 +380,7 @@ systemctl daemon-reload
 systemctl enable x-ui
 systemctl restart x-ui
 
-echo -e "\033[0;32m✅ X-UI installé et démarré sur le port 8443 avec TLS.\033[0m"
+echo -e "${GREEN}✅ X-UI installé et démarré sur le port 8443 avec TLS.${NC}"
 
 echo -e "${GREEN}✅ Installation complète terminée : Xray, Trojan-Go et X-UI sur 8443 avec TLS ACME.${NC}"
 echo "Domaine : $DOMAIN"
