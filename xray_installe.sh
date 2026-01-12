@@ -339,9 +339,9 @@ systemctl restart trojan-go
 # Installation et configuration X-UI
 # ===============================
 
-echo -e "\n${GREEN}📥 Installation de X-UI...${NC}"
+echo -e "\n${GREEN}📥 Installation de X-UI via le script officiel...${NC}"
 
-# Télécharger et installer la dernière version stable via le script officiel (plus simple et fiable)
+# Télécharger et installer la dernière version stable via le script officiel
 bash <(curl -Ls https://raw.githubusercontent.com/vaxilu/x-ui/master/install.sh)
 
 # Copier les certificats TLS existants de Xray pour X-UI
@@ -351,9 +351,9 @@ cp /etc/xray/xray.key /etc/x-ui/cert/x-ui.key
 
 # Configurer le panneau X-UI sur le port 8443 avec TLS
 echo -e "${GREEN}⚙️ Configuration du panneau X-UI sur le port 8443 avec TLS...${NC}"
-/usr/local/bin/x-ui setting -port 8443 -tls true -cert /etc/x-ui/cert/x-ui.crt -key /etc/x-ui/cert/x-ui.key
+/usr/bin/x-ui setting -port 8443 -tls true -cert /etc/x-ui/cert/x-ui.crt -key /etc/x-ui/cert/x-ui.key
 
-# Créer un service systemd robuste pour X-UI
+# Créer un service systemd robuste pour X-UI (optionnel si le script officiel ne l’a pas fait)
 cat > /etc/systemd/system/x-ui.service << 'EOF'
 [Unit]
 Description=X-UI Web Panel Service
@@ -361,7 +361,7 @@ After=network.target
 Wants=network-online.target
 
 [Service]
-ExecStart=/usr/local/bin/x-ui
+ExecStart=/usr/bin/x-ui
 Restart=always
 RestartSec=5
 StartLimitIntervalSec=0
