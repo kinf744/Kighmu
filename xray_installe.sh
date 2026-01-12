@@ -14,8 +14,6 @@ fi
 mkdir -p /etc/xray
 echo "$DOMAIN" > /etc/xray/domain
 
-echo "$DOMAIN" > /tmp/.xray_domain
-
 EMAIL="adrienkiaje@gmail.com"
 
 apt update
