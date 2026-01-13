@@ -20,15 +20,11 @@ print_header() {
 
 afficher_utilisateurs_xray() {
   if [[ -f "$USERS_FILE" ]]; then
-    vmess_tls_count=$(jq '.vmess_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
-    vmess_ntls_count=$(jq '.vmess_ntls | length' "$USERS_FILE" 2>/dev/null || echo 0)
-    vless_tls_count=$(jq '.vless_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
-    vless_ntls_count=$(jq '.vless_ntls | length' "$USERS_FILE" 2>/dev/null || echo 0)
-    trojan_tls_count=$(jq '.trojan_tls | length' "$USERS_FILE" 2>/dev/null || echo 0)
-    trojan_ntls_count=$(jq '.trojan_ntls | length' "$USERS_FILE" 2>/dev/null || echo 0)
-    vmess_count=$((vmess_tls_count + vmess_ntls_count))
-    vless_count=$((vless_tls_count + vless_ntls_count))
-    trojan_count=$((trojan_tls_count + trojan_ntls_count))
+    # Comptage des UUID uniques pour chaque protocole
+    vmess_count=$(jq '[.vmess_tls[], .vmess_ntls[]] | map(.uuid) | unique | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    vless_count=$(jq '[.vless_tls[], .vless_ntls[]] | map(.uuid) | unique | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    trojan_count=$(jq '[.trojan_tls[], .trojan_ntls[]] | map(.uuid) | unique | length' "$USERS_FILE" 2>/dev/null || echo 0)
+
     echo -e "${BOLD}Utilisateur Xray :${RESET}"
     echo -e "  • VMess: [${YELLOW}${vmess_count}${RESET}] • VLESS: [${YELLOW}${vless_count}${RESET}] • Trojan: [${YELLOW}${trojan_count}${RESET}]"
   else
