@@ -31,7 +31,7 @@ afficher_utilisateurs_xray() {
     trojan_count=$(jq '[.trojan[]?.password] | unique | length' "$USERS_FILE" 2>/dev/null || echo 0)
 
     # Affichage aligné avec espaces réguliers
-    echo -e "${BOLD}Utilisateurs Xray :${RESET}"
+    echo -e "${WHITE_BOLD}Utilisateurs Xray :${RESET}"
     echo -e "  • VMess  [${YELLOW}${vmess_count}${RESET}] • VLESS  [${YELLOW}${vless_count}${RESET}] • Trojan [${YELLOW}${trojan_count}${RESET}]"
 }
 
@@ -57,7 +57,7 @@ afficher_appareils_connectes() {
     fi
   done
 
-  echo -e "${BOLD}Appareils connectés :${RESET}"
+  echo -e "${WHITE_BOLD}Appareils connectés :${RESET}"
   echo -e "  • Vmess: [${YELLOW}${connexions["vmess"]}${RESET}]  • Vless: [${YELLOW}${connexions["vless"]}${RESET}]  • Trojan: [${YELLOW}${connexions["trojan"]}${RESET}]"
 }
 
@@ -70,7 +70,7 @@ print_consommation_xray() {
   today_gb=$(awk -v b="$today_bytes" 'BEGIN {printf "%.2f", b / 1073741824}')
   month_gb=$(awk -v b="$month_bytes" 'BEGIN {printf "%.2f", b / 1073741824}')
 
-  echo -e "${BOLD}Consommation Xray :${RESET}"
+  echo -e "${WHITE_BOLD}Consommation Xray :${RESET}"
   echo -e "  • Aujourd’hui : [${GREEN}${today_gb} Go${RESET}]"
   echo -e "  • Ce mois : [${GREEN}${month_gb} Go${RESET}]"
 }
@@ -84,7 +84,7 @@ afficher_xray_actifs() {
   ports_tls=$(jq -r '.inbounds[] | select(.streamSettings.security=="tls") | .port' "$CONFIG_FILE" | sort -u | paste -sd ", ")
   ports_ntls=$(jq -r '.inbounds[] | select(.streamSettings.security=="none") | .port' "$CONFIG_FILE" | sort -u | paste -sd ", ")
   protos=$(jq -r '.inbounds[].protocol' "$CONFIG_FILE" | sort -u | paste -sd ", ")
-  echo -e "${BOLD}Tunnels actifs :${RESET}"
+  echo -e "${WHITE_BOLD}Tunnels actifs :${RESET}"
   [[ -n "$ports_tls" ]] && echo -e " ${GREEN}•${RESET} Port(s) TLS : [${YELLOW}${ports_tls}${RESET}] – Protocoles [${MAGENTA}${protos}${RESET}]"
   [[ -n "$ports_ntls" ]] && echo -e " ${GREEN}•${RESET} Port(s) Non-TLS : [${YELLOW}${ports_ntls}${RESET}] – Protocoles [${MAGENTA}${protos}${RESET}]"
 }
