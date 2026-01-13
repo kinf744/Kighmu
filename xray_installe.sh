@@ -80,7 +80,7 @@ cat > /etc/xray/users.json << EOF
     { "uuid": "$uuid", "limit": 5 }
   ],
   "trojan": [
-    { "uuid": "$uuid", "limit": 5 }
+    { "password": "$uuid", "limit": 5 }
   ]
 }
 EOF
