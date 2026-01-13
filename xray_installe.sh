@@ -288,14 +288,23 @@ EOF
 
 systemctl daemon-reload
 systemctl enable xray
-systemctl restart xray
 
-if systemctl is-active --quiet xray; then
-  echo -e "${GREEN}Xray démarré avec succès.${NC}"
+# Redémarrage du service
+if systemctl restart xray; then
+    # Vérification immédiate
+    sleep 2
+    if systemctl is-active --quiet xray; then
+        echo -e "${GREEN}✅ Xray démarré avec succès.${NC}"
+    else
+        echo -e "${RED}❌ Xray n'a pas démarré.${NC}"
+        echo "Derniers logs :"
+        journalctl -u xray -n 20 --no-pager
+        exit 1
+    fi
 else
-  echo -e "${RED}Erreur : Xray ne démarre pas.${NC}"
-  journalctl -u xray -n 20 --no-pager
-  exit 1
+    echo -e "${RED}❌ Échec du redémarrage du service Xray.${NC}"
+    journalctl -u xray -n 20 --no-pager
+    exit 1
 fi
 
 # Installation Trojan-Go
