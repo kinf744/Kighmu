@@ -222,24 +222,29 @@ create_config() {
 
   # 🔹 Affichage résumé
   echo
-  echo -e "${CYAN}==============================${NC}"
-  echo -e "🧩 ${proto^^}"
-  echo -e "${CYAN}==============================${NC}"
-  echo -e "📄 Configuration générée pour : $name"
+  echo -e "${CYAN}==============================${RESET}"
+  echo -e "${BOLD}🧩 ${proto^^}${RESET}"
+  echo -e "${CYAN}==============================${RESET}"
+  echo -e "${YELLOW}📄 Configuration générée pour :${RESET} $name"
   echo "--------------------------------------------------"
-  echo -e "➤ DOMAINE : $DOMAIN"
-  echo -e "➤ PORTs : TLS=$port_tls / NTLS=$port_ntls"
-  echo -e "➤ UUID / Password : $uuid"
-  echo -e "➤ Paths : TLS=$path_ws_tls / NTLS=$path_ws_ntls"
-  echo -e "➤ Validité : $days jours (expire le $(date -d "+$days days" +"%d/%m/%Y"))"
-  echo -e "➤ Nombre total d'utilisateurs : $limit"
+  echo -e "➤ DOMAINE : ${YELLOW}$DOMAIN${RESET}"
+  echo -e "${GREEN}➤ PORTs :${RESET}"
+  echo -e "   TLS   : ${MAGENTA}$port_tls${RESET}"
+  echo -e "   NTLS  : ${MAGENTA}$port_ntls${RESET}"
+  echo -e "${GREEN}➤ UUID généré :${RESET} ${MAGENTA}$uuid${RESET}"
+  echo -e "➤ Paths :"
+  echo -e "   TLS   : ${MAGENTA}$path_ws_tls${RESET}"
+  echo -e "   NTLS  : ${MAGENTA}$path_ws_ntls${RESET}"
+  echo -e "➤ Validité : ${YELLOW}$days jours${RESET} (expire le $(date -d "+$days days" +"%d/%m/%Y"))"
+  echo -e "➤ Nombre total d'utilisateurs : ${BOLD}$limit${RESET}"
   echo
-  echo -e "●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
-  echo -e "TLS     : $link_tls"
-  echo -e "Non-TLS : $link_ntls"
-  echo -e "●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
+  echo -e "${CYAN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●${RESET}"
+  echo -e "${CYAN}┃ TLS     : ${GREEN}$link_tls${RESET}"
   echo
-
+  echo -e "${CYAN}┃ Non‑TLS : ${GREEN}$link_ntls${RESET}"
+  echo -e "${CYAN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●${RESET}"
+  echo
+  
   # 🔹 Redémarrage sécurisé de Xray
   systemctl reload xray 2>/dev/null || systemctl restart xray
 }
