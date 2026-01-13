@@ -19,17 +19,66 @@ print_header() {
 }
 
 afficher_utilisateurs_xray() {
-  if [[ -f "$USERS_FILE" ]]; then
-    # Comptage des UUID uniques pour chaque protocole
-    vmess_count=$(jq '[.vmess_tls[], .vmess_ntls[]] | map(.uuid) | unique | length' "$USERS_FILE" 2>/dev/null || echo 0)
-    vless_count=$(jq '[.vless_tls[], .vless_ntls[]] | map(.uuid) | unique | length' "$USERS_FILE" 2>/dev/null || echo 0)
-    trojan_count=$(jq '[.trojan_tls[], .trojan_ntls[]] | map(.uuid) | unique | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    if [[ ! -f "$USERS_FILE" ]]; then
+        echo -e "${RED}Fichier $USERS_FILE introuvable.${RESET}"
+        return 1
+    fi
 
-    echo -e "${BOLD}Utilisateur Xray :${RESET}"
-    echo -e "  • VMess: [${YELLOW}${vmess_count}${RESET}] • VLESS: [${YELLOW}${vless_count}${RESET}] • Trojan: [${YELLOW}${trojan_count}${RESET}]"
-  else
-    echo -e "${RED}Fichier des utilisateurs introuvable.${RESET}"
-  fi
+    declare -A protocol_map=(
+        [vmess_tls]="vmess"
+        [vmess_ntls]="vmess"
+        [vless_tls]="vless"
+        [vless_ntls]="vless"
+        [trojan_tls]="trojan"
+        [trojan_ntls]="trojan"
+    )
+
+    users=()
+    keys=()
+    count=0
+
+    # Récupérer tous les UUID/Password uniques pour chaque protocole TLS + NTLS
+    for key in "${!protocol_map[@]}"; do
+        proto="${protocol_map[$key]}"
+        if [[ "$proto" == "trojan" ]]; then
+            uuids=$(jq -r --arg k "$key" '.[$k] // [] | .[]?.password' "$USERS_FILE" 2>/dev/null)
+        else
+            uuids=$(jq -r --arg k "$key" '.[$k] // [] | .[]?.uuid' "$USERS_FILE" 2>/dev/null)
+        fi
+        while IFS= read -r uuid; do
+            [[ -n "$uuid" ]] && { users+=("$key:$uuid"); keys+=("$key"); ((count++)); }
+        done <<< "$uuids"
+    done
+
+    if (( count == 0 )); then
+        echo -e "${RED}Aucun utilisateur Xray trouvé.${RESET}"
+        return 0
+    fi
+
+    # Filtrer les doublons pour affichage
+    declare -A seen
+    unique_users=()
+    unique_keys=()
+    for i in "${!users[@]}"; do
+        uuid_only="${users[$i]#*:}"
+        if [[ -z "${seen[$uuid_only]}" ]]; then
+            unique_users+=("${users[$i]}")
+            unique_keys+=("${keys[$i]}")
+            seen[$uuid_only]=1
+        fi
+    done
+
+    users=("${unique_users[@]}")
+    keys=("${unique_keys[@]}")
+    count=${#users[@]}
+
+    # Affichage clair avec numéros
+    echo -e "${BOLD}Liste des utilisateurs Xray :${RESET}"
+    for ((i=0; i<count; i++)); do
+        proto="${users[$i]%%_*}"
+        uuid="${users[$i]#*:}"
+        echo -e "[$((i+1))] Protocole : ${YELLOW}${proto}${RESET} - UUID/Password : ${CYAN}$uuid${RESET}"
+    done
 }
 
 afficher_appareils_connectes() {
