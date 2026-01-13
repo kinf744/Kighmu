@@ -20,64 +20,39 @@ print_header() {
 
 afficher_utilisateurs_xray() {
     if [[ ! -f "$USERS_FILE" ]]; then
-        echo -e "${RED}Fichier $USERS_FILE introuvable.${RESET}"
+        echo -e "${RED}Fichier des utilisateurs introuvable.${NC}"
         return 1
     fi
 
-    declare -A protocol_map=(
-        [vmess_tls]="vmess"
-        [vmess_ntls]="vmess"
-        [vless_tls]="vless"
-        [vless_ntls]="vless"
-        [trojan_tls]="trojan"
-        [trojan_ntls]="trojan"
-    )
-
     users=()
-    keys=()
-    count=0
+    protos=()
 
-    # Récupérer tous les UUID/Password uniques pour chaque protocole TLS + NTLS
-    for key in "${!protocol_map[@]}"; do
-        proto="${protocol_map[$key]}"
-        if [[ "$proto" == "trojan" ]]; then
-            uuids=$(jq -r --arg k "$key" '.[$k] // [] | .[]?.password' "$USERS_FILE" 2>/dev/null)
-        else
-            uuids=$(jq -r --arg k "$key" '.[$k] // [] | .[]?.uuid' "$USERS_FILE" 2>/dev/null)
-        fi
-        while IFS= read -r uuid; do
-            [[ -n "$uuid" ]] && { users+=("$key:$uuid"); keys+=("$key"); ((count++)); }
-        done <<< "$uuids"
+    # VMess
+    for u in $(jq -r '.vmess[]?.uuid' "$USERS_FILE"); do
+        users+=("$u")
+        protos+=("vmess")
     done
 
-    if (( count == 0 )); then
-        echo -e "${RED}Aucun utilisateur Xray trouvé.${RESET}"
+    # VLESS
+    for u in $(jq -r '.vless[]?.uuid' "$USERS_FILE"); do
+        users+=("$u")
+        protos+=("vless")
+    done
+
+    # Trojan
+    for u in $(jq -r '.trojan[]?.password' "$USERS_FILE"); do
+        users+=("$u")
+        protos+=("trojan")
+    done
+
+    if [[ ${#users[@]} -eq 0 ]]; then
+        echo -e "${RED}Aucun utilisateur Xray trouvé.${NC}"
         return 0
     fi
 
-    # Filtrer les doublons pour affichage
-    declare -A seen
-    unique_users=()
-    unique_keys=()
+    echo -e "${BOLD}Liste des utilisateurs Xray :${NC}"
     for i in "${!users[@]}"; do
-        uuid_only="${users[$i]#*:}"
-        if [[ -z "${seen[$uuid_only]}" ]]; then
-            unique_users+=("${users[$i]}")
-            unique_keys+=("${keys[$i]}")
-            seen[$uuid_only]=1
-        fi
-    done
-
-    users=("${unique_users[@]}")
-    keys=("${unique_keys[@]}")
-    count=${#users[@]}
-
-    # Affichage clair avec numéros
-    echo -e "${BOLD}Liste des utilisateurs Xray :${RESET}"
-    for ((i=0; i<count; i++)); do
-        proto="${users[$i]%%_*}"
-        uuid="${users[$i]#*:}"
-        echo -e "[$((i+1))] Protocole : ${YELLOW}${proto}${RESET} - UUID/Password : ${CYAN}$uuid${RESET}"
+        echo -e "[$((i+1))] Protocole: ${YELLOW}${protos[$i]}${NC} - UUID/Password: ${CYAN}${users[$i]}${NC}"
     done
 }
 
@@ -290,117 +265,43 @@ create_config() {
 }
 
 delete_user_by_number() {
-    if [[ ! -f "$USERS_FILE" ]]; then
-        echo -e "${RED}Fichier $USERS_FILE introuvable.${RESET}"
-        return 1
-    fi
-
-    declare -A protocol_map=(
-        [vmess_tls]="vmess"
-        [vmess_ntls]="vmess"
-        [vless_tls]="vless"
-        [vless_ntls]="vless"
-        [trojan_tls]="trojan"
-        [trojan_ntls]="trojan"
-    )
-
-    users=()
-    keys=()
-    count=0
-
-    # Construire liste TLS + Non-TLS
-    for key in "${!protocol_map[@]}"; do
-        proto="${protocol_map[$key]}"
-        if [[ "$proto" == "trojan" ]]; then
-            uuids=$(jq -r --arg k "$key" '.[$k] // [] | .[]?.password' "$USERS_FILE" 2>/dev/null)
-        else
-            uuids=$(jq -r --arg k "$key" '.[$k] // [] | .[]?.uuid' "$USERS_FILE" 2>/dev/null)
-        fi
-        while IFS= read -r uuid; do
-            [[ -n "$uuid" ]] && { users+=("$key:$uuid"); keys+=("$key"); ((count++)); }
-        done <<< "$uuids"
-    done
-
-    if (( count == 0 )); then
-        echo -e "${RED}Aucun utilisateur à supprimer.${RESET}"
-        return 0
-    fi
-
-    # Filtrer doublons
-    declare -A seen
-    unique_users=()
-    unique_keys=()
-    for i in "${!users[@]}"; do
-        uuid_only="${users[$i]#*:}"
-        if [[ -z "${seen[$uuid_only]}" ]]; then
-            unique_users+=("${users[$i]}")
-            unique_keys+=("${keys[$i]}")
-            seen[$uuid_only]=1
-        fi
-    done
-
-    users=("${unique_users[@]}")
-    keys=("${unique_keys[@]}")
-    count=${#users[@]}
-
-    # Affichage des utilisateurs avec numéros
-    echo -e "${BOLD}Liste des utilisateurs Xray :${RESET}"
-    for ((i=0; i<count; i++)); do
-        proto="${users[$i]%%_*}"
-        uuid="${users[$i]#*:}"
-        echo -e "[$((i+1))] Protocole : ${YELLOW}${proto}${RESET} - UUID/Password : ${CYAN}$uuid${RESET}"
-    done
+    afficher_utilisateurs_xray
+    if [[ ! -f "$USERS_FILE" ]]; then return 1; fi
 
     read -rp "Numéro à supprimer (0 pour annuler) : " num
-    if ! [[ "$num" =~ ^[0-9]+$ ]] || (( num < 0 )) || (( num > count )); then
-        echo -e "${RED}Numéro invalide.${RESET}"
+    if ! [[ "$num" =~ ^[0-9]+$ ]] || (( num < 0 )) || (( num > ${#users[@]} )); then
+        echo -e "${RED}Numéro invalide.${NC}"
         return 1
     fi
-
     (( num == 0 )) && { echo "Suppression annulée."; return 0; }
 
     idx=$((num - 1))
-    sel_key="${keys[$idx]}"
-    sel_uuid="${users[$idx]#*:}"
-    sel_proto="${protocol_map[$sel_key]}"
-    tls_key="${sel_proto}_tls"
-    ntls_key="${sel_proto}_ntls"
+    sel_uuid="${users[$idx]}"
+    sel_proto="${protos[$idx]}"
 
     # Sauvegarde
     cp "$USERS_FILE" "${USERS_FILE}.bak"
     cp "$CONFIG_FILE" "${CONFIG_FILE}.bak"
 
-    # Supprimer dans users.json
+    # Suppression dans users.json
     if [[ "$sel_proto" == "trojan" ]]; then
-        jq --arg u "$sel_uuid" '
-            .trojan_tls |= map(select(.password != $u)) |
-            .trojan_ntls |= map(select(.password != $u))
-        ' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+        jq --arg p "$sel_uuid" '.trojan |= map(select(.password != $p))' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
     else
-        jq --arg u "$sel_uuid" '
-            .["'"$tls_key"'"] |= map(select(.uuid != $u)) |
-            .["'"$ntls_key"'"] |= map(select(.uuid != $u))
-        ' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+        jq --arg u "$sel_uuid" --arg proto "$sel_proto" '.[$proto] |= map(select(.uuid != $u))' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
     fi
 
-    # Supprimer dans config.json
-    if [[ "$sel_proto" == "vmess" || "$sel_proto" == "vless" ]]; then
-        jq --arg id "$sel_uuid" '
-            (.inbounds[] | select(.settings.clients? != null) | .settings.clients) |= map(select(.id != $id))
-        ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+    # Suppression dans config.json
+    if [[ "$sel_proto" == "trojan" ]]; then
+        jq --arg p "$sel_uuid" '(.inbounds[] | select(.protocol=="trojan") | .settings.clients) |= map(select(.password != $p))' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
     else
-        jq --arg id "$sel_uuid" '
-            (.inbounds[] | select(.protocol=="trojan") | .settings.clients) |= map(select(.password != $id))
-        ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+        jq --arg u "$sel_uuid" '(.inbounds[] | select(.protocol==("vmess","vless") and .settings.clients? != null) | .settings.clients) |= map(select(.id != $u))' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
     fi
 
-    # Nettoyer fichier d'expiration
+    # Nettoyage fichier d’expiration
     [[ -f /etc/xray/users_expiry.list ]] && grep -v "^${sel_uuid}|" /etc/xray/users_expiry.list > /tmp/expiry.tmp && mv /tmp/expiry.tmp /etc/xray/users_expiry.list
 
-    # Redémarrage Xray
     systemctl restart xray
-
-    echo -e "${GREEN}✅ Utilisateur supprimé : $sel_proto / UUID/Password : $sel_uuid${RESET}"
+    echo -e "${GREEN}Utilisateur supprimé : $sel_proto / UUID/Password: $sel_uuid${NC}"
 }
 
 choice=0
