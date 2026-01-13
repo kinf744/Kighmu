@@ -137,14 +137,15 @@ load_user_data() {
 
 # Compte total des utilisateurs multi-protocole
 count_users() {
-  local total=0
-  local keys=("vmess_tls" "vmess_ntls" "vless_tls" "vless_ntls" "trojan_tls" "trojan_ntls")
-  for key in "${keys[@]}"; do
-    local count
-    count=$(jq --arg k "$key" '.[$k] | length // 0' "$USERS_FILE")
-    total=$(( total + count ))
-  done
-  echo "$total"
+    local vmess_count vless_count trojan_count total
+
+    vmess_count=$(jq '.vmess | length // 0' "$USERS_FILE")
+    vless_count=$(jq '.vless | length // 0' "$USERS_FILE")
+    trojan_count=$(jq '.trojan | length // 0' "$USERS_FILE")
+
+    total=$(( vmess_count + vless_count + trojan_count ))
+
+    echo "$total"
 }
 
 create_config() {
