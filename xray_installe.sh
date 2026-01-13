@@ -342,7 +342,7 @@ cat > /etc/trojan-go/config.json << EOF
 EOF
 
 # Redémarrage Trojan-Go
-systemctl restart trojan-go
+# systemctl restart trojan-go
 
 echo -e "${GREEN}✅ Installation complète terminée : Xray, Trojan-Go et sur 8443 avec TLS ACME.${NC}"
 echo "Domaine : $DOMAIN"
