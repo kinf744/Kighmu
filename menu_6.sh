@@ -207,7 +207,7 @@ create_config() {
       ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
 
       link_tls="trojan://$uuid@$DOMAIN:$port_tls?security=tls&type=ws&path=$path_ws_tls&host=$DOMAIN&sni=$DOMAIN#$name"
-      link_ntls="trojan://$uuid@$DOMAIN:$port_ntls?type=ws&path=$path_ws_ntls#$name"
+      link_ntls="trojan://$uuid@$DOMAIN:$port_ntls?type=ws&path=$path_ws_ntls&host=$DOMAIN#$name"
       ;;
       
     *)
