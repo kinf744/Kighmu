@@ -43,18 +43,25 @@ afficher_appareils_connectes() {
   declare -A ports_ntls=( ["vmess"]=8880 ["vless"]=8880 ["trojan"]=8880 )
 
   for proto in "${!connexions[@]}"; do
+    ips=()
+
     # TLS
     port=${ports_tls[$proto]}
     if [[ -n "$port" ]]; then
-      tls_count=$(ss -tn state established "( sport = :$port )" 2>/dev/null | tail -n +2 | wc -l)
-      connexions[$proto]=$((connexions[$proto] + tls_count))
+      mapfile -t tls_ips < <(ss -tn state established "( sport = :$port )" 2>/dev/null | awk 'NR>1 {print $5}' | cut -d: -f1)
+      ips+=("${tls_ips[@]}")
     fi
+
     # Non-TLS
     port=${ports_ntls[$proto]}
     if [[ -n "$port" ]]; then
-      ntls_count=$(ss -tn state established "( sport = :$port )" 2>/dev/null | tail -n +2 | wc -l)
-      connexions[$proto]=$((connexions[$proto] + ntls_count))
+      mapfile -t ntls_ips < <(ss -tn state established "( sport = :$port )" 2>/dev/null | awk 'NR>1 {print $5}' | cut -d: -f1)
+      ips+=("${ntls_ips[@]}")
     fi
+
+    # Compter les IP uniques
+    uniq_count=$(printf "%s\n" "${ips[@]}" | sort -u | wc -l)
+    connexions[$proto]=$uniq_count
   done
 
   echo -e "${WHITE_BOLD}Appareils connectés :${RESET}"
