@@ -267,9 +267,11 @@ create_config() {
 }
 
 delete_user_by_number() {
+    # Affichage des utilisateurs existants
     afficher_utilisateurs_xray
     if [[ ! -f "$USERS_FILE" ]]; then return 1; fi
 
+    # Demande de sélection
     read -rp "Numéro à supprimer (0 pour annuler) : " num
     if ! [[ "$num" =~ ^[0-9]+$ ]] || (( num < 0 )) || (( num > ${#users[@]} )); then
         echo -e "${RED}Numéro invalide.${NC}"
@@ -281,28 +283,34 @@ delete_user_by_number() {
     sel_uuid="${users[$idx]}"
     sel_proto="${protos[$idx]}"
 
-    # Sauvegarde
+    # Sauvegarde avant modification
     cp "$USERS_FILE" "${USERS_FILE}.bak"
     cp "$CONFIG_FILE" "${CONFIG_FILE}.bak"
 
     # Suppression dans users.json
     if [[ "$sel_proto" == "trojan" ]]; then
-        jq --arg p "$sel_uuid" '.trojan |= map(select(.password != $p))' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+        jq --arg p "$sel_uuid" '.trojan |= map(select(.password != $p))' \
+           "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
     else
-        jq --arg u "$sel_uuid" --arg proto "$sel_proto" '.[$proto] |= map(select(.uuid != $u))' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+        jq --arg u "$sel_uuid" --arg proto "$sel_proto" '.[$proto] |= map(select(.uuid != $u))' \
+           "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
     fi
 
     # Suppression dans config.json
     if [[ "$sel_proto" == "trojan" ]]; then
-        jq --arg p "$sel_uuid" '(.inbounds[] | select(.protocol=="trojan") | .settings.clients) |= map(select(.password != $p))' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+        jq --arg p "$sel_uuid" '(.inbounds[] | select(.protocol=="trojan") | .settings.clients) |= map(select(.password != $p))' \
+           "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
     else
-        jq --arg u "$sel_uuid" '(.inbounds[] | select(.protocol==("vmess","vless") and .settings.clients? != null) | .settings.clients) |= map(select(.id != $u))' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+        jq --arg u "$sel_uuid" '(.inbounds[] | select(.protocol=="vmess" or .protocol=="vless") | .settings.clients) |= map(select(.id != $u))' \
+           "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
     fi
 
     # Nettoyage fichier d’expiration
     [[ -f /etc/xray/users_expiry.list ]] && grep -v "^${sel_uuid}|" /etc/xray/users_expiry.list > /tmp/expiry.tmp && mv /tmp/expiry.tmp /etc/xray/users_expiry.list
 
+    # Redémarrage du service Xray
     systemctl restart xray
+
     echo -e "${GREEN}Utilisateur supprimé : $sel_proto / UUID/Password: $sel_uuid${NC}"
 }
 
