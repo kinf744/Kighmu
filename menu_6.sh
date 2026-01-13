@@ -155,7 +155,7 @@ create_config() {
         '.vmess += [{"uuid": $id, "limit": $lim}]' \
         "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
 
-      # Ajout uniquement dans inbounds VMess
+      # Ajout dans config.json (TLS et non-TLS)
       jq --arg id "$uuid" '
         (.inbounds[] | select(.protocol=="vmess" and .streamSettings.security=="tls") | .settings.clients)
           += [{"id": $id,"alterId":0}] |
@@ -163,7 +163,7 @@ create_config() {
           += [{"id": $id,"alterId":0}]
       ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
 
-      # Génération liens
+      # Génération des liens
       link_tls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"$path_ws_tls\",\"tls\":\"tls\",\"sni\":\"$DOMAIN\"}" | base64 -w0)"
       link_ntls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_ntls\",\"id\":\"$uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"$path_ws_ntls\",\"tls\":\"none\"}" | base64 -w0)"
       ;;
@@ -176,7 +176,6 @@ create_config() {
         '.vless += [{"uuid": $id, "limit": $lim}]' \
         "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
 
-      # Ajout uniquement dans inbounds Vless
       jq --arg id "$uuid" '
         (.inbounds[] | select(.protocol=="vless" and .streamSettings.security=="tls") | .settings.clients)
           += [{"id": $id}] |
@@ -196,7 +195,6 @@ create_config() {
         '.trojan += [{"password": $pw, "limit": $lim}]' \
         "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
 
-      # Ajout uniquement dans inbounds Trojan
       jq --arg pw "$uuid" '
         (.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="tls") | .settings.clients)
           += [{"password": $pw}] |
