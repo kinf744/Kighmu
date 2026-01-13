@@ -125,19 +125,17 @@ while true; do
     SSH_USERS_COUNT=$(count_ssh_users)
 
     XRAY_USERS_FILE="/etc/xray/users.json"
-    if [[ -f "$XRAY_USERS_FILE" ]]; then
-  vmess_tls_count=$(jq '.vmess_tls // [] | length' "$XRAY_USERS_FILE" 2>/dev/null || echo 0)
-  vmess_ntls_count=$(jq '.vmess_ntls // [] | length' "$XRAY_USERS_FILE" 2>/dev/null || echo 0)
-  vless_tls_count=$(jq '.vless_tls // [] | length' "$XRAY_USERS_FILE" 2>/dev/null || echo 0)
-  vless_ntls_count=$(jq '.vless_ntls // [] | length' "$XRAY_USERS_FILE" 2>/dev/null || echo 0)
-  trojan_tls_count=$(jq '.trojan_tls // [] | length' "$XRAY_USERS_FILE" 2>/dev/null || echo 0)
-  trojan_ntls_count=$(jq '.trojan_ntls // [] | length' "$XRAY_USERS_FILE" 2>/dev/null || echo 0)
 
-  vmess_count=$((vmess_tls_count + vmess_ntls_count))
-  vless_count=$((vless_tls_count + vless_ntls_count))
-  trojan_count=$((trojan_tls_count + trojan_ntls_count))
+if [[ -f "$XRAY_USERS_FILE" ]]; then
+  vmess_count=$(jq '.vmess // [] | length' "$XRAY_USERS_FILE" 2>/dev/null || echo 0)
+  vless_count=$(jq '.vless // [] | length' "$XRAY_USERS_FILE" 2>/dev/null || echo 0)
+  trojan_count=$(jq '.trojan // [] | length' "$XRAY_USERS_FILE" 2>/dev/null || echo 0)
+
   XRAY_USERS_COUNT=$((vmess_count + vless_count + trojan_count))
 else
+  vmess_count=0
+  vless_count=0
+  trojan_count=0
   XRAY_USERS_COUNT=0
 fi
 
