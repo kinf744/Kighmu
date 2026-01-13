@@ -10,6 +10,7 @@ YELLOW="\u001B[33m"
 MAGENTA="\u001B[35m"
 CYAN="\u001B[36m"
 BOLD="\u001B[1m"
+WHITE_BOLD="\u001B[1;37m"
 RESET="\u001B[0m"
 
 print_header() {
