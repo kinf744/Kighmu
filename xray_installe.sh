@@ -60,7 +60,7 @@ bash acme.sh --install
 rm acme.sh
 cd ~/.acme.sh || exit
 bash acme.sh --register-account -m "$EMAIL"
-bash acme.sh --issue --standalone -d "$DOMAIN" --force
+bash acme.sh --issue --alpn -d "$DOMAIN" --force
 bash acme.sh --installcert -d "$DOMAIN" --fullchainpath /etc/xray/xray.crt --keypath /etc/xray/xray.key
 
 if [[ ! -f "/etc/xray/xray.crt" || ! -f "/etc/xray/xray.key" ]]; then
