@@ -29,10 +29,9 @@ afficher_utilisateurs_xray() {
     vless_count=$(jq '[.vless[]?.uuid] | unique | length' "$USERS_FILE" 2>/dev/null || echo 0)
     trojan_count=$(jq '[.trojan[]?.password] | unique | length' "$USERS_FILE" 2>/dev/null || echo 0)
 
-    echo -e "${BOLD}Utilisateurs Xray actuels :${RESET}"
-    echo -e "  • VMess  : [${YELLOW}${vmess_count}${RESET}]"
-    echo -e "  • VLESS  : [${YELLOW}${vless_count}${RESET}]"
-    echo -e "  • Trojan : [${YELLOW}${trojan_count}${RESET}]"
+    # Affichage aligné avec espaces réguliers
+    echo -e "${BOLD}Utilisateurs Xray :${RESET}"
+    echo -e "  • VMess  [${YELLOW}${vmess_count}${RESET}] • VLESS  [${YELLOW}${vless_count}${RESET}] • Trojan [${YELLOW}${trojan_count}${RESET}]"
 }
 
 afficher_appareils_connectes() {
