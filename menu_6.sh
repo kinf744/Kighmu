@@ -20,40 +20,19 @@ print_header() {
 
 afficher_utilisateurs_xray() {
     if [[ ! -f "$USERS_FILE" ]]; then
-        echo -e "${RED}Fichier des utilisateurs introuvable.${NC}"
+        echo -e "${RED}Fichier des utilisateurs introuvable.${RESET}"
         return 1
     fi
 
-    users=()
-    protos=()
+    # Comptage des utilisateurs uniques par protocole
+    vmess_count=$(jq '[.vmess[]?.uuid] | unique | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    vless_count=$(jq '[.vless[]?.uuid] | unique | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    trojan_count=$(jq '[.trojan[]?.password] | unique | length' "$USERS_FILE" 2>/dev/null || echo 0)
 
-    # VMess
-    for u in $(jq -r '.vmess[]?.uuid' "$USERS_FILE"); do
-        users+=("$u")
-        protos+=("vmess")
-    done
-
-    # VLESS
-    for u in $(jq -r '.vless[]?.uuid' "$USERS_FILE"); do
-        users+=("$u")
-        protos+=("vless")
-    done
-
-    # Trojan
-    for u in $(jq -r '.trojan[]?.password' "$USERS_FILE"); do
-        users+=("$u")
-        protos+=("trojan")
-    done
-
-    if [[ ${#users[@]} -eq 0 ]]; then
-        echo -e "${RED}Aucun utilisateur Xray trouvé.${NC}"
-        return 0
-    fi
-
-    echo -e "${BOLD}Liste des utilisateurs Xray :${NC}"
-    for i in "${!users[@]}"; do
-        echo -e "[$((i+1))] Protocole: ${YELLOW}${protos[$i]}${NC} - UUID/Password: ${CYAN}${users[$i]}${NC}"
-    done
+    echo -e "${BOLD}Utilisateurs Xray actuels :${RESET}"
+    echo -e "  • VMess  : [${YELLOW}${vmess_count}${RESET}]"
+    echo -e "  • VLESS  : [${YELLOW}${vless_count}${RESET}]"
+    echo -e "  • Trojan : [${YELLOW}${trojan_count}${RESET}]"
 }
 
 afficher_appareils_connectes() {
