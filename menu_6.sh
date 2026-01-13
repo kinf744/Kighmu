@@ -293,7 +293,7 @@ delete_user_by_number() {
 
     # Affichage propre et numéroté
     echo
-    echo -e "${BOLD}Liste des utilisateurs Xray :${NC}"
+    echo -e "${YELLOW}Liste des utilisateurs Xray :${NC}"
     for i in "${!users[@]}"; do
         echo "[$((i+1))] ${protos[$i]} → ${users[$i]}"
     done
