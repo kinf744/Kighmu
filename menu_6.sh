@@ -241,105 +241,70 @@ create_config() {
 }
 
 delete_user_by_number() {
-    if [[ ! -f "$USERS_FILE" ]]; then
-        echo -e "${RED}Fichier $USERS_FILE introuvable.${RESET}"
-        return 1
-    fi
+    [[ ! -f "$USERS_FILE" ]] && { echo -e "${RED}Fichier $USERS_FILE introuvable.${NC}"; return 1; }
 
-    # Map des clés vers les protocoles
-    declare -A protocol_map=(
-        [vmess_tls]="vmess"
-        [vmess_ntls]="vmess"
-        [vless_tls]="vless"
-        [vless_ntls]="vless"
-        [trojan_tls]="trojan"
-        [trojan_ntls]="trojan"
-    )
+    # Mapping des protocoles
+    declare -A protocol_map=( [vmess]="id" [vless]="id" [trojan]="password" )
 
+    # Construire liste des utilisateurs
     users=()
-    keys=()
-    count=0
-
-    # Construire liste des utilisateurs TLS + Non-TLS
-    for key in "${!protocol_map[@]}"; do
-        uuids=$(jq -r --arg k "$key" '.[$k] // [] | .[]?.uuid' "$USERS_FILE" 2>/dev/null)
-        while IFS= read -r uuid; do
-            [[ -n "$uuid" ]] && { users+=("$key:$uuid"); keys+=("$key"); ((count++)); }
-        done <<< "$uuids"
+    for proto in "${!protocol_map[@]}"; do
+        key_field=${protocol_map[$proto]}
+        jq -r --arg key "$key_field" --arg proto "$proto" '.[$proto] // [] | .[] | .[$key]' "$USERS_FILE" | while read -r val; do
+            [[ -n "$val" ]] && users+=("$proto:$val")
+        done
     done
 
-    if (( count == 0 )); then
-        echo -e "${RED}Aucun utilisateur à supprimer.${RESET}"
-        return 0
-    fi
+    [[ ${#users[@]} -eq 0 ]] && { echo -e "${RED}Aucun utilisateur à supprimer.${NC}"; return 0; }
 
-    # Filtrer les UUID uniques pour l'affichage
-    declare -A seen
-    unique_users=()
-    unique_keys=()
+    # Affichage des utilisateurs
+    echo -e "${GREEN}Liste des utilisateurs Xray :${NC}"
     for i in "${!users[@]}"; do
-        uuid_only="${users[$i]#*:}"
-        if [[ -z "${seen[$uuid_only]}" ]]; then
-            unique_users+=("${users[$i]}")
-            unique_keys+=("${keys[$i]}")
-            seen[$uuid_only]=1
-        fi
-    done
-
-    users=("${unique_users[@]}")
-    keys=("${unique_keys[@]}")
-    count=${#users[@]}
-
-    echo -e "${GREEN}Liste des utilisateurs Xray :${RESET}"
-    for ((i=0; i<count; i++)); do
         proto="${users[$i]%%:*}"
-        uuid="${users[$i]#*:}"
-        echo -e "[$((i+1))] Protocole : ${YELLOW}${proto%%_*}${RESET} - UUID : ${CYAN}$uuid${RESET}"
+        id="${users[$i]#*:}"
+        echo -e "[$((i+1))] Protocole : ${YELLOW}$proto${NC} - UUID/Password : ${CYAN}$id${NC}"
     done
 
     read -rp "Numéro à supprimer (0 pour annuler) : " num
-    if ! [[ "$num" =~ ^[0-9]+$ ]] || (( num < 0 )) || (( num > count )); then
-        echo -e "${RED}Numéro invalide.${RESET}"
+    [[ ! "$num" =~ ^[0-9]+$ || "$num" -lt 0 || "$num" -gt ${#users[@]} ]] && { echo -e "${RED}Numéro invalide.${NC}"; return 1; }
+    (( num == 0 )) && { echo "Suppression annulée."; return 0; }
+
+    idx=$((num-1))
+    sel_proto="${users[$idx]%%:*}"
+    sel_id="${users[$idx]#*:}"
+    key_field="${protocol_map[$sel_proto]}"
+
+    # Sauvegarde
+    cp "$USERS_FILE" "$USERS_FILE.bak"
+    cp "$CONFIG_FILE" "$CONFIG_FILE.bak"
+
+    # Suppression dans users.json
+    jq --arg proto "$sel_proto" --arg key "$key_field" --arg id "$sel_id" \
+       '.[$proto] |= map(select(.[$key] != $id))' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+
+    # Suppression dans config.json
+    if [[ "$sel_proto" == "trojan" ]]; then
+        jq --arg id "$sel_id" '(.inbounds[] | select(.protocol=="trojan") | .settings.clients) |= map(select(.password != $id))' \
+           "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+    else
+        jq --arg id "$sel_id" '(.inbounds[] | select(.protocol==$id or .settings.clients? != null) | .settings.clients) |= map(select(.id != $id))' \
+           "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+    fi
+
+    # Suppression de l'expiration
+    [[ -f /etc/xray/users_expiry.list ]] && grep -v "^${sel_id}|" /etc/xray/users_expiry.list > /tmp/expiry.tmp && mv /tmp/expiry.tmp /etc/xray/users_expiry.list
+
+    # Vérification config avant restart
+    if ! xray -test -config "$CONFIG_FILE" &>/dev/null; then
+        echo -e "${RED}⚠️ Config invalide après suppression, restauration automatique.${NC}"
+        mv "$USERS_FILE.bak" "$USERS_FILE"
+        mv "$CONFIG_FILE.bak" "$CONFIG_FILE"
         return 1
     fi
 
-    (( num == 0 )) && { echo "Suppression annulée."; return 0; }
-
-    idx=$((num - 1))
-    sel_key="${keys[$idx]}"
-    sel_uuid="${users[$idx]#*:}"
-    sel_proto="${protocol_map[$sel_key]}"
-    tls_key="${sel_proto}_tls"
-    ntls_key="${sel_proto}_ntls"
-
-    # Sauvegarde avant modification
-    cp "$USERS_FILE" "${USERS_FILE}.bak"
-    cp "$CONFIG_FILE" "${CONFIG_FILE}.bak"
-
-    # Suppression dans TLS et Non-TLS
-    jq --arg tls "$tls_key" --arg ntls "$ntls_key" --arg u "$sel_uuid" '
-        .[$tls] |= map(select(.uuid != $u)) |
-        .[$ntls] |= map(select(.uuid != $u))
-    ' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
-
-    # Suppression dans config.json
-    if [[ "$sel_proto" == "vmess" || "$sel_proto" == "vless" ]]; then
-        jq --arg id "$sel_uuid" '
-            (.inbounds[] | select(.settings.clients? != null) | .settings.clients) |= map(select(.id != $id))
-        ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
-    else
-        jq --arg id "$sel_uuid" '
-            (.inbounds[] | select(.protocol=="trojan") | .settings.clients) |= map(select(.password != $id))
-        ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
-    fi
-
-    # Nettoyer le fichier d’expiration
-    [[ -f /etc/xray/users_expiry.list ]] && grep -v "^${sel_uuid}|" /etc/xray/users_expiry.list > /tmp/expiry.tmp && mv /tmp/expiry.tmp /etc/xray/users_expiry.list
-
-    # Redémarrage du service
     systemctl restart xray
 
-    echo -e "${GREEN}Utilisateur supprimé : $sel_proto / UUID: $sel_uuid${RESET}"
+    echo -e "${GREEN}Utilisateur supprimé : $sel_proto / UUID/Password: $sel_id${NC}"
 }
 
 choice=0
