@@ -129,7 +129,16 @@ count_users() {
 
 create_config() {
   local proto=$1 name=$2 days=$3 limit=$4
-  [[ -z "$DOMAIN" ]] && { echo -e "${RED}⚠️ Domaine non défini.${RESET}"; return; }
+
+  # 🔹 Lecture automatique du domaine si vide
+  if [[ -z "$DOMAIN" ]]; then
+      if [[ -f /etc/xray/domain ]]; then
+          DOMAIN=$(cat /etc/xray/domain)
+      else
+          echo -e "${RED}⚠️ Domaine non défini.${RESET}"
+          return
+      fi
+  fi
 
   local port_tls=8443
   local port_ntls=8880
@@ -210,6 +219,7 @@ create_config() {
   local exp_date_iso=$(date -d "+$days days" +"%Y-%m-%d")
   echo "$uuid|$exp_date_iso" >> /etc/xray/users_expiry.list
 
+  # 🔹 Affichage simplifié (reste inchangé)
   echo
   echo -e "${CYAN}==============================${RESET}"
   echo -e "${BOLD}🧩 ${proto^^}${RESET}"
