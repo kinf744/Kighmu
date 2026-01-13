@@ -250,51 +250,94 @@ create_config() {
 }
 
 delete_user_by_number() {
-    # Affichage des utilisateurs existants
-    afficher_utilisateurs_xray
-    if [[ ! -f "$USERS_FILE" ]]; then return 1; fi
+    [[ ! -f "$USERS_FILE" ]] && {
+        echo -e "${RED}Fichier users.json introuvable.${NC}"
+        return 1
+    }
 
-    # Demande de sélection
+    # Tableaux locaux propres
+    local users=()
+    local protos=()
+
+    # VMess
+    while read -r u; do
+        users+=("$u")
+        protos+=("vmess")
+    done < <(jq -r '.vmess[]?.uuid' "$USERS_FILE")
+
+    # VLESS
+    while read -r u; do
+        users+=("$u")
+        protos+=("vless")
+    done < <(jq -r '.vless[]?.uuid' "$USERS_FILE")
+
+    # Trojan
+    while read -r u; do
+        users+=("$u")
+        protos+=("trojan")
+    done < <(jq -r '.trojan[]?.password' "$USERS_FILE")
+
+    # Aucun utilisateur
+    if (( ${#users[@]} == 0 )); then
+        echo -e "${RED}Aucun utilisateur Xray à supprimer.${NC}"
+        return 0
+    fi
+
+    # Affichage propre et numéroté
+    echo
+    echo -e "${BOLD}Liste des utilisateurs Xray :${NC}"
+    for i in "${!users[@]}"; do
+        echo "[$((i+1))] ${protos[$i]} → ${users[$i]}"
+    done
+    echo
+
+    # Sélection
     read -rp "Numéro à supprimer (0 pour annuler) : " num
-    if ! [[ "$num" =~ ^[0-9]+$ ]] || (( num < 0 )) || (( num > ${#users[@]} )); then
+    if ! [[ "$num" =~ ^[0-9]+$ ]] || (( num < 0 || num > ${#users[@]} )); then
         echo -e "${RED}Numéro invalide.${NC}"
         return 1
     fi
     (( num == 0 )) && { echo "Suppression annulée."; return 0; }
 
-    idx=$((num - 1))
-    sel_uuid="${users[$idx]}"
-    sel_proto="${protos[$idx]}"
+    local idx=$((num - 1))
+    local sel_uuid="${users[$idx]}"
+    local sel_proto="${protos[$idx]}"
 
-    # Sauvegarde avant modification
+    # Sauvegardes
     cp "$USERS_FILE" "${USERS_FILE}.bak"
     cp "$CONFIG_FILE" "${CONFIG_FILE}.bak"
 
-    # Suppression dans users.json
+    # Suppression users.json
     if [[ "$sel_proto" == "trojan" ]]; then
-        jq --arg p "$sel_uuid" '.trojan |= map(select(.password != $p))' \
-           "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+        jq --arg p "$sel_uuid" \
+          '.trojan |= map(select(.password != $p))' \
+          "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
     else
-        jq --arg u "$sel_uuid" --arg proto "$sel_proto" '.[$proto] |= map(select(.uuid != $u))' \
-           "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+        jq --arg u "$sel_uuid" --arg proto "$sel_proto" \
+          '.[$proto] |= map(select(.uuid != $u))' \
+          "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
     fi
 
-    # Suppression dans config.json
+    # Suppression config.json
     if [[ "$sel_proto" == "trojan" ]]; then
-        jq --arg p "$sel_uuid" '(.inbounds[] | select(.protocol=="trojan") | .settings.clients) |= map(select(.password != $p))' \
-           "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+        jq --arg p "$sel_uuid" \
+          '(.inbounds[] | select(.protocol=="trojan") | .settings.clients)
+           |= map(select(.password != $p))' \
+          "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
     else
-        jq --arg u "$sel_uuid" '(.inbounds[] | select(.protocol=="vmess" or .protocol=="vless") | .settings.clients) |= map(select(.id != $u))' \
-           "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
+        jq --arg u "$sel_uuid" \
+          '(.inbounds[] | select(.protocol=="vmess" or .protocol=="vless") | .settings.clients)
+           |= map(select(.id != $u))' \
+          "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
     fi
 
-    # Nettoyage fichier d’expiration
-    [[ -f /etc/xray/users_expiry.list ]] && grep -v "^${sel_uuid}|" /etc/xray/users_expiry.list > /tmp/expiry.tmp && mv /tmp/expiry.tmp /etc/xray/users_expiry.list
+    # Nettoyage expiration
+    [[ -f /etc/xray/users_expiry.list ]] &&
+      sed -i "/^$sel_uuid|/d" /etc/xray/users_expiry.list
 
-    # Redémarrage du service Xray
     systemctl restart xray
 
-    echo -e "${GREEN}Utilisateur supprimé : $sel_proto / UUID/Password: $sel_uuid${NC}"
+    echo -e "${GREEN}✅ Utilisateur supprimé : $sel_proto / $sel_uuid${NC}"
 }
 
 choice=0
