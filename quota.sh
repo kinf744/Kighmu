@@ -4,7 +4,7 @@
 # Auto-initialisation + auto-exécution
 # ======================================================
 
-SCRIPT_PATH="/usr/local/bin/sshws-quota-init.sh"
+SCRIPT_PATH="/usr/local/bin/quota.sh"
 
 # 🔒 Auto-permission (UNE SEULE FOIS)
 if [ ! -x "$SCRIPT_PATH" ]; then
