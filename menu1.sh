@@ -1,9 +1,9 @@
 #!/bin/bash
 # menu1.sh
-# Créer un utilisateur normal et sauvegarder ses infos
+# Création utilisateur SSH/WS + durée + quota Go (blocage si quota atteint)
 set -euo pipefail
 
-# Définition des couleurs (comme dans le panneau principal)
+# ================= COULEURS =================
 RED="\e[31m"
 GREEN="\e[32m"
 YELLOW="\e[33m"
@@ -15,134 +15,139 @@ RESET="\e[0m"
 
 clear
 
-# Charger la configuration globale si elle existe
+# ================= CONFIG GLOBALE =================
 if [ -f ~/.kighmu_info ]; then
     source ~/.kighmu_info
 else
-    echo -e "${RED}Erreur : fichier ~/.kighmu_info introuvable, informations globales manquantes.${RESET}"
-    read -p "Appuyez sur Entrée pour revenir au menu..." 
+    echo -e "${RED}Erreur : ~/.kighmu_info introuvable.${RESET}"
+    read -p "Entrée pour revenir..."
     exit 1
 fi
 
-# Charger la clé publique SlowDNS
+# ================= SLOWDNS =================
 if [ -f /etc/slowdns/server.pub ]; then
     SLOWDNS_KEY=$(cat /etc/slowdns/server.pub)
 else
-    SLOWDNS_KEY="${RED}Clé publique SlowDNS non trouvée!${RESET}"
+    SLOWDNS_KEY="NON DISPONIBLE"
 fi
 
-# Charger le NameServer SlowDNS exact depuis le fichier de config, sinon valeur vide
 if [ -f /etc/slowdns/ns.conf ]; then
     SLOWDNS_NS=$(cat /etc/slowdns/ns.conf)
 else
     SLOWDNS_NS=""
-    echo -e "${YELLOW}Attention : fichier /etc/slowdns/ns.conf introuvable. Poursuite sans NS.${RESET}"
 fi
 
+# ================= EN-TÊTE =================
 echo -e "${CYAN}+==================================================+${RESET}"
-echo -e "|                CRÉATION D'UTILISATEUR             |"
+echo -e "|            CRÉATION D'UTILISATEUR SSH             |"
 echo -e "${CYAN}+==================================================+${RESET}"
 
-# Demander les informations
+# ================= SAISIE =================
 read -p "Nom d'utilisateur : " username
 
 if id "$username" &>/dev/null; then
-    echo -e "${RED}L'utilisateur existe déjà.${RESET}"
-    read -p "Appuyez sur Entrée pour revenir au menu..."
+    echo -e "${RED}Utilisateur déjà existant.${RESET}"
+    read -p "Entrée pour revenir..."
     exit 1
 fi
 
-# Lecture mot de passe visible (sans masquage)
 read -p "Mot de passe : " password
-
 read -p "Nombre d'appareils autorisés : " limite
-read -p "Durée de validité (en jours) : " days
+read -p "Durée de validité (jours) : " days
+read -p "Quota DATA (en Go) : " quota
 
-# Validation simple
-if ! [[ "$limite" =~ ^[0-9]+$ ]] || ! [[ "$days" =~ ^[0-9]+$ ]]; then
-    echo -e "${RED}Nombre d'appareils ou durée non valides.${RESET}"
-    read -p "Appuyez sur Entrée pour revenir au menu..."
+# ================= VALIDATION =================
+if ! [[ "$limite" =~ ^[0-9]+$ && "$days" =~ ^[0-9]+$ && "$quota" =~ ^[0-9]+$ ]]; then
+    echo -e "${RED}Valeurs numériques invalides.${RESET}"
+    read -p "Entrée pour revenir..."
     exit 1
 fi
 
-# Calculer la date d'expiration
+# ================= EXPIRATION =================
 expire_date=$(date -d "+$days days" '+%Y-%m-%d')
 
-# Création utilisateur compatible OpenSSH / Dropbear
-useradd -m -s /bin/bash "$username" || { echo -e "${RED}Erreur lors de la création${RESET}"; read -p "Appuyez sur Entrée pour revenir au menu..."; exit 1; }
+# ================= CRÉATION USER =================
+useradd -m -s /bin/bash "$username"
 echo "$username:$password" | chpasswd
-
-# Appliquer la date d'expiration du compte
 chage -E "$expire_date" "$username"
 
-# Préparer fichier d'utilisateurs
-USER_FILE="/etc/kighmu/users.list"
+# ================= FICHIERS =================
 mkdir -p /etc/kighmu
+USER_FILE="/etc/kighmu/users.list"
 touch "$USER_FILE"
 chmod 600 "$USER_FILE"
 
 HOST_IP=$(hostname -I | awk '{print $1}')
 
-# Sauvegarder les infos utilisateur dans le format attendu par hysteria.sh
-echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
+echo "$username|$password|$limite|$expire_date|$quota|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
 
-# Ajout automatique de l'affichage du banner personnalisé au login shell
+# ================= QUOTA IPTABLES =================
+QUOTA_DIR="/etc/sshws-quota"
+QUOTA_DB="$QUOTA_DIR/users.db"
+
+mkdir -p "$QUOTA_DIR"
+touch "$QUOTA_DB"
+
+# format: user:quotaGO:never
+grep -q "^$username:" "$QUOTA_DB" || echo "$username:$quota:never" >> "$QUOTA_DB"
+
+# ================= HOME + BANNER =================
 BANNER_PATH="/etc/ssh/sshd_banner"
-
-# Home minimal pour Dropbear / OpenSSH
 USER_HOME="/home/$username"
-if [ ! -d "$USER_HOME" ]; then
-    mkdir -p "$USER_HOME"
-    chown "$username":"$username" "$USER_HOME"
-fi
 
-echo -e "
-# Affichage du banner Kighmu VPS Manager
+echo "
 if [ -f $BANNER_PATH ]; then
-    cat \$BANNER_PATH
+  cat $BANNER_PATH
 fi
 " > "$USER_HOME/.bashrc"
 
-chown "$username":"$username" "$USER_HOME/.bashrc"
+chown "$username:$username" "$USER_HOME/.bashrc"
 chmod 644 "$USER_HOME/.bashrc"
 
-# Résumé affichage coloré des informations utilisateur avec hysteria inclus
-echo -e "✨ 𝙉𝙊𝙐𝙑𝙀𝘼𝙐 𝙐𝙏𝙄𝙇𝙄𝙎𝘼𝙏𝙀𝙐𝙍 𝘾𝙍𝙀‌𝙀‌ ✨"
+# ================= AFFICHAGE FINAL =================
+echo -e "✨ 𝙉𝙊𝙐𝙑𝙀𝘼𝙐 𝙐𝙏𝙄𝙇𝙄𝙎𝘼𝙏𝙀𝙐𝙍 𝘾𝙍𝙀́𝙀́ ✨"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo -e "🔐 𝙋𝙊𝙍𝙏𝙎 𝘿𝙄𝙎𝙋𝙊𝙉𝙄𝘽𝙇𝙀𝙎 :"
-echo -e "∘ SSH: 22          ∘ System-DNS: 53"
-echo -e "∘ SSH WS: 80       ∘ WEB-NGINX: 81"
+
+echo -e "🔐 PORTS DISPONIBLES :"
+echo -e "∘ SSH: 22          ∘ DNS: 53"
+echo -e "∘ SSH WS: 80       ∘ NGINX: 81"
 echo -e "∘ DROPBEAR: 2222   ∘ SSL: 444"
-echo -e "∘ BadVPN: 7200     ∘ BadVPN: 7300"
-echo -e "∘ FASTDNS: 5300    ∘ UDP-Custom: 54000"
+echo -e "∘ BadVPN: 7200/7300"
+echo -e "∘ FASTDNS: 5300    ∘ UDP: 54000"
 echo -e "∘ Hysteria: 22000  ∘ Proxy WS: 9090"
+
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo -e "${YELLOW}🌍 𝘿𝙊𝙈𝘼𝙄𝙉𝙀 :${RESET} $DOMAIN"
-echo -e "${YELLOW}📌 𝙄𝙋 𝙃𝙊𝙎𝙏 :${RESET} $HOST_IP"
-echo -e "${YELLOW}👤 𝙐𝙏𝙄𝙇𝙄𝙎𝘼𝙏𝙀𝙐𝙍 :${RESET} $username"
-echo -e "${YELLOW}🔑 𝙈𝙊𝙏 𝘿𝙀 𝙋𝘼𝙎𝙎𝙀 :${RESET} $password"
-echo -e "${YELLOW}📦 𝙇𝙄𝙈𝙄𝙏𝙀 :${RESET} $limite"
-echo -e "${YELLOW}📅 𝘿𝘼𝙏𝙀 𝘿'𝙀𝙓𝙋𝙄𝙍𝘼𝙏𝙄𝙊𝙉 :${RESET} $expire_date"
+echo -e "${YELLOW}🌍 DOMAINE :${RESET} $DOMAIN"
+echo -e "${YELLOW}📌 IP HOST :${RESET} $HOST_IP"
+echo -e "${YELLOW}👤 UTILISATEUR :${RESET} $username"
+echo -e "${YELLOW}🔑 MOT DE PASSE :${RESET} $password"
+echo -e "${YELLOW}📦 LIMITE APPAREILS :${RESET} $limite"
+echo -e "${YELLOW}📊 QUOTA DATA :${RESET} $quota Go"
+echo -e "${YELLOW}📅 EXPIRATION :${RESET} $expire_date"
+
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo "📲 𝘼𝙋𝙋𝙎 : HTTP Injector, CUSTOM, SOCKSIP TUNNEL, SSC, etc."
+echo "📲 APPS : HTTP Injector, CUSTOM, SOCKSIP TUNNEL, SSC"
 echo ""
-echo -e "➡️ 𝙎𝙎𝙃 𝙒𝙎 : ${GREEN}$DOMAIN:80@$username:$password${RESET}"
-echo -e "➡️ 𝙎𝙎𝙇/𝙏𝙇𝙎 : ${GREEN}$HOST_IP:444@$username:$password${RESET}"
-echo -e "➡️ 𝙋𝙍𝙊𝙓𝙔 𝙒𝙎 : ${GREEN}$HOST_IP:9090@$username:$password${RESET}"
-echo -e "➡️ 𝙎𝙎𝙃 𝙐𝘿𝙋 : ${GREEN}$HOST_IP:54000@$username:$password${RESET}"
-echo -e "➡️ 𝙃𝙔𝙎𝙏𝙀𝙍𝙄𝘼 : ${GREEN}$DOMAIN:22000@$username:$password${RESET}"
+
+echo -e "➡️ SSH WS : ${GREEN}$DOMAIN:80@$username:$password${RESET}"
+echo -e "➡️ SSL/TLS : ${GREEN}$HOST_IP:444@$username:$password${RESET}"
+echo -e "➡️ PROXY WS : ${GREEN}$HOST_IP:9090@$username:$password${RESET}"
+echo -e "➡️ SSH UDP : ${GREEN}$HOST_IP:54000@$username:$password${RESET}"
+echo -e "➡️ HYSTERIA : ${GREEN}$DOMAIN:22000@$username:$password${RESET}"
+
 echo ""
-echo -e "📜 𝙋𝘼𝙔𝙇𝙊𝘼𝘿 𝙒𝙎:"
-echo -e "${GREEN}GET / HTTP/1.1[crlf]Host: [host][crlf]Connection: Upgrade[crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]${RESET}"
+echo -e "📜 PAYLOAD WS:"
+echo -e "${GREEN}GET / HTTP/1.1[crlf]Host: [host][crlf]Connection: Upgrade[crlf]Upgrade: websocket[crlf][crlf]${RESET}"
+
 echo ""
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo -e "🚀 𝘾𝙊𝙉𝙁𝙄𝙂 𝙁𝘼𝙎𝙏𝘿𝙉𝙎 (5300)" 
-echo -e "${YELLOW}🔐Pub KEY:${RESET}"
+echo -e "🚀 FASTDNS (5300)"
+echo -e "${YELLOW}PUB KEY:${RESET}"
 echo -e "$SLOWDNS_KEY"
-echo -e "NameServer:"
-echo -e "${YELLOW}$SLOWDNS_NS${RESET}"
+echo -e "${YELLOW}NS:${RESET} $SLOWDNS_NS"
+
 echo ""
-echo -e "${GREEN}✅ 𝘾𝙊𝙈𝙋𝙏𝙀 𝘾𝙍𝙀‌𝙀‌ 𝘼𝙑𝙀𝘾 𝙎𝙐𝘾𝘾𝙀‌𝙎${RESET}"
+echo -e "${GREEN}✅ COMPTE CRÉÉ AVEC SUCCÈS${RESET}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
 read -p "Appuyez sur Entrée pour revenir au menu..."
