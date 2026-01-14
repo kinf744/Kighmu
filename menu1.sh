@@ -67,6 +67,10 @@ chmod 600 "$USER_FILE"
 
 HOST_IP=$(hostname -I | awk '{print $1}')
 
+# ===== AJOUT SÉCURISÉ (ANTI-DOUBLON) =====
+grep -v "^$username|" "$USER_FILE" > /tmp/users.tmp || true
+mv /tmp/users.tmp "$USER_FILE"
+
 echo "$username|$password|$limite|$expire_date|$quota|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
 
 # ================= QUOTA VNSTAT =================
