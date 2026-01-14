@@ -1,6 +1,7 @@
 #!/bin/bash
-# menu1.sh
-# Création utilisateur SSH/WS + durée + quota Go (VNSTAT)
+# ==========================================
+# CREATION UTILISATEUR SSH/WS/TLS/UDP/XRAY + QUOTA
+# ==========================================
 set -euo pipefail
 
 # ================= COULEURS =================
@@ -32,7 +33,6 @@ echo -e "${CYAN}+==================================================+${RESET}"
 
 # ================= SAISIE =================
 read -rp "Nom d'utilisateur : " username
-
 if id "$username" &>/dev/null; then
     echo -e "${RED}Utilisateur déjà existant.${RESET}"
     read -p "Entrée pour revenir..."
@@ -67,23 +67,41 @@ chmod 600 "$USER_FILE"
 
 HOST_IP=$(hostname -I | awk '{print $1}')
 
-# ===== AJOUT SÉCURISÉ (ANTI-DOUBLON) =====
+# Supprimer doublons si existants
 grep -v "^$username|" "$USER_FILE" > /tmp/users.tmp || true
 mv /tmp/users.tmp "$USER_FILE"
 
+# Ajouter nouvel utilisateur
 echo "$username|$password|$limite|$expire_date|$quota|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
 
-# ================= QUOTA VNSTAT =================
-QUOTA_DIR="/etc/sshws-quota"
-QUOTA_DB="$QUOTA_DIR/users.db"
-USAGE_DB="$QUOTA_DIR/usage.db"
+# ================= QUOTA VNSTAT + IPTABLES =================
+BASE_DIR="/etc/sshws-quota"
+USERS_DB="$BASE_DIR/users.db"
+USAGE_DB="$BASE_DIR/usage.db"
+LOG="$BASE_DIR/quota.log"
+CHAIN="SSHWS_QUOTA"
 
-mkdir -p "$QUOTA_DIR"
-touch "$QUOTA_DB" "$USAGE_DB"
+mkdir -p "$BASE_DIR"
+touch "$USERS_DB" "$USAGE_DB" "$LOG"
 
-# Ajout quota si absent
-grep -q "^$username:" "$QUOTA_DB" || echo "$username:$quota" >> "$QUOTA_DB"
+# Ajouter quota si absent
+grep -q "^$username:" "$USERS_DB" || echo "$username:$quota" >> "$USERS_DB"
 grep -q "^$username:" "$USAGE_DB" || echo "$username:0" >> "$USAGE_DB"
+
+# ================= IPTABLES INIT =================
+iptables -N $CHAIN 2>/dev/null || true
+iptables -C OUTPUT -j $CHAIN 2>/dev/null || iptables -A OUTPUT -j $CHAIN
+iptables -C INPUT  -j $CHAIN 2>/dev/null || iptables -A INPUT  -j $CHAIN
+
+UID=$(id -u "$username")
+iptables -C $CHAIN -m owner --uid-owner "$UID" -j RETURN 2>/dev/null || \
+iptables -A $CHAIN -m owner --uid-owner "$UID" -j RETURN
+
+# ================= INITIALISATION USAGE =================
+BYTES=$(iptables -L $CHAIN -v -n | awk -v uid="$UID" '$0~uid {sum+=$2} END {print sum}')
+USED_GB=$(( BYTES / 1024 / 1024 / 1024 ))
+sed -i "/^$username:/d" "$USAGE_DB"
+echo "$username:$USED_GB" >> "$USAGE_DB"
 
 # ================= BANNER =================
 USER_HOME="/home/$username"
@@ -124,13 +142,12 @@ echo -e "${YELLOW}⏳ JOURS RESTANTS    :${RESET} $DAYS_LEFT jours"
 
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo -e "📊 GESTION DATA :"
-echo -e "∘ Méthode       : vnStat (global serveur)"
+echo -e "∘ Méthode       : IPTABLES + VNSTAT"
 echo -e "∘ Blocage auto  : OUI (quota atteint)"
 echo -e "∘ Reset quota   : ❌ Aucun (sauf reset manuel)"
 
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo "📲 APPS COMPATIBLES :"
-echo "HTTP Injector, CUSTOM, SOCKSIP TUNNEL, SSC, V2Ray, Xray"
+echo "📲 APPS COMPATIBLES : HTTP Injector, CUSTOM, SOCKSIP TUNNEL, SSC, V2Ray, Xray"
 
 echo ""
 echo -e "➡️ SSH WS     : ${GREEN}$DOMAIN:80@$username:$password${RESET}"
