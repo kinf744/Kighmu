@@ -1,57 +1,42 @@
 #!/bin/bash
-# ======================================================
-# SSH / WS QUOTA INIT + CHECK
-# Auto-initialisation + auto-exécution
-# ======================================================
+# ==========================================
+# QUOTA SSH / WS / TLS / UDP / XRAY (VNSTAT)
+# ==========================================
 
-SCRIPT_PATH="/usr/local/bin/quota.sh"
+IFACE=$(vnstat --iflist | awk 'NR==1{print $1}')
+BASE_DIR="/etc/sshws-quota"
+USERS_DB="$BASE_DIR/users.db"
+USAGE_DB="$BASE_DIR/usage.db"
+LOG="$BASE_DIR/quota.log"
 
-# 🔒 Auto-permission (UNE SEULE FOIS)
-if [ ! -x "$SCRIPT_PATH" ]; then
-    chmod +x "$SCRIPT_PATH" 2>/dev/null
-fi
+mkdir -p "$BASE_DIR"
+touch "$USERS_DB" "$USAGE_DB" "$LOG"
 
-DB="/etc/sshws-quota/users.db"
-CHAIN="SSHWS_QUOTA"
-LOG="/etc/sshws-quota/quota.log"
+get_total_gb() {
+    vnstat -i "$IFACE" --oneline b \
+    | awk -F';' '{print int($9/1024/1024)}'
+}
 
-# ================= DOSSIERS =================
-mkdir -p /etc/sshws-quota
-touch "$DB" "$LOG"
+TOTAL_USED=$(get_total_gb)
 
-# ================= IPTABLES INIT =================
-iptables -N $CHAIN 2>/dev/null
-
-iptables -C OUTPUT -j $CHAIN 2>/dev/null || iptables -A OUTPUT -j $CHAIN
-iptables -C INPUT  -j $CHAIN 2>/dev/null || iptables -A INPUT  -j $CHAIN
-
-# ================= QUOTA CHECK =================
 while IFS=: read -r USER QUOTA; do
     id "$USER" &>/dev/null || continue
     [[ -z "$QUOTA" ]] && continue
 
-    UID=$(id -u "$USER")
+    PREV=$(grep "^$USER:" "$USAGE_DB" | cut -d: -f2)
+    PREV=${PREV:-0}
 
-    # Règle de comptage
-    iptables -C $CHAIN -m owner --uid-owner "$UID" -j RETURN 2>/dev/null || \
-    iptables -A $CHAIN -m owner --uid-owner "$UID" -j RETURN
+    DELTA=$(( TOTAL_USED - PREV ))
+    [[ $DELTA -lt 0 ]] && DELTA=0
 
-    # Lecture DATA
-    BYTES=$(iptables -L $CHAIN -v -n | awk -v uid="$UID" '$0~uid {sum+=$2} END {print sum}')
-    BYTES=${BYTES:-0}
+    USED=$(( PREV + DELTA ))
 
-    USED_GB=$(( BYTES / 1024 / 1024 / 1024 ))
+    sed -i "/^$USER:/d" "$USAGE_DB"
+    echo "$USER:$USED" >> "$USAGE_DB"
 
-    # Blocage si quota atteint
-    if (( USED_GB >= QUOTA )); then
-        iptables -C $CHAIN -m owner --uid-owner "$UID" -j DROP 2>/dev/null || \
-        iptables -A $CHAIN -m owner --uid-owner "$UID" -j DROP
-
+    if (( USED >= QUOTA )); then
         passwd -l "$USER" &>/dev/null
-
-        echo "$(date '+%F %T') | $USER BLOQUÉ ($USED_GB/$QUOTA Go)" >> "$LOG"
+        echo "$(date '+%F %T') | $USER BLOQUÉ ($USED/$QUOTA Go)" >> "$LOG"
     fi
 
-done < "$DB"
-
-exit 0
+done < "$USERS_DB"
