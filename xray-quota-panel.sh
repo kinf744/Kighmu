@@ -74,3 +74,5 @@ for proto in vmess vless trojan; do
 done
 
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+read -p "Appuyez sur Entrée pour continuer..."
