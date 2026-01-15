@@ -38,8 +38,8 @@ echo "netfilter-persistent a appliqué les règles initiales."
 iptables -S
 
 # Installation Xray
-# latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest | grep tag_name | cut -d '"' -f4 | sed 's/v//')
-xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v25.2.1/xray-linux-64.zip"
+latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest | grep tag_name | cut -d '"' -f4 | sed 's/v//')
+xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v${latest_version}/xray-linux-64.zip"
 
 mkdir -p /tmp/xray_install && cd /tmp/xray_install
 curl -L -o xray.zip "$xraycore_link"
@@ -103,14 +103,13 @@ cat > /etc/xray/config.json << EOF
         "network": "ws",
         "security": "tls",
         "tlsSettings": {
-          "certificates": [
-            {
-              "certificateFile": "/etc/xray/xray.crt",
-              "keyFile": "/etc/xray/xray.key"
-            }
-          ],
+          "certificates": [{
+            "certificateFile": "/etc/xray/xray.crt",
+            "keyFile": "/etc/xray/xray.key"
+          }],
           "minVersion": "1.2",
-          "maxVersion": "1.3"
+          "maxVersion": "1.3",
+          "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
         },
         "wsSettings": {
           "path": "/vmess-tls",
@@ -144,14 +143,13 @@ cat > /etc/xray/config.json << EOF
         "network": "ws",
         "security": "tls",
         "tlsSettings": {
-          "certificates": [
-            {
-              "certificateFile": "/etc/xray/xray.crt",
-              "keyFile": "/etc/xray/xray.key"
-            }
-          ],
+          "certificates": [{
+            "certificateFile": "/etc/xray/xray.crt",
+            "keyFile": "/etc/xray/xray.key"
+          }],
           "minVersion": "1.2",
-          "maxVersion": "1.3"
+          "maxVersion": "1.3",
+          "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
         },
         "wsSettings": {
           "path": "/vless-tls",
@@ -172,11 +170,11 @@ cat > /etc/xray/config.json << EOF
         "wsSettings": {
           "path": "/vless-ntls",
           "host": "$DOMAIN"
-        },
-        "sniffing": {
-          "enabled": true,
-          "destOverride": ["http", "tls"]
         }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls"]
       }
     },
     {
@@ -190,15 +188,14 @@ cat > /etc/xray/config.json << EOF
         "network": "ws",
         "security": "tls",
         "tlsSettings": {
-          "certificates": [
-            {
-              "certificateFile": "/etc/xray/xray.crt",
-              "keyFile": "/etc/xray/xray.key"
-            }
-          ],
+          "certificates": [{
+            "certificateFile": "/etc/xray/xray.crt",
+            "keyFile": "/etc/xray/xray.key"
+          }],
           "alpn": ["http/1.1"],
           "minVersion": "1.2",
-          "maxVersion": "1.3"
+          "maxVersion": "1.3",
+          "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
         },
         "wsSettings": {
           "path": "/trojan-tls",
@@ -218,128 +215,6 @@ cat > /etc/xray/config.json << EOF
         "wsSettings": {
           "path": "/trojan-ntls",
           "host": "$DOMAIN"
-        }
-      }
-    },
-    {
-      "port": 8443,
-      "protocol": "vmess",
-      "settings": {
-        "clients": [{"id": "$uuid", "alterId": 0}]
-      },
-      "streamSettings": {
-        "network": "http",
-        "security": "tls",
-        "tlsSettings": {
-          "certificates": [
-            {
-              "certificateFile": "/etc/xray/xray.crt",
-              "keyFile": "/etc/xray/xray.key"
-            }
-          ],
-          "minVersion": "1.2",
-          "maxVersion": "1.3"
-        },
-        "httpSettings": {
-          "path": "/vmess-tls",
-          "host": ["$DOMAIN"]
-        }
-      }
-    },
-    {
-      "port": 8880,
-      "protocol": "vmess",
-      "settings": {
-        "clients": [{"id": "$uuid", "alterId": 0}]
-      },
-      "streamSettings": {
-        "network": "http",
-        "security": "none",
-        "httpSettings": {
-          "path": "/vmess-ntls",
-          "host": ["$DOMAIN"]
-        }
-      }
-    },
-    {
-      "port": 8443,
-      "protocol": "vless",
-      "settings": {
-        "clients": [{"id": "$uuid"}],
-        "decryption": "none"
-      },
-      "streamSettings": {
-        "network": "http",
-        "security": "tls",
-        "tlsSettings": {
-          "certificates": [
-            {
-              "certificateFile": "/etc/xray/xray.crt",
-              "keyFile": "/etc/xray/xray.key"
-            }
-          ],
-          "minVersion": "1.2",
-          "maxVersion": "1.3"
-        },
-        "httpSettings": {
-          "path": "/vless-tls",
-          "host": ["$DOMAIN"]
-        }
-      }
-    },
-    {
-      "port": 8880,
-      "protocol": "vless",
-      "settings": {
-        "clients": [{"id": "$uuid"}],
-        "decryption": "none"
-      },
-      "streamSettings": {
-        "network": "http",
-        "security": "none",
-        "httpSettings": {
-          "path": "/vless-ntls",
-          "host": ["$DOMAIN"]
-        }
-      }
-    },
-    {
-      "port": 8443,
-      "protocol": "trojan",
-      "settings": {
-        "clients": [{"password": "$uuid"}]
-      },
-      "streamSettings": {
-        "network": "http",
-        "security": "tls",
-        "tlsSettings": {
-          "certificates": [
-            {
-              "certificateFile": "/etc/xray/xray.crt",
-              "keyFile": "/etc/xray/xray.key"
-            }
-          ],
-          "minVersion": "1.2",
-          "maxVersion": "1.3"
-        },
-        "httpSettings": {
-          "path": "/trojan-tls",
-          "host": ["$DOMAIN"]
-        }
-      }
-    },
-    {
-      "port": 8880,
-      "protocol": "trojan",
-      "settings": {
-        "clients": [{"password": "$uuid"}]
-      },
-      "streamSettings": {
-        "network": "http",
-        "security": "none",
-        "httpSettings": {
-          "path": "/trojan-ntls",
-          "host": ["$DOMAIN"]
         }
       }
     }
