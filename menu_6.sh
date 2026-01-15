@@ -391,7 +391,7 @@ while true; do
     2)
       read -rp "Nom de l'utilisateur VMESS : " conf_name
       read -rp "Durée (jours) : " days
-      read -rp "Limite totale d'utilisateurs (devices) : " limit
+      read -rp "Limite totale de Go : " limit
       [[ -n "$conf_name" && -n "$days" && -n "$limit" ]] && create_config "vmess" "$conf_name" "$days" "$limit"
       read -p "Appuyez sur Entrée pour continuer..."
       ;;
