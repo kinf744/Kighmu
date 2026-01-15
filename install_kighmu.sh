@@ -207,7 +207,8 @@ FILES=(
   "bot2_pannel.sh"
   "Delete_user_xray.sh"
   "udp_request.sh"
-  "quota.sh"
+  "xray-quota.go"
+  "xray-quota-panel.sh
   "install_v2ray.sh"
 )
 
