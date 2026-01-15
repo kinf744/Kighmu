@@ -410,6 +410,7 @@ while true; do
       read -p "Appuyez sur Entrée pour continuer..."
       ;;
     5)
+  chmod +x $HOME/Kighmu/xray-quota-panel.sh  # → une seule fois suffit avant le premier lancement
   bash $HOME/Kighmu/xray-quota-panel.sh
   read -p "Appuyez sur Entrée pour revenir..."
       ;;
