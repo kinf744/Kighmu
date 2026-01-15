@@ -137,7 +137,10 @@ count_users() {
 }
 
 create_config() {
-  local proto=$1 name=$2 days=$3 limit=$4
+  local proto=$1
+  local name=$2
+  local days=$3
+  local limit=$4   # quota en Go
 
   # 🔹 Lecture automatique du domaine si vide
   if [[ -z "$DOMAIN" ]]; then
@@ -153,30 +156,40 @@ create_config() {
   local port_ntls=8880
   local path_ws_tls path_ws_ntls
   local link_tls link_ntls
-  local uuid
+  local uuid tag
 
-  # 🔹 UUID unique
+  # 🔹 UUID + tag (obligatoire pour stats Xray)
   uuid=$(cat /proc/sys/kernel/random/uuid)
+  tag="${proto}_${name}_${uuid:0:8}"
+
+  # 🔹 Date d’expiration
+  local exp_date_iso
+  exp_date_iso=$(date -d "+$days days" +"%Y-%m-%d")
 
   case "$proto" in
     vmess)
       path_ws_tls="/vmess-tls"
       path_ws_ntls="/vmess-ntls"
 
-      # Ajout dans users.json
-      jq --arg id "$uuid" --argjson lim "$limit" \
-        '.vmess += [{"uuid": $id, "limit": $lim}]' \
-        "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+      # users.json
+      jq --arg id "$uuid" --arg name "$name" --arg tag "$tag" --arg exp "$exp_date_iso" --argjson lim "$limit" \
+        '.vmess += [{
+          "uuid": $id,
+          "name": $name,
+          "tag": $tag,
+          "limit_gb": $lim,
+          "used_gb": 0,
+          "expire": $exp
+        }]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
 
-      # Ajout dans config.json (TLS et non-TLS)
-      jq --arg id "$uuid" '
+      # config.json
+      jq --arg id "$uuid" --arg tag "$tag" '
         (.inbounds[] | select(.protocol=="vmess" and .streamSettings.security=="tls") | .settings.clients)
-          += [{"id": $id,"alterId":0}] |
+          += [{"id": $id, "alterId": 0, "email": $tag}] |
         (.inbounds[] | select(.protocol=="vmess" and .streamSettings.security=="none") | .settings.clients)
-          += [{"id": $id,"alterId":0}]
+          += [{"id": $id, "alterId": 0, "email": $tag}]
       ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
 
-      # Génération des liens
       link_tls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"$path_ws_tls\",\"tls\":\"tls\",\"sni\":\"$DOMAIN\"}" | base64 -w0)"
       link_ntls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_ntls\",\"id\":\"$uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"$path_ws_ntls\",\"tls\":\"none\"}" | base64 -w0)"
       ;;
@@ -185,15 +198,21 @@ create_config() {
       path_ws_tls="/vless-tls"
       path_ws_ntls="/vless-ntls"
 
-      jq --arg id "$uuid" --argjson lim "$limit" \
-        '.vless += [{"uuid": $id, "limit": $lim}]' \
-        "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+      jq --arg id "$uuid" --arg name "$name" --arg tag "$tag" --arg exp "$exp_date_iso" --argjson lim "$limit" \
+        '.vless += [{
+          "uuid": $id,
+          "name": $name,
+          "tag": $tag,
+          "limit_gb": $lim,
+          "used_gb": 0,
+          "expire": $exp
+        }]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
 
-      jq --arg id "$uuid" '
+      jq --arg id "$uuid" --arg tag "$tag" '
         (.inbounds[] | select(.protocol=="vless" and .streamSettings.security=="tls") | .settings.clients)
-          += [{"id": $id}] |
+          += [{"id": $id, "email": $tag}] |
         (.inbounds[] | select(.protocol=="vless" and .streamSettings.security=="none") | .settings.clients)
-          += [{"id": $id}]
+          += [{"id": $id, "email": $tag}]
       ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
 
       link_tls="vless://$uuid@$DOMAIN:$port_tls?security=tls&type=ws&host=$DOMAIN&path=$path_ws_tls&encryption=none&sni=$DOMAIN#$name"
@@ -204,32 +223,32 @@ create_config() {
       path_ws_tls="/trojan-tls"
       path_ws_ntls="/trojan-ntls"
 
-      jq --arg pw "$uuid" --argjson lim "$limit" \
-        '.trojan += [{"password": $pw, "limit": $lim}]' \
-        "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+      jq --arg pw "$uuid" --arg name "$name" --arg tag "$tag" --arg exp "$exp_date_iso" --argjson lim "$limit" \
+        '.trojan += [{
+          "password": $pw,
+          "name": $name,
+          "tag": $tag,
+          "limit_gb": $lim,
+          "used_gb": 0,
+          "expire": $exp
+        }]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
 
-      jq --arg pw "$uuid" '
+      jq --arg pw "$uuid" --arg tag "$tag" '
         (.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="tls") | .settings.clients)
-          += [{"password": $pw}] |
+          += [{"password": $pw, "email": $tag}] |
         (.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="none") | .settings.clients)
-          += [{"password": $pw}]
+          += [{"password": $pw, "email": $tag}]
       ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
 
       link_tls="trojan://$uuid@$DOMAIN:$port_tls?security=tls&type=ws&path=$path_ws_tls&host=$DOMAIN&sni=$DOMAIN#$name"
       link_ntls="trojan://$uuid@$DOMAIN:$port_ntls?type=ws&security=none&path=$path_ws_ntls&host=$DOMAIN#$name"
       ;;
-
-    *)
-      echo -e "${RED}Protocole inconnu.${NC}"
-      return 1
-      ;;
   esac
 
   # 🔹 Gestion de la validité
-  local exp_date_iso=$(date -d "+$days days" +"%Y-%m-%d")
   echo "$uuid|$exp_date_iso" >> /etc/xray/users_expiry.list
 
-  # 🔹 Affichage résumé
+  # 🔹 🔥 AFFICHAGE COMPLÉT POST-CRÉATION (inchangé, important)
   echo
   echo -e "${CYAN}==============================${RESET}"
   echo -e "${BOLD}🧩 ${proto^^}${RESET}"
@@ -245,7 +264,7 @@ create_config() {
   echo -e "   TLS   : ${MAGENTA}$path_ws_tls${RESET}"
   echo -e "   NTLS  : ${MAGENTA}$path_ws_ntls${RESET}"
   echo -e "➤ Validité : ${YELLOW}$days jours${RESET} (expire le $(date -d "+$days days" +"%d/%m/%Y"))"
-  echo -e "➤ Nombre total d'utilisateurs : ${BOLD}$limit${RESET}"
+  echo -e "➤ Nombre total de Go : ${BOLD}$limit${RESET}"
   echo
   echo -e "${CYAN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●${RESET}"
   echo -e "${CYAN}┃ TLS     : ${GREEN}$link_tls${RESET}"
@@ -253,7 +272,7 @@ create_config() {
   echo -e "${CYAN}┃ Non‑TLS : ${GREEN}$link_ntls${RESET}"
   echo -e "${CYAN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●${RESET}"
   echo
-  
+
   # 🔹 Redémarrage sécurisé de Xray
   systemctl reload xray 2>/dev/null || systemctl restart xray
 }
