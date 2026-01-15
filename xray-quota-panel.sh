@@ -14,7 +14,7 @@ BOLD="\e[1m"
 RESET="\e[0m"
 
 # ─────────────────────────────────────────
-# Fonction : trafic par UUID (Go)
+# Fonction : trafic par UUID ou password (Go)
 # ─────────────────────────────────────────
 usage_gb() {
   local id="$1"
@@ -33,44 +33,43 @@ echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━�
 
 TOTAL=0
 
-# ───────────── TOTAL GLOBAL ─────────────
+# ───────────── CALCUL CONSOMMATION TOTALE ─────────────
 for proto in vmess vless trojan; do
-  key="uuid"; [[ "$proto" == "trojan" ]] && key="password"
-
-  jq -r ".${proto}[]?.${key}" "$USERS" | while read -r id; do
-    g=$(usage_gb "$id")
-    TOTAL=$(awk "BEGIN{print $TOTAL+$g}")
-  done
+    key="uuid"; [[ "$proto" == "trojan" ]] && key="password"
+    mapfile -t ids < <(jq -r ".${proto}[]?.${key}" "$USERS")
+    for id in "${ids[@]}"; do
+        g=$(usage_gb "$id")
+        TOTAL=$(awk "BEGIN{print $TOTAL+$g}")
+    done
 done
 
-printf "${WHITE}Consommation totale : ${GREEN}%.2f Go${RESET}\n" "$TOTAL"
-
+echo -e "${WHITE}Consommation totale : ${GREEN}$(printf "%.2f" "$TOTAL") Go${RESET}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-printf "${BOLD}%-8s %-32s %-20s${RESET}\n" "PROTO" "UTILISATEUR (expiration)" "CONSOMMATION"
-echo "---------------------------------------------------------------"
+
+# ───────────── ENTÊTE LISTE UTILISATEURS ─────────────
+printf "${BOLD}%-8s %-25s %-25s %-20s${RESET}\n" "PROTO" "UTILISATEUR" "EXPIRATION" "CONSOMMATION"
+echo "--------------------------------------------------------------------------"
 
 # ───────────── LISTE UTILISATEURS ─────────────
 for proto in vmess vless trojan; do
-  key="uuid"; [[ "$proto" == "trojan" ]] && key="password"
+    key="uuid"; [[ "$proto" == "trojan" ]] && key="password"
+    mapfile -t users_json < <(jq -c ".${proto}[]?" "$USERS")
+    for u in "${users_json[@]}"; do
+        id=$(echo "$u" | jq -r ".${key}")
+        name=$(echo "$u" | jq -r ".name")
+        quota=$(echo "$u" | jq -r ".limit_gb")
+        exp=$(echo "$u" | jq -r ".expire")
 
-  jq -c ".${proto}[]?" "$USERS" | while read -r u; do
-    id=$(echo "$u" | jq -r ".${key}")
-    name=$(echo "$u" | jq -r ".name")
-    quota=$(echo "$u" | jq -r ".quota_gb")
-    exp=$(echo "$u" | jq -r ".expiry")
+        exp_fr=$(date -d "$exp" +"%d/%m/%Y" 2>/dev/null)
+        used=$(usage_gb "$id")
 
-    # Date FR
-    exp_fr=$(date -d "$exp" +"%d/%m/%Y" 2>/dev/null)
+        # Couleur selon quota
+        color="$GREEN"
+        (( $(echo "$used >= $quota" | bc -l) )) && color="$RED"
 
-    used=$(usage_gb "$id")
-
-    # Couleur selon quota
-    color="$GREEN"
-    (( $(echo "$used >= $quota" | bc -l) )) && color="$RED"
-
-    printf "%-8s ${WHITE}%-15s${RESET} ${YELLOW}( %s )${RESET}   ${color}%5.2f Go / %s Go${RESET}\n" \
-      "$proto" "$name" "$exp_fr" "$used" "$quota"
-  done
+        printf "%-8s ${WHITE}%-25s${RESET} ${YELLOW}%-25s${RESET} ${color}%6.2f Go / %-6s${RESET}\n" \
+            "$proto" "$name" "$exp_fr" "$used" "$quota"
+    done
 done
 
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
