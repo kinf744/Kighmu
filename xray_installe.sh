@@ -217,6 +217,116 @@ cat > /etc/xray/config.json << EOF
           "host": "$DOMAIN"
         }
       }
+    },
+    {
+      "port": 8443,
+      "protocol": "vmess",
+      "settings": {
+        "clients": [{"id": "$uuid", "alterId": 0}]
+      },
+      "streamSettings": {
+        "network": "http",
+        "security": "tls",
+        "tlsSettings": {
+          "certificates": [{
+            "certificateFile": "/etc/xray/xray.crt",
+            "keyFile": "/etc/xray/xray.key"
+          }]
+        },
+        "httpSettings": {
+          "path": "/vmess-tls",
+          "host": ["$DOMAIN"]
+        }
+      }
+    },
+    {
+      "port": 8880,
+      "protocol": "vmess",
+      "settings": {
+        "clients": [{"id": "$uuid", "alterId": 0}]
+      },
+      "streamSettings": {
+        "network": "http",
+        "security": "none",
+        "httpSettings": {
+          "path": "/vmess-ntls",
+          "host": ["$DOMAIN"]
+        }
+      }
+    },
+    {
+      "port": 8443,
+      "protocol": "vless",
+      "settings": {
+        "clients": [{"id": "$uuid"}],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "http",
+        "security": "tls",
+        "tlsSettings": {
+          "certificates": [{
+            "certificateFile": "/etc/xray/xray.crt",
+            "keyFile": "/etc/xray/xray.key"
+          }]
+        },
+        "httpSettings": {
+          "path": "/vless-tls",
+          "host": ["$DOMAIN"]
+        }
+      }
+    },
+    {
+      "port": 8880,
+      "protocol": "vless",
+      "settings": {
+        "clients": [{"id": "$uuid"}],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "http",
+        "security": "none",
+        "httpSettings": {
+          "path": "/vless-ntls",
+          "host": ["$DOMAIN"]
+        }
+      }
+    },
+    {
+      "port": 8443,
+      "protocol": "trojan",
+      "settings": {
+        "clients": [{"password": "$uuid"}]
+      },
+      "streamSettings": {
+        "network": "http",
+        "security": "tls",
+        "tlsSettings": {
+          "certificates": [{
+            "certificateFile": "/etc/xray/xray.crt",
+            "keyFile": "/etc/xray/xray.key"
+          }]
+        },
+        "httpSettings": {
+          "path": "/trojan-tls",
+          "host": ["$DOMAIN"]
+        }
+      }
+    },
+    {
+      "port": 8880,
+      "protocol": "trojan",
+      "settings": {
+        "clients": [{"password": "$uuid"}]
+      },
+      "streamSettings": {
+        "network": "http",
+        "security": "none",
+        "httpSettings": {
+          "path": "/trojan-ntls",
+          "host": ["$DOMAIN"]
+        }
+      }
     }
   ],
   "outbounds": [
