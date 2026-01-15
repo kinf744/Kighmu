@@ -15,6 +15,7 @@ const (
 	configFile = "/etc/xray/config.json"
 )
 
+// Structures JSON
 type Users struct {
 	Vmess  []User `json:"vmess"`
 	Vless  []User `json:"vless"`
@@ -24,7 +25,9 @@ type Users struct {
 type User struct {
 	UUID  string `json:"uuid,omitempty"`
 	Pass  string `json:"password,omitempty"`
+	Name  string `json:"name"`
 	Limit int64  `json:"limit"` // Go
+	Expire string `json:"expire"`
 }
 
 type Stat struct {
@@ -36,29 +39,44 @@ type StatsResponse struct {
 	Stat []Stat `json:"stat"`
 }
 
+// Conversion bytes -> Go
 func bytesToGB(b int64) float64 {
 	return float64(b) / 1073741824
 }
 
+// Désactive l'utilisateur dans config.json et redémarre Xray
+func disableUser(uuid string) {
+	cmd := exec.Command("bash", "-c",
+		fmt.Sprintf(`
+jq --arg u "%s" '
+(.inbounds[].settings.clients) |= map(select(.id != $u and .password != $u))
+' %s > /tmp/config.tmp &&
+mv /tmp/config.tmp %s &&
+systemctl restart xray
+`, uuid, configFile, configFile))
+	cmd.Run()
+}
+
 func main() {
+	// ─── Lecture des stats
 	resp, err := http.Get(apiURL)
 	if err != nil {
 		fmt.Println("❌ Impossible de contacter Xray API")
 		return
 	}
 	defer resp.Body.Close()
-
 	body, _ := ioutil.ReadAll(resp.Body)
 
 	var stats StatsResponse
 	json.Unmarshal(body, &stats)
 
+	// ─── Lecture des utilisateurs
 	data, _ := ioutil.ReadFile(usersFile)
 	var users Users
 	json.Unmarshal(data, &users)
 
+	// ─── Calcul de la consommation
 	usage := make(map[string]int64)
-
 	for _, s := range stats.Stat {
 		if strings.Contains(s.Name, "user>>>") {
 			parts := strings.Split(s.Name, ">>>")
@@ -69,37 +87,47 @@ func main() {
 		}
 	}
 
-	checkUsers := func(uuid string, limit int64) {
-		if used, ok := usage[uuid]; ok {
-			gb := bytesToGB(used)
-			if gb >= float64(limit) {
-				fmt.Printf("🚫 Quota dépassé : %s (%.2f / %d Go)\n", uuid, gb, limit)
-				disableUser(uuid)
-			}
+	// ─── Affichage du panneau
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	fmt.Println("          TRAFFIC D'UTILISATEURS")
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+	totalUsed := 0.0
+
+	printUser := func(proto, id, name, expire string, limit int64) {
+		used := bytesToGB(usage[id])
+		totalUsed += used
+
+		colorStart := "\033[32m" // vert
+		colorEnd := "\033[0m"
+		if used >= float64(limit) {
+			colorStart = "\033[31m" // rouge
+			disableUser(id)
 		}
+
+		expFr := expire
+		if len(expire) > 0 {
+			expFr = expire // tu peux convertir en dd/mm/yyyy si nécessaire
+		}
+
+		fmt.Printf("%-8s %-15s ( %s )   %s%5.2f Go / %d Go%s\n",
+			proto, name, expFr, colorStart, used, limit, colorEnd)
 	}
 
+	// Vmess
 	for _, u := range users.Vmess {
-		checkUsers(u.UUID, u.Limit)
+		printUser("vmess", u.UUID, u.Name, u.Expire, u.Limit)
 	}
+	// Vless
 	for _, u := range users.Vless {
-		checkUsers(u.UUID, u.Limit)
+		printUser("vless", u.UUID, u.Name, u.Expire, u.Limit)
 	}
+	// Trojan
 	for _, u := range users.Trojan {
-		checkUsers(u.Pass, u.Limit)
+		printUser("trojan", u.Pass, u.Name, u.Expire, u.Limit)
 	}
-}
 
-func disableUser(uuid string) {
-	cmd := exec.Command("bash", "-c",
-		fmt.Sprintf(`
-jq --arg u "%s" '
-(.inbounds[].settings.clients) |= map(
-  select(.id != $u and .password != $u)
-)' %s > /tmp/config.tmp &&
-mv /tmp/config.tmp %s &&
-systemctl restart xray
-`, uuid, configFile, configFile),
-	)
-	cmd.Run()
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	fmt.Printf("Consommation totale : %.2f Go\n", totalUsed)
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 }
