@@ -103,13 +103,14 @@ cat > /etc/xray/config.json << EOF
         "network": "ws",
         "security": "tls",
         "tlsSettings": {
-          "certificates": [{
-            "certificateFile": "/etc/xray/xray.crt",
-            "keyFile": "/etc/xray/xray.key"
-          }],
+          "certificates": [
+            {
+              "certificateFile": "/etc/xray/xray.crt",
+              "keyFile": "/etc/xray/xray.key"
+            }
+          ],
           "minVersion": "1.2",
-          "maxVersion": "1.3",
-          "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
+          "maxVersion": "1.3"
         },
         "wsSettings": {
           "path": "/vmess-tls",
@@ -143,13 +144,14 @@ cat > /etc/xray/config.json << EOF
         "network": "ws",
         "security": "tls",
         "tlsSettings": {
-          "certificates": [{
-            "certificateFile": "/etc/xray/xray.crt",
-            "keyFile": "/etc/xray/xray.key"
-          }],
+          "certificates": [
+            {
+              "certificateFile": "/etc/xray/xray.crt",
+              "keyFile": "/etc/xray/xray.key"
+            }
+          ],
           "minVersion": "1.2",
-          "maxVersion": "1.3",
-          "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
+          "maxVersion": "1.3"
         },
         "wsSettings": {
           "path": "/vless-tls",
@@ -170,11 +172,11 @@ cat > /etc/xray/config.json << EOF
         "wsSettings": {
           "path": "/vless-ntls",
           "host": "$DOMAIN"
+        },
+        "sniffing": {
+          "enabled": true,
+          "destOverride": ["http", "tls"]
         }
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": ["http", "tls"]
       }
     },
     {
@@ -188,14 +190,15 @@ cat > /etc/xray/config.json << EOF
         "network": "ws",
         "security": "tls",
         "tlsSettings": {
-          "certificates": [{
-            "certificateFile": "/etc/xray/xray.crt",
-            "keyFile": "/etc/xray/xray.key"
-          }],
+          "certificates": [
+            {
+              "certificateFile": "/etc/xray/xray.crt",
+              "keyFile": "/etc/xray/xray.key"
+            }
+          ],
           "alpn": ["http/1.1"],
           "minVersion": "1.2",
-          "maxVersion": "1.3",
-          "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
+          "maxVersion": "1.3"
         },
         "wsSettings": {
           "path": "/trojan-tls",
@@ -228,10 +231,14 @@ cat > /etc/xray/config.json << EOF
         "network": "http",
         "security": "tls",
         "tlsSettings": {
-          "certificates": [{
-            "certificateFile": "/etc/xray/xray.crt",
-            "keyFile": "/etc/xray/xray.key"
-          }]
+          "certificates": [
+            {
+              "certificateFile": "/etc/xray/xray.crt",
+              "keyFile": "/etc/xray/xray.key"
+            }
+          ],
+          "minVersion": "1.2",
+          "maxVersion": "1.3"
         },
         "httpSettings": {
           "path": "/vmess-tls",
@@ -265,10 +272,14 @@ cat > /etc/xray/config.json << EOF
         "network": "http",
         "security": "tls",
         "tlsSettings": {
-          "certificates": [{
-            "certificateFile": "/etc/xray/xray.crt",
-            "keyFile": "/etc/xray/xray.key"
-          }]
+          "certificates": [
+            {
+              "certificateFile": "/etc/xray/xray.crt",
+              "keyFile": "/etc/xray/xray.key"
+            }
+          ],
+          "minVersion": "1.2",
+          "maxVersion": "1.3"
         },
         "httpSettings": {
           "path": "/vless-tls",
@@ -302,10 +313,14 @@ cat > /etc/xray/config.json << EOF
         "network": "http",
         "security": "tls",
         "tlsSettings": {
-          "certificates": [{
-            "certificateFile": "/etc/xray/xray.crt",
-            "keyFile": "/etc/xray/xray.key"
-          }]
+          "certificates": [
+            {
+              "certificateFile": "/etc/xray/xray.crt",
+              "keyFile": "/etc/xray/xray.key"
+            }
+          ],
+          "minVersion": "1.2",
+          "maxVersion": "1.3"
         },
         "httpSettings": {
           "path": "/trojan-tls",
