@@ -217,6 +217,16 @@ cat > /etc/xray/config.json << EOF
           "host": "$DOMAIN"
         }
       }
+    },
+    {
+      "port": 10085,
+      "listen": "127.0.0.1",
+      "protocol": "dokodemo-door",
+      "settings": {
+        "network": "tcp",
+        "timeout": 0
+      },
+      "tag": "api"
     }
   ],
   "outbounds": [
