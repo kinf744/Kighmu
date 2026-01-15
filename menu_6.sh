@@ -102,8 +102,9 @@ show_menu() {
   echo -e "${BOLD}${YELLOW}[02]${RESET} Créer utilisateur VMess"
   echo -e "${BOLD}${YELLOW}[03]${RESET} Créer utilisateur VLESS"
   echo -e "${BOLD}${YELLOW}[04]${RESET} Créer utilisateur Trojan"
-  echo -e "${BOLD}${YELLOW}[05]${RESET} Supprimer utilisateur Xray"
-  echo -e "${BOLD}${YELLOW}[06]${RESET} Désinstallation complète Xray"
+  echo -e "${BOLD}${YELLOW}[05]${RESET} Consommation Xray en Go"
+  echo -e "${BOLD}${YELLOW}[06]${RESET} Supprimer utilisateur Xray"
+  echo -e "${BOLD}${YELLOW}[07]${RESET} Désinstallation complète Xray"
   echo -e "${BOLD}${RED}[00]${RESET} Quitter"
   echo -e "${CYAN}──────────────────────────────────────────────────────────${RESET}"
   echo -ne "${BOLD}${YELLOW}Choix → ${RESET}"
@@ -390,10 +391,14 @@ while true; do
       read -p "Appuyez sur Entrée pour continuer..."
       ;;
     5)
+  bash $HOME/Kighmu/xray-quota-panel.sh
+  read -p "Appuyez sur Entrée pour revenir..."
+      ;;
+    6)
       delete_user_by_number
       read -p "Appuyez sur Entrée pour continuer..."
       ;;
-    6)
+    7)
       echo -e "${YELLOW}Désinstallation complète de Xray et Trojan en cours...${RESET}"
 
 read -rp "Es-tu sûr de vouloir désinstaller Xray, Trojan-Go et X-UI ? (o/n) : " confirm
