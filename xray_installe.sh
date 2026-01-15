@@ -39,7 +39,7 @@ iptables -S
 
 # Installation Xray
 # latest_version=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest | grep tag_name | cut -d '"' -f4 | sed 's/v//')
-xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v25.3.3/xray-linux-64.zip"
+xraycore_link="https://github.com/XTLS/Xray-core/releases/download/v25.2.1/xray-linux-64.zip"
 
 mkdir -p /tmp/xray_install && cd /tmp/xray_install
 curl -L -o xray.zip "$xraycore_link"
