@@ -143,7 +143,7 @@ create_config() {
       if [[ -f /etc/xray/domain ]]; then
           DOMAIN=$(cat /etc/xray/domain)
       else
-          echo -e "${RED}⚠️ Domaine non défini.${NC}"
+          echo -e "${RED}⚠️ Domaine non défini.${RESET}"
           return 1
       fi
   fi
@@ -151,76 +151,73 @@ create_config() {
   local port_tls=8443
   local port_ntls=8880
   local path_ws_tls path_ws_ntls
-  local link_tls link_ntls
   local uuid
 
   # 🔹 UUID unique
   uuid=$(cat /proc/sys/kernel/random/uuid)
 
+  # 🔹 Définition des chemins
   case "$proto" in
     vmess)
       path_ws_tls="/vmess-tls"
       path_ws_ntls="/vmess-ntls"
 
-      # Ajout dans users.json
-      jq --arg id "$uuid" --argjson lim "$limit" \
-        '.vmess += [{"uuid": $id, "limit": $lim}]' \
-        "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+      jq --arg id "$uuid" --argjson lim "$limit" '.vmess += [{"uuid": $id, "limit": $lim}]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
 
-      # Ajout dans config.json (TLS et non-TLS)
       jq --arg id "$uuid" '
-        (.inbounds[] | select(.protocol=="vmess" and .streamSettings.security=="tls") | .settings.clients)
-          += [{"id": $id,"alterId":0}] |
-        (.inbounds[] | select(.protocol=="vmess" and .streamSettings.security=="none") | .settings.clients)
-          += [{"id": $id,"alterId":0}]
+        (.inbounds[] | select(.protocol=="vmess" and .streamSettings.security=="tls") | .settings.clients) += [{"id": $id,"alterId":0}] |
+        (.inbounds[] | select(.protocol=="vmess" and .streamSettings.security=="none") | .settings.clients) += [{"id": $id,"alterId":0}]
       ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
-
-      # Génération des liens
-      link_tls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"$path_ws_tls\",\"tls\":\"tls\",\"sni\":\"$DOMAIN\"}" | base64 -w0)"
-      link_ntls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_ntls\",\"id\":\"$uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"$path_ws_ntls\",\"tls\":\"none\"}" | base64 -w0)"
       ;;
-
     vless)
       path_ws_tls="/vless-tls"
       path_ws_ntls="/vless-ntls"
 
-      jq --arg id "$uuid" --argjson lim "$limit" \
-        '.vless += [{"uuid": $id, "limit": $lim}]' \
-        "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+      jq --arg id "$uuid" --argjson lim "$limit" '.vless += [{"uuid": $id, "limit": $lim}]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
 
       jq --arg id "$uuid" '
-        (.inbounds[] | select(.protocol=="vless" and .streamSettings.security=="tls") | .settings.clients)
-          += [{"id": $id}] |
-        (.inbounds[] | select(.protocol=="vless" and .streamSettings.security=="none") | .settings.clients)
-          += [{"id": $id}]
+        (.inbounds[] | select(.protocol=="vless" and .streamSettings.security=="tls") | .settings.clients) += [{"id": $id}] |
+        (.inbounds[] | select(.protocol=="vless" and .streamSettings.security=="none") | .settings.clients) += [{"id": $id}]
       ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
-
-      link_tls="vless://$uuid@$DOMAIN:$port_tls?security=tls&type=ws&host=$DOMAIN&path=$path_ws_tls&encryption=none&sni=$DOMAIN#$name"
-      link_ntls="vless://$uuid@$DOMAIN:$port_ntls?security=none&type=ws&host=$DOMAIN&path=$path_ws_ntls&encryption=none#$name"
       ;;
-
     trojan)
       path_ws_tls="/trojan-tls"
       path_ws_ntls="/trojan-ntls"
 
-      jq --arg pw "$uuid" --argjson lim "$limit" \
-        '.trojan += [{"password": $pw, "limit": $lim}]' \
-        "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+      jq --arg pw "$uuid" --argjson lim "$limit" '.trojan += [{"password": $pw, "limit": $lim}]' "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
 
       jq --arg pw "$uuid" '
-        (.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="tls") | .settings.clients)
-          += [{"password": $pw}] |
-        (.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="none") | .settings.clients)
-          += [{"password": $pw}]
+        (.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="tls") | .settings.clients) += [{"password": $pw}] |
+        (.inbounds[] | select(.protocol=="trojan" and .streamSettings.security=="none") | .settings.clients) += [{"password": $pw}]
       ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
-
-      link_tls="trojan://$uuid@$DOMAIN:$port_tls?security=tls&type=ws&path=$path_ws_tls&host=$DOMAIN&sni=$DOMAIN#$name"
-      link_ntls="trojan://$uuid@$DOMAIN:$port_ntls?type=ws&security=none&path=$path_ws_ntls&host=$DOMAIN#$name"
       ;;
-
     *)
-      echo -e "${RED}Protocole inconnu.${NC}"
+      echo -e "${RED}Protocole inconnu.${RESET}"
       return 1
+      ;;
+  esac
+
+  # 🔹 Liens pour WS et HTTPUpgrade
+  local link_tls_ws link_tls_http link_ntls_ws link_ntls_http
+
+  case "$proto" in
+    vmess)
+      link_tls_ws="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"$path_ws_tls\",\"tls\":\"tls\",\"sni\":\"$DOMAIN\"}" | base64 -w0)"
+      link_tls_http="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name-httpupgrade\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$uuid\",\"aid\":0,\"net\":\"http\",\"type\":\"httpupgrade\",\"host\":[\"$DOMAIN\"],\"path\":\"$path_ws_tls\",\"tls\":\"tls\",\"sni\":\"$DOMAIN\"}" | base64 -w0)"
+      link_ntls_ws="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_ntls\",\"id\":\"$uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"$path_ws_ntls\",\"tls\":\"none\"}" | base64 -w0)"
+      link_ntls_http="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name-httpupgrade\",\"add\":\"$DOMAIN\",\"port\":\"$port_ntls\",\"id\":\"$uuid\",\"aid\":0,\"net\":\"http\",\"type\":\"httpupgrade\",\"host\":[\"$DOMAIN\"],\"path\":\"$path_ws_ntls\",\"tls\":\"none\"}" | base64 -w0)"
+      ;;
+    vless)
+      link_tls_ws="vless://$uuid@$DOMAIN:$port_tls?security=tls&type=ws&host=$DOMAIN&path=$path_ws_tls&encryption=none&sni=$DOMAIN#$name"
+      link_tls_http="vless://$uuid@$DOMAIN:$port_tls?security=tls&type=httpupgrade&host=$DOMAIN&path=$path_ws_tls&encryption=none&sni=$DOMAIN#$name-httpupgrade"
+      link_ntls_ws="vless://$uuid@$DOMAIN:$port_ntls?security=none&type=ws&host=$DOMAIN&path=$path_ws_ntls&encryption=none#$name"
+      link_ntls_http="vless://$uuid@$DOMAIN:$port_ntls?security=none&type=httpupgrade&host=$DOMAIN&path=$path_ws_ntls&encryption=none#$name-httpupgrade"
+      ;;
+    trojan)
+      link_tls_ws="trojan://$uuid@$DOMAIN:$port_tls?type=ws&security=tls&path=$path_ws_tls&host=$DOMAIN&sni=$DOMAIN#$name"
+      link_tls_http="trojan://$uuid@$DOMAIN:$port_tls?type=httpupgrade&security=tls&path=$path_ws_tls&host=$DOMAIN&sni=$DOMAIN#$name-httpupgrade"
+      link_ntls_ws="trojan://$uuid@$DOMAIN:$port_ntls?type=ws&security=none&path=$path_ws_ntls&host=$DOMAIN#$name"
+      link_ntls_http="trojan://$uuid@$DOMAIN:$port_ntls?type=httpupgrade&security=none&path=$path_ws_ntls&host=$DOMAIN#$name-httpupgrade"
       ;;
   esac
 
@@ -228,7 +225,7 @@ create_config() {
   local exp_date_iso=$(date -d "+$days days" +"%Y-%m-%d")
   echo "$uuid|$exp_date_iso" >> /etc/xray/users_expiry.list
 
-  # 🔹 Affichage résumé
+  # 🔹 Affichage résumé clair
   echo
   echo -e "${CYAN}==============================${RESET}"
   echo -e "${BOLD}🧩 ${proto^^}${RESET}"
@@ -236,23 +233,20 @@ create_config() {
   echo -e "${YELLOW}📄 Configuration générée pour :${RESET} $name"
   echo "--------------------------------------------------"
   echo -e "➤ DOMAINE : ${YELLOW}$DOMAIN${RESET}"
-  echo -e "${GREEN}➤ PORTs :${RESET}"
-  echo -e "   TLS   : ${MAGENTA}$port_tls${RESET}"
-  echo -e "   NTLS  : ${MAGENTA}$port_ntls${RESET}"
-  echo -e "${GREEN}➤ UUID généré :${RESET} ${MAGENTA}$uuid${RESET}"
-  echo -e "➤ Paths :"
-  echo -e "   TLS   : ${MAGENTA}$path_ws_tls${RESET}"
-  echo -e "   NTLS  : ${MAGENTA}$path_ws_ntls${RESET}"
+  echo -e "${GREEN}➤ PORTs :${RESET} TLS=${MAGENTA}$port_tls${RESET}, Non-TLS=${MAGENTA}$port_ntls${RESET}"
+  echo -e "➤ UUID / Password : ${MAGENTA}$uuid${RESET}"
+  echo -e "➤ Paths : TLS=${MAGENTA}$path_ws_tls${RESET}, Non-TLS=${MAGENTA}$path_ws_ntls${RESET}"
   echo -e "➤ Validité : ${YELLOW}$days jours${RESET} (expire le $(date -d "+$days days" +"%d/%m/%Y"))"
-  echo -e "➤ Nombre total d'utilisateurs : ${BOLD}$limit${RESET}"
+  echo -e "➤ Limite d'appareils : ${BOLD}$limit${RESET}"
   echo
   echo -e "${CYAN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●${RESET}"
-  echo -e "${CYAN}┃ TLS     : ${GREEN}$link_tls${RESET}"
-  echo
-  echo -e "${CYAN}┃ Non‑TLS : ${GREEN}$link_ntls${RESET}"
+  echo -e "${CYAN}┃ TLS WS         : ${GREEN}$link_tls_ws${RESET}"
+  echo -e "${CYAN}┃ TLS HTTPUpgrade: ${GREEN}$link_tls_http${RESET}"
+  echo -e "${CYAN}┃ Non‑TLS WS     : ${GREEN}$link_ntls_ws${RESET}"
+  echo -e "${CYAN}┃ Non‑TLS HTTPUp.: ${GREEN}$link_ntls_http${RESET}"
   echo -e "${CYAN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●${RESET}"
   echo
-  
+
   # 🔹 Redémarrage sécurisé de Xray
   systemctl reload xray 2>/dev/null || systemctl restart xray
 }
