@@ -1,8 +1,7 @@
 // ================================================================
-// sshws.go — TCP RAW Injector + WebSocket → SSH
-// Listener TCP brut (architecture correcte)
-// Go 1.13 | systemd OK
-// Auteur : @kighmu (corrigé définitivement)
+// sshws.go — TCP RAW Injector + WebSocket → SSH (OPTIMISÉ)
+// Go 1.13+ | systemd OK
+// Auteur : @kighmu (optimisé & stabilisé)
 // Licence : MIT
 // ================================================================
 
@@ -21,7 +20,9 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"time"
 )
 
 // =====================
@@ -56,25 +57,21 @@ func acceptKey(key string) string {
 	return base64.StdEncoding.EncodeToString(h.Sum(nil))
 }
 
-func allowedDomain() string {
-	u, err := user.Current()
-	if err != nil {
-		return ""
+func tuneTCP(c net.Conn) {
+	if tc, ok := c.(*net.TCPConn); ok {
+		tc.SetNoDelay(true)
+		tc.SetKeepAlive(true)
+		tc.SetKeepAlivePeriod(20 * time.Second)
+		tc.SetReadBuffer(4 * 1024 * 1024)
+		tc.SetWriteBuffer(4 * 1024 * 1024)
 	}
-	f, err := os.Open(filepath.Join(u.HomeDir, infoFile))
-	if err != nil {
-		return ""
-	}
-	defer f.Close()
+}
 
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
-		if strings.HasPrefix(line, "DOMAIN=") {
-			return strings.Trim(strings.SplitN(line, "=", 2)[1], `"`)
-		}
-	}
-	return ""
+func fastPipe(dst, src net.Conn) {
+	buf := make([]byte, 64*1024) // buffer optimal
+	io.CopyBuffer(dst, src, buf)
+	dst.Close()
+	src.Close()
 }
 
 // =====================
@@ -108,7 +105,7 @@ Type=simple
 User=root
 ExecStart=%s -listen %s -target-host %s -target-port %s
 Restart=always
-RestartSec=1
+RestartSec=0
 LimitNOFILE=1048576
 StandardOutput=journal
 StandardError=journal
@@ -124,70 +121,67 @@ WantedBy=multi-user.target
 }
 
 // =====================
-// WebSocket RAW
+// WebSocket RAW (OPTIMISÉ)
 // =====================
-func handleWebSocket(client net.Conn, first []byte, target string) {
-	req := string(first)
+func handleWebSocket(c net.Conn, first []byte, target string) {
+	tuneTCP(c)
 
 	key := ""
-	for _, line := range strings.Split(req, "\n") {
-		if strings.HasPrefix(strings.ToLower(line), "sec-websocket-key") {
+	sc := bufio.NewScanner(strings.NewReader(string(first)))
+	for sc.Scan() {
+		line := sc.Text()
+		if strings.HasPrefix(strings.ToLower(line), "sec-websocket-key:") {
 			key = strings.TrimSpace(strings.SplitN(line, ":", 2)[1])
+			break
 		}
 	}
 	if key == "" {
 		key = "dGhlIHNhbXBsZSBub25jZQ=="
 	}
 
-	resp := fmt.Sprintf(
-		"HTTP/1.1 101 KIGHMU-KIAJE\r\n"+
-			"Upgrade: websocket\r\n"+
-			"Connection: Upgrade\r\n"+
-			"Sec-WebSocket-Accept: %s\r\n\r\n",
-		acceptKey(key),
-	)
+	resp := "HTTP/1.1 101 KIGHMU_KIAJE\r\n" +
+		"Upgrade: websocket\r\n" +
+		"Connection: Upgrade\r\n" +
+		"Sec-WebSocket-Accept: " + acceptKey(key) + "\r\n\r\n"
 
-	_, _ = client.Write([]byte(resp))
+	c.Write([]byte(resp))
 
-	remote, err := net.Dial("tcp", target)
+	r, err := net.Dial("tcp", target)
 	if err != nil {
-		client.Close()
+		c.Close()
 		return
 	}
+	tuneTCP(r)
 
-	go io.Copy(remote, client)
-	go io.Copy(client, remote)
+	go fastPipe(r, c)
+	go fastPipe(c, r)
 }
 
 // =====================
-// TCP RAW Injector (CORRIGÉ)
+// TCP RAW Injector (OPTIMISÉ)
 // =====================
-func handleTCP(client net.Conn, target string) {
-	// Réponse HTTP d’ouverture du tunnel
-	_, _ = client.Write([]byte(
-		"HTTP/1.1 200 OK KIGHMU-KIAJE\r\n"+
-			"Connection: keep-alive\r\n\r\n",
-	))
+func handleTCP(c net.Conn, target string) {
+	tuneTCP(c)
 
-	// Connexion SSH backend
-	remote, err := net.Dial("tcp", target)
+	c.Write([]byte("HTTP/1.1 200 OK KIGHMU_KIAJE\r\n\r\n"))
+
+	r, err := net.Dial("tcp", target)
 	if err != nil {
-		client.Close()
+		c.Close()
 		return
 	}
+	tuneTCP(r)
 
-	// IMPORTANT :
-	// ❌ aucun payload HTTP n’est envoyé vers SSH
-	// ✅ tunnel TCP brut uniquement
-
-	go io.Copy(remote, client)
-	go io.Copy(client, remote)
+	go fastPipe(r, c)
+	go fastPipe(c, r)
 }
 
 // =====================
 // MAIN
 // =====================
 func main() {
+	runtime.GOMAXPROCS(runtime.NumCPU())
+
 	listen := flag.String("listen", "80", "Listen port")
 	targetHost := flag.String("target-host", "127.0.0.1", "SSH host")
 	targetPort := flag.String("target-port", "22", "SSH port")
@@ -203,7 +197,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Println("🚀 SSHWS WS + TCP RAW actif sur :", *listen)
+	log.Println("🚀 SSHWS WS + TCP RAW OPTIMISÉ actif sur :", *listen)
 
 	for {
 		client, err := ln.Accept()
