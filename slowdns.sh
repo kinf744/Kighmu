@@ -201,6 +201,8 @@ WantedBy=multi-user.target
 EOF
 
 # ===================== NFTABLES (SAFE) =====================
+mkdir -p /etc/nftables.d
+
 cat > /etc/nftables.d/slowdns.nft <<EOF
 table inet slowdns {
   chain prerouting {
