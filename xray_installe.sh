@@ -23,6 +23,7 @@ apt install -y iptables iptables-persistent curl socat xz-utils wget apt-transpo
   gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq ca-certificates libcap2-bin
 
 # Configuration iptables initiale
+netfilter-persistent flush
 iptables -A INPUT -p tcp --dport 22 -j ACCEPT
 iptables -A INPUT -p tcp --dport 8880 -j ACCEPT
 iptables -A INPUT -p udp --dport 8880 -j ACCEPT
@@ -32,7 +33,6 @@ iptables -A INPUT -p tcp --dport 2083 -j ACCEPT
 iptables -A INPUT -p udp --dport 2083 -j ACCEPT
 iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
 iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
-netfilter-persistent flush
 netfilter-persistent save
 echo "netfilter-persistent a appliqué les règles initiales."
 iptables -S
