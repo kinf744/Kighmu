@@ -163,7 +163,7 @@ create_config() {
     vmess)          path_ws_tls="/vmess"; path_ws_ntls="/vmess"; path_grpc="vmess-grpc" ;;
     vless)          path_ws_tls="/vless"; path_ws_ntls="/vless"; path_grpc="vless-grpc" ;;
     trojan)         path_ws_tls="/trojan-ws"; path_ws_ntls="/trojan-ws"; path_grpc="trojan-grpc" ;;
-    shadowsocks)    path_ws_tls="/ss-ws"; path_ws_ntls="/ss-ws"; path_grpc="ss-grpc" ;;
+    shadowsocks)    path_ws_tls="/ss-ws"; path_ws_ntls="/ss-ws"; path_grpc="" ;;
     *) echo -e "${RED}Protocole inconnu : $proto${RESET}"; return 1 ;;
   esac
 
@@ -185,12 +185,12 @@ create_config() {
       ;;
     trojan)
       jq --arg pw "$uuid" --arg name "$name" --arg tag "$tag" --arg exp "$exp_date_iso" --argjson lim "$limit" \
-         '.trojan += [{"password": $pw, "name": $name, "tag": $tag, "limit_gb": $lim, "used_gb":0, "expire": $exp}]' \
+         '.trojan += [{"password": $pw, "name": $name, "tag": $tag, "limit_gb": $lim, "used_gb":0,"expire": $exp}]' \
          "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
       ;;
     shadowsocks)
       jq --arg pw "$uuid" --arg name "$name" --arg tag "$tag" --arg exp "$exp_date_iso" --argjson lim "$limit" \
-         '.shadowsocks += [{"password": $pw, "method":"aes-128-gcm","name":$name,"tag":$tag,"limit_gb":$lim,"used_gb":0,"expire":$exp}]' \
+         '.shadowsocks += [{"password": $pw,"method":"aes-128-gcm","name":$name,"tag":$tag,"limit_gb":$lim,"used_gb":0,"expire":$exp}]' \
          "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
       ;;
   esac
@@ -219,53 +219,36 @@ create_config() {
       ;;
   esac
 
-  # 🔹 Génération des liens pour le client
+  # 🔹 Génération des liens
   local link_tls link_ntls link_grpc link_ss_tls link_ss_ntls
+
+  # Fonction interne pour encoder SS
+  encode_ss() { echo -n "aes-128-gcm:$1" | base64 -w0; }
+
   case "$proto" in
     vmess)
       local vmess_json
       vmess_json=$(jq -n \
-        --arg v "2" \
-        --arg ps "$name" \
-        --arg add "$DOMAIN" \
-        --arg port "$port_tls" \
-        --arg id "$uuid" \
-        --arg aid "0" \
-        --arg net "ws" \
-        --arg type "none" \
-        --arg host "$DOMAIN" \
-        --arg path "$path_ws_tls" \
-        --arg tls "tls" \
+        --arg v "2" --arg ps "$name" --arg add "$DOMAIN" --arg port "$port_tls" --arg id "$uuid" \
+        --arg aid "0" --arg net "ws" --arg type "none" --arg host "$DOMAIN" --arg path "$path_ws_tls" --arg tls "tls" \
         '{
-          v: $v,
-          ps: $ps,
-          add: $add,
-          port: $port,
-          id: $id,
-          aid: ($aid|tonumber),
-          net: $net,
-          type: $type,
-          host: $host,
-          path: $path,
-          tls: $tls
+          v: $v, ps: $ps, add: $add, port: $port, id: $id, aid: ($aid|tonumber), net: $net, type: $type, host: $host, path: $path, tls: $tls
         }')
       link_tls="vmess://$(echo -n "$vmess_json" | base64 -w0)"
-      link_ntls="${proto}://$uuid@$DOMAIN:$port_ntls?security=none&type=ws&path=$path_ws_ntls&host=$DOMAIN#$name"
-      link_grpc="${proto}://$uuid@$DOMAIN:$port_grpc_tls?mode=grpc&security=tls&serviceName=$path_grpc#$name"
-      link_ss_tls="ss://aes-128-gcm:$uuid@$DOMAIN:$port_tls?path=$path_ws_tls&security=tls#$name"
-      link_ss_ntls="ss://aes-128-gcm:$uuid@$DOMAIN:$port_ntls?path=$path_ws_ntls&security=none#$name"
+      link_ntls="vmess://$uuid@$DOMAIN:$port_ntls?security=none&type=ws&path=$path_ws_ntls&host=$DOMAIN#$name"
+      link_grpc="vmess://$uuid@$DOMAIN:$port_grpc_tls?mode=grpc&security=tls&serviceName=$path_grpc#$name"
       ;;
-    *)
+    vless|trojan)
       link_tls="${proto}://$uuid@$DOMAIN:$port_tls?security=tls&type=ws&path=$path_ws_tls&host=$DOMAIN&sni=$DOMAIN#$name"
       link_ntls="${proto}://$uuid@$DOMAIN:$port_ntls?security=none&type=ws&path=$path_ws_ntls&host=$DOMAIN#$name"
       link_grpc="${proto}://$uuid@$DOMAIN:$port_grpc_tls?mode=grpc&security=tls&serviceName=$path_grpc#$name"
-
-      # 🔹 Shadowsocks Base64 style
-      local ss_b64_tls ss_b64_ntls
-      ss_b64_tls=$(encode_ss "$uuid")
-      ss_b64_ntls=$(encode_ss "$uuid")
-      link_ss_tls="ss://${ss_b64_tls}@${DOMAIN}:${port_tls}?path=${path_ws_tls}&security=tls&host=${DOMAIN}&type=ws&sni=${DOMAIN}#${name}"
-      link_ss_ntls="ss://${ss_b64_ntls}@${DOMAIN}:${port_ntls}?path=${path_ws_ntls}&security=none&host=${DOMAIN}&type=ws&sni=${DOMAIN}#${name}"
+      ;;
+    shadowsocks)
+      local ss_b64
+      ss_b64=$(encode_ss "$uuid")
+      link_ss_tls="ss://${ss_b64}@${DOMAIN}:${port_tls}?path=${path_ws_tls}&security=tls&host=${DOMAIN}&type=ws&sni=${DOMAIN}#${name}"
+      link_ss_ntls="ss://${ss_b64}@${DOMAIN}:${port_ntls}?path=${path_ws_ntls}&security=none&host=${DOMAIN}&type=ws&sni=${DOMAIN}#${name}"
+      ;;
   esac
 
   # 🔹 Sauvegarde expiration
@@ -276,7 +259,6 @@ create_config() {
   echo -e "${CYAN}==============================${RESET}"
   echo -e "${BOLD}🧩 ${proto^^} – $name${RESET}"
   echo -e "${CYAN}==============================${RESET}"
-  echo -e "${YELLOW}📄 Utilisateur :${RESET} $name"
   echo -e "${GREEN}➤ Ports :${RESET} TLS [$port_tls] | Non-TLS [$port_ntls] | gRPC [$port_grpc_tls]"
   echo -e "${GREEN}➤ UUID / Password :${RESET} $uuid"
   echo -e "${GREEN}➤ Paths WS :${RESET} TLS [$path_ws_tls] | Non-TLS [$path_ws_ntls]"
@@ -286,11 +268,11 @@ create_config() {
   echo -e "${GREEN}➤ Expiration :${RESET} $exp_date_iso"
   echo
   echo -e "${CYAN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●${RESET}"
-  echo -e "${CYAN}┃ TLS WS      : ${GREEN}$link_tls${RESET}"
-  echo -e "${CYAN}┃ Non-TLS WS  : ${GREEN}$link_ntls${RESET}"
-  echo -e "${CYAN}┃ gRPC TLS    : ${GREEN}$link_grpc${RESET}"
-  echo -e "${CYAN}┃ SS TLS WS   : ${GREEN}$link_ss_tls${RESET}"
-  echo -e "${CYAN}┃ SS Non-TLS  : ${GREEN}$link_ss_ntls${RESET}"
+  [[ $proto != "shadowsocks" ]] && echo -e "${CYAN}┃ TLS WS      : ${GREEN}$link_tls${RESET}"
+  [[ $proto != "shadowsocks" ]] && echo -e "${CYAN}┃ Non-TLS WS  : ${GREEN}$link_ntls${RESET}"
+  [[ $proto != "shadowsocks" ]] && echo -e "${CYAN}┃ gRPC TLS    : ${GREEN}$link_grpc${RESET}"
+  [[ $proto == "shadowsocks" ]] && echo -e "${CYAN}┃ TLS WS      : ${GREEN}$link_ss_tls${RESET}"
+  [[ $proto == "shadowsocks" ]] && echo -e "${CYAN}┃ Non-TLS WS  : ${GREEN}$link_ss_ntls${RESET}"
   echo -e "${CYAN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●${RESET}"
   echo
 
