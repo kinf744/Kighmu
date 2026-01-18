@@ -147,35 +147,34 @@ create_config() {
       if [[ -f /etc/xray/domain ]]; then
           DOMAIN=$(cat /etc/xray/domain)
       else
-          echo -e "${RED}⚠️ Domaine non défini.${NC}"
+          echo -e "${RED}⚠️ Domaine non défini.${RESET}"
           return 1
       fi
   fi
 
-  # 🔹 Ports et paths
+  # 🔹 Ports standards
   local port_tls=8443
   local port_ntls=8880
-  local port_grpc_tls
-  local path_ws_tls path_ws_ntls path_grpc
-  local link_tls link_ntls link_grpc link_ss_tls link_ss_ntls
-  local uuid tag
+  local port_grpc_tls=8443
 
-  # 🔹 UUID + tag
+  # 🔹 Paths par protocole
+  local path_ws_tls path_ws_ntls path_grpc
+  case "$proto" in
+    vmess)          path_ws_tls="/vmess"; path_ws_ntls="/vmess"; path_grpc="vmess-grpc" ;;
+    vless)          path_ws_tls="/vless"; path_ws_ntls="/vless"; path_grpc="vless-grpc" ;;
+    trojan)         path_ws_tls="/trojan-ws"; path_ws_ntls="/trojan-ws"; path_grpc="trojan-grpc" ;;
+    shadowsocks)    path_ws_tls="/ss-ws"; path_ws_ntls="/ss-ws"; path_grpc="ss-grpc" ;;
+    *) echo -e "${RED}Protocole inconnu : $proto${RESET}"; return 1 ;;
+  esac
+
+  # 🔹 UUID ou mot de passe
+  local uuid tag
   uuid=$(cat /proc/sys/kernel/random/uuid)
   tag="${proto}_${name}_${uuid:0:8}"
 
   # 🔹 Date d’expiration
   local exp_date_iso
   exp_date_iso=$(date -d "+$days days" +"%Y-%m-%d")
-
-  # 🔹 Assignation des ports gRPC selon le protocole
-  case "$proto" in
-    vmess) port_grpc_tls=8443; path_ws_tls="/vmess"; path_ws_ntls="/vmess"; path_grpc="vmess-grpc" ;;
-    vless) port_grpc_tls=8443; path_ws_tls="/vless"; path_ws_ntls="/vless"; path_grpc="vless-grpc" ;;
-    trojan) port_grpc_tls=8443; path_ws_tls="/trojan-ws"; path_ws_ntls="/trojan-ws"; path_grpc="trojan-grpc" ;;
-    shadowsocks) port_grpc_tls=8443; path_ws_tls="/ss-ws"; path_ws_ntls="/ss-ws"; path_grpc="ss-grpc" ;;
-    *) echo -e "${RED}Protocole inconnu : $proto${NC}"; return 1 ;;
-  esac
 
   # 🔹 Mise à jour users.json
   case "$proto" in
@@ -220,7 +219,8 @@ create_config() {
       ;;
   esac
 
-  # 🔹 Génération des liens
+  # 🔹 Génération des liens pour le client
+  local link_tls link_ntls link_grpc link_ss_tls link_ss_ntls
   link_tls="${proto}://$uuid@$DOMAIN:$port_tls?security=tls&type=ws&path=$path_ws_tls&host=$DOMAIN&sni=$DOMAIN#$name"
   link_ntls="${proto}://$uuid@$DOMAIN:$port_ntls?security=none&type=ws&path=$path_ws_ntls&host=$DOMAIN#$name"
   link_grpc="${proto}://$uuid@$DOMAIN:$port_grpc_tls?mode=grpc&security=tls&serviceName=$path_grpc#$name"
@@ -230,7 +230,7 @@ create_config() {
   # 🔹 Sauvegarde expiration
   echo "$uuid|$exp_date_iso" >> /etc/xray/users_expiry.list
 
-  # 🔹 Affichage final complet
+  # 🔹 Affichage complet après création
   echo
   echo -e "${CYAN}==============================${RESET}"
   echo -e "${BOLD}🧩 ${proto^^} – $name${RESET}"
