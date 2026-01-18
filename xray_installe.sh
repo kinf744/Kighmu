@@ -19,7 +19,7 @@ fi
 EMAIL="adrienkiaje@gmail.com"
 
 apt update
-apt install -y iptables iptables-persistent curl socat xz-utils wget apt-transport-https \
+apt install -y iptables nginx iptables-persistent curl socat xz-utils wget apt-transport-https \
   gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq ca-certificates libcap2-bin
 
 # Configuration iptables initiale
