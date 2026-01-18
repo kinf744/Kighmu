@@ -168,8 +168,8 @@ create_config() {
 
   case "$proto" in
     vmess)
-      path_ws_tls="/vmess-tls"
-      path_ws_ntls="/vmess-ntls"
+      path_ws_tls="/vmess"
+      path_ws_ntls="/vmess"
 
       # users.json
       jq --arg id "$uuid" --arg name "$name" --arg tag "$tag" --arg exp "$exp_date_iso" --argjson lim "$limit" \
@@ -195,8 +195,8 @@ create_config() {
       ;;
 
     vless)
-      path_ws_tls="/vless-tls"
-      path_ws_ntls="/vless-ntls"
+      path_ws_tls="/vless"
+      path_ws_ntls="/vless"
 
       jq --arg id "$uuid" --arg name "$name" --arg tag "$tag" --arg exp "$exp_date_iso" --argjson lim "$limit" \
         '.vless += [{
@@ -220,8 +220,8 @@ create_config() {
       ;;
 
     trojan)
-      path_ws_tls="/trojan-tls"
-      path_ws_ntls="/trojan-ntls"
+      path_ws_tls="/trojan-ws"
+      path_ws_ntls="/trojan-ws"
 
       jq --arg pw "$uuid" --arg name "$name" --arg tag "$tag" --arg exp "$exp_date_iso" --argjson lim "$limit" \
         '.trojan += [{
