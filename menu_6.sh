@@ -199,7 +199,7 @@ create_config() {
   case "$proto" in
     vmess)
       jq --arg id "$uuid" --arg tag "$tag" \
-         '(.inbounds[] | select(.protocol=="vmess") | .settings.clients) += [{"id":$id,"alterId":0,"email":$tag}]' \
+         '(.inbounds[] | select(.protocol=="vmess") | .settings.clients //= []) += [{"id":$id,"alterId":0,"email":$tag}]' \
          "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
       ;;
     vless)
