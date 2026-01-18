@@ -425,8 +425,8 @@ read -rp "Es-tu sûr de vouloir désinstaller Xray, Trojan-Go et X-UI ? (o/n) : 
 case "$confirm" in
   [oO]|[yY]|[yY][eE][sS])
     echo -e "${GREEN}Arrêt des services...${NC}"
-    systemctl stop xray trojan-go x-ui 2>/dev/null || true
-    systemctl disable xray trojan-go x-ui 2>/dev/null || true
+    systemctl stop xray nginx trojan-go x-ui 2>/dev/null || true
+    systemctl disable xray nginx trojan-go x-ui 2>/dev/null || true
 
     echo -e "${GREEN}Fermeture des ports utilisés...${NC}"
     for port in 8880 8443 2087 2083; do
