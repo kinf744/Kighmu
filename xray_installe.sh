@@ -469,13 +469,10 @@ server {
 }
 
 systemctl daemon-reload
-systemctl enable xray
+systemctl enable xray nginx
 
 # Redémarrage du service
-if systemctl restart xray; then
-if systemctl restart nginx; then
-if systemctl enable runn; then
-if systemctl restart runn; then
+if systemctl restart xray nginx; then
     # Vérification immédiate
     sleep 2
     if systemctl is-active --quiet xray; then
