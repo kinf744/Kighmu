@@ -259,9 +259,13 @@ create_config() {
       link_tls="${proto}://$uuid@$DOMAIN:$port_tls?security=tls&type=ws&path=$path_ws_tls&host=$DOMAIN&sni=$DOMAIN#$name"
       link_ntls="${proto}://$uuid@$DOMAIN:$port_ntls?security=none&type=ws&path=$path_ws_ntls&host=$DOMAIN#$name"
       link_grpc="${proto}://$uuid@$DOMAIN:$port_grpc_tls?mode=grpc&security=tls&serviceName=$path_grpc#$name"
-      link_ss_tls="ss://aes-128-gcm:$uuid@$DOMAIN:$port_tls?path=$path_ws_tls&security=tls#$name"
-      link_ss_ntls="ss://aes-128-gcm:$uuid@$DOMAIN:$port_ntls?path=$path_ws_ntls&security=none#$name"
-      ;;
+
+      # 🔹 Shadowsocks Base64 style
+      local ss_b64_tls ss_b64_ntls
+      ss_b64_tls=$(encode_ss "$uuid")
+      ss_b64_ntls=$(encode_ss "$uuid")
+      link_ss_tls="ss://${ss_b64_tls}@${DOMAIN}:${port_tls}?path=${path_ws_tls}&security=tls&host=${DOMAIN}&type=ws&sni=${DOMAIN}#${name}"
+      link_ss_ntls="ss://${ss_b64_ntls}@${DOMAIN}:${port_ntls}?path=${path_ws_ntls}&security=none&host=${DOMAIN}&type=ws&sni=${DOMAIN}#${name}"
   esac
 
   # 🔹 Sauvegarde expiration
