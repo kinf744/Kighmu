@@ -353,6 +353,8 @@ RestartPreventExitStatus=23
 WantedBy=multi-user.target
 EOF
 
+DOMAIN=$(cat /etc/xray/domain)
+
 cat > /etc/nginx/conf.d/xray.conf << EOF
 # ========================================
 # WS + gRPC TLS (port 8443)
