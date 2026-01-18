@@ -170,10 +170,10 @@ create_config() {
 
   # 🔹 Assignation des ports gRPC selon le protocole
   case "$proto" in
-    vmess) port_grpc_tls=31234; path_ws_tls="/vmess"; path_ws_ntls="/vmess"; path_grpc="vmess-grpc" ;;
-    vless) port_grpc_tls=24456; path_ws_tls="/vless"; path_ws_ntls="/vless"; path_grpc="vless-grpc" ;;
-    trojan) port_grpc_tls=33456; path_ws_tls="/trojan-ws"; path_ws_ntls="/trojan-ws"; path_grpc="trojan-grpc" ;;
-    shadowsocks) port_grpc_tls=30310; path_ws_tls="/ss-ws"; path_ws_ntls="/ss-ws"; path_grpc="ss-grpc" ;;
+    vmess) port_grpc_tls=8443; path_ws_tls="/vmess"; path_ws_ntls="/vmess"; path_grpc="vmess-grpc" ;;
+    vless) port_grpc_tls=8443; path_ws_tls="/vless"; path_ws_ntls="/vless"; path_grpc="vless-grpc" ;;
+    trojan) port_grpc_tls=8443; path_ws_tls="/trojan-ws"; path_ws_ntls="/trojan-ws"; path_grpc="trojan-grpc" ;;
+    shadowsocks) port_grpc_tls=8443; path_ws_tls="/ss-ws"; path_ws_ntls="/ss-ws"; path_grpc="ss-grpc" ;;
     *) echo -e "${RED}Protocole inconnu : $proto${NC}"; return 1 ;;
   esac
 
