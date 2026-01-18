@@ -147,145 +147,96 @@ create_config() {
       if [[ -f /etc/xray/domain ]]; then
           DOMAIN=$(cat /etc/xray/domain)
       else
-          echo -e "${RED}⚠️ Domaine non défini.${RESET}"
+          echo -e "${RED}⚠️ Domaine non défini.${NC}"
           return 1
       fi
   fi
 
+  # 🔹 Ports et paths
   local port_tls=8443
   local port_ntls=8880
-  local port_grpc
+  local port_grpc_tls
   local path_ws_tls path_ws_ntls path_grpc
-  local link_tls link_ntls link_grpc
+  local link_tls link_ntls link_grpc link_ss_tls link_ss_ntls
   local uuid tag
+
+  # 🔹 UUID + tag
   uuid=$(cat /proc/sys/kernel/random/uuid)
   tag="${proto}_${name}_${uuid:0:8}"
+
+  # 🔹 Date d’expiration
   local exp_date_iso
   exp_date_iso=$(date -d "+$days days" +"%Y-%m-%d")
 
-  # Définition des paths et ports gRPC
+  # 🔹 Assignation des ports gRPC selon le protocole
   case "$proto" in
-    vmess)
-      path_ws_tls="/vmess"
-      path_ws_ntls="/vmess"
-      path_grpc="vmess-grpc"
-      port_grpc=31234
-      ;;
-    vless)
-      path_ws_tls="/vless"
-      path_ws_ntls="/vless"
-      path_grpc="vless-grpc"
-      port_grpc=24456
-      ;;
-    trojan)
-      path_ws_tls="/trojan-ws"
-      path_ws_ntls="/trojan-ws"
-      path_grpc="trojan-grpc"
-      port_grpc=33456
-      ;;
-    ss)
-      path_ws_tls="/ss-ws"
-      path_ws_ntls="/ss-ws"
-      path_grpc="ss-grpc"
-      port_grpc=30310
-      ;;
-    *)
-      echo -e "${RED}Protocole inconnu : $proto${RESET}"
-      return 1
-      ;;
+    vmess) port_grpc_tls=31234; path_ws_tls="/vmess"; path_ws_ntls="/vmess"; path_grpc="vmess-grpc" ;;
+    vless) port_grpc_tls=24456; path_ws_tls="/vless"; path_ws_ntls="/vless"; path_grpc="vless-grpc" ;;
+    trojan) port_grpc_tls=33456; path_ws_tls="/trojan-ws"; path_ws_ntls="/trojan-ws"; path_grpc="trojan-grpc" ;;
+    shadowsocks) port_grpc_tls=30310; path_ws_tls="/ss-ws"; path_ws_ntls="/ss-ws"; path_grpc="ss-grpc" ;;
+    *) echo -e "${RED}Protocole inconnu : $proto${NC}"; return 1 ;;
   esac
 
   # 🔹 Mise à jour users.json
   case "$proto" in
     vmess|vless)
       jq --arg id "$uuid" --arg name "$name" --arg tag "$tag" --arg exp "$exp_date_iso" --argjson lim "$limit" \
-        ".${proto} += [{
-          \"uuid\": \$id,
-          \"name\": \$name,
-          \"tag\": \$tag,
-          \"limit_gb\": \$lim,
-          \"used_gb\": 0,
-          \"expire\": \$exp
-        }]" "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+         ".${proto} += [{\"uuid\": \"$uuid\", \"name\": \"$name\", \"tag\": \"$tag\", \"limit_gb\": $limit, \"used_gb\":0, \"expire\": \"$exp_date_iso\"}]" \
+         "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
       ;;
-    trojan|ss)
+    trojan)
       jq --arg pw "$uuid" --arg name "$name" --arg tag "$tag" --arg exp "$exp_date_iso" --argjson lim "$limit" \
-        ".${proto} += [{
-          \"password\": \$pw,
-          \"name\": \$name,
-          \"tag\": \$tag,
-          \"limit_gb\": \$lim,
-          \"used_gb\": 0,
-          \"expire\": \$exp
-        }]" "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+         '.trojan += [{"password": $pw, "name": $name, "tag": $tag, "limit_gb": $lim, "used_gb":0, "expire": $exp}]' \
+         "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
+      ;;
+    shadowsocks)
+      jq --arg pw "$uuid" --arg name "$name" --arg tag "$tag" --arg exp "$exp_date_iso" --argjson lim "$limit" \
+         '.shadowsocks += [{"password": $pw, "method":"aes-128-gcm","name":$name,"tag":$tag,"limit_gb":$lim,"used_gb":0,"expire":$exp}]' \
+         "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
       ;;
   esac
 
   # 🔹 Mise à jour config.json
   case "$proto" in
-    vmess|vless)
-      # WS TLS
-      jq --arg id "$uuid" --arg tag "$tag" '
-        (.inbounds[] | select(.protocol==$proto and .streamSettings.network=="ws" and .streamSettings.security=="tls") | .settings.clients)
-          += [{"id": $id, "email": $tag}] |
-        (.inbounds[] | select(.protocol==$proto and .streamSettings.network=="ws" and .streamSettings.security=="none") | .settings.clients)
-          += [{"id": $id, "email": $tag}] |
-        (.inbounds[] | select(.protocol==$proto and .streamSettings.network=="grpc") | .settings.clients)
-          += [{"id": $id, "email": $tag}]
-      ' --arg proto "$proto" "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
-      ;;
-    trojan)
-      jq --arg pw "$uuid" --arg tag "$tag" '
-        (.inbounds[] | select(.protocol=="trojan" and .streamSettings.network=="ws") | .settings.clients)
-          += [{"password": $pw, "email": $tag}] |
-        (.inbounds[] | select(.protocol=="trojan" and .streamSettings.network=="grpc") | .settings.clients)
-          += [{"password": $pw, "email": $tag}]
-      ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
-      ;;
-    ss)
-      jq --arg pw "$uuid" --arg tag "$tag" '
-        (.inbounds[] | select(.protocol=="shadowsocks" and .streamSettings.network=="ws") | .settings.clients)
-          += [{"password": $pw, "email": $tag}] |
-        (.inbounds[] | select(.protocol=="shadowsocks" and .streamSettings.network=="grpc") | .settings.clients)
-          += [{"password": $pw, "email": $tag}]
-      ' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
-      ;;
-  esac
-
-  # 🔹 Sauvegarde date d'expiration
-  echo "$uuid|$exp_date_iso" >> /etc/xray/users_expiry.list
-
-  # 🔹 Génération des liens
-  case "$proto" in
     vmess)
-      link_tls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"$path_ws_tls\",\"tls\":\"tls\",\"sni\":\"$DOMAIN\"}" | base64 -w0)"
-      link_ntls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_ntls\",\"id\":\"$uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"$path_ws_ntls\",\"tls\":\"none\"}" | base64 -w0)"
-      link_grpc="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_grpc\",\"id\":\"$uuid\",\"aid\":0,\"net\":\"grpc\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"$path_grpc\",\"tls\":\"tls\",\"sni\":\"$DOMAIN\"}" | base64 -w0)"
+      jq --arg id "$uuid" --arg tag "$tag" \
+         '(.inbounds[] | select(.protocol=="vmess") | .settings.clients) += [{"id":$id,"alterId":0,"email":$tag}]' \
+         "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
       ;;
     vless)
-      link_tls="vless://$uuid@$DOMAIN:$port_tls?security=tls&type=ws&host=$DOMAIN&path=$path_ws_tls&encryption=none&sni=$DOMAIN#$name"
-      link_ntls="vless://$uuid@$DOMAIN:$port_ntls?security=none&type=ws&host=$DOMAIN&path=$path_ws_ntls&encryption=none#$name"
-      link_grpc="vless://$uuid@$DOMAIN:$port_grpc?mode=gun&security=tls&type=grpc&serviceName=$path_grpc&sni=$DOMAIN#$name"
+      jq --arg id "$uuid" --arg tag "$tag" \
+         '(.inbounds[] | select(.protocol=="vless") | .settings.clients) += [{"id":$id,"email":$tag}]' \
+         "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
       ;;
     trojan)
-      link_tls="trojan://$uuid@$DOMAIN:$port_tls?security=tls&type=ws&path=$path_ws_tls&host=$DOMAIN&sni=$DOMAIN#$name"
-      link_ntls="trojan://$uuid@$DOMAIN:$port_ntls?type=ws&security=none&path=$path_ws_ntls&host=$DOMAIN#$name"
-      link_grpc="trojan://$uuid@$DOMAIN:$port_grpc?type=grpc&security=tls&serviceName=$path_grpc#$name"
+      jq --arg pw "$uuid" --arg tag "$tag" \
+         '(.inbounds[] | select(.protocol=="trojan") | .settings.clients) += [{"password":$pw,"email":$tag}]' \
+         "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
       ;;
-    ss)
-      link_tls="ss://${uuid}@${DOMAIN}:${port_tls}?plugin=v2ray-plugin;path=${path_ws_tls};tls#${name}"
-      link_ntls="ss://${uuid}@${DOMAIN}:${port_ntls}?plugin=v2ray-plugin;path=${path_ws_ntls}#${name}"
-      link_grpc="ss://${uuid}@${DOMAIN}:${port_grpc}?plugin=v2ray-plugin;mode=grpc;serviceName=${path_grpc};tls#${name}"
+    shadowsocks)
+      jq --arg pw "$uuid" --arg tag "$tag" \
+         '(.inbounds[] | select(.protocol=="shadowsocks") | .settings.clients) += [{"password":$pw,"method":"aes-128-gcm","email":$tag}]' \
+         "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
       ;;
   esac
 
-  # 🔹 Affichage complet
+  # 🔹 Génération des liens
+  link_tls="${proto}://$uuid@$DOMAIN:$port_tls?security=tls&type=ws&path=$path_ws_tls&host=$DOMAIN&sni=$DOMAIN#$name"
+  link_ntls="${proto}://$uuid@$DOMAIN:$port_ntls?security=none&type=ws&path=$path_ws_ntls&host=$DOMAIN#$name"
+  link_grpc="${proto}://$uuid@$DOMAIN:$port_grpc_tls?mode=grpc&security=tls&serviceName=$path_grpc#$name"
+  link_ss_tls="ss://aes-128-gcm:$uuid@$DOMAIN:$port_tls?path=$path_ws_tls&security=tls#$name"
+  link_ss_ntls="ss://aes-128-gcm:$uuid@$DOMAIN:$port_ntls?path=$path_ws_ntls&security=none#$name"
+
+  # 🔹 Sauvegarde expiration
+  echo "$uuid|$exp_date_iso" >> /etc/xray/users_expiry.list
+
+  # 🔹 Affichage final complet
   echo
   echo -e "${CYAN}==============================${RESET}"
   echo -e "${BOLD}🧩 ${proto^^} – $name${RESET}"
   echo -e "${CYAN}==============================${RESET}"
   echo -e "${YELLOW}📄 Utilisateur :${RESET} $name"
-  echo -e "${GREEN}➤ Ports :${RESET} TLS [$port_tls] | Non-TLS [$port_ntls] | gRPC [$port_grpc]"
+  echo -e "${GREEN}➤ Ports :${RESET} TLS [$port_tls] | Non-TLS [$port_ntls] | gRPC [$port_grpc_tls]"
   echo -e "${GREEN}➤ UUID / Password :${RESET} $uuid"
   echo -e "${GREEN}➤ Paths WS :${RESET} TLS [$path_ws_tls] | Non-TLS [$path_ws_ntls]"
   echo -e "${GREEN}➤ gRPC ServiceName :${RESET} $path_grpc"
@@ -294,13 +245,15 @@ create_config() {
   echo -e "${GREEN}➤ Expiration :${RESET} $exp_date_iso"
   echo
   echo -e "${CYAN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●${RESET}"
-  echo -e "${CYAN}┃ TLS      : ${GREEN}$link_tls${RESET}"
-  echo -e "${CYAN}┃ Non-TLS  : ${GREEN}$link_ntls${RESET}"
-  echo -e "${CYAN}┃ gRPC     : ${GREEN}$link_grpc${RESET}"
+  echo -e "${CYAN}┃ TLS WS      : ${GREEN}$link_tls${RESET}"
+  echo -e "${CYAN}┃ Non-TLS WS  : ${GREEN}$link_ntls${RESET}"
+  echo -e "${CYAN}┃ gRPC TLS    : ${GREEN}$link_grpc${RESET}"
+  echo -e "${CYAN}┃ SS TLS WS   : ${GREEN}$link_ss_tls${RESET}"
+  echo -e "${CYAN}┃ SS Non-TLS  : ${GREEN}$link_ss_ntls${RESET}"
   echo -e "${CYAN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●${RESET}"
   echo
 
-  # 🔹 Redémarrage sécurisé Xray
+  # 🔹 Redémarrage sécurisé de Xray
   systemctl reload xray 2>/dev/null || systemctl restart xray
 }
 
