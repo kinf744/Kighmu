@@ -355,14 +355,17 @@ EOF
 
 cat > /etc/nginx/conf.d/xray.conf << EOF
 server {
-    listen 80;
-    listen [::]:80;
+    listen 81;
+    listen [::]:81;
     server_name $DOMAIN *.$DOMAIN;
 
     # Redirige tout vers HTTPS
     return 301 https://$host$request_uri;
 }
 
+# ----------------------------
+# TLS WS / gRPC (port 8443)
+# ----------------------------
 server {
     listen 8443 ssl http2;
     listen [::]:8443 ssl http2;
@@ -376,7 +379,7 @@ server {
     ssl_protocols TLSv1.2 TLSv1.3;
 
     # ----------------------------
-    # WebSocket locations
+    # WebSocket TLS
     # ----------------------------
     location = /vless {
         proxy_redirect off;
@@ -423,7 +426,7 @@ server {
     }
 
     # ----------------------------
-    # gRPC locations
+    # gRPC TLS
     # ----------------------------
     location ^~ /vless-grpc {
         grpc_pass grpc://127.0.0.1:24456;
@@ -454,11 +457,11 @@ server {
     }
 
     # ----------------------------
-    # Fallback pour le site / HTML
+    # Fallback site
     # ----------------------------
     location / {
         proxy_redirect off;
-        proxy_pass http://127.0.0.1:700; # ton backend web si nécessaire
+        proxy_pass http://127.0.0.1:700; # backend web
         proxy_http_version 1.1;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -467,6 +470,79 @@ server {
         proxy_set_header Host $http_host;
     }
 }
+
+# ----------------------------
+# WS NTLS (port 8880) – non TLS
+# ----------------------------
+server {
+    listen 8880;
+    listen [::]:8880;
+    server_name $DOMAIN *.$DOMAIN;
+
+    root /home/vps/public_html;
+
+    # ----------------------------
+    # WebSocket NTLS
+    # ----------------------------
+    location = /vless-ntls {
+        proxy_redirect off;
+        proxy_pass http://127.0.0.1:14016;
+        proxy_http_version 1.1;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $http_host;
+    }
+
+    location = /vmess-ntls {
+        proxy_redirect off;
+        proxy_pass http://127.0.0.1:23456;
+        proxy_http_version 1.1;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $http_host;
+    }
+
+    location = /trojan-ntls {
+        proxy_redirect off;
+        proxy_pass http://127.0.0.1:25432;
+        proxy_http_version 1.1;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $http_host;
+    }
+
+    location = /ss-ntls {
+        proxy_redirect off;
+        proxy_pass http://127.0.0.1:30300;
+        proxy_http_version 1.1;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $http_host;
+    }
+
+    # ----------------------------
+    # Fallback site NTLS
+    # ----------------------------
+    location / {
+        proxy_redirect off;
+        proxy_pass http://127.0.0.1:700; # backend web
+        proxy_http_version 1.1;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $http_host;
+    }
+}
+EOF
 
 systemctl daemon-reload
 systemctl enable xray nginx
