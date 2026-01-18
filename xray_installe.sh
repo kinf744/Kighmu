@@ -74,13 +74,30 @@ uuid=$(cat /proc/sys/kernel/random/uuid)
 cat > /etc/xray/users.json << EOF
 {
   "vmess": [
-    { "uuid": "$uuid", "limit": 5 }
+    {
+      "id": "$uuid",
+      "alterId": 0,
+      "limit": 5
+    }
   ],
   "vless": [
-    { "uuid": "$uuid", "limit": 5 }
+    {
+      "id": "$uuid",
+      "limit": 5
+    }
   ],
   "trojan": [
-    { "password": "$uuid", "limit": 5 }
+    {
+      "password": "$uuid",
+      "limit": 5
+    }
+  ],
+  "shadowsocks": [
+    {
+      "method": "aes-128-gcm",
+      "password": "$uuid",
+      "limit": 5
+    }
   ]
 }
 EOF
@@ -111,7 +128,7 @@ cat > /etc/xray/config.json << EOF
       "settings": {
         "decryption": "none",
         "clients": [
-          { "id": "${uuid}" }
+          { "id": "$uuid" }
         ]
       },
       "streamSettings": {
@@ -129,7 +146,7 @@ cat > /etc/xray/config.json << EOF
       "settings": {
         "clients": [
           {
-            "id": "${uuid}",
+            "id": "$uuid",
             "alterId": 0
           }
         ]
@@ -148,7 +165,7 @@ cat > /etc/xray/config.json << EOF
       "protocol": "trojan",
       "settings": {
         "clients": [
-          { "password": "${uuid}" }
+          { "password": "$uuid" }
         ],
         "udp": true
       },
@@ -168,7 +185,7 @@ cat > /etc/xray/config.json << EOF
         "clients": [
           {
             "method": "aes-128-gcm",
-            "password": "${uuid}"
+            "password": "$uuid"
           }
         ],
         "network": "tcp,udp"
@@ -188,7 +205,7 @@ cat > /etc/xray/config.json << EOF
       "settings": {
         "decryption": "none",
         "clients": [
-          { "id": "${uuid}" }
+          { "id": "$uuid" }
         ]
       },
       "streamSettings": {
@@ -206,7 +223,7 @@ cat > /etc/xray/config.json << EOF
       "settings": {
         "clients": [
           {
-            "id": "${uuid}",
+            "id": "$uuid",
             "alterId": 0
           }
         ]
@@ -225,7 +242,7 @@ cat > /etc/xray/config.json << EOF
       "protocol": "trojan",
       "settings": {
         "clients": [
-          { "password": "${uuid}" }
+          { "password": "$uuid" }
         ]
       },
       "streamSettings": {
@@ -244,7 +261,7 @@ cat > /etc/xray/config.json << EOF
         "clients": [
           {
             "method": "aes-128-gcm",
-            "password": "${uuid}"
+            "password": "$uuid"
           }
         ],
         "network": "tcp,udp"
