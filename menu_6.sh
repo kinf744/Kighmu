@@ -221,11 +221,48 @@ create_config() {
 
   # 🔹 Génération des liens pour le client
   local link_tls link_ntls link_grpc link_ss_tls link_ss_ntls
-  link_tls="${proto}://$uuid@$DOMAIN:$port_tls?security=tls&type=ws&path=$path_ws_tls&host=$DOMAIN&sni=$DOMAIN#$name"
-  link_ntls="${proto}://$uuid@$DOMAIN:$port_ntls?security=none&type=ws&path=$path_ws_ntls&host=$DOMAIN#$name"
-  link_grpc="${proto}://$uuid@$DOMAIN:$port_grpc_tls?mode=grpc&security=tls&serviceName=$path_grpc#$name"
-  link_ss_tls="ss://aes-128-gcm:$uuid@$DOMAIN:$port_tls?path=$path_ws_tls&security=tls#$name"
-  link_ss_ntls="ss://aes-128-gcm:$uuid@$DOMAIN:$port_ntls?path=$path_ws_ntls&security=none#$name"
+  case "$proto" in
+    vmess)
+      local vmess_json
+      vmess_json=$(jq -n \
+        --arg v "2" \
+        --arg ps "$name" \
+        --arg add "$DOMAIN" \
+        --arg port "$port_tls" \
+        --arg id "$uuid" \
+        --arg aid "0" \
+        --arg net "ws" \
+        --arg type "none" \
+        --arg host "$DOMAIN" \
+        --arg path "$path_ws_tls" \
+        --arg tls "tls" \
+        '{
+          v: $v,
+          ps: $ps,
+          add: $add,
+          port: $port,
+          id: $id,
+          aid: ($aid|tonumber),
+          net: $net,
+          type: $type,
+          host: $host,
+          path: $path,
+          tls: $tls
+        }')
+      link_tls="vmess://$(echo -n "$vmess_json" | base64 -w0)"
+      link_ntls="${proto}://$uuid@$DOMAIN:$port_ntls?security=none&type=ws&path=$path_ws_ntls&host=$DOMAIN#$name"
+      link_grpc="${proto}://$uuid@$DOMAIN:$port_grpc_tls?mode=grpc&security=tls&serviceName=$path_grpc#$name"
+      link_ss_tls="ss://aes-128-gcm:$uuid@$DOMAIN:$port_tls?path=$path_ws_tls&security=tls#$name"
+      link_ss_ntls="ss://aes-128-gcm:$uuid@$DOMAIN:$port_ntls?path=$path_ws_ntls&security=none#$name"
+      ;;
+    *)
+      link_tls="${proto}://$uuid@$DOMAIN:$port_tls?security=tls&type=ws&path=$path_ws_tls&host=$DOMAIN&sni=$DOMAIN#$name"
+      link_ntls="${proto}://$uuid@$DOMAIN:$port_ntls?security=none&type=ws&path=$path_ws_ntls&host=$DOMAIN#$name"
+      link_grpc="${proto}://$uuid@$DOMAIN:$port_grpc_tls?mode=grpc&security=tls&serviceName=$path_grpc#$name"
+      link_ss_tls="ss://aes-128-gcm:$uuid@$DOMAIN:$port_tls?path=$path_ws_tls&security=tls#$name"
+      link_ss_ntls="ss://aes-128-gcm:$uuid@$DOMAIN:$port_ntls?path=$path_ws_ntls&security=none#$name"
+      ;;
+  esac
 
   # 🔹 Sauvegarde expiration
   echo "$uuid|$exp_date_iso" >> /etc/xray/users_expiry.list
