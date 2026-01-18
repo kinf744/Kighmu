@@ -353,11 +353,129 @@ RestartPreventExitStatus=23
 WantedBy=multi-user.target
 EOF
 
+cat > /etc/nginx/conf.d/xray.conf << EOF
+server {
+    listen 80;
+    listen [::]:80;
+    server_name $DOMAIN *.$DOMAIN;
+
+    # Redirige tout vers HTTPS
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 8443 ssl http2;
+    listen [::]:8443 ssl http2;
+    server_name $DOMAIN *.$DOMAIN;
+
+    root /home/vps/public_html;
+
+    ssl_certificate /etc/xray/xray.crt;
+    ssl_certificate_key /etc/xray/xray.key;
+    ssl_ciphers EECDH+CHACHA20:EECDH+AES128:EECDH+AES256:!MD5;
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    # ----------------------------
+    # WebSocket locations
+    # ----------------------------
+    location = /vless {
+        proxy_redirect off;
+        proxy_pass http://127.0.0.1:14016;
+        proxy_http_version 1.1;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $http_host;
+    }
+
+    location = /vmess {
+        proxy_redirect off;
+        proxy_pass http://127.0.0.1:23456;
+        proxy_http_version 1.1;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $http_host;
+    }
+
+    location = /trojan-ws {
+        proxy_redirect off;
+        proxy_pass http://127.0.0.1:25432;
+        proxy_http_version 1.1;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $http_host;
+    }
+
+    location = /ss-ws {
+        proxy_redirect off;
+        proxy_pass http://127.0.0.1:30300;
+        proxy_http_version 1.1;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $http_host;
+    }
+
+    # ----------------------------
+    # gRPC locations
+    # ----------------------------
+    location ^~ /vless-grpc {
+        grpc_pass grpc://127.0.0.1:24456;
+        grpc_set_header X-Real-IP $remote_addr;
+        grpc_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        grpc_set_header Host $http_host;
+    }
+
+    location ^~ /vmess-grpc {
+        grpc_pass grpc://127.0.0.1:31234;
+        grpc_set_header X-Real-IP $remote_addr;
+        grpc_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        grpc_set_header Host $http_host;
+    }
+
+    location ^~ /trojan-grpc {
+        grpc_pass grpc://127.0.0.1:33456;
+        grpc_set_header X-Real-IP $remote_addr;
+        grpc_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        grpc_set_header Host $http_host;
+    }
+
+    location ^~ /ss-grpc {
+        grpc_pass grpc://127.0.0.1:30310;
+        grpc_set_header X-Real-IP $remote_addr;
+        grpc_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        grpc_set_header Host $http_host;
+    }
+
+    # ----------------------------
+    # Fallback pour le site / HTML
+    # ----------------------------
+    location / {
+        proxy_redirect off;
+        proxy_pass http://127.0.0.1:700; # ton backend web si nécessaire
+        proxy_http_version 1.1;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $http_host;
+    }
+}
+
 systemctl daemon-reload
 systemctl enable xray
 
 # Redémarrage du service
 if systemctl restart xray; then
+if systemctl restart nginx; then
+if systemctl enable runn; then
+if systemctl restart runn; then
     # Vérification immédiate
     sleep 2
     if systemctl is-active --quiet xray; then
