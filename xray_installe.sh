@@ -355,6 +355,28 @@ EOF
 
 DOMAIN=$(cat /etc/xray/domain)
 
+cat > /etc/nginx/sites-enabled/default << EOF
+server {
+    listen 81 default_server;
+    listen [::]:81 default_server;
+
+    server_name $DOMAIN;
+
+    # Emplacement des fichiers de votre site (ajustez si nécessaire)
+    root /var/www/html;
+
+    # Index par défaut
+    index index.html;
+
+    # Les directives pour gérer les requêtes
+    location / {
+        try_files \$uri \$uri/ =404;
+    }
+
+    # Autres règles de serveur si nécessair
+}
+EOF
+
 cat > /etc/nginx/conf.d/xray.conf << EOF
 # ========================================
 # WS + gRPC TLS (port 8443)
