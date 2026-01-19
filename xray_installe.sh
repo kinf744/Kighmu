@@ -358,8 +358,8 @@ DOMAIN=$(cat /etc/xray/domain)
 
 cat > /etc/nginx/sites-enabled/default << EOF
 server {
-    listen 81 default_server;
-    listen [::]:81 default_server;
+    listen 80 default_server;
+    listen [::]:80 default_server;
 
     server_name $DOMAIN;
 
