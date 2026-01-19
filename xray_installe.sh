@@ -23,6 +23,14 @@ apt install -y iptables nginx iptables-persistent curl socat xz-utils wget apt-t
   gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion ntpdate chrony unzip jq ca-certificates libcap2-bin
 
 # Configuration iptables initiale
+if command -v iptables >/dev/null 2>&1; then
+        if ! sudo iptables -C INPUT -p tcp --dport 81 -j ACCEPT 2>/dev/null; then
+            sudo iptables -I INPUT -p tcp --dport 81 -j ACCEPT
+            command -v netfilter-persistent >/dev/null && sudo netfilter-persistent save
+            echo "✅ Port 81 ouvert dans le firewall"
+        fi
+fi
+    
 netfilter-persistent flush
 iptables -A INPUT -p tcp --dport 22 -j ACCEPT
 iptables -A INPUT -p tcp --dport 81 -j ACCEPT
