@@ -33,7 +33,6 @@ fi
     
 netfilter-persistent flush
 iptables -A INPUT -p tcp --dport 22 -j ACCEPT
-iptables -A INPUT -p tcp --dport 81 -j ACCEPT
 iptables -A INPUT -p tcp --dport 8880 -j ACCEPT
 iptables -A INPUT -p udp --dport 8880 -j ACCEPT
 iptables -A INPUT -p tcp --dport 8443 -j ACCEPT
@@ -366,8 +365,8 @@ DOMAIN=$(cat /etc/xray/domain)
 
 cat > /etc/nginx/sites-enabled/default << EOF
 server {
-    listen 80 default_server;
-    listen [::]:80 default_server;
+    listen 81 default_server;
+    listen [::]:81 default_server;
 
     server_name $DOMAIN;
 
