@@ -528,12 +528,12 @@ install_sshws() {
     sudo install -m 0755 sshws "$BIN_DST"
     echo "✅ SSHWS installé dans $BIN_DST"
 
-    # Firewall : ouvrir le port 80 si iptables disponible
+    # Firewall : ouvrir le port 88 si iptables disponible
     if command -v iptables >/dev/null 2>&1; then
-        if ! sudo iptables -C INPUT -p tcp --dport 80 -j ACCEPT 2>/dev/null; then
-            sudo iptables -I INPUT -p tcp --dport 80 -j ACCEPT
+        if ! sudo iptables -C INPUT -p tcp --dport 88 -j ACCEPT 2>/dev/null; then
+            sudo iptables -I INPUT -p tcp --dport 88 -j ACCEPT
             command -v netfilter-persistent >/dev/null && sudo netfilter-persistent save
-            echo "✅ Port 80 ouvert dans le firewall"
+            echo "✅ Port 88 ouvert dans le firewall"
         fi
     fi
 
@@ -547,7 +547,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=$BIN_DST -listen 80 -target-host 127.0.0.1 -target-port 22
+ExecStart=$BIN_DST -listen 88 -target-host 127.0.0.1 -target-port 22
 Restart=always
 RestartSec=2
 User=root
@@ -597,7 +597,7 @@ uninstall_sshws() {
     [ -f /usr/local/bin/sshws ] && rm -f /usr/local/bin/sshws && echo "🗑️ Binaire sshws supprimé"
     [ -d /var/log/sshws ] && rm -rf /var/log/sshws && echo "🗑️ Logs sshws supprimés"
 
-    for PORT in 80 8080; do
+    for PORT in 80 88 8080; do
         while iptables -C INPUT -p tcp --dport "$PORT" -j ACCEPT 2>/dev/null; do
             iptables -D INPUT -p tcp --dport "$PORT" -j ACCEPT
             echo "🔥 Règle iptables supprimée pour le port $PORT"
