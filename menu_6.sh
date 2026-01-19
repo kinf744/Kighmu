@@ -246,7 +246,7 @@ create_config() {
       ;;
     shadowsocks)
       local ss_b64
-      ss_b64=$(encode_ss "$uuid")
+      ss_b64=$(echo -n "aes-128-gcm:$uuid" | base64 -w0)
       link_ss_tls="ss://${ss_b64}@${DOMAIN}:${port_tls}?path=${path_ws_tls}&security=tls&host=${DOMAIN}&type=ws&sni=${DOMAIN}#${name}"
       link_ss_ntls="ss://${ss_b64}@${DOMAIN}:${port_ntls}?path=${path_ws_ntls}&security=none&host=${DOMAIN}&type=ws&sni=${DOMAIN}#${name}"
       ;;
