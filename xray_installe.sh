@@ -25,6 +25,7 @@ apt install -y iptables nginx iptables-persistent curl socat xz-utils wget apt-t
 # Configuration iptables initiale
 netfilter-persistent flush
 iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+iptables -A INPUT -p tcp --dport 81 -j ACCEPT
 iptables -A INPUT -p tcp --dport 8880 -j ACCEPT
 iptables -A INPUT -p udp --dport 8880 -j ACCEPT
 iptables -A INPUT -p tcp --dport 8443 -j ACCEPT
