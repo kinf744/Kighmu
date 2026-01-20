@@ -68,9 +68,9 @@ log "Interface    : ${CYAN}$SERVER_IFACE${RESET}"
 # ================= BINAIRE =================
 log "Téléchargement udpServer..."
 wget -q -O "$UDP_BIN" \
-  "https://bitbucket.org/iopmx/udprequestserver/downloads/udpServer" \
+  "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp_request" \
   && chmod +x "$UDP_BIN" \
-  || { err "Échec du téléchargement udpServer"; exit 1; }
+  || { err "Échec du téléchargement udp_request"; exit 1; }
 
 # ================= EXCLUDE =================
 EXCLUDE_OPT="-exclude=$(IFS=,; echo "${EXCLUDED_PORTS[*]}")"
