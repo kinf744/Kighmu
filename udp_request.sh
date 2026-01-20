@@ -29,7 +29,7 @@ INSTALL_LOG="/var/log/udp-request-install.log"
 RUNTIME_LOG="/var/log/udp-request-server.log"
 
 # Ports critiques EXCLUS (SlowDNS / V2Ray / MIX)
-EXCLUDED_PORTS=(53 36712 5300 5400 81 8880 80 9090 444 5401 8443)
+EXCLUDED_PORTS=(53 36712 5300 5400 30300 30310 25432 81 8880 80 9090 444 5401 8443)
 
 exec > >(tee -a "$INSTALL_LOG") 2>&1
 
