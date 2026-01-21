@@ -43,16 +43,13 @@ if ! id "$RUN_USER" &>/dev/null; then
 fi
 
 # ================= DEPOT =================
-if [ ! -d "$INSTALL_DIR" ]; then
-  git clone https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp-custom.git "$INSTALL_DIR"
-else
-  cd "$INSTALL_DIR"
-  git config --global --add safe.directory "$INSTALL_DIR"
-  git pull || true
-fi
+log "Téléchargement udp-custom..."
+wget -q -O "$BIN_PATH" \
+  "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp-custom" \
+  && chmod +x "$BIN_PATH" \
+  || { err "Échec du téléchargement udp-custom"; exit 1; }
 
 # ================= BINAIRE =================
-chmod +x "$BIN_PATH"
 if [ ! -x "$BIN_PATH" ]; then
   log "❌ Binaire udp-custom introuvable"
   exit 1
