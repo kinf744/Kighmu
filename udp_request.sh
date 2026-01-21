@@ -1,132 +1,108 @@
 #!/bin/bash
 # ==========================================================
-# udp_request.sh — VERSION STABLE FINALE
-# UDP Request Server (SlowDNS / UDP Custom / Xray FRIENDLY)
+# UDP REQUEST — INSTALLATION STABLE (FIX DÉFINITIF)
+# Compatible SlowDNS / UDP Custom / Xray
 # OS : Ubuntu 20.04+ / Debian 10+
+# Auteur : corrigé pour binaire interactif udp_request
 # ==========================================================
 
-set -euo pipefail
+set -e
 
 # ================= COULEURS =================
-setup_colors() {
-  RED=""; GREEN=""; YELLOW=""; CYAN=""; BOLD=""; RESET=""
-  if [ -t 1 ] && [ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]; then
-    RED="$(tput setaf 1)"
-    GREEN="$(tput setaf 2)"
-    YELLOW="$(tput setaf 3)"
-    CYAN="$(tput setaf 6)"
-    BOLD="$(tput bold)"
-    RESET="$(tput sgr0)"
-  fi
-}
-setup_colors
-
-# ================= VARIABLES =================
-UDP_BIN="/usr/bin/udp_request"
-SERVICE_FILE="/etc/systemd/system/udp_request.service"
-INSTALL_LOG="/var/log/udp_request-install.log"
-
-exec > >(tee -a "$INSTALL_LOG") 2>&1
+RED="\033[31m"
+GREEN="\033[32m"
+YELLOW="\033[33m"
+CYAN="\033[36m"
+RESET="\033[0m"
 
 log()  { echo -e "${GREEN}[+]${RESET} $*"; }
 warn() { echo -e "${YELLOW}[!]${RESET} $*"; }
-err()  { echo -e "${RED}[ERREUR]${RESET} $*" >&2; }
+err()  { echo -e "${RED}[ERREUR]${RESET} $*"; exit 1; }
 
 # ================= ROOT =================
-[[ "$EUID" -ne 0 ]] && err "Exécuter ce script en root" && exit 1
+[[ "$EUID" -ne 0 ]] && err "Exécute ce script en root"
 
 clear
-echo -e "${CYAN}${BOLD}============================================${RESET}"
-echo -e "${GREEN}${BOLD}     UDP REQUEST — MODE STABLE${RESET}"
-echo -e "${YELLOW}${BOLD}  Compatible SlowDNS / UDP Custom / Xray${RESET}"
-echo -e "${CYAN}${BOLD}============================================${RESET}"
+echo -e "${CYAN}============================================${RESET}"
+echo -e "${GREEN}     UDP REQUEST — MODE STABLE${RESET}"
+echo -e "${YELLOW} Compatible SlowDNS / UDP Custom / Xray${RESET}"
+echo -e "${CYAN}============================================${RESET}"
 echo
 
-# ================= OS CHECK =================
-. /etc/os-release || { err "OS indétectable"; exit 1; }
-[[ "$ID" != "ubuntu" && "$ID" != "debian" ]] && err "OS non supporté" && exit 1
+# ================= VARIABLES =================
+UDP_BIN="/usr/bin/udp_request"
+WRAPPER="/usr/bin/udp_requestd"
+SERVICE="/etc/systemd/system/udp-request.service"
+LOG_FILE="/var/log/udp-request.log"
+
+# Ports UDP exclus (anti‑conflit)
+EXCLUDED_PORTS=(53 80 81 443 444 8443 8880 9090 5300 5400 5401 36712 25432 30300 30310)
 
 # ================= DEPENDANCES =================
 log "Installation des dépendances..."
 apt update -y >/dev/null 2>&1 || true
-apt install -y wget net-tools iproute2 >/dev/null 2>&1
+apt install -y wget iproute2 net-tools >/dev/null 2>&1
 
-# ================= NETWORK =================
-SERVER_IFACE=$(ip -4 route get 1 | awk '{print $5; exit}')
+# ================= IP / IFACE =================
 SERVER_IP=$(ip -4 route get 1 | awk '{print $7; exit}')
+SERVER_IFACE=$(ip -4 route get 1 | awk '{print $5; exit}')
 
-[[ -z "$SERVER_IFACE" ]] && err "Interface réseau introuvable" && exit 1
+[[ -z "$SERVER_IP" || -z "$SERVER_IFACE" ]] && err "Impossible de détecter IP ou interface"
 
-log "Interface réseau : ${CYAN}$SERVER_IFACE${RESET}"
-log "IP détectée      : ${CYAN}$SERVER_IP${RESET}"
+log "Interface réseau : $SERVER_IFACE"
+log "IP détectée      : $SERVER_IP"
 
-# ================= CLEANUP =================
+# ================= NETTOYAGE =================
 log "Arrêt et nettoyage des anciennes instances..."
-systemctl stop UDPserver 2>/dev/null || true
-pkill -f udpServer 2>/dev/null || true
-sleep 2
+systemctl stop udp-request 2>/dev/null || true
+pkill -f udp_request 2>/dev/null || true
+rm -f "$UDP_BIN" "$WRAPPER" "$SERVICE"
 
-# ================= BINAIRE =================
-log "Téléchargement du binaire udpServer..."
+# ================= TELECHARGEMENT =================
+log "Téléchargement du binaire udp_request..."
 wget -q -O "$UDP_BIN" \
   "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp_request" \
-  || { err "Échec du téléchargement udpServer"; exit 1; }
+  || err "Échec téléchargement udp_request"
+
 chmod +x "$UDP_BIN"
 
-# ================= PORTS UDP EXCLUS =================
-log "Définition des ports UDP exclus (statique + dynamique)..."
+# ================= WRAPPER NON INTERACTIF =================
+log "Création du wrapper non-interactif (FIX)..."
 
-# --- Ports critiques connus (NE JAMAIS TOUCHER)
-EXCLUDED_STATIC_PORTS=(
-  53
-  80 81
-  443 444
-  8080 8880
-  9090
-  5300 5400 5401
-  8443
-  25432
-  30300 30310
-  36712
-)
+EXCLUDE_OPT=$(IFS=,; echo "${EXCLUDED_PORTS[*]}")
 
-# --- Ports UDP déjà utilisés (dynamiques)
-USED_UDP_PORTS=$(ss -lunp | awk 'NR>1 {print $5}' \
-  | awk -F: '{print $NF}' \
-  | grep -E '^[0-9]+$' \
-  | sort -u)
+cat > "$WRAPPER" <<EOF
+#!/bin/bash
+# Wrapper daemon-safe pour udp_request
+exec </dev/null
+exec >>$LOG_FILE 2>&1
 
-# --- Fusion + déduplication
-EXCLUDED_ALL_PORTS=$(printf "%s\n" \
-  "${EXCLUDED_STATIC_PORTS[@]}" \
-  $USED_UDP_PORTS \
-  | sort -n -u | paste -sd,)
+while true; do
+  $UDP_BIN \\
+    -ip=$SERVER_IP \\
+    -net=$SERVER_IFACE \\
+    -exclude=$EXCLUDE_OPT \\
+    -mode=system
 
-EXCLUDE_OPT="-exclude=$EXCLUDED_ALL_PORTS"
+  sleep 2
+done
+EOF
 
-log "Ports UDP exclus finaux : ${CYAN}$EXCLUDED_ALL_PORTS${RESET}"
+chmod +x "$WRAPPER"
 
 # ================= SYSTEMD =================
-log "Création du service systemd udp_request..."
-
-cat > "$SERVICE_FILE" <<EOF
+log "Création du service systemd..."
+cat > "$SERVICE" <<EOF
 [Unit]
-Description=UDP Request Server (STABLE)
+Description=UDP Request (Stable Daemon)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=$UDP_BIN \\
-  -net=$SERVER_IFACE \\
-  $EXCLUDE_OPT \\
-  -mode=system
-Restart=on-failure
-RestartSec=5
-StartLimitIntervalSec=60
-StartLimitBurst=5
-StandardOutput=journal
-StandardError=journal
+ExecStart=$WRAPPER
+Restart=always
+RestartSec=2
 NoNewPrivileges=true
 LimitNOFILE=1048576
 
@@ -136,29 +112,26 @@ EOF
 
 systemctl daemon-reexec
 systemctl daemon-reload
-systemctl enable udp_request >/dev/null 2>&1
-systemctl restart udp_request
+systemctl enable udp-request
+systemctl restart udp-request
 
 sleep 3
 
 # ================= VERIFICATION =================
-if systemctl is-active --quiet udp_request; then
-  log "UDP Request STABLE actif et fonctionnel"
+if systemctl is-active --quiet udp-request; then
+  log "UDP Request actif et STABLE"
 else
-  err "Échec du démarrage UDPserver"
-  journalctl -u udp_request -n 50 --no-pager
-  exit 1
+  err "UDP Request ne démarre pas"
 fi
 
-# ================= RÉSUMÉ =================
+# ================= RESUME =================
 echo
-echo -e "${CYAN}${BOLD}============================================${RESET}"
-echo -e "${GREEN}${BOLD} INSTALLATION TERMINÉE${RESET}"
-echo -e "${CYAN}${BOLD}============================================${RESET}"
-echo -e "Interface réseau : ${GREEN}$SERVER_IFACE${RESET}"
-echo -e "IP détectée      : ${GREEN}$SERVER_IP${RESET}"
-echo -e "Mode             : ${GREEN}UDP STABLE${RESET}"
-echo -e "Ports exclus     : ${GREEN}$EXCLUDED_ALL_PORTS${RESET}"
-echo -e "Service          : ${GREEN}udp_request${RESET}"
-echo -e "Logs             : ${GREEN}journalctl -u udp_request -f${RESET}"
-echo -e "${CYAN}${BOLD}============================================${RESET}"
+echo -e "${CYAN}============================================${RESET}"
+echo -e "${GREEN} INSTALLATION TERMINÉE AVEC SUCCÈS${RESET}"
+echo -e "${CYAN}============================================${RESET}"
+echo -e "Service      : udp-request"
+echo -e "Interface    : $SERVER_IFACE"
+echo -e "IP serveur   : $SERVER_IP"
+echo -e "Ports exclus : ${EXCLUDED_PORTS[*]}"
+echo -e "Logs         : $LOG_FILE"
+echo -e "${CYAN}============================================${RESET}"
