@@ -32,8 +32,8 @@ echo
 # ================= VARIABLES =================
 UDP_BIN="/usr/bin/udp_request"
 WRAPPER="/usr/bin/udp_requestd"
-SERVICE="/etc/systemd/system/UDPserver.service"
-LOG_FILE="/var/log/UDPserver.log"
+SERVICE="/etc/systemd/system/udp-request.service"
+LOG_FILE="/var/log/udp-request.log"
 
 # Ports UDP exclus (anti‑conflit)
 EXCLUDED_PORTS=(53 80 81 443 444 8443 8880 9090 5300 5400 5401 36712 25432 30300 30310)
@@ -112,8 +112,8 @@ EOF
 
 systemctl daemon-reexec
 systemctl daemon-reload
-systemctl enable UDPserver
-systemctl restart UDPserver
+systemctl enable udp-request
+systemctl restart udp-request
 
 sleep 3
 
