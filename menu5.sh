@@ -200,25 +200,56 @@ install_udp_custom() {
     echo "✅ Installation UDP Custom terminée avec succès."
 }
 
+
 uninstall_udp_custom() {
-    echo -e "\u001B[1;33m>>> Désinstallation UDP Custom...\u001B[0m"
+    echo "============================================"
+    echo "        Désinstallation UDP Custom"
+    echo "============================================"
 
-    systemctl stop udp-custom.service udpgw.service 2>/dev/null || true
-    systemctl disable udp-custom.service udpgw.service 2>/dev/null || true
-    
-    rm -f /etc/systemd/system/udp-custom.service /etc/systemd/system/udpgw.service
-    systemctl daemon-reload
+    # Arrêt et désactivation du service systemd
+    if systemctl is-active --quiet udp-custom; then
+        echo "[+] Arrêt du service systemd..."
+        systemctl stop udp-request
+    fi
+    if systemctl is-enabled --quiet udp-custom; then
+        echo "[+] Désactivation du service systemd..."
+        systemctl disable udp-custom
+    fi
 
-    pkill -15 -f "udp-custom|udpgw" 2>/dev/null || true
-    sleep 2
-    pkill -9 -f "udp-custom|udpgw" 2>/dev/null || true
+    # Suppression du service systemd
+    if [[ -f /etc/systemd/system/udp-custom.service ]]; then
+        echo "[+] Suppression du service systemd..."
+        rm -f /etc/systemd/system/udp-custom.service
+        systemctl daemon-reload
+    fi
 
-    rm -rf /root/udp /usr/bin/udpgw /var/log/udp-custom-install.log /etc/UDPCustom /etc/limiter.sh
+    # Suppression des binaires et logs
+    [[ -f /usr/bin/udp-custom ]] && rm -f /usr/bin/udp-custom && echo "[+] Binaire supprimé"
+    [[ -f /usr/bin/udp-custom ]] && rm -f /usr/bin/udp-custom && echo "[+] Wrapper supprimé"
+    [[ -f /var/log/udp-custom.log ]] && rm -f /var/log/udp-custom.log && echo "[+] Logs supprimés"
 
-    journalctl --vacuum-time=2s --unit=udp-custom.service 2>/dev/null || true
-    journalctl --vacuum-time=2s --unit=udpgw.service 2>/dev/null || true
+    # Suppression des processus résiduels
+    PID_LIST=$(pgrep -x udp-custom)
+    if [[ -n "$PID_LIST" ]]; then
+        echo "[+] Killing les processus résiduels..."
+        pkill -x udp_request || true
+    fi
 
-    echo -e "\u001B[1;32m[OK] UDP Custom désinstallé\u001B[0m"
+    # Suppression des règles iptables (si elles existent)
+    UDP_PORTS=(53 80 81 443 444 8443 8880 9090 5300 5400 5401 4466 25432 30300 30310)
+    for port in "${UDP_PORTS[@]}"; do
+        iptables -D INPUT -p udp --dport "$port" -j ACCEPT 2>/dev/null || true
+        iptables -t nat -D PREROUTING -p udp --dport "$port" -j REDIRECT --to-ports "$port" 2>/dev/null || true
+    done
+
+    # Sauvegarde iptables si iptables-persistent installé
+    if command -v netfilter-persistent >/dev/null 2>&1; then
+        echo "[+] Sauvegarde des règles iptables..."
+        netfilter-persistent save >/dev/null 2>&1 || true
+    fi
+
+    echo "[+] UDP custom complètement désinstallé."
+    echo "============================================"
 }
 
 install_socks_python() {
