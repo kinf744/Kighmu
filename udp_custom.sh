@@ -1,7 +1,7 @@
 #!/bin/bash
 # ==========================================================
-# udp_request.sh
-# UDP Request Server MAÎTRE (udpServer)
+# udp_custom.sh
+# udp-custom Server (udp-custom)
 # COHABITATION STABLE avec SlowDNS & UDP Custom
 # OS : Ubuntu 20.04+ / Debian 10+
 # ==========================================================
@@ -26,7 +26,7 @@ setup_colors
 UDP_BIN="/usr/bin/udp-custom"
 SERVICE_FILE="/etc/systemd/system/udp-custom.service"
 INSTALL_LOG="/var/log/udp-custom.log"
-RUNTIME_LOG="/var/log/udp-request-server.log"
+RUNTIME_LOG="/var/log/udp-custom.log"
 
 # Ports critiques EXCLUS (SlowDNS / V2Ray / MIX)
 EXCLUDED_PORTS=(53 5300 5400 30300 30310 25432 4466 81 8880 80 9090 444 5401 8443)
@@ -68,7 +68,7 @@ log "Interface    : ${CYAN}$SERVER_IFACE${RESET}"
 # ================= BINAIRE =================
 log "Téléchargement udpServer..."
 wget -q -O "$UDP_BIN" \
-  "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp_request" \
+  "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp-custom" \
   && chmod +x "$UDP_BIN" \
   || { err "Échec du téléchargement udp_request"; exit 1; }
 
@@ -77,7 +77,7 @@ EXCLUDE_OPT="-exclude=$(IFS=,; echo "${EXCLUDED_PORTS[*]}")"
 log "Ports UDP exclus : ${EXCLUDED_PORTS[*]}"
 
 # ================= SYSTEMD =================
-log "Création du service systemd UDP Request (MODE UDP STABLE)..."
+log "Création du service systemd udp-custom (MODE UDP STABLE)..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
 Description=UDP Request Server (MODE UDP STABLE)
@@ -110,11 +110,11 @@ systemctl restart udp-custom
 sleep 3
 
 # ================= VERIFICATION =================
-if systemctl is-active --quiet UDPserver; then
-  log "UDP Request STABLE actif"
+if systemctl is-active --quiet udp-custom; then
+  log "udp-custom STABLE actif"
 else
-  err "UDP Request ne démarre pas"
-  journalctl -u UDPserver -n 50 --no-pager
+  err "udp-custom ne démarre pas"
+  journalctl -u udp-custom -n 50 --no-pager
   exit 1
 fi
 
@@ -127,6 +127,6 @@ echo -e "IP serveur   : ${GREEN}$SERVER_IP${RESET}"
 echo -e "Interface    : ${GREEN}$SERVER_IFACE${RESET}"
 echo -e "Mode         : ${GREEN}UDP (STABLE)${RESET}"
 echo -e "Ports exclus : ${GREEN}${EXCLUDED_PORTS[*]}${RESET}"
-echo -e "Service      : ${GREEN}UDPserver${RESET}"
+echo -e "Service      : ${GREEN}udp-custom${RESET}"
 echo -e "Logs runtime : ${GREEN}$RUNTIME_LOG${RESET}"
 echo -e "${CYAN}${BOLD}============================================${RESET}"
