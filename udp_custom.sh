@@ -23,13 +23,13 @@ setup_colors() {
 setup_colors
 
 # ================= VARIABLES =================
-UDP_BIN="/usr/bin/udpServer"
-SERVICE_FILE="/etc/systemd/system/UDPserver.service"
-INSTALL_LOG="/var/log/udp-request-install.log"
+UDP_BIN="/usr/bin/udp-custom"
+SERVICE_FILE="/etc/systemd/system/udp-custom.service"
+INSTALL_LOG="/var/log/udp-custom.log"
 RUNTIME_LOG="/var/log/udp-request-server.log"
 
 # Ports critiques EXCLUS (SlowDNS / V2Ray / MIX)
-EXCLUDED_PORTS=(53 36712 5300 5400 30300 30310 25432 4466 81 8880 80 9090 444 5401 8443)
+EXCLUDED_PORTS=(53 5300 5400 30300 30310 25432 4466 81 8880 80 9090 444 5401 8443)
 
 exec > >(tee -a "$INSTALL_LOG") 2>&1
 
@@ -42,8 +42,8 @@ err()  { echo -e "${RED}[ERREUR]${RESET} $*" >&2; }
 
 clear
 echo -e "${CYAN}${BOLD}============================================${RESET}"
-echo -e "${GREEN}${BOLD}     UDP REQUEST — MODE STABLE${RESET}"
-echo -e "${YELLOW}${BOLD}  Compatible SlowDNS / UDP Custom${RESET}"
+echo -e "${GREEN}${BOLD}     UDP CUSTOM — MODE STABLE${RESET}"
+echo -e "${YELLOW}${BOLD}  Compatible SlowDNS / UDP Request${RESET}"
 echo -e "${CYAN}${BOLD}============================================${RESET}"
 echo
 
@@ -104,8 +104,8 @@ EOF
 
 systemctl daemon-reexec
 systemctl daemon-reload
-systemctl enable UDPserver >/dev/null 2>&1
-systemctl restart UDPserver
+systemctl enable udp-custom >/dev/null 2>&1
+systemctl restart udp-custom
 
 sleep 3
 
