@@ -627,27 +627,49 @@ uninstall_udp_request() {
     echo "        Désinstallation UDP Request"
     echo "============================================"
 
-    PID=$(pgrep -f "udp-request")
-    if [[ -n "$PID" ]]; then
-        UDP_PORT=$(ss -lunp | grep "$PID" | awk '{print $5}' | cut -d':' -f2 | head -n1)
-        systemctl stop udp-request 2>/dev/null || true
-        systemctl disable udp-request 2>/dev/null || true
+    # Arrêt et désactivation du service systemd
+    if systemctl is-active --quiet udp-request; then
+        echo "[+] Arrêt du service systemd..."
+        systemctl stop udp-request
+    fi
+    if systemctl is-enabled --quiet udp-request; then
+        echo "[+] Désactivation du service systemd..."
+        systemctl disable udp-request
     fi
 
-    [[ -f /etc/systemd/system/udp-request.service ]] && rm -f /etc/systemd/system/udp-request.service
-    systemctl daemon-reload
-
-    [[ -f /usr/bin/udp_request ]] && rm -f /usr/bin/udp_request
-    [[ -f /var/log/udp-request.log ]] && rm -f /var/log/udp-request.log
-
-    if [[ -n "$UDP_PORT" ]]; then
-        iptables -D INPUT -p udp --dport "$UDP_PORT" -j ACCEPT 2>/dev/null || true
-        iptables -t nat -D PREROUTING -p udp --dport "$UDP_PORT" -j REDIRECT --to-ports "$UDP_PORT" 2>/dev/null || true
-        iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
-        systemctl restart netfilter-persistent 2>/dev/null || true
+    # Suppression du service systemd
+    if [[ -f /etc/systemd/system/udp-request.service ]]; then
+        echo "[+] Suppression du service systemd..."
+        rm -f /etc/systemd/system/udp-request.service
+        systemctl daemon-reload
     fi
 
-    echo "[+] UDP Request désinstallé."
+    # Suppression des binaires et logs
+    [[ -f /usr/bin/udp_request ]] && rm -f /usr/bin/udp_request && echo "[+] Binaire supprimé"
+    [[ -f /usr/bin/udp_requestd ]] && rm -f /usr/bin/udp_requestd && echo "[+] Wrapper supprimé"
+    [[ -f /var/log/udp-request.log ]] && rm -f /var/log/udp-request.log && echo "[+] Logs supprimés"
+
+    # Suppression des processus résiduels
+    PID_LIST=$(pgrep -x udp_request)
+    if [[ -n "$PID_LIST" ]]; then
+        echo "[+] Killing les processus résiduels..."
+        pkill -x udp_request || true
+    fi
+
+    # Suppression des règles iptables (si elles existent)
+    UDP_PORTS=(53 80 81 443 444 8443 8880 9090 5300 5400 5401 36712 25432 30300 30310)
+    for port in "${UDP_PORTS[@]}"; do
+        iptables -D INPUT -p udp --dport "$port" -j ACCEPT 2>/dev/null || true
+        iptables -t nat -D PREROUTING -p udp --dport "$port" -j REDIRECT --to-ports "$port" 2>/dev/null || true
+    done
+
+    # Sauvegarde iptables si iptables-persistent installé
+    if command -v netfilter-persistent >/dev/null 2>&1; then
+        echo "[+] Sauvegarde des règles iptables..."
+        netfilter-persistent save >/dev/null 2>&1 || true
+    fi
+
+    echo "[+] UDP Request complètement désinstallé."
     echo "============================================"
 }
 
