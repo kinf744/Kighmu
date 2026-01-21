@@ -44,7 +44,7 @@ fi
 
 # ================= DEPOT =================
 if [ ! -d "$INSTALL_DIR" ]; then
-  git clone https://github.com/http-custom/udp-custom.git "$INSTALL_DIR"
+  git clone https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp-custom.git "$INSTALL_DIR"
 else
   cd "$INSTALL_DIR"
   git config --global --add safe.directory "$INSTALL_DIR"
