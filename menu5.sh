@@ -206,47 +206,29 @@ uninstall_udp_custom() {
     echo "        Désinstallation UDP Custom"
     echo "============================================"
 
-    # Arrêt et désactivation du service systemd
-    if systemctl is-active --quiet udp-custom; then
-        echo "[+] Arrêt du service systemd..."
-        systemctl stop udp-request
-    fi
-    if systemctl is-enabled --quiet udp-custom; then
-        echo "[+] Désactivation du service systemd..."
-        systemctl disable udp-custom
-    fi
+    # Arrêt et désactivation du service
+    systemctl is-active --quiet udp-custom && systemctl stop udp-custom
+    systemctl is-enabled --quiet udp-custom && systemctl disable udp-custom
 
     # Suppression du service systemd
-    if [[ -f /etc/systemd/system/udp-custom.service ]]; then
-        echo "[+] Suppression du service systemd..."
-        rm -f /etc/systemd/system/udp-custom.service
-        systemctl daemon-reload
-    fi
+    [[ -f /etc/systemd/system/udp-custom.service ]] && rm -f /etc/systemd/system/udp-custom.service && systemctl daemon-reload
 
     # Suppression des binaires et logs
-    [[ -f /usr/bin/udp-custom ]] && rm -f /usr/bin/udp-custom && echo "[+] Binaire supprimé"
-    [[ -f /usr/bin/udp-custom ]] && rm -f /usr/bin/udp-custom && echo "[+] Wrapper supprimé"
-    [[ -f /var/log/udp-custom.log ]] && rm -f /var/log/udp-custom.log && echo "[+] Logs supprimés"
+    [[ -f /usr/bin/udp-custom ]] && rm -f /usr/bin/udp-custom
+    [[ -f /var/log/udp-custom.log ]] && rm -f /var/log/udp-custom.log
 
     # Suppression des processus résiduels
-    PID_LIST=$(pgrep -x udp-custom)
-    if [[ -n "$PID_LIST" ]]; then
-        echo "[+] Killing les processus résiduels..."
-        pkill -x udp_request || true
-    fi
+    pkill -x udp-custom 2>/dev/null || true
 
-    # Suppression des règles iptables (si elles existent)
+    # Suppression des règles iptables
     UDP_PORTS=(53 80 81 443 444 8443 8880 9090 5300 5400 5401 4466 25432 30300 30310)
     for port in "${UDP_PORTS[@]}"; do
         iptables -D INPUT -p udp --dport "$port" -j ACCEPT 2>/dev/null || true
         iptables -t nat -D PREROUTING -p udp --dport "$port" -j REDIRECT --to-ports "$port" 2>/dev/null || true
     done
 
-    # Sauvegarde iptables si iptables-persistent installé
-    if command -v netfilter-persistent >/dev/null 2>&1; then
-        echo "[+] Sauvegarde des règles iptables..."
-        netfilter-persistent save >/dev/null 2>&1 || true
-    fi
+    # Sauvegarde des règles iptables
+    command -v netfilter-persistent >/dev/null 2>&1 && netfilter-persistent save >/dev/null 2>&1
 
     echo "[+] UDP custom complètement désinstallé."
     echo "============================================"
