@@ -627,11 +627,11 @@ uninstall_udp_request() {
     echo "        Désinstallation UDP Request"
     echo "============================================"
 
-    PID=$(pgrep -f "udp_request")
+    PID=$(pgrep -f "udp-request")
     if [[ -n "$PID" ]]; then
         UDP_PORT=$(ss -lunp | grep "$PID" | awk '{print $5}' | cut -d':' -f2 | head -n1)
-        systemctl stop udp_request 2>/dev/null || true
-        systemctl disable udp_request 2>/dev/null || true
+        systemctl stop udp-request 2>/dev/null || true
+        systemctl disable udp-request 2>/dev/null || true
     fi
 
     [[ -f /etc/systemd/system/udp-request.service ]] && rm -f /etc/systemd/system/udp-request.service
