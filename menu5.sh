@@ -634,7 +634,7 @@ uninstall_udp_request() {
         systemctl disable udp_request 2>/dev/null || true
     fi
 
-    [[ -f /etc/systemd/system/udp_request.service ]] && rm -f /etc/systemd/system/UDPserver.service
+    [[ -f /etc/systemd/system/udp-request.service ]] && rm -f /etc/systemd/system/udp-request.service
     systemctl daemon-reload
 
     [[ -f /usr/bin/udp_request ]] && rm -f /usr/bin/udp_request
