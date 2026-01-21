@@ -24,7 +24,7 @@ setup_colors
 # ================= VARIABLES =================
 UDP_BIN="/usr/bin/udp_request"
 SERVICE_FILE="/etc/systemd/system/udp_request.service"
-INSTALL_LOG="/var/log/udp-request-install.log"
+INSTALL_LOG="/var/log/udp_request-install.log"
 
 exec > >(tee -a "$INSTALL_LOG") 2>&1
 
