@@ -107,7 +107,7 @@ EXCLUDE_OPT="-exclude=$EXCLUDED_ALL_PORTS"
 log "Ports UDP exclus finaux : ${CYAN}$EXCLUDED_ALL_PORTS${RESET}"
 
 # ================= SYSTEMD =================
-log "Création du service systemd UDPserver..."
+log "Création du service systemd udp_request..."
 
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
@@ -136,17 +136,17 @@ EOF
 
 systemctl daemon-reexec
 systemctl daemon-reload
-systemctl enable UDPserver >/dev/null 2>&1
-systemctl restart UDPserver
+systemctl enable udp_request >/dev/null 2>&1
+systemctl restart udp_request
 
 sleep 3
 
 # ================= VERIFICATION =================
-if systemctl is-active --quiet UDPserver; then
+if systemctl is-active --quiet udp_request; then
   log "UDP Request STABLE actif et fonctionnel"
 else
   err "Échec du démarrage UDPserver"
-  journalctl -u UDPserver -n 50 --no-pager
+  journalctl -u udp_request -n 50 --no-pager
   exit 1
 fi
 
@@ -159,6 +159,6 @@ echo -e "Interface réseau : ${GREEN}$SERVER_IFACE${RESET}"
 echo -e "IP détectée      : ${GREEN}$SERVER_IP${RESET}"
 echo -e "Mode             : ${GREEN}UDP STABLE${RESET}"
 echo -e "Ports exclus     : ${GREEN}$EXCLUDED_ALL_PORTS${RESET}"
-echo -e "Service          : ${GREEN}UDPserver${RESET}"
-echo -e "Logs             : ${GREEN}journalctl -u UDPserver -f${RESET}"
+echo -e "Service          : ${GREEN}udp_request${RESET}"
+echo -e "Logs             : ${GREEN}journalctl -u udp_request -f${RESET}"
 echo -e "${CYAN}${BOLD}============================================${RESET}"
