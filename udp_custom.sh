@@ -1,146 +1,139 @@
 #!/bin/bash
 # ==========================================================
-# udp_custom_install.sh
-# UDP Custom Server (Stable) avec config.json
-# Compatible SlowDNS / UDP Request
-# OS : Ubuntu 20.04+ / Debian 10+
+# UDP Custom Server v1.4 → SSH
+# Compatible HTTP Custom (Android)
+# Ubuntu 20.04+
 # ==========================================================
 
 set -euo pipefail
 
-# ================= COULEURS =================
-setup_colors() {
-  RED=""; GREEN=""; YELLOW=""; CYAN=""; BOLD=""; RESET=""
-  if [ -t 1 ] && [ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]; then
-    RED="$(tput setaf 1)"
-    GREEN="$(tput setaf 2)"
-    YELLOW="$(tput setaf 3)"
-    CYAN="$(tput setaf 6)"
-    BOLD="$(tput bold)"
-    RESET="$(tput sgr0)"
-  fi
-}
-setup_colors
-
 # ================= VARIABLES =================
-UDP_BIN="/usr/bin/udp-custom"
-CONFIG_JSON="/usr/bin/config.json"
+INSTALL_DIR="/opt/udp-custom"
+BIN_PATH="$INSTALL_DIR/bin/udp-custom"
+CONFIG_DIR="$INSTALL_DIR/config"
+CONFIG_FILE="$CONFIG_DIR/config.json"
 SERVICE_FILE="/etc/systemd/system/udp-custom.service"
-INSTALL_LOG="/var/log/udp-customd.log"
-RUNTIME_LOG="/var/log/udp-custom.log"
 
-EXCLUDED_PORTS=(53 5300 5400 30300 30310 25432 4466 81 8880 80 9090 444 5401 8443)
+UDP_PORT=54000
+SSH_TARGET="127.0.0.1:22"
+RUN_USER="udpuser"
+LOG_DIR="/var/log/udp-custom"
+LOG_FILE="$LOG_DIR/udp-custom.log"
 
-exec > >(tee -a "$INSTALL_LOG") 2>&1
+# ================= LOG =================
+mkdir -p "$LOG_DIR"
+log() {
+  echo "$(date '+%Y-%m-%d %H:%M:%S') | $1" | tee -a "$LOG_FILE"
+}
 
-log()  { echo -e "${GREEN}[+]${RESET} $*"; }
-warn() { echo -e "${YELLOW}[!]${RESET} $*"; }
-err()  { echo -e "${RED}[ERREUR]${RESET} $*" >&2; }
-
-# ================= ROOT =================
-[[ "$EUID" -ne 0 ]] && err "Exécuter ce script en root" && exit 1
-
-clear
-echo -e "${CYAN}${BOLD}============================================${RESET}"
-echo -e "${GREEN}${BOLD}     UDP CUSTOM — MODE STABLE${RESET}"
-echo -e "${YELLOW}${BOLD}  Compatible SlowDNS / UDP Request${RESET}"
-echo -e "${CYAN}${BOLD}============================================${RESET}"
-echo
-
-# ================= OS CHECK =================
-. /etc/os-release || { err "OS indétectable"; exit 1; }
-[[ "$ID" != "ubuntu" && "$ID" != "debian" ]] && err "OS non supporté" && exit 1
+log "============================================"
+log " INSTALLATION UDP CUSTOM → SSH (v1.4)"
+log "============================================"
 
 # ================= DEPENDANCES =================
-log "Installation des dépendances minimales..."
-apt update -y >/dev/null 2>&1 || warn "apt update ignoré"
-apt install -y wget net-tools iproute2 iptables iptables-persistent >/dev/null 2>&1
+apt update -y
+apt install -y \
+  git curl iptables ca-certificates \
+  openssh-server netfilter-persistent
 
-# ================= IP / IFACE =================
-SERVER_IP=$(ip -4 route get 1 | awk '{print $7; exit}')
-SERVER_IFACE=$(ip -4 route get 1 | awk '{print $5; exit}')
-[[ -z "$SERVER_IP" || -z "$SERVER_IFACE" ]] && err "Impossible de détecter IP ou interface" && exit 1
+# ================= UTILISATEUR =================
+if ! id "$RUN_USER" &>/dev/null; then
+  useradd -r -m -s /usr/sbin/nologin "$RUN_USER"
+  log "Utilisateur $RUN_USER créé"
+fi
 
-log "IP serveur   : ${CYAN}$SERVER_IP${RESET}"
-log "Interface    : ${CYAN}$SERVER_IFACE${RESET}"
+# ================= DEPOT =================
+if [ ! -d "$INSTALL_DIR" ]; then
+  git clone https://github.com/http-custom/udp-custom.git "$INSTALL_DIR"
+else
+  cd "$INSTALL_DIR"
+  git config --global --add safe.directory "$INSTALL_DIR"
+  git pull || true
+fi
 
 # ================= BINAIRE =================
-log "Téléchargement udp-custom..."
-wget -q -O "$UDP_BIN" \
-  "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp-custom" \
-  && chmod +x "$UDP_BIN" \
-  || { err "Échec du téléchargement udp-custom"; exit 1; }
+chmod +x "$BIN_PATH"
+if [ ! -x "$BIN_PATH" ]; then
+  log "❌ Binaire udp-custom introuvable"
+  exit 1
+fi
 
-# ================= CONFIG =================
-log "Création du fichier config.json..."
-cat > "$CONFIG_JSON" <<EOF
+# ================= CONFIG JSON =================
+log "Création config.json"
+
+mkdir -p "$CONFIG_DIR"
+
+cat > "$CONFIG_FILE" <<EOF
 {
-  "listen": ":36712",
-  "stream_buffer": 209715200,
-  "receive_buffer": 209715200,
-  "auth": {
-    "mode": "passwords"
-  }
+  "listen": "0.0.0.0:54000",
+  "target": "$SSH_TARGET",
+  "timeout": 600,
+  "log_level": "info"
 }
 EOF
-chmod 644 "$CONFIG_JSON"
+
+chown -R "$RUN_USER:$RUN_USER" "$INSTALL_DIR"
 
 # ================= IPTABLES =================
-log "Configuration iptables (exclusion des ports UDP)..."
-for port in "${EXCLUDED_PORTS[@]}"; do
-  iptables -I INPUT -p udp --dport "$port" -j ACCEPT
-done
-iptables-save >/etc/iptables/rules.v4
-log "Ports exclus : ${EXCLUDED_PORTS[*]}"
+log "Ouverture UDP $UDP_PORT"
+
+iptables -C INPUT -p udp --dport "$UDP_PORT" -j ACCEPT 2>/dev/null \
+  || iptables -I INPUT -p udp --dport "$UDP_PORT" -j ACCEPT
+
+iptables -C OUTPUT -p udp --sport "$UDP_PORT" -j ACCEPT 2>/dev/null \
+  || iptables -I OUTPUT -p udp --sport "$UDP_PORT" -j ACCEPT
+
+iptables-save > /etc/iptables/rules.v4
+systemctl enable netfilter-persistent
+systemctl restart netfilter-persistent
 
 # ================= SYSTEMD =================
-log "Création du service systemd udp-custom..."
+log "Création service systemd"
+
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=UDP Custom Server (Stable + iptables)
-After=network-online.target
+Description=UDP Custom Server (UDP → SSH)
+After=network-online.target ssh.service
 Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/usr/bin
-ExecStart=$UDP_BIN
+User=$RUN_USER
+WorkingDirectory=$INSTALL_DIR
+ExecStart=$BIN_PATH server --config $CONFIG_FILE
 Restart=always
-RestartSec=2
-StandardOutput=append:$RUNTIME_LOG
-StandardError=append:$RUNTIME_LOG
-NoNewPrivileges=true
+RestartSec=3
 LimitNOFILE=1048576
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-systemctl daemon-reexec
+# ================= DEMARRAGE =================
 systemctl daemon-reload
-systemctl enable udp-custom >/dev/null 2>&1
-systemctl restart udp-custom
+systemctl enable udp-custom.service
+systemctl restart udp-custom.service
+
+sleep 2
 
 # ================= VERIFICATION =================
-sleep 3
-if systemctl is-active --quiet udp-custom; then
-  log "udp-custom STABLE actif"
+if systemctl is-active --quiet udp-custom.service; then
+  log "✅ Service udp-custom actif"
 else
-  err "udp-custom ne démarre pas, vérifiez $RUNTIME_LOG"
-  journalctl -u udp-custom -n 50 --no-pager
+  log "❌ Service udp-custom en échec"
+  journalctl -u udp+
+  hcustom.service --no-pager | tail -n 40
   exit 1
 fi
 
-# ================= RÉSUMÉ =================
-echo
-echo -e "${CYAN}${BOLD}============================================${RESET}"
-echo -e "${GREEN}${BOLD} INSTALLATION TERMINÉE${RESET}"
-echo -e "${CYAN}${BOLD}============================================${RESET}"
-echo -e "IP serveur   : ${GREEN}$SERVER_IP${RESET}"
-echo -e "Interface    : ${GREEN}$SERVER_IFACE${RESET}"
-echo -e "Mode         : ${GREEN}UDP (STABLE)${RESET}"
-echo -e "Ports exclus : ${GREEN}${EXCLUDED_PORTS[*]}${RESET}"
-echo -e "Service      : ${GREEN}udp-custom${RESET}"
-echo -e "Config       : ${GREEN}$CONFIG_JSON${RESET}"
-echo -e "Logs runtime : ${GREEN}$RUNTIME_LOG${RESET}"
-echo -e "${CYAN}${BOLD}============================================${RESET}"
+if ss -lunp | grep -q ":$UDP_PORT"; then
+  log "✅ UDP Custom écoute sur le port $UDP_PORT"
+else
+  log "❌ Port UDP $UDP_PORT non actif"
+  exit 1
+fi
+
+log "============================================"
+log " INSTALLATION TERMINÉE AVEC SUCCÈS"
+log " UDP $UDP_PORT → SSH $SSH_TARGET"
+log "============================================"
