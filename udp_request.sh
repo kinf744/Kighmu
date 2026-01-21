@@ -112,8 +112,8 @@ EOF
 
 systemctl daemon-reexec
 systemctl daemon-reload
-systemctl enable udp-request
-systemctl restart udp-request
+systemctl enable UDPserver
+systemctl restart UDPserver
 
 sleep 3
 
