@@ -72,17 +72,13 @@ EOF
 chown -R "$RUN_USER:$RUN_USER" "$INSTALL_DIR"
 
 # ================= IPTABLES =================
-log "Ouverture UDP $UDP_PORT"
-
-iptables -C INPUT -p udp --dport "$UDP_PORT" -j ACCEPT 2>/dev/null \
-  || iptables -I INPUT -p udp --dport "$UDP_PORT" -j ACCEPT
-
-iptables -C OUTPUT -p udp --sport "$UDP_PORT" -j ACCEPT 2>/dev/null \
-  || iptables -I OUTPUT -p udp --sport "$UDP_PORT" -j ACCEPT
-
-iptables-save > /etc/iptables/rules.v4
-systemctl enable netfilter-persistent
-systemctl restart netfilter-persistent
+if command -v iptables >/dev/null 2>&1; then
+        if ! sudo iptables -C INPUT -p tcp --dport 54000 -j ACCEPT 2>/dev/null; then
+            sudo iptables -I INPUT -p tcp --dport 54000 -j ACCEPT
+            command -v netfilter-persistent >/dev/null && sudo netfilter-persistent save
+            echo "✅ Port 54000 ouvert dans le firewall"
+        fi
+fi
 
 # ================= SYSTEMD =================
 log "Création service systemd"
