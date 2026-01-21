@@ -630,15 +630,15 @@ uninstall_udp_request() {
     PID=$(pgrep -f "udpServer")
     if [[ -n "$PID" ]]; then
         UDP_PORT=$(ss -lunp | grep "$PID" | awk '{print $5}' | cut -d':' -f2 | head -n1)
-        systemctl stop UDPserver 2>/dev/null || true
-        systemctl disable UDPserver 2>/dev/null || true
+        systemctl stop udp_request 2>/dev/null || true
+        systemctl disable udp_request 2>/dev/null || true
     fi
 
-    [[ -f /etc/systemd/system/UDPserver.service ]] && rm -f /etc/systemd/system/UDPserver.service
+    [[ -f /etc/systemd/system/udp_request.service ]] && rm -f /etc/systemd/system/UDPserver.service
     systemctl daemon-reload
 
-    [[ -f /usr/bin/udpServer ]] && rm -f /usr/bin/udpServer
-    [[ -f /var/log/udp-request-server.log ]] && rm -f /var/log/udp-request-server.log
+    [[ -f /usr/bin/udp_request ]] && rm -f /usr/bin/udp_request
+    [[ -f /var/log/udp-request.log ]] && rm -f /var/log/udp-request.log
 
     if [[ -n "$UDP_PORT" ]]; then
         iptables -D INPUT -p udp --dport "$UDP_PORT" -j ACCEPT 2>/dev/null || true
