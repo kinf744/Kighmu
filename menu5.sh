@@ -627,7 +627,7 @@ uninstall_udp_request() {
     echo "        Désinstallation UDP Request"
     echo "============================================"
 
-    PID=$(pgrep -f "udpServer")
+    PID=$(pgrep -f "udp_request")
     if [[ -n "$PID" ]]; then
         UDP_PORT=$(ss -lunp | grep "$PID" | awk '{print $5}' | cut -d':' -f2 | head -n1)
         systemctl stop udp_request 2>/dev/null || true
