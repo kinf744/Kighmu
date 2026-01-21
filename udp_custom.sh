@@ -25,7 +25,7 @@ setup_colors
 # ================= VARIABLES =================
 UDP_BIN="/usr/bin/udp-custom"
 SERVICE_FILE="/etc/systemd/system/udp-custom.service"
-INSTALL_LOG="/var/log/udp-custom.log"
+INSTALL_LOG="/var/log/udp-customd.log"
 RUNTIME_LOG="/var/log/udp-custom.log"
 
 # Ports critiques EXCLUS (SlowDNS / V2Ray / MIX)
