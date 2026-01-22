@@ -1,132 +1,78 @@
 #!/bin/bash
-# ==========================================================
-# UDP Custom Server v1.4 → SSH
-# Compatible HTTP Custom (Android)
-# Ubuntu 20.04+
-# ==========================================================
-
-set -euo pipefail
-
-# ================= VARIABLES =================
-INSTALL_DIR="/opt/udp-custom"
-BIN_PATH="$INSTALL_DIR/bin/udp-custom"
-CONFIG_DIR="$INSTALL_DIR/config"
-CONFIG_FILE="$CONFIG_DIR/config.json"
-SERVICE_FILE="/etc/systemd/system/udp-custom.service"
-
-UDP_PORT=54000
-SSH_TARGET="127.0.0.1:22"
-RUN_USER="udpuser"
-LOG_DIR="/var/log/udp-custom"
-LOG_FILE="$LOG_DIR/udp-custom.log"
-
-# ================= LOG =================
-mkdir -p "$LOG_DIR"
-log() {
-  echo "$(date '+%Y-%m-%d %H:%M:%S') | $1" | tee -a "$LOG_FILE"
-}
-
-log "============================================"
-log " INSTALLATION UDP CUSTOM → SSH (v1.4)"
-log "============================================"
-
-# ================= DEPENDANCES =================
 apt update -y
-apt install -y \
-  git curl iptables ca-certificates \
-  openssh-server netfilter-persistent
+apt upgrade -y
+apt install lolcat -y
+apt install figlet -y
+apt install neofetch -y
+apt install screenfetch -y
+cd
+rm -rf /root/udp
+mkdir -p /root/udp
 
-# ================= UTILISATEUR =================
-if ! id "$RUN_USER" &>/dev/null; then
-  useradd -r -m -s /usr/sbin/nologin "$RUN_USER"
-  log "Utilisateur $RUN_USER créé"
-fi
+# banner
+clear
 
-# ================= DEPOT =================
-log "Téléchargement udp-custom..."
-wget -q -O "$BIN_PATH" \
-  "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp-custom" \
-  && chmod +x "$BIN_PATH" \
-  || { err "Échec du téléchargement udp-custom"; exit 1; }
+sleep 5
+# change to time GMT+5:30
 
-# ================= BINAIRE =================
-if [ ! -x "$BIN_PATH" ]; then
-  log "❌ Binaire udp-custom introuvable"
-  exit 1
-fi
+echo "change to time GMT+5:30 Sri Lanka"
+ln -fs /usr/share/zoneinfo/Asia/Colombo /etc/localtime
 
-# ================= CONFIG JSON =================
-log "Création config.json"
+# install udp-custom
+echo downloading udp-custom
+wget "https://github.com/noobconner21/UDP-Custom-Script/raw/main/udp-custom-linux-amd64" -O /root/udp/udp-custom
+chmod +x /root/udp/udp-custom
 
-mkdir -p "$CONFIG_DIR"
+echo downloading default config
+wget "https://raw.githubusercontent.com/noobconner21/UDP-Custom-Script/main/config.json" -O /root/udp/config.json
+chmod 644 /root/udp/config.json
 
-cat > "$CONFIG_FILE" <<EOF
-{
-  "listen": "0.0.0.0:54000",
-  "target": "$SSH_TARGET",
-  "timeout": 600,
-  "log_level": "info"
-}
-EOF
-
-chown -R "$RUN_USER:$RUN_USER" "$INSTALL_DIR"
-
-# ================= IPTABLES =================
-if command -v iptables >/dev/null 2>&1; then
-        if ! sudo iptables -C INPUT -p tcp --dport 54000 -j ACCEPT 2>/dev/null; then
-            sudo iptables -I INPUT -p tcp --dport 54000 -j ACCEPT
-            command -v netfilter-persistent >/dev/null && sudo netfilter-persistent save
-            echo "✅ Port 54000 ouvert dans le firewall"
-        fi
-fi
-
-# ================= SYSTEMD =================
-log "Création service systemd"
-
-cat > "$SERVICE_FILE" <<EOF
+if [ -z "$1" ]; then
+cat <<EOF > /etc/systemd/system/udp-custom.service
 [Unit]
-Description=UDP Custom Server (UDP → SSH)
-After=network-online.target ssh.service
-Wants=network-online.target
+Description=UDP Custom by ePro Dev. Team and modify by sslablk
 
 [Service]
+User=root
 Type=simple
-User=$RUN_USER
-WorkingDirectory=$INSTALL_DIR
-ExecStart=$BIN_PATH server --config $CONFIG_FILE
+ExecStart=/root/udp/udp-custom server
+WorkingDirectory=/root/udp/
 Restart=always
-RestartSec=3
-LimitNOFILE=1048576
+RestartSec=2s
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target
 EOF
-
-# ================= DEMARRAGE =================
-systemctl daemon-reload
-systemctl enable udp-custom.service
-systemctl restart udp-custom.service
-
-sleep 2
-
-# ================= VERIFICATION =================
-if systemctl is-active --quiet udp-custom.service; then
-  log "✅ Service udp-custom actif"
 else
-  log "❌ Service udp-custom en échec"
-  journalctl -u udp+
-  hcustom.service --no-pager | tail -n 40
-  exit 1
+cat <<EOF > /etc/systemd/system/udp-custom.service
+[Unit]
+Description=UDP Custom by ePro Dev. Team and modify by sslablk
+
+[Service]
+User=root
+Type=simple
+ExecStart=/root/udp/udp-custom server -exclude $1
+WorkingDirectory=/root/udp/
+Restart=always
+RestartSec=2s
+
+[Install]
+WantedBy=default.target
+EOF
 fi
 
-if ss -lunp | grep -q ":$UDP_PORT"; then
-  log "✅ UDP Custom écoute sur le port $UDP_PORT"
-else
-  log "❌ Port UDP $UDP_PORT non actif"
-  exit 1
-fi
+clear
+echo 'UDP Install Script By Project SSLAB LK Dev.Team'
+echo 'UDP Custom By ePro Dev. Team'
+echo ''
+sleep 5
 
-log "============================================"
-log " INSTALLATION TERMINÉE AVEC SUCCÈS"
-log " UDP $UDP_PORT → SSH $SSH_TARGET"
-log "============================================"
+echo start service udp-custom
+systemctl start udp-custom &>/dev/null
+
+echo enable service udp-custom
+systemctl enable udp-custom &>/dev/null
+
+echo -e "✅ Installation complète"
+
+read -p "Appuyez sur Entrée pour continuer..."
