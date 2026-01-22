@@ -85,16 +85,6 @@ EOF
     },
     {
       "port": 5401,
-      "protocol": "dokodemo-door",
-      "settings": {
-        "address": "0.0.0.0",
-        "port": 80,
-        "network": "tcp"
-      },
-      "tag": "ssh"
-    },
-    {
-      "port": 5401,
       "protocol": "vless",
       "settings": {
         "clients": [
