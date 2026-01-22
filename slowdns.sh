@@ -77,13 +77,13 @@ choose_backend() {
   echo "Choix du backend SlowDNS"
   echo "1) SSH"
   echo "2) V2Ray"
-  echo "3) MIX"
+  echo "3) WS"
   read -rp "Sélection [1-3] : " c
 
   case "$c" in
     1) BACKEND_MODE="ssh" ;;
     2) BACKEND_MODE="v2ray" ;;
-    3) BACKEND_MODE="mix" ;;
+    3) BACKEND_MODE="WS" ;;
     *) echo "Choix invalide"; exit 1 ;;
   esac
 
@@ -170,7 +170,7 @@ source "$DIR/backend.conf" 2>/dev/null || BACKEND_MODE="ssh"
 case "$BACKEND_MODE" in
   ssh) TARGET="127.0.0.1:22" ;;
   v2ray) TARGET="127.0.0.1:5401" ;;
-  mix) TARGET="127.0.0.1:8443" ;;
+  WS) TARGET="127.0.0.1:80" ;;
   *) TARGET="127.0.0.1:22" ;;
 esac
 
