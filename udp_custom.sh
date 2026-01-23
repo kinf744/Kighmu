@@ -80,13 +80,37 @@ cat > "$CONFIG_FILE" <<EOF
 EOF
 log "✅ Fichier de configuration créé : $CONFIG_FILE"
 
-# ================= IPTABLES =================
-log "Configuration iptables pour le port UDP $UDP_PORT..."
-iptables -C INPUT -p udp --dport "$UDP_PORT" -j ACCEPT 2>/dev/null || iptables -I INPUT -p udp --dport "$UDP_PORT" -j ACCEPT
-iptables-save | tee /etc/iptables/rules.v4 >/dev/null
-systemctl enable netfilter-persistent
-systemctl restart netfilter-persistent || true
-log "✅ Règles iptables appliquées et persistantes."
+# ================= NFTABLES =================
+log "Configuration nftables pour UDP Custom (port $UDP_PORT)..."
+
+systemctl enable nftables >/dev/null 2>&1
+systemctl start nftables >/dev/null 2>&1
+
+NFT_FILE="/etc/nftables.d/udp-custom.nft"
+mkdir -p /etc/nftables.d
+
+cat > "$NFT_FILE" <<EOF
+table inet udp_custom {
+  chain input {
+    type filter hook input priority 0;
+    policy accept;
+
+    udp dport $UDP_PORT accept
+  }
+}
+EOF
+
+# Charger la règle
+nft -f "$NFT_FILE"
+
+# Inclure automatiquement si pas déjà fait
+if ! grep -q "udp-custom.nft" /etc/nftables.conf; then
+    sed -i '/^include/i include "/etc/nftables.d/*.nft"' /etc/nftables.conf 2>/dev/null || true
+fi
+
+systemctl restart nftables
+
+log "✅ Règle nftables active pour UDP Custom (UDP $UDP_PORT)"
 
 # ================= SYSTEMD =================
 SERVICE_PATH="/etc/systemd/system/$SERVICE_NAME"
