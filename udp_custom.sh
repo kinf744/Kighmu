@@ -43,11 +43,15 @@ if ! id "$RUN_USER" &>/dev/null; then
 fi
 
 # ================= DEPOT =================
-log "Téléchargement udp-custom..."
-wget -q -O "$BIN_PATH" \
-  "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp-custom" \
-  && chmod +x "$BIN_PATH" \
-  || { err "Échec du téléchargement udp-custom"; exit 1; }
+mkdir -p "$(dirname "$BIN_PATH")"
+
+if ! wget -q -O "$BIN_PATH" "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp-custom"; then
+    log "❌ Échec du téléchargement udp-custom"
+    exit 1
+fi
+
+chmod +x "$BIN_PATH"
+log "✅ Binaire udp-custom téléchargé et exécutable"
 
 # ================= BINAIRE =================
 if [ ! -x "$BIN_PATH" ]; then
