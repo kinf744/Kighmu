@@ -73,9 +73,9 @@ mkdir -p "$(dirname "$CONFIG_FILE")"
 cat > "$CONFIG_FILE" <<EOF
 {
   "server_port": $UDP_PORT,
-  "exclude_port": [],
+  "exclude_port": [5300, 53],
   "udp_timeout": 600,
-  "dns_cache": true
+  "dns_cache": false
 }
 EOF
 log "✅ Fichier de configuration créé : $CONFIG_FILE"
