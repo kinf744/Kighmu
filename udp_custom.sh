@@ -93,8 +93,8 @@ systemctl restart netfilter-persistent || true
 log "Règles iptables appliquées et persistantes."
 
 # --- Service systemd ---
-SERVICE_PATH="/etc/systemd/system/udp_custom.service"
-log "Création du fichier systemd udp_custom.service..."
+SERVICE_PATH="/etc/systemd/system/udp-custom.service"
+log "Création du fichier systemd udp-custom.service..."
 cat > "$SERVICE_PATH" <<EOF
 [Unit]
 Description=UDP Custom Service for HTTP Custom VPN
@@ -119,8 +119,8 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable udp_custom.service
-systemctl restart udp_custom.service
+systemctl enable udp-custom.service
+systemctl restart udp-custom.service
 
 # --- Vérification démarrage ---
 sleep 3
