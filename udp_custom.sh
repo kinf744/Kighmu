@@ -62,8 +62,8 @@ EOF
 fi
 
 clear
-echo 'UDP Install Script By Project SSLAB LK Dev.Team'
-echo 'UDP Custom By ePro Dev. Team'
+echo 'UDP Install Script By Project kighmu.Team'
+echo 'UDP Custom By Kighmu. Team'
 echo ''
 sleep 5
 
