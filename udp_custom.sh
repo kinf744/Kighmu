@@ -51,29 +51,15 @@ if [[ -z "$IP_TEST" ]]; then
 fi
 
 # --- Clonage ou mise à jour du dépôt ---
-if [ ! -d "$INSTALL_DIR" ]; then
-  log "Clonage du dépôt udp-custom..."
-  git clone https://github.com/http-custom/udp-custom.git "$INSTALL_DIR" 2>>"$LOG_FILE" || {
-    log "Échec du clonage. Vérifier l’accès réseau et l’URL du dépôt."
-    exit 1
-  }
-else
-  log "udp-custom déjà présent, mise à jour..."
-  cd "$INSTALL_DIR"
-  git pull 2>>"$LOG_FILE" || log "Échec de la mise à jour, le script continue."
-fi
-cd "$INSTALL_DIR"
+mkdir -p "$(dirname "$BIN_PATH")"
 
-# --- Vérification du binaire ---
-if [ ! -x "$BIN_PATH" ]; then
-  if [ -f "$BIN_PATH" ]; then
-    chmod +x "$BIN_PATH"
-  fi
+if ! wget -q -O "$BIN_PATH" "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp-custom"; then
+    log "❌ Échec du téléchargement udp-custom"
+    exit 1
 fi
-if [ ! -x "$BIN_PATH" ]; then
-  log "❌ Erreur critique: Le binaire $BIN_PATH est manquant ou non exécutable."
-  exit 1
-fi
+
+chmod +x "$BIN_PATH"
+log "✅ Binaire udp-custom téléchargé et exécutable"
 
 # --- Configuration JSON ---
 log "Configuration UDP..."
