@@ -67,7 +67,7 @@ pip install cloudflare >/dev/null || log "cloudflare lib non critique"
 # ===================== DNSTT =====================
 if [[ ! -x "$SLOWDNS_BIN" ]]; then
   log "Téléchargement DNSTT server..."
-  curl -fsSL https://github.com/Mygod/dnstt/releases/download/v20241021/dnstt-server-linux-amd64 -o "$SLOWDNS_BIN"
+  curl -fsSL https://dnstt-server-client.s3.amazonaws.com/dnstt-client-linux-amd64 -o "$SLOWDNS_BIN"
   chmod +x "$SLOWDNS_BIN"
 fi
 
