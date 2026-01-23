@@ -134,21 +134,4 @@ log "|  Port UDP $UDP_PORT ouvert et persistant   |"
 log "|  Service systemd $SERVICE_NAME actif      |"
 log "+--------------------------------------------+"
 
-# ================= FONCTION DESINSTALLATION =================
-uninstall_udp_custom() {
-    log ">>> Désinstallation UDP Custom..."
-    systemctl stop "$SERVICE_NAME" || true
-    systemctl disable "$SERVICE_NAME" || true
-    rm -f "/etc/systemd/system/$SERVICE_NAME"
-    systemctl daemon-reload
-
-    rm -rf "$INSTALL_DIR"
-
-    iptables -D INPUT -p udp --dport "$UDP_PORT" -j ACCEPT 2>/dev/null || true
-    iptables-save | tee /etc/iptables/rules.v4 >/dev/null
-    systemctl restart netfilter-persistent || true
-
-    log "[OK] UDP Custom désinstallé."
-}
-
 exit 0
