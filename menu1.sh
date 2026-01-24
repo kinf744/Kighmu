@@ -72,6 +72,17 @@ expire_date=$(date -d "+$days days" '+%Y-%m-%d')
 useradd -m -s /bin/bash "$username" || { echo -e "${RED}Erreur lors de la création${RESET}"; read -p "Appuyez sur Entrée pour revenir au menu..."; exit 1; }
 echo "$username:$password" | chpasswd
 
+# ================== ZIVPN SYNC ==================
+ZIVPN_CONFIG="/etc/zivpn/config.json"
+
+if [ -f "$ZIVPN_CONFIG" ]; then
+    if ! grep -q "\"$password\"" "$ZIVPN_CONFIG"; then
+        sed -i 's/"config": \[/"config": ["'"$password"'", /' "$ZIVPN_CONFIG"
+        systemctl restart zivpn
+    fi
+fi
+# ===============================================
+
 # Appliquer la date d'expiration du compte
 chage -E "$expire_date" "$username"
 
