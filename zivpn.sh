@@ -38,8 +38,20 @@ if [[ ! -f "$DOMAIN_FILE" ]]; then
     exit 1
 fi
 
-DOMAIN=$(cat "$DOMAIN_FILE")
-EMAIL="admin@$DOMAIN"
+EMAIL="adrienkiaje@gmail.com"
+
+DOMAIN_FILE="/etc/xray/domain"
+
+if [[ ! -f "$DOMAIN_FILE" ]]; then
+    read -rp "Entrez votre nom de domaine pour ZIVPN : " DOMAIN
+    if [[ -z "$DOMAIN" ]]; then
+        echo "❌ Domaine non valide."
+        exit 1
+    fi
+    echo "$DOMAIN" > "$DOMAIN_FILE"
+else
+    DOMAIN=$(cat "$DOMAIN_FILE")
+fi
 
 # Certificat déjà existant → réutilisation
 if [[ -f "$CERT" && -f "$KEY" ]]; then
