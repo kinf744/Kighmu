@@ -41,16 +41,22 @@ fi
 EMAIL="adrienkiaje@gmail.com"
 
 DOMAIN_FILE="/etc/xray/domain"
+TLS_DIR="/etc/ssl/kighmu"
 
-if [[ ! -f "$DOMAIN_FILE" ]]; then
+# Créer les dossiers si nécessaire
+mkdir -p "$(dirname "$DOMAIN_FILE")"
+mkdir -p "$TLS_DIR"
+
+# Vérifier si le domaine existe
+if [[ -f "$DOMAIN_FILE" ]]; then
+    DOMAIN=$(cat "$DOMAIN_FILE")
+else
     read -rp "Entrez votre nom de domaine pour ZIVPN : " DOMAIN
     if [[ -z "$DOMAIN" ]]; then
         echo "❌ Domaine non valide."
         exit 1
     fi
     echo "$DOMAIN" > "$DOMAIN_FILE"
-else
-    DOMAIN=$(cat "$DOMAIN_FILE")
 fi
 
 # Certificat déjà existant → réutilisation
