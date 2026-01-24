@@ -25,6 +25,7 @@ afficher_modes_ports() {
     if systemctl is-active --quiet histeria2.service || pgrep -f hysteria >/dev/null 2>&1; then any_active=1; fi
     if systemctl is-active --quiet sshws.service || pgrep -f sshws >/dev/null 2>&1; then any_active=1; fi
     if systemctl is-active --quiet udp-request.service || pgrep -f udp_request >/dev/null 2>&1; then any_active=1; fi
+    if systemctl is-active --quiet zivpn.service || pgrep -f zivpn >/dev/null 2>&1; then any_active=1; fi
 
     if [[ $any_active -eq 0 ]]; then
         return
@@ -71,6 +72,9 @@ afficher_modes_ports() {
     fi
     if systemctl is-active --quiet udp-request.service || pgrep -f udp_reuest >/dev/null 2>&1 || screen -list | grep -q udp_request; then
         echo -e "  - UDP_request: ${GREEN}4466${RESET}"
+    fi
+    if systemctl is-active --quiet zivpn.service || pgrep -f Zivpn >/dev/null 2>&1; then
+        echo -e "  - Zivpn: ${GREEN}port UDP 5667${RESET}"
     fi
 }
 
