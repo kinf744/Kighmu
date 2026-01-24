@@ -7,6 +7,7 @@ echo "=== Installation ZIVPN UDP (clean & nftables) ==="
 apt update -y
 apt install -y wget curl jq nftables openssl socat
 
+# Arrêter le service si déjà existant
 systemctl stop zivpn.service >/dev/null 2>&1 || true
 
 # ===================== INSTALL BINARY =====================
@@ -18,31 +19,18 @@ chmod +x /usr/local/bin/zivpn
 # ===================== CONFIG =====================
 mkdir -p /etc/zivpn
 
-cat <<EOF > /etc/zivpn/config.json
-{
-  "listen": ":5667",
-  "cert": "/etc/ssl/kighmu/fullchain.crt",
-  "key": "/etc/ssl/kighmu/private.key",
-  "obfs": "zivpn",
-  "auth": {
-    "mode": "passwords",
-    "config": ["zi"]
-  }
-}
-EOF
-
-# ===================== DOMAIN & CERTIFICATS TLS =====================
-DOMAIN_FILE="/etc/xray/domain"
+CONFIG_FILE="/etc/zivpn/config.json"
 TLS_DIR="/etc/ssl/kighmu"
 CERT="$TLS_DIR/fullchain.crt"
 KEY="$TLS_DIR/private.key"
+DOMAIN_FILE="/etc/xray/domain"
 EMAIL="adrienkiaje@gmail.com"
 
-# Créer les dossiers si nécessaire
+# Créer dossiers si nécessaire
 mkdir -p "$(dirname "$DOMAIN_FILE")"
 mkdir -p "$TLS_DIR"
 
-# Vérifier si le domaine existe
+# ===================== DOMAIN =====================
 if [[ -f "$DOMAIN_FILE" ]]; then
     DOMAIN=$(cat "$DOMAIN_FILE")
 else
@@ -54,7 +42,7 @@ else
     echo "$DOMAIN" > "$DOMAIN_FILE"
 fi
 
-# Certificat déjà existant → réutilisation
+# ===================== CERTIFICAT TLS =====================
 if [[ -f "$CERT" && -f "$KEY" ]]; then
     echo "🔐 Certificat TLS existant trouvé → réutilisation"
 else
@@ -72,19 +60,24 @@ else
         --keypath "$KEY"
 
     chmod 600 "$KEY"
+    chmod 644 "$CERT"
     echo "✅ Certificat TLS généré avec succès"
 fi
 
-# Lien vers ZIVPN
-ln -sf "$CERT" /etc/zivpn/zivpn.crt
-ln -sf "$KEY" /etc/zivpn/zivpn.key
-
-# ===================== SYSCTL (persistant) =====================
-cat <<EOF > /etc/sysctl.d/99-zivpn.conf
-net.core.rmem_max=16777216
-net.core.wmem_max=16777216
+# ===================== CONFIG.JSON =====================
+# Création du config JSON si absent ou remplacement
+cat <<EOF > "$CONFIG_FILE"
+{
+  "listen": ":5667",
+  "cert": "$CERT",
+  "key": "$KEY",
+  "obfs": "zivpn",
+  "auth": {
+    "mode": "passwords",
+    "config": ["zi"]
+  }
+}
 EOF
-sysctl --system >/dev/null
 
 # ===================== SYSTEMD =====================
 cat <<EOF > /etc/systemd/system/zivpn.service
@@ -94,7 +87,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/zivpn server -c /etc/zivpn/config.json
+ExecStart=/usr/local/bin/zivpn server -c $CONFIG_FILE
 WorkingDirectory=/etc/zivpn
 Restart=always
 RestartSec=3
@@ -106,24 +99,19 @@ NoNewPrivileges=true
 WantedBy=multi-user.target
 EOF
 
-systemctl daemon-reexec
 systemctl daemon-reload
 systemctl enable zivpn
-systemctl start zivpn
 
 # ===================== NFTABLES =====================
 echo "[+] Configuration nftables"
-
 mkdir -p /etc/nftables.d
 
 cat <<EOF > /etc/nftables.d/zivpn.nft
 table inet zivpn {
-
     chain prerouting {
         type nat hook prerouting priority -100;
         udp dport 6000-19999 dnat to :5667
     }
-
     chain input {
         type filter hook input priority 0;
         udp dport 5667 accept
@@ -135,8 +123,6 @@ EOF
 # Activer nftables
 systemctl enable nftables
 systemctl start nftables
-
-# Charger la règle
 nft -f /etc/nftables.d/zivpn.nft
 
 # Rendre persistant
@@ -146,12 +132,28 @@ fi
 
 systemctl restart nftables
 
-# ===================== FIN =====================
-echo ""
-echo "✅ ZIVPN installé avec succès"
-echo "➡️ Port interne : 5667"
-echo "➡️ Ports externes : UDP 6000–19999"
-echo "➡️ Authentification : gérée par menu1.sh"
-echo "➡️ Firewall : nftables"
-echo "➡️ Certificat TLS : $CERT / $KEY"
-echo ""
+# ===================== SYSCTL =====================
+cat <<EOF > /etc/sysctl.d/99-zivpn.conf
+net.core.rmem_max=16777216
+net.core.wmem_max=16777216
+EOF
+sysctl --system >/dev/null
+
+# ===================== START ZIVPN =====================
+systemctl restart zivpn
+sleep 2
+
+# Vérification du service
+if systemctl is-active --quiet zivpn; then
+    echo ""
+    echo "✅ ZIVPN installé et démarré avec succès"
+    echo "➡️ Port interne : 5667"
+    echo "➡️ Ports externes : UDP 6000–19999"
+    echo "➡️ Authentification : gérée par menu1.sh"
+    echo "➡️ Firewall : nftables"
+    echo "➡️ Certificat TLS : $CERT / $KEY"
+else
+    echo ""
+    echo "❌ ZIVPN a échoué à démarrer. Vérifiez le journal avec :"
+    echo "   journalctl -u zivpn -n 50 --no-pager"
+fi
