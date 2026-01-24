@@ -90,7 +90,10 @@ echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> 
 ZIVPN_CONFIG="/etc/zivpn/config.json"
 
 if [ -f "$ZIVPN_CONFIG" ]; then
-    command -v jq >/dev/null 2>&1 || return 0
+    command -v jq >/dev/null 2>&1 || {
+        echo "jq non installé, sync ZIVPN ignorée"
+        exit 0
+    }
 
     TODAY=$(date +%Y-%m-%d)
 
@@ -100,7 +103,7 @@ if [ -f "$ZIVPN_CONFIG" ]; then
     }' /etc/kighmu/users.list | sort -u | jq -R . | jq -s .)
 
     jq --argjson arr "$ZIVPN_PASS" '
-        .config = $arr
+        .auth.config = $arr
     ' "$ZIVPN_CONFIG" > /tmp/zivpn.json && mv /tmp/zivpn.json "$ZIVPN_CONFIG"
 
     systemctl restart zivpn
