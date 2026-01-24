@@ -743,6 +743,8 @@ uninstall_zivpn() {
     # ------------------ Remove binary & config ------------------
     rm -f /usr/local/bin/zivpn
     rm -rf /etc/zivpn
+    systemctl stop zivpn
+    pkill -f zivpn
 
     # ------------------ Remove nftables rules ------------------
     if nft list tables 2>/dev/null | grep -q "inet zivpn"; then
