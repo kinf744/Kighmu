@@ -10,7 +10,7 @@ systemctl stop zivpn.service >/dev/null 2>&1 || true
 
 echo "[+] Téléchargement ZIVPN"
 wget -q https://github.com/zahidbd2/udp-zivpn/releases/download/udp-zivpn_1.4.9/udp-zivpn-linux-amd64 \
--O /usr/local/bin/zivpn
+  -O /usr/local/bin/zivpn
 chmod +x /usr/local/bin/zivpn
 
 mkdir -p /etc/zivpn
@@ -20,6 +20,10 @@ DOMAIN_FILE="/etc/zivpn/domain.txt"
 CERT="/etc/zivpn/zivpn.crt"
 KEY="/etc/zivpn/zivpn.key"
 LOG_FILE="/var/log/zivpn.log"
+
+# -------------------- Création fichier log --------------------
+touch "$LOG_FILE"
+chmod 644 "$LOG_FILE"
 
 # -------------------- Domaine --------------------
 if [[ -f "$DOMAIN_FILE" ]]; then
@@ -39,10 +43,10 @@ if [[ -f "$CERT" && -f "$KEY" ]]; then
 else
     echo "[+] Génération certificat ZIVPN auto-signé pour $DOMAIN"
     openssl req -x509 -newkey rsa:2048 \
-    -keyout "$KEY" \
-    -out "$CERT" \
-    -nodes -days 3650 \
-    -subj "/CN=$DOMAIN"
+      -keyout "$KEY" \
+      -out "$CERT" \
+      -nodes -days 3650 \
+      -subj "/CN=$DOMAIN"
 fi
 
 chmod 600 "$KEY"
