@@ -727,6 +727,40 @@ install_zivpn() {
 }
 
 uninstall_zivpn() {
+    echo "=== Désinstallation ZIVPN UDP ==="
+
+    # ------------------ Stop service ------------------
+    if systemctl list-units --full -all | grep -q zivpn.service; then
+        systemctl stop zivpn.service >/dev/null 2>&1 || true
+        systemctl disable zivpn.service >/dev/null 2>&1 || true
+    fi
+
+    # ------------------ Remove systemd ------------------
+    rm -f /etc/systemd/system/zivpn.service
+    systemctl daemon-reexec
+    systemctl daemon-reload
+
+    # ------------------ Remove binary & config ------------------
+    rm -f /usr/local/bin/zivpn
+    rm -rf /etc/zivpn
+
+    # ------------------ Remove nftables rules ------------------
+    if nft list tables 2>/dev/null | grep -q "inet zivpn"; then
+        nft delete table inet zivpn >/dev/null 2>&1 || true
+    fi
+
+    rm -f /etc/nftables.d/zivpn.nft
+    systemctl restart nftables >/dev/null 2>&1 || true
+
+    # ------------------ Remove sysctl ------------------
+    rm -f /etc/sysctl.d/99-zivpn.conf
+    sysctl --system >/dev/null 2>&1 || true
+
+    # ------------------ Optional cleanup ------------------
+    sed -i '/zivpn/d' /etc/kighmu/users.list 2>/dev/null || true
+
+    echo "✅ ZIVPN désinstallé et nettoyé avec succès"
+    sleep 1
 }
 
 # --- Interface utilisateur ---
@@ -773,6 +807,7 @@ while true; do
     echo -e "${GREEN}${BOLD}[09]${RESET} ${YELLOW}Hysteria${RESET}"
     echo -e "${GREEN}${BOLD}[10]${RESET} ${YELLOW}Tunnel WS/WSS SSH${RESET}"
     echo -e "${GREEN}${BOLD}[11]${RESET} ${YELLOW}UDP_request${RESET}"
+    echo -e "${GREEN}${BOLD}[12]${RESET} ${YELLOW}ZIVPN TUNNEL${RESET}"
     echo -e "${GREEN}${BOLD}[00]${RESET} ${YELLOW}Quitter${RESET}"
     echo -e "${CYAN}+======================================================+${RESET}"
     echo -ne "${BOLD}${YELLOW}👉 Choisissez un mode : ${RESET}"
