@@ -72,16 +72,26 @@ expire_date=$(date -d "+$days days" '+%Y-%m-%d')
 useradd -m -s /bin/bash "$username" || { echo -e "${RED}Erreur lors de la création${RESET}"; read -p "Appuyez sur Entrée pour revenir au menu..."; exit 1; }
 echo "$username:$password" | chpasswd
 
-# ================== ZIVPN SYNC ==================
+# ================== ZIVPN SYNC (INTERNAL) ==================
 ZIVPN_CONFIG="/etc/zivpn/config.json"
 
 if [ -f "$ZIVPN_CONFIG" ]; then
-    if ! grep -q "\"$password\"" "$ZIVPN_CONFIG"; then
-        sed -i 's/"config": \[/"config": ["'"$password"'", /' "$ZIVPN_CONFIG"
-        systemctl restart zivpn
-    fi
+    TODAY=$(date +%Y-%m-%d)
+
+    # Construire dynamiquement la liste des mots de passe valides
+    ZIVPN_PASS=$(awk -F'|' -v today="$TODAY" '
+    {
+        if ($4 >= today) print $2
+    }' /etc/kighmu/users.list | jq -R . | jq -s .)
+
+    # Appliquer proprement dans le JSON
+    jq --argjson arr "$ZIVPN_PASS" '
+        .config = $arr
+    ' "$ZIVPN_CONFIG" > /tmp/zivpn.json && mv /tmp/zivpn.json "$ZIVPN_CONFIG"
+
+    systemctl restart zivpn
 fi
-# ===============================================
+# ==========================================================
 
 # Appliquer la date d'expiration du compte
 chage -E "$expire_date" "$username"
