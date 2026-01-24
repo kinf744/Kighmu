@@ -96,22 +96,27 @@ sysctl --system >/dev/null
 mkdir -p /etc/nftables.d
 cat <<EOF > /etc/nftables.d/zivpn.nft
 table inet zivpn {
+    chain prerouting {
+        type nat hook prerouting priority -100;
+        udp dport 6000-19999 dnat to :5667
+    }
 
-  chain input {
-    type filter hook input priority 0;
-    udp dport 5667 accept
-    ct state established,related accept
-  }
+    chain input {
+        type filter hook input priority 0;
+        udp dport 5667 accept
+        udp dport 6000-19999 accept
+        ct state established,related accept
+    }
 
-  chain forward {
-    type filter hook forward priority 0;
-    accept
-  }
+    chain forward {
+        type filter hook forward priority 0;
+        accept
+    }
 
-  chain postrouting {
-    type nat hook postrouting priority 100;
-    oifname != "tun0" masquerade
-  }
+    chain postrouting {
+        type nat hook postrouting priority 100;
+        oifname != "tun0" masquerade
+    }
 }
 EOF
 
