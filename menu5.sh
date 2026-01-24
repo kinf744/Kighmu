@@ -721,6 +721,14 @@ uninstall_udp_request() {
     echo "============================================"
 }
 
+install_zivpn() {
+    echo ">>> Installation Zivpn via script..."
+    bash "$HOME/Kighmu/zivpn.sh" || echo "Script introuvable."
+}
+
+uninstall_zivpn() {
+}
+
 # --- Interface utilisateur ---
 manage_mode() {
     MODE_NAME=$1; INSTALL_FUNC=$2; UNINSTALL_FUNC=$3
@@ -781,6 +789,7 @@ while true; do
         9) manage_mode "Hysteria" install_hysteria uninstall_hysteria ;;
         10) manage_mode "Tunnel WS/WSS SSH" install_sshws uninstall_sshws ;;
         11) manage_mode "UDP_request" install_udp_request uninstall_udp_request ;;
+        12) manage_mode "ZIVPN TUNNEL" install_zivpn uninstall_zivpn ;;
         0) echo -e "${RED}🚪 Sortie du panneau de contrôle.${RESET}" ; exit 0 ;;
         *) echo -e "${RED}❌ Option invalide, réessayez.${RESET}" ;;
     esac
