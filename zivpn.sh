@@ -5,7 +5,7 @@ echo "=== Installation ZIVPN UDP (clean & nftables) ==="
 
 # ===================== DEPENDANCES =====================
 apt update -y
-apt install -y wget curl jq nftables openssl
+apt install -y wget curl jq nftables openssl socat
 
 systemctl stop zivpn.service >/dev/null 2>&1 || true
 
@@ -25,12 +25,45 @@ cat <<EOF > /etc/zivpn/config.json
 }
 EOF
 
-# ===================== CERTIFICATS =====================
-echo "[+] Génération certificats TLS"
-openssl req -new -newkey rsa:4096 -nodes -x509 -days 365 \
--subj "/C=US/ST=NA/L=NA/O=ZIVPN/OU=UDP/CN=zivpn" \
--keyout /etc/zivpn/zivpn.key \
--out /etc/zivpn/zivpn.crt
+# ===================== CERTIFICATS TLS =====================
+TLS_DIR="/etc/ssl/kighmu"
+CERT="$TLS_DIR/fullchain.crt"
+KEY="$TLS_DIR/private.key"
+DOMAIN_FILE="/etc/xray/domain"   # ou autre fichier contenant ton domaine
+
+mkdir -p "$TLS_DIR"
+
+if [[ ! -f "$DOMAIN_FILE" ]]; then
+    echo "❌ Domaine introuvable ($DOMAIN_FILE)"
+    exit 1
+fi
+
+DOMAIN=$(cat "$DOMAIN_FILE")
+EMAIL="admin@$DOMAIN"
+
+# Certificat déjà existant → réutilisation
+if [[ -f "$CERT" && -f "$KEY" ]]; then
+    echo "🔐 Certificat TLS existant trouvé → réutilisation"
+else
+    echo "[+] Génération certificat TLS via acme.sh pour $DOMAIN"
+    # Installer acme.sh si absent
+    if [[ ! -d "$HOME/.acme.sh" ]]; then
+        curl -s https://get.acme.sh | sh
+    fi
+
+    ~/.acme.sh/acme.sh --register-account -m "$EMAIL" || true
+    ~/.acme.sh/acme.sh --issue --standalone -d "$DOMAIN" --force
+    ~/.acme.sh/acme.sh --installcert -d "$DOMAIN" \
+        --fullchainpath "$CERT" \
+        --keypath "$KEY"
+
+    chmod 600 "$KEY"
+    echo "✅ Certificat TLS généré avec succès"
+fi
+
+# Lien vers ZIVPN
+ln -sf "$CERT" /etc/zivpn/zivpn.crt
+ln -sf "$KEY" /etc/zivpn/zivpn.key
 
 # ===================== SYSCTL (persistant) =====================
 cat <<EOF > /etc/sysctl.d/99-zivpn.conf
@@ -106,4 +139,5 @@ echo "➡️ Port interne : 5667"
 echo "➡️ Ports externes : UDP 6000–19999"
 echo "➡️ Authentification : gérée par menu1.sh"
 echo "➡️ Firewall : nftables"
+echo "➡️ Certificat TLS : $CERT / $KEY"
 echo ""
