@@ -1,62 +1,109 @@
 #!/bin/bash
-# Zivpn UDP Module installer - AMD x64
-# Creator Zahid Islam
-# Bash by PowerMX
+set -euo pipefail
 
-echo -e "Updating server"
-sudo apt-get update && apt-get upgrade -y
-systemctl stop zivpn.service 1> /dev/null 2> /dev/null
-echo -e "Downloading UDP Service"
-wget https://github.com/zahidbd2/udp-zivpn/releases/download/udp-zivpn_1.4.9/udp-zivpn-linux-amd64 -O /usr/local/bin/zivpn 1> /dev/null 2> /dev/null
+echo "=== Installation ZIVPN UDP (clean & nftables) ==="
+
+# ===================== DEPENDANCES =====================
+apt update -y
+apt install -y wget curl jq nftables openssl
+
+systemctl stop zivpn.service >/dev/null 2>&1 || true
+
+# ===================== INSTALL BINARY =====================
+echo "[+] Téléchargement ZIVPN"
+wget -q https://github.com/zahidbd2/udp-zivpn/releases/download/udp-zivpn_1.4.9/udp-zivpn-linux-amd64 \
+    -O /usr/local/bin/zivpn
 chmod +x /usr/local/bin/zivpn
-mkdir /etc/zivpn 1> /dev/null 2> /dev/null
-wget https://raw.githubusercontent.com/zahidbd2/udp-zivpn/main/config.json -O /etc/zivpn/config.json 1> /dev/null 2> /dev/null
 
-echo "Generating cert files:"
-openssl req -new -newkey rsa:4096 -days 365 -nodes -x509 -subj "/C=US/ST=California/L=Los Angeles/O=Example Corp/OU=IT Department/CN=zivpn" -keyout "/etc/zivpn/zivpn.key" -out "/etc/zivpn/zivpn.crt"
-sysctl -w net.core.rmem_max=16777216 1> /dev/null 2> /dev/null
-sysctl -w net.core.wmem_max=16777216 1> /dev/null 2> /dev/null
+# ===================== CONFIG =====================
+mkdir -p /etc/zivpn
+
+cat <<EOF > /etc/zivpn/config.json
+{
+  "listen": ":5667",
+  "config": []
+}
+EOF
+
+# ===================== CERTIFICATS =====================
+echo "[+] Génération certificats TLS"
+openssl req -new -newkey rsa:4096 -nodes -x509 -days 365 \
+-subj "/C=US/ST=NA/L=NA/O=ZIVPN/OU=UDP/CN=zivpn" \
+-keyout /etc/zivpn/zivpn.key \
+-out /etc/zivpn/zivpn.crt
+
+# ===================== SYSCTL (persistant) =====================
+cat <<EOF > /etc/sysctl.d/99-zivpn.conf
+net.core.rmem_max=16777216
+net.core.wmem_max=16777216
+EOF
+sysctl --system >/dev/null
+
+# ===================== SYSTEMD =====================
 cat <<EOF > /etc/systemd/system/zivpn.service
 [Unit]
-Description=zivpn VPN Server
+Description=ZIVPN UDP Server
 After=network.target
 
 [Service]
 Type=simple
-User=root
-WorkingDirectory=/etc/zivpn
 ExecStart=/usr/local/bin/zivpn server -c /etc/zivpn/config.json
+WorkingDirectory=/etc/zivpn
 Restart=always
 RestartSec=3
-Environment=ZIVPN_LOG_LEVEL=info
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
 AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
 NoNewPrivileges=true
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-echo -e "ZIVPN UDP Passwords"
-read -p "Enter passwords separated by commas, example: passwd1,passwd2 (Press enter for Default 'zi'): " input_config
+systemctl daemon-reexec
+systemctl daemon-reload
+systemctl enable zivpn
+systemctl start zivpn
 
-if [ -n "$input_config" ]; then
-    IFS=',' read -r -a config <<< "$input_config"
-    if [ ${#config[@]} -eq 1 ]; then
-        config+=(${config[0]})
-    fi
-else
-    config=("zi")
+# ===================== NFTABLES =====================
+echo "[+] Configuration nftables"
+
+mkdir -p /etc/nftables.d
+
+cat <<EOF > /etc/nftables.d/zivpn.nft
+table inet zivpn {
+
+    chain prerouting {
+        type nat hook prerouting priority -100;
+        udp dport 6000-19999 dnat to :5667
+    }
+
+    chain input {
+        type filter hook input priority 0;
+        udp dport 5667 accept
+        udp dport 6000-19999 accept
+    }
+}
+EOF
+
+# Activer nftables
+systemctl enable nftables
+systemctl start nftables
+
+# Charger la règle
+nft -f /etc/nftables.d/zivpn.nft
+
+# Rendre persistant
+if ! grep -q nftables.d /etc/nftables.conf 2>/dev/null; then
+    echo 'include "/etc/nftables.d/*.nft"' >> /etc/nftables.conf
 fi
 
-new_config_str="\"config\": [$(printf "\"%s\"," "${config[@]}" | sed 's/,$//')]"
+systemctl restart nftables
 
-sed -i -E "s/\"config\": ?\[[[:space:]]*\"zi\"[[:space:]]*\]/${new_config_str}/g" /etc/zivpn/config.json
-
-systemctl enable zivpn.service
-systemctl start zivpn.service
-iptables -t nat -A PREROUTING -i $(ip -4 route ls|grep default|grep -Po '(?<=dev )(\S+)'|head -1) -p udp --dport 6000:19999 -j DNAT --to-destination :5667
-ufw allow 6000:19999/udp
-ufw allow 5667/udp
-rm zi2.* 1> /dev/null 2> /dev/null
-echo -e "ZIVPN Installed"
+# ===================== FIN =====================
+echo ""
+echo "✅ ZIVPN installé avec succès"
+echo "➡️ Port interne : 5667"
+echo "➡️ Ports externes : UDP 6000–19999"
+echo "➡️ Authentification : gérée par menu1.sh"
+echo "➡️ Firewall : nftables"
+echo ""
