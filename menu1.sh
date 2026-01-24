@@ -86,26 +86,26 @@ HOST_IP=$(hostname -I | awk '{print $1}')
 # Sauvegarder les infos utilisateur dans le format attendu par hysteria.sh
 echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
 
-# ================== ZIVPN SYNC (INTERNAL) ==================
+# ================== ZIVPN SYNC (POST USER ADD) ==================
 ZIVPN_CONFIG="/etc/zivpn/config.json"
 
 if [ -f "$ZIVPN_CONFIG" ]; then
+    command -v jq >/dev/null 2>&1 || return 0
+
     TODAY=$(date +%Y-%m-%d)
 
-    # Construire dynamiquement la liste des mots de passe valides
     ZIVPN_PASS=$(awk -F'|' -v today="$TODAY" '
     {
         if ($4 >= today) print $2
-    }' /etc/kighmu/users.list | jq -R . | jq -s .)
+    }' /etc/kighmu/users.list | sort -u | jq -R . | jq -s .)
 
-    # Appliquer proprement dans le JSON
     jq --argjson arr "$ZIVPN_PASS" '
         .config = $arr
     ' "$ZIVPN_CONFIG" > /tmp/zivpn.json && mv /tmp/zivpn.json "$ZIVPN_CONFIG"
 
     systemctl restart zivpn
 fi
-# ==========================================================
+# ================================================================
 
 # Ajout automatique de l'affichage du banner personnalisé au login shell
 BANNER_PATH="/etc/ssh/sshd_banner"
