@@ -729,28 +729,39 @@ install_zivpn() {
 uninstall_zivpn() {
     echo "=== Désinstallation ZIVPN UDP ==="
 
-    # ------------------ Stop service ------------------
+    # ------------------ Stop et disable service ------------------
     if systemctl list-units --full -all | grep -q zivpn.service; then
+        echo "[+] Arrêt du service ZIVPN..."
         systemctl stop zivpn.service >/dev/null 2>&1 || true
         systemctl disable zivpn.service >/dev/null 2>&1 || true
     fi
 
-    # ------------------ Remove systemd ------------------
+    # ------------------ Kill processus sur le port 5667 ------------------
+    PORTS=(5667) # tu peux ajouter d'autres ports si besoin
+    for p in "${PORTS[@]}"; do
+        if lsof -i udp:"$p" >/dev/null 2>&1; then
+            echo "[+] Détection de processus sur le port $p..."
+            lsof -ti udp:"$p" | xargs -r kill -9
+        fi
+    done
+
+    pkill -f zivpn >/dev/null 2>&1 || true
+
+    # ------------------ Remove systemd service ------------------
     rm -f /etc/systemd/system/zivpn.service
-    systemctl daemon-reexec
-    systemctl daemon-reload
+    systemctl daemon-reexec >/dev/null 2>&1
+    systemctl daemon-reload >/dev/null 2>&1
 
     # ------------------ Remove binary & config ------------------
+    echo "[+] Suppression des fichiers ZIVPN..."
     rm -f /usr/local/bin/zivpn
     rm -rf /etc/zivpn
-    systemctl stop zivpn
-    pkill -f zivpn
 
     # ------------------ Remove nftables rules ------------------
     if nft list tables 2>/dev/null | grep -q "inet zivpn"; then
+        echo "[+] Suppression de la table nftables 'zivpn'..."
         nft delete table inet zivpn >/dev/null 2>&1 || true
     fi
-
     rm -f /etc/nftables.d/zivpn.nft
     systemctl restart nftables >/dev/null 2>&1 || true
 
@@ -762,7 +773,6 @@ uninstall_zivpn() {
     sed -i '/zivpn/d' /etc/kighmu/users.list 2>/dev/null || true
 
     echo "✅ ZIVPN désinstallé et nettoyé avec succès"
-    sleep 1
 }
 
 # --- Interface utilisateur ---
