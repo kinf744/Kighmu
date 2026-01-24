@@ -727,52 +727,48 @@ install_zivpn() {
 }
 
 uninstall_zivpn() {
-    echo "=== Désinstallation ZIVPN UDP ==="
+    echo "=== Désinstallation complète ZIVPN UDP ==="
 
-    # ------------------ Stop et disable service ------------------
-    if systemctl list-units --full -all | grep -q zivpn.service; then
-        echo "[+] Arrêt du service ZIVPN..."
+    if systemctl list-unit-files | grep -q '^zivpn.service'; then
         systemctl stop zivpn.service >/dev/null 2>&1 || true
         systemctl disable zivpn.service >/dev/null 2>&1 || true
     fi
 
-    # ------------------ Kill processus sur le port 5667 ------------------
-    PORTS=(5667) # tu peux ajouter d'autres ports si besoin
-    for p in "${PORTS[@]}"; do
-        if lsof -i udp:"$p" >/dev/null 2>&1; then
-            echo "[+] Détection de processus sur le port $p..."
-            lsof -ti udp:"$p" | xargs -r kill -9
-        fi
-    done
+    if pgrep -f "/usr/local/bin/zivpn" >/dev/null 2>&1; then
+        pkill -9 -f "/usr/local/bin/zivpn" || true
+    fi
 
-    pkill -f zivpn >/dev/null 2>&1 || true
-
-    # ------------------ Remove systemd service ------------------
     rm -f /etc/systemd/system/zivpn.service
-    systemctl daemon-reexec >/dev/null 2>&1
     systemctl daemon-reload >/dev/null 2>&1
+    systemctl daemon-reexec >/dev/null 2>&1
 
-    # ------------------ Remove binary & config ------------------
-    echo "[+] Suppression des fichiers ZIVPN..."
     rm -f /usr/local/bin/zivpn
     rm -rf /etc/zivpn
 
-    # ------------------ Remove nftables rules ------------------
-    if nft list tables 2>/dev/null | grep -q "inet zivpn"; then
-        echo "[+] Suppression de la table nftables 'zivpn'..."
+    if nft list tables 2>/dev/null | grep -q 'inet zivpn'; then
         nft delete table inet zivpn >/dev/null 2>&1 || true
     fi
+
     rm -f /etc/nftables.d/zivpn.nft
+
+    if [[ -f /etc/nftables.conf ]]; then
+        sed -i '/\/etc\/nftables\.d\/\*\.nft/d' /etc/nftables.conf
+    fi
+
     systemctl restart nftables >/dev/null 2>&1 || true
 
-    # ------------------ Remove sysctl ------------------
     rm -f /etc/sysctl.d/99-zivpn.conf
     sysctl --system >/dev/null 2>&1 || true
 
-    # ------------------ Optional cleanup ------------------
+    if ip link show | grep -q tun; then
+        ip link show | awk -F: '/tun/ {print $2}' | while read -r tun; do
+            ip link del "$tun" >/dev/null 2>&1 || true
+        done
+    fi
+
     sed -i '/zivpn/d' /etc/kighmu/users.list 2>/dev/null || true
 
-    echo "✅ ZIVPN désinstallé et nettoyé avec succès"
+    echo "✅ ZIVPN totalement désinstallé"
 }
 
 # --- Interface utilisateur ---
