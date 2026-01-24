@@ -95,10 +95,10 @@ sysctl --system >/dev/null
 # -------------------- NFTABLES --------------------
 mkdir -p /etc/nftables.d
 cat <<EOF > /etc/nftables.d/zivpn.nft
-table inet zivpn {
+table ip zivpn {
     chain prerouting {
         type nat hook prerouting priority -100;
-        udp dport 6000-19999 dnat to :5667
+        udp dport 6000-19999 dnat to 0.0.0.0:5667
     }
 
     chain input {
