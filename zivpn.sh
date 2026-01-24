@@ -3,40 +3,51 @@ set -euo pipefail
 
 echo "=== Installation ZIVPN UDP (aligned official / nftables) ==="
 
-# ===================== DEPENDANCES =====================
 apt update -y
 apt install -y wget curl jq nftables openssl socat
 
-# ===================== STOP SERVICE =====================
 systemctl stop zivpn.service >/dev/null 2>&1 || true
 
-# ===================== INSTALL BINARY =====================
 echo "[+] Téléchargement ZIVPN"
 wget -q https://github.com/zahidbd2/udp-zivpn/releases/download/udp-zivpn_1.4.9/udp-zivpn-linux-amd64 \
   -O /usr/local/bin/zivpn
 chmod +x /usr/local/bin/zivpn
 
-# ===================== PATHS =====================
 mkdir -p /etc/zivpn
 CONFIG_FILE="/etc/zivpn/config.json"
 
+DOMAIN_FILE="/etc/zivpn/domain.txt"
 CERT="/etc/zivpn/zivpn.crt"
 KEY="/etc/zivpn/zivpn.key"
 
-# ===================== CERTIFICAT (OBLIGATOIRE POUR ZIVPN) =====================
-if [[ ! -f "$CERT" || ! -f "$KEY" ]]; then
-  echo "[+] Génération certificat ZIVPN (auto-signé, attendu par le binaire)"
-  openssl req -x509 -newkey rsa:2048 \
-    -keyout "$KEY" \
-    -out "$CERT" \
-    -nodes -days 3650 \
-    -subj "/CN=zivpn"
+# -------------------- Domaine --------------------
+if [[ -f "$DOMAIN_FILE" ]]; then
+    DOMAIN=$(cat "$DOMAIN_FILE")
+else
+    read -rp "Entrez votre nom de domaine pour ZIVPN : " DOMAIN
+    if [[ -z "$DOMAIN" ]]; then
+        echo "❌ Domaine non valide."
+        exit 1
+    fi
+    echo "$DOMAIN" > "$DOMAIN_FILE"
+fi
+
+# -------------------- Certificat --------------------
+if [[ -f "$CERT" && -f "$KEY" ]]; then
+    echo "[+] Certificat existant trouvé → réutilisation"
+else
+    echo "[+] Génération certificat ZIVPN auto-signé pour $DOMAIN"
+    openssl req -x509 -newkey rsa:2048 \
+      -keyout "$KEY" \
+      -out "$CERT" \
+      -nodes -days 3650 \
+      -subj "/CN=$DOMAIN"
 fi
 
 chmod 600 "$KEY"
 chmod 644 "$CERT"
 
-# ===================== CONFIG.JSON (OFFICIEL) =====================
+# -------------------- Config JSON --------------------
 cat <<EOF > "$CONFIG_FILE"
 {
   "listen": ":5667",
@@ -50,7 +61,7 @@ cat <<EOF > "$CONFIG_FILE"
 }
 EOF
 
-# ===================== SYSTEMD =====================
+# -------------------- Systemd --------------------
 cat <<EOF > /etc/systemd/system/zivpn.service
 [Unit]
 Description=ZIVPN UDP Server
@@ -73,7 +84,7 @@ EOF
 systemctl daemon-reload
 systemctl enable zivpn
 
-# ===================== SYSCTL (OBLIGATOIRE POUR TUNNEL) =====================
+# -------------------- SYSCTL --------------------
 cat <<EOF > /etc/sysctl.d/99-zivpn.conf
 net.ipv4.ip_forward=1
 net.core.rmem_max=16777216
@@ -81,11 +92,8 @@ net.core.wmem_max=16777216
 EOF
 sysctl --system >/dev/null
 
-# ===================== NFTABLES (CORRECT ZIVPN) =====================
-echo "[+] Configuration nftables (NAT + FORWARD)"
-
+# -------------------- NFTABLES --------------------
 mkdir -p /etc/nftables.d
-
 cat <<EOF > /etc/nftables.d/zivpn.nft
 table inet zivpn {
 
@@ -115,15 +123,15 @@ if ! grep -q nftables.d /etc/nftables.conf 2>/dev/null; then
   echo 'include "/etc/nftables.d/*.nft"' >> /etc/nftables.conf
 fi
 
-# ===================== START SERVICE =====================
+# -------------------- Start service --------------------
 systemctl restart zivpn
 sleep 2
 
-# ===================== STATUS =====================
 if systemctl is-active --quiet zivpn; then
   echo ""
   echo "✅ ZIVPN OPÉRATIONNEL"
   echo "➡️ UDP Port : 5667"
+  echo "➡️ Domaine : $DOMAIN"
   echo "➡️ Certificat : $CERT"
   echo "➡️ Firewall : nftables (NAT actif)"
   echo "➡️ Tunnel : IP-over-UDP (TUN)"
