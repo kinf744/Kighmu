@@ -72,6 +72,20 @@ expire_date=$(date -d "+$days days" '+%Y-%m-%d')
 useradd -m -s /bin/bash "$username" || { echo -e "${RED}Erreur lors de la création${RESET}"; read -p "Appuyez sur Entrée pour revenir au menu..."; exit 1; }
 echo "$username:$password" | chpasswd
 
+# Appliquer la date d'expiration du compte
+chage -E "$expire_date" "$username"
+
+# Préparer fichier d'utilisateurs
+USER_FILE="/etc/kighmu/users.list"
+mkdir -p /etc/kighmu
+touch "$USER_FILE"
+chmod 600 "$USER_FILE"
+
+HOST_IP=$(hostname -I | awk '{print $1}')
+
+# Sauvegarder les infos utilisateur dans le format attendu par hysteria.sh
+echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
+
 # ================== ZIVPN SYNC (INTERNAL) ==================
 ZIVPN_CONFIG="/etc/zivpn/config.json"
 
@@ -92,20 +106,6 @@ if [ -f "$ZIVPN_CONFIG" ]; then
     systemctl restart zivpn
 fi
 # ==========================================================
-
-# Appliquer la date d'expiration du compte
-chage -E "$expire_date" "$username"
-
-# Préparer fichier d'utilisateurs
-USER_FILE="/etc/kighmu/users.list"
-mkdir -p /etc/kighmu
-touch "$USER_FILE"
-chmod 600 "$USER_FILE"
-
-HOST_IP=$(hostname -I | awk '{print $1}')
-
-# Sauvegarder les infos utilisateur dans le format attendu par hysteria.sh
-echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
 
 # Ajout automatique de l'affichage du banner personnalisé au login shell
 BANNER_PATH="/etc/ssh/sshd_banner"
