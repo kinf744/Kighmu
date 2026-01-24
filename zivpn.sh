@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "=== Installation ZIVPN UDP (aligned official / nftables) ==="
+echo "=== Installation ZIVPN UDP (aligned official / nftables + logging) ==="
 
 apt update -y
 apt install -y wget curl jq nftables openssl socat
@@ -10,7 +10,7 @@ systemctl stop zivpn.service >/dev/null 2>&1 || true
 
 echo "[+] Téléchargement ZIVPN"
 wget -q https://github.com/zahidbd2/udp-zivpn/releases/download/udp-zivpn_1.4.9/udp-zivpn-linux-amd64 \
-  -O /usr/local/bin/zivpn
+-O /usr/local/bin/zivpn
 chmod +x /usr/local/bin/zivpn
 
 mkdir -p /etc/zivpn
@@ -19,6 +19,7 @@ CONFIG_FILE="/etc/zivpn/config.json"
 DOMAIN_FILE="/etc/zivpn/domain.txt"
 CERT="/etc/zivpn/zivpn.crt"
 KEY="/etc/zivpn/zivpn.key"
+LOG_FILE="/var/log/zivpn.log"
 
 # -------------------- Domaine --------------------
 if [[ -f "$DOMAIN_FILE" ]]; then
@@ -38,10 +39,10 @@ if [[ -f "$CERT" && -f "$KEY" ]]; then
 else
     echo "[+] Génération certificat ZIVPN auto-signé pour $DOMAIN"
     openssl req -x509 -newkey rsa:2048 \
-      -keyout "$KEY" \
-      -out "$CERT" \
-      -nodes -days 3650 \
-      -subj "/CN=$DOMAIN"
+    -keyout "$KEY" \
+    -out "$CERT" \
+    -nodes -days 3650 \
+    -subj "/CN=$DOMAIN"
 fi
 
 chmod 600 "$KEY"
@@ -61,7 +62,7 @@ cat <<EOF > "$CONFIG_FILE"
 }
 EOF
 
-# -------------------- Systemd --------------------
+# -------------------- Systemd avec log --------------------
 cat <<EOF > /etc/systemd/system/zivpn.service
 [Unit]
 Description=ZIVPN UDP Server
@@ -69,7 +70,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/zivpn server -c $CONFIG_FILE
+ExecStart=/usr/local/bin/zivpn server -c $CONFIG_FILE 2>> $LOG_FILE
 WorkingDirectory=/etc/zivpn
 Restart=always
 RestartSec=3
@@ -96,27 +97,27 @@ sysctl --system >/dev/null
 mkdir -p /etc/nftables.d
 cat <<EOF > /etc/nftables.d/zivpn.nft
 table ip zivpn {
-    chain prerouting {
-        type nat hook prerouting priority -100;
-        udp dport 6000-19999 dnat to 0.0.0.0:5667
-    }
+  chain prerouting {
+    type nat hook prerouting priority -100;
+    udp dport 6000-19999 dnat to 0.0.0.0:5667
+  }
 
-    chain input {
-        type filter hook input priority 0;
-        udp dport 5667 accept
-        udp dport 6000-19999 accept
-        ct state established,related accept
-    }
+  chain input {
+    type filter hook input priority 0;
+    udp dport 5667 accept
+    udp dport 6000-19999 accept
+    ct state established,related accept
+  }
 
-    chain forward {
-        type filter hook forward priority 0;
-        accept
-    }
+  chain forward {
+    type filter hook forward priority 0;
+    accept
+  }
 
-    chain postrouting {
-        type nat hook postrouting priority 100;
-        oifname != "tun0" masquerade
-    }
+  chain postrouting {
+    type nat hook postrouting priority 100;
+    oifname != "tun0" masquerade
+  }
 }
 EOF
 
@@ -140,6 +141,7 @@ if systemctl is-active --quiet zivpn; then
   echo "➡️ Certificat : $CERT"
   echo "➡️ Firewall : nftables (NAT actif)"
   echo "➡️ Tunnel : IP-over-UDP (TUN)"
+  echo "➡️ Logs côté serveur : $LOG_FILE"
 else
   echo ""
   echo "❌ ZIVPN ÉCHEC"
