@@ -25,23 +25,12 @@ cat <<EOF > /etc/zivpn/config.json
 }
 EOF
 
-# ===================== CERTIFICATS TLS =====================
+# ===================== DOMAIN & CERTIFICATS TLS =====================
+DOMAIN_FILE="/etc/xray/domain"
 TLS_DIR="/etc/ssl/kighmu"
 CERT="$TLS_DIR/fullchain.crt"
 KEY="$TLS_DIR/private.key"
-DOMAIN_FILE="/etc/xray/domain"   # ou autre fichier contenant ton domaine
-
-mkdir -p "$TLS_DIR"
-
-if [[ ! -f "$DOMAIN_FILE" ]]; then
-    echo "❌ Domaine introuvable ($DOMAIN_FILE)"
-    exit 1
-fi
-
 EMAIL="adrienkiaje@gmail.com"
-
-DOMAIN_FILE="/etc/xray/domain"
-TLS_DIR="/etc/ssl/kighmu"
 
 # Créer les dossiers si nécessaire
 mkdir -p "$(dirname "$DOMAIN_FILE")"
@@ -64,6 +53,7 @@ if [[ -f "$CERT" && -f "$KEY" ]]; then
     echo "🔐 Certificat TLS existant trouvé → réutilisation"
 else
     echo "[+] Génération certificat TLS via acme.sh pour $DOMAIN"
+
     # Installer acme.sh si absent
     if [[ ! -d "$HOME/.acme.sh" ]]; then
         curl -s https://get.acme.sh | sh
