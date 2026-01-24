@@ -21,7 +21,11 @@ mkdir -p /etc/zivpn
 cat <<EOF > /etc/zivpn/config.json
 {
   "listen": ":5667",
-  "config": []
+  "config": [],
+  "tls": {
+    "cert": "/etc/ssl/kighmu/fullchain.crt",
+    "key": "/etc/ssl/kighmu/private.key"
+  }
 }
 EOF
 
