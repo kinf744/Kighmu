@@ -74,7 +74,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/zivpn server -c $CONFIG_FILE 2>> $LOG_FILE
+ExecStart=/usr/local/bin/zivpn server -c /etc/zivpn/config.json >> /var/log/zivpn.log 2>&1
 WorkingDirectory=/etc/zivpn
 Restart=always
 RestartSec=3
