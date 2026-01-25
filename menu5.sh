@@ -184,20 +184,18 @@ install_udp_custom() {
     mkdir -p "$TMP_DIR"
     cd "$TMP_DIR" || return 1
 
-    # Télécharger le binaire et le hash
+    # 🚨 CORRECTION : Nom de fichier correct
     echo "⏳ Téléchargement de udp-custom..."
     curl -LO "$RELEASE_URL/udp-custom-linux-amd64"
-    # Note: pas de .sha256 disponible, on skip la vérif
-
+    
     # Vérifier que le fichier existe et est exécutable
     if [[ ! -f "udp-custom-linux-amd64" ]]; then
         echo "❌ Fichier binaire non trouvé"
-        cd ~; rm -rf "$TMP_DIR"
-        return 1
+        cd ~; rm -rf "$TMP_DIR"; return 1
     fi
 
-    # Installer le binaire
-    install -m 0755 udp-custom-linux-amd64 "$BIN_DST"
+    # 🚨 CORRECTION : Nom correct dans install
+    install -m 0755 "udp-custom-linux-amd64" "$BIN_DST"
     echo "✅ udp-custom installé dans $BIN_DST"
 
     # Config JSON
@@ -215,12 +213,12 @@ install_udp_custom() {
 EOF
     echo "✅ Config créée: $CONFIG_FILE"
 
-    # Firewall : ouvrir le port 36712 si iptables disponible
+    # Firewall
     if command -v iptables >/dev/null 2>&1; then
         if ! iptables -C INPUT -p udp --dport 36712 -j ACCEPT 2>/dev/null; then
             iptables -I INPUT -p udp --dport 36712 -j ACCEPT
             command -v netfilter-persistent >/dev/null && netfilter-persistent save
-            echo "✅ Port 36712 ouvert dans le firewall"
+            echo "✅ Port 36712 ouvert"
         fi
     fi
 
@@ -248,14 +246,17 @@ EOF
 
         systemctl daemon-reload
         systemctl enable --now udp-custom.service
+        sleep 2
         echo "✅ Service systemd udp-custom installé et actif"
     else
         echo "ℹ️ Service systemd déjà existant"
+        systemctl restart udp-custom.service
     fi
 
     IP=$(hostname -I | awk '{print $1}')
     echo "🚀 udp-custom prêt ! Format client: $IP:36712:username:password"
     echo "   Compatible ZIVPN(6000-19999) + SlowDNS(53→5300)"
+    echo "   Vérif: ss -ulnp | grep 36712"
 
     # Nettoyage
     cd ~
