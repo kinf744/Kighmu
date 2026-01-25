@@ -178,89 +178,88 @@ uninstall_dropbear() {
 install_udp_custom() {
     BIN_DST="/usr/local/bin/udp-custom"
     TMP_DIR="/tmp/udp_custom_install"
-    RELEASE_URL="https://github.com/kinf744/Kighmu/releases/download/v1.0.0"
+    UDP_PORT=36712
+    RUN_USER="root"  # Pas besoin d'user dédié pour compatibilité
 
-    # Préparer le dossier temporaire
+    # Préparer dossier temporaire
     mkdir -p "$TMP_DIR"
     cd "$TMP_DIR" || return 1
 
-    # 🚨 CORRECTION : Nom de fichier correct
-    echo "⏳ Téléchargement de udp-custom..."
-    curl -LO "$RELEASE_URL/udp-custom-linux-amd64"
-    
-    # Vérifier que le fichier existe et est exécutable
-    if [[ ! -f "udp-custom-linux-amd64" ]]; then
-        echo "❌ Fichier binaire non trouvé"
+    # Téléchargement (ta méthode éprouvée)
+    echo "⏳ Téléchargement udp-custom..."
+    if ! wget -q -O "udp-custom" "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp-custom-linux-amd64"; then
+        echo "❌ Échec téléchargement"
         cd ~; rm -rf "$TMP_DIR"; return 1
     fi
 
-    # 🚨 CORRECTION : Nom correct dans install
-    install -m 0755 "udp-custom-linux-amd64" "$BIN_DST"
-    echo "✅ udp-custom installé dans $BIN_DST"
+    chmod +x udp-custom
+    install -m 0755 udp-custom "$BIN_DST"
+    echo "✅ Binaire installé: $BIN_DST"
 
-    # Config JSON
+    # Config JSON (ta syntaxe originale qui marche)
     CONFIG_FILE="/root/udp/config.json"
     mkdir -p "/root/udp"
     cat > "$CONFIG_FILE" <<EOF
 {
-  "listen": ":36712",
-  "stream_buffer": 33554432,
-  "receive_buffer": 83886080,
-  "auth": {
-    "mode": "passwords"
-  }
+  "server_port": $UDP_PORT,
+  "exclude_port": [53,5300],
+  "udp_timeout": 600,
+  "dns_cache": true
 }
 EOF
-    echo "✅ Config créée: $CONFIG_FILE"
+    echo "✅ Config: $CONFIG_FILE"
 
-    # Firewall
-    if command -v iptables >/dev/null 2>&1; then
-        if ! iptables -C INPUT -p udp --dport 36712 -j ACCEPT 2>/dev/null; then
-            iptables -I INPUT -p udp --dport 36712 -j ACCEPT
-            command -v netfilter-persistent >/dev/null && netfilter-persistent save
-            echo "✅ Port 36712 ouvert"
-        fi
-    fi
+    # IPTABLES (ton style précis)
+    echo "🔓 Ouverture port $UDP_PORT..."
+    iptables -C INPUT -p udp --dport "$UDP_PORT" -j ACCEPT 2>/dev/null || \
+    iptables -I INPUT -p udp --dport "$UDP_PORT" -j ACCEPT
+    command -v netfilter-persistent >/dev/null && netfilter-persistent save
+    echo "✅ Port $UDP_PORT ouvert et persistant"
 
-    # systemd : création du service si absent
+    # SYSTEMD (ton modèle parfait)
     SYSTEMD_FILE="/etc/systemd/system/udp-custom.service"
-    if [ ! -f "$SYSTEMD_FILE" ]; then
-        tee "$SYSTEMD_FILE" >/dev/null <<EOF
+    systemctl stop udp-custom 2>/dev/null || true
+    
+    cat > "$SYSTEMD_FILE" <<EOF
 [Unit]
-Description=UDP Custom Tunnel
+Description=UDP Custom Service
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=$BIN_DST server -c $CONFIG_FILE -exclude 53,5300
-Restart=always
-RestartSec=2
-User=root
-LimitNOFILE=1048576
+User=$RUN_USER
 WorkingDirectory=/root/udp
+ExecStart=$BIN_DST -c $CONFIG_FILE
+Restart=always
+RestartSec=5
+LimitNOFILE=1048576
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=udp-custom
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-        systemctl daemon-reload
-        systemctl enable --now udp-custom.service
-        sleep 2
-        echo "✅ Service systemd udp-custom installé et actif"
+    systemctl daemon-reload
+    systemctl enable udp-custom.service
+    systemctl restart udp-custom.service
+    sleep 3
+
+    # VÉRIFICATION FINALE (ton style)
+    if systemctl is-active --quiet udp-custom.service; then
+        IP=$(hostname -I | awk '{print $1}')
+        echo "✅ UDP Custom actif sur port $UDP_PORT !"
+        echo "   Client: $IP:$UDP_PORT:username:password"
+        echo "   Exclus: 53(SlowDNS),5300(dnstt) protégés"
+        echo "   Vérif: ss -ulnp | grep $UDP_PORT"
     else
-        echo "ℹ️ Service systemd déjà existant"
-        systemctl restart udp-custom.service
+        echo "❌ Service HS. Logs:"
+        journalctl -u udp-custom.service -n 20 --no-pager
     fi
 
-    IP=$(hostname -I | awk '{print $1}')
-    echo "🚀 udp-custom prêt ! Format client: $IP:36712:username:password"
-    echo "   Compatible ZIVPN(6000-19999) + SlowDNS(53→5300)"
-    echo "   Vérif: ss -ulnp | grep 36712"
-
-    # Nettoyage
-    cd ~
-    rm -rf "$TMP_DIR"
+    cd ~; rm -rf "$TMP_DIR"
     read -p "Appuyez sur Entrée..."
 }
 
