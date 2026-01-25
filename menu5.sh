@@ -176,40 +176,27 @@ uninstall_dropbear() {
 }
 
 install_udp_custom() {
-    clear; show_banner
-    echo -e "${C_BOLD}${C_PURPLE}--- 🚀 Installing udp-custom ---${C_RESET}"
+    clear
+    echo "--- 🚀 Installing udp-custom ---"
+    
     if [ -f "/etc/systemd/system/udp-custom.service" ]; then
-        echo -e "${YELLOW}ℹ️ udp-custom is already installed.${RESET}"
+        echo "ℹ️ udp-custom already installed."
+        read -p "Press Enter..."
         return
     fi
 
-    echo -e "${GREEN}⚙️ Creating directory for udp-custom...${RESET}"
     mkdir -p "/root/udp"
 
-    echo -e "${GREEN}⚙️ Detecting system architecture...${RESET}"
-    local arch
-    arch=$(uname -m)
-    local binary_url=""
-    if [[ "$arch" == "x86_64" ]]; then
-        binary_url="https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp-custom-linux-amd64"
-        echo -e "${BLUE}ℹ️ Detected x86_64 (amd64) architecture.${RESET}"
-    elif [[ "$arch" == "aarch64" || "$arch" == "arm64" ]]; then
-        binary_url="https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp-custom-linux-arm"
-        echo -e "${BLUE}ℹ️ Detected ARM64 architecture.${RESET}"
-    else
-        echo -e "${RED}❌ Unsupported architecture: $arch. Cannot install udp-custom.${RESET}"
-        return
-    fi
-
-    echo -e "${GREEN}📥 Downloading udp-custom binary...${RESET}"
-    wget -q --show-progress -O "/root/udp/udp-custom" "$binary_url"
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}❌ Failed to download the udp-custom binary.${RESET}"
-        return
-    fi
+    # Download FIXÉ
+    echo "📥 Downloading..."
+    wget -q --timeout=15 -O "/root/udp/udp-custom" \
+      "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp-custom-linux-amd64" || {
+      echo "❌ Download failed - check URL"
+      read -p "Press Enter..."; return
+    }
     chmod +x "/root/udp/udp-custom"
 
-    echo -e "${GREEN}📝 Creating default config.json...${RESET}"
+    # TA CONFIG JSON PARFAITE (inchangée)
     cat > "/root/udp/config.json" <<EOF
 {
   "listen": ":36712",
@@ -220,38 +207,38 @@ install_udp_custom() {
   }
 }
 EOF
-    chmod 644 "/root/udp/config.json"
 
-    echo -e "${GREEN}📝 Creating systemd service file...${RESET}"
+    # Firewall udp-custom (compatible ZIVPN+SLOWDNS)
+    iptables -A INPUT -p udp --dport 36712 -j ACCEPT 2>/dev/null || true
+
+    # Systemd CORRIGÉ
     cat > /etc/systemd/system/udp-custom.service <<EOF
 [Unit]
-Description=UDP Custom by kighmu
-After=network.target
+Description=UDP Custom Tunnel
+After=network-online.target
+Wants=network-online.target
 
 [Service]
-User=root
 Type=simple
-ExecStart=/root/udp/udp-custom server -exclude 53,5300
-WorkingDirectory=/root/udp/
+User=root
+ExecStart=/root/udp/udp-custom server -c /root/udp/config.json -exclude 53,5300
+WorkingDirectory=/root/udp
 Restart=always
 RestartSec=2s
+LimitNOFILE=65536
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target
 EOF
 
-    echo -e "${YELLOW}▶️ Enabling and starting udp-custom service...${RESET}"
     systemctl daemon-reload
-    systemctl enable udp-custom.service
-    systemctl start udp-custom.service
-    sleep 2
-    if systemctl is-active --quiet udp-custom; then
-        echo -e "${YELLOW}✅ SUCCESS: udp-custom is installed and active.${RESET}"
-    else
-        echo -e "${RED}❌ ERROR: udp-custom service failed to start.${RESET}"
-        echo -e "${YELLOW}ℹ️ Displaying last 15 lines of the service log for diagnostics:${RESET}"
-        journalctl -u udp-custom.service -n 15 --no-pager
+    systemctl enable --now udp-custom.service
+    
+    if systemctl is-active --quiet udp-custom.service; then
+        echo "✅ udp-custom installé ! Port 36712"
     fi
+    
+    read -p "Press Enter..."
 }
 
 uninstall_udp_custom() {
