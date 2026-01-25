@@ -203,6 +203,12 @@ echo -e "➡️ 𝙎𝙎𝙇/𝙏𝙇𝙎 : ${GREEN}$HOST_IP:444@$username:$pass
 echo -e "➡️ 𝙋𝙍𝙊𝙓𝙔 𝙒𝙎 : ${GREEN}$HOST_IP:9090@$username:$password${RESET}"
 echo -e "➡️ 𝙎𝙎𝙃 𝙐𝘿𝙋 : ${GREEN}$HOST_IP:54000@$username:$password${RESET}"
 echo -e "➡️ 𝙃𝙔𝙎𝙏𝙀𝙍𝙄𝘼 : ${GREEN}$DOMAIN:22000@$username:$password${RESET}"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "🚀 ${BOLD}𝗭𝗜𝗩𝗣𝗡 𝗨𝗗𝗣 𝗧𝗨𝗡𝗡𝗘𝗟${RESET}"
+echo -e "${GREEN}🌐 𝗗𝗼𝗺𝗮𝗶𝗻𝗲: ${YELLOW}$DOMAIN${RESET}"
+echo -e "${GREEN}🔐 𝗢𝗯𝗳𝘀: ${YELLOW}zivpn${RESET}
+echo -e "${GREEN}🔐 𝗣𝗮𝘀𝘀𝘄𝗼𝗿𝗱: ${YELLOW}$password${RESET}
+echo "${GREEN}🔌 𝐏𝐨𝐫𝐭    : 5667${RESET}"
 echo -e ""
 echo -e "📜 𝙋𝘼𝙔𝙇𝙊𝘼𝘿 𝙒𝙎:"
 echo -e "${GREEN}GET / HTTP/1.1[crlf]Host: [host][crlf]Connection: Upgrade[crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]${RESET}"
