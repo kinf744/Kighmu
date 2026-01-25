@@ -210,10 +210,12 @@ create_zivpn_user() {
 delete_zivpn_user() {
   print_title
   echo "[3] SUPPRIMER UTILISATEUR"
-  
-  if ! zivpn_installed || [[ ! -s "$ZIVPN_USER_FILE" ]]; then
-    echo "❌ Aucun utilisateur ou ZIVPN non installé"
-    pause; return
+
+  # On ne bloque plus sur zivpn_installed, seulement sur le fichier users
+  if [[ ! -f "$ZIVPN_USER_FILE" || ! -s "$ZIVPN_USER_FILE" ]]; then
+    echo "❌ Aucun utilisateur enregistré pour l’instant."
+    pause
+    return
   fi
 
   echo "Utilisateurs actifs:"
