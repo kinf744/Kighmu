@@ -52,8 +52,7 @@ chmod 644 /etc/resolv.conf
 log "Installation des dépendances..."
 export DEBIAN_FRONTEND=noninteractive
 apt update -y
-apt install -y nftables curl tcpdump jq python3 python3-venv python3-pip iproute2
-systemctl enable --now nftables
+apt install -y iptables curl tcpdump jq python3 python3-venv python3-pip iproute2
 
 # ===================== PYTHON VENV =====================
 if [[ ! -d "$SLOWDNS_DIR/venv" ]]; then
@@ -200,27 +199,20 @@ StandardError=append:/var/log/slowdns.log
 WantedBy=multi-user.target
 EOF
 
-# ===================== NFTABLES (SAFE) =====================
-mkdir -p /etc/nftables.d
+# ===================== IPTABLES (Compatible ZIVPN) =====================
+iptables -C INPUT -p udp --dport 5300 -j ACCEPT 2>/dev/null || \
+iptables -A INPUT -p udp --dport 5300 -j ACCEPT
 
-cat > /etc/nftables.d/slowdns.nft <<EOF
-table inet slowdns {
-  chain prerouting {
-    type nat hook prerouting priority -100;
-    iifname "$PUB_IFACE" udp dport 53 redirect to :5300
-  }
-  chain input {
-    type filter hook input priority 0;
-    udp dport 5300 accept
-  }
-}
-EOF
+iptables -C PREROUTING -t nat -i eth0 -p udp --dport 53 -j REDIRECT --to-ports 5300 2>/dev/null || \
+iptables -t nat -A PREROUTING -i eth0 -p udp --dport 53 -j REDIRECT --to-ports 5300
 
-grep -q slowdns.nft /etc/nftables.conf || \
-echo 'include "/etc/nftables.d/slowdns.nft"' >> /etc/nftables.conf
+# Persistance iptables
+apt install -y iptables-persistent >/dev/null 2>&1 || true
+netfilter-persistent save >/dev/null 2>&1 || true
+
+log "✅ IPTables SlowDNS configuré (compatible ZIVPN)"
 
 systemctl daemon-reload
-nft -f /etc/nftables.d/slowdns.nft
 systemctl enable --now slowdns.service
 
 log "✅ SlowDNS installé, sécurisé et compatible UDP Request"
