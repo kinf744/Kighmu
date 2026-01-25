@@ -230,8 +230,7 @@ create_zivpn_user() {
       echo "🔐 𝗣𝗮𝘀𝘀𝘄𝗼𝗿𝗱 : $PASS"
       echo "📅 𝗘𝘅𝗽𝗶𝗿𝗲   : $EXPIRE"
       echo "🔌 𝐏𝐨𝐫𝐭    : 5667"
-      echo
-      echo"━━━━━━━━━━━━━━━━━━━━━"
+      echo "━━━━━━━━━━━━━━━━━━━━━"
     else
       echo "❌ JSON invalide → rollback"
       rm -f /tmp/config.json
