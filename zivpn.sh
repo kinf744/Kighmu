@@ -197,7 +197,7 @@ create_zivpn_user() {
       DOMAIN=$(cat "$ZIVPN_DOMAIN_FILE" 2>/dev/null || echo "$IP")
 
       echo
-      echo "✅ UTILISATEUR AJOUTÉ"
+      echo "✅ 𝗨𝗧𝗜𝗟𝗜𝗦𝗔𝗧𝗘𝗨𝗥 𝗖𝗥𝗘𝗘𝗥"
       echo "━━━━━━━━━━━━━━━━━━━━━"
       echo "🌐 𝗗𝗼𝗺𝗮𝗶𝗻𝗲  : $DOMAIN"
       echo "🎭 𝗢𝗯𝗳𝘀     : zivpn"
