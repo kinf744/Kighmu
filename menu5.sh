@@ -176,102 +176,19 @@ uninstall_dropbear() {
 }
 
 install_udp_custom() {
-    BIN_DST="/usr/local/bin/udp-custom"
-    TMP_DIR="/tmp/udp_custom_install"
-    UDP_PORT=36712
-    RUN_USER="root"  # Pas besoin d'user dédié pour compatibilité
-
-    # Préparer dossier temporaire
-    mkdir -p "$TMP_DIR"
-    cd "$TMP_DIR" || return 1
-
-    # Téléchargement (ta méthode éprouvée)
-    echo "⏳ Téléchargement udp-custom..."
-    if ! wget -q -O "udp-custom" "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp-custom-linux-amd64"; then
-        echo "❌ Échec téléchargement"
-        cd ~; rm -rf "$TMP_DIR"; return 1
-    fi
-
-    chmod +x udp-custom
-    install -m 0755 udp-custom "$BIN_DST"
-    echo "✅ Binaire installé: $BIN_DST"
-
-    # Config JSON (ta syntaxe originale qui marche)
-    CONFIG_FILE="/root/udp/config.json"
-    mkdir -p "/root/udp"
-    cat > "$CONFIG_FILE" <<EOF
-{
-  "server_port": $UDP_PORT,
-  "exclude_port": [53,5300],
-  "udp_timeout": 600,
-  "dns_cache": true
+    echo ">>> Installation dropbear via script..."
+    bash "$HOME/Kighmu/udp_custom.sh" || echo "Script introuvable."
 }
-EOF
-    echo "✅ Config: $CONFIG_FILE"
 
-    # IPTABLES (ton style précis)
-    echo "🔓 Ouverture port $UDP_PORT..."
-    iptables -C INPUT -p udp --dport "$UDP_PORT" -j ACCEPT 2>/dev/null || \
-    iptables -I INPUT -p udp --dport "$UDP_PORT" -j ACCEPT
-    command -v netfilter-persistent >/dev/null && netfilter-persistent save
-    echo "✅ Port $UDP_PORT ouvert et persistant"
-
-    # SYSTEMD (ton modèle parfait)
-    SYSTEMD_FILE="/etc/systemd/system/udp-custom.service"
-    systemctl stop udp-custom 2>/dev/null || true
-    
-    cat > "$SYSTEMD_FILE" <<EOF
-[Unit]
-Description=UDP Custom Service
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=$RUN_USER
-WorkingDirectory=/root/udp
-ExecStart=$BIN_DST -c $CONFIG_FILE
-Restart=always
-RestartSec=5
-LimitNOFILE=1048576
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=udp-custom
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-    systemctl daemon-reload
-    systemctl enable udp-custom.service
-    systemctl restart udp-custom.service
-    sleep 3
-
-    # VÉRIFICATION FINALE (ton style)
-    if systemctl is-active --quiet udp-custom.service; then
-        IP=$(hostname -I | awk '{print $1}')
-        echo "✅ UDP Custom actif sur port $UDP_PORT !"
-        echo "   Client: $IP:$UDP_PORT:username:password"
-        echo "   Exclus: 53(SlowDNS),5300(dnstt) protégés"
-        echo "   Vérif: ss -ulnp | grep $UDP_PORT"
-    else
-        echo "❌ Service HS. Logs:"
-        journalctl -u udp-custom.service -n 20 --no-pager
-    fi
-
-    cd ~; rm -rf "$TMP_DIR"
-    read -p "Appuyez sur Entrée..."
-}
 
 uninstall_udp_custom() {
     echo "--- 🗑️ Désinstallation udp-custom ---"
     
-    # Vérifier si installé
+    # Vérifier si installé (MULTIPLES emplacements possibles)
     SYSTEMD_FILE="/etc/systemd/system/udp-custom.service"
-    if [ ! -f "$SYSTEMD_FILE" ]; then
+    if [[ ! -f "$SYSTEMD_FILE" ]]; then
         echo "ℹ️ udp-custom non installé."
-        read -p "Appuyez sur Entrée..."
-        return
+        read -p "Appuyez sur Entrée..."; return 0
     fi
 
     echo "🛑 Arrêt et désactivation du service..."
@@ -281,25 +198,42 @@ uninstall_udp_custom() {
     echo "🗑️ Suppression service systemd..."
     rm -f "$SYSTEMD_FILE"
     systemctl daemon-reload
+    systemctl reset-failed udp-custom.service 2>/dev/null || true
 
+    # SUPPRESSION COMPLÈTE (tous les emplacements possibles)
     echo "🗑️ Suppression binaire et fichiers..."
     rm -f /usr/local/bin/udp-custom
+    rm -f /opt/udp-custom/bin/udp-custom-linux-amd64
+    rm -f /opt/udp-custom/bin/udp-custom
+    rm -rf /opt/udp-custom
     rm -rf /root/udp
+    rm -rf /etc/udp-custom
+    rm -rf /var/log/udp-custom
 
-    echo "🔓 Fermeture port firewall..."
-    iptables -D INPUT -p udp --dport 36712 -j ACCEPT 2>/dev/null || true
-    command -v netfilter-persistent >/dev/null && netfilter-persistent save 2>/dev/null || true
+    # Nettoyage utilisateur si créé
+    userdel udpuser 2>/dev/null || true
+    rm -rf /home/udpuser 2>/dev/null || true
+
+    # 🔓 FIREWALL COMPLET (tous les ports possibles)
+    echo "🔓 Fermeture ports firewall..."
+    for port in 36712 54000; do
+        iptables -D INPUT -p udp --dport "$port" -j ACCEPT 2>/dev/null || true
+        iptables -D INPUT -p udp --dport "$port" -j ACCEPT 2>/dev/null || true
+    done
+    
+    # NAT si présent
+    iptables -t nat -D PREROUTING -p udp --dport 36712 -j DNAT --to-destination :36712 2>/dev/null || true
+    netfilter-persistent save 2>/dev/null || true
 
     echo "✅ udp-custom désinstallé avec succès !"
     
-    # Vérification finale
-    if ! systemctl is-active --quiet udp-custom.service 2>/dev/null; then
-        echo "   Service supprimé (OK)"
-    fi
-    
-    if ! ss -ludp | grep -q :36712; then
-        echo "   Port 36712 libéré (OK)"
-    fi
+    # Vérification finale DÉTAILLÉE
+    echo
+    echo "🔍 VÉRIFICATION FINALE :"
+    [[ ! -f "$SYSTEMD_FILE" ]] && echo "   ✅ Service supprimé" || echo "   ❌ Service reste"
+    ! systemctl list-unit-files | grep -q udp-custom.service && echo "   ✅ systemd clean" || echo "   ❌ systemd sale"
+    ! ss -ulnp | grep -q :36712 && echo "   ✅ Port 36712 libéré" || echo "   ❌ Port 36712 occupé"
+    ! ss -ulnp | grep -q :54000 && echo "   ✅ Port 54000 libéré" || echo "   ❌ Port 54000 occupé"
     
     read -p "Appuyez sur Entrée..."
 }
