@@ -71,7 +71,7 @@ show_status_block() {
 
 install_zivpn() {
   print_title
-  echo "[1] INSTALLATION ZIVPN"
+  echo "[1] INSTALLATION ZIVPN (NO CONFLIT UFW)"
   echo
 
   if zivpn_installed; then
@@ -80,14 +80,19 @@ install_zivpn() {
     return
   fi
 
-  # Clean slate
+  # Clean slate + PURGE UFW
   systemctl stop zivpn >/dev/null 2>&1 || true
+  systemctl stop ufw >/dev/null 2>&1 || true
   ufw disable >/dev/null 2>&1 || true
-  iptables -F; iptables -t nat -F
+  apt purge ufw -y >/dev/null 2>&1 || true
+  
+  # RESET iptables propre
+  iptables -F; iptables -t nat -F; iptables -t mangle -F 2>/dev/null || true
 
-  apt update -y && apt install -y wget curl jq openssl ufw iptables-persistent
+  # ✅ PAQUETS SANS CONFLIT UFW
+  apt update -y && apt install -y wget curl jq openssl iptables-persistent netfilter-persistent
 
-  # Binaire + cert (code précédent OK)
+  # Binaire + cert
   wget -q "https://github.com/zahidbd2/udp-zivpn/releases/download/udp-zivpn_1.4.9/udp-zivpn-linux-amd64" -O "$ZIVPN_BIN"
   chmod +x "$ZIVPN_BIN"
   
@@ -125,26 +130,47 @@ Type=simple
 ExecStart=$ZIVPN_BIN server -c $ZIVPN_CONFIG
 WorkingDirectory=/etc/zivpn
 Restart=always
+RestartSec=5
 AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
+LimitNOFILE=1048576
+
 [Install]
 WantedBy=multi-user.target
 EOF
 
   systemctl daemon-reload && systemctl enable "$ZIVPN_SERVICE"
 
-  # FIREWALL CORRIGÉ
+  # 🔥 FIREWALL TRIPLE TUNNEL
+  iptables -A INPUT -p udp --dport 5667 -j ACCEPT   # ZIVPN interne
+  iptables -A INPUT -p udp --dport 36712 -j ACCEPT  # UDP Custom
+  iptables -A INPUT -p udp --dport 6000:19999 -j ACCEPT  # ZIVPN clients
   iptables -t nat -A PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667
-  iptables -A INPUT -p udp --dport 5667 -j ACCEPT
-  iptables -A INPUT -p udp --dport 6000:19999 -j ACCEPT
-  iptables -A INPUT -p udp --dport 36712 -j ACCEPT 2>/dev/null || true
-  netfilter-persistent save
+  
+  # Persistance iptables
+  netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
 
+  # Optimisations réseau
   sysctl -w net.core.rmem_max=16777216
   sysctl -w net.core.wmem_max=16777216
+  echo "net.core.rmem_max=16777216" >> /etc/sysctl.conf
+  echo "net.core.wmem_max=16777216" >> /etc/sysctl.conf
 
   systemctl start "$ZIVPN_SERVICE"
   
-  echo "✅ ZIVPN installé ! Teste avec password 'zi'"
+  # VÉRIFICATION FINALE
+  sleep 3
+  if systemctl is-active --quiet "$ZIVPN_SERVICE"; then
+    IP=$(hostname -I | awk '{print $1}')
+    echo "✅ ZIVPN installé et actif !"
+    echo "📱 Config ZIVPN App:"
+    echo "   udp server: $IP"
+    echo "   Port: 6000-19999 (auto NAT → 5667)"
+    echo "   Password: zi"
+    echo "🔍 Vérif ports: ss -ulnp | grep -E '(53|5667|36712)'"
+  else
+    echo "❌ ZIVPN ne démarre pas → journalctl -u zivpn.service"
+  fi
+  
   pause
 }
 
