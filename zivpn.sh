@@ -223,9 +223,8 @@ delete_zivpn_user() {
   print_title
   echo "[3] SUPPRIMER UTILISATEUR"
 
-  # On ne bloque plus sur zivpn_installed, seulement sur le fichier users
   if [[ ! -f "$ZIVPN_USER_FILE" || ! -s "$ZIVPN_USER_FILE" ]]; then
-    echo "❌ Aucun utilisateur enregistré pour l’instant."
+    echo "❌ Aucun utilisateur enregistré."
     pause
     return
   fi
@@ -236,20 +235,31 @@ delete_zivpn_user() {
   echo
   read -rp "Téléphone à supprimer: " PHONE
 
+  # SUPPRESSION utilisateur
   tmp=$(mktemp)
   grep -v "^$PHONE|" "$ZIVPN_USER_FILE" > "$tmp"
   mv "$tmp" "$ZIVPN_USER_FILE"
+  chmod 600 "$ZIVPN_USER_FILE"
 
-  # Refresh config
+  # ✅ JQ CORRIGÉ (comme create_user corrigé)
   TODAY=$(date +%Y-%m-%d)
   PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$ZIVPN_USER_FILE" | \
-              sort -u | jq -R . | jq -s .)
+              sort -u | paste -sd, -)
 
-  jq --argjson arr "$PASSWORDS" '.auth.config = $arr' "$ZIVPN_CONFIG" > /tmp/config.json
-  mv /tmp/config.json "$ZIVPN_CONFIG"
+  # VÉRIFICATION + UPDATE sécurisé
+  if jq --arg passwords "$PASSWORDS" \
+        '.auth.config = ($passwords | split(","))' \
+        "$ZIVPN_CONFIG" > /tmp/config.json 2>/dev/null && \
+     jq empty /tmp/config.json >/dev/null 2>&1; then
+    
+    mv /tmp/config.json "$ZIVPN_CONFIG"
+    systemctl restart "$ZIVPN_SERVICE"
+    echo "✅ $PHONE supprimé et ZIVPN mis à jour"
+  else
+    echo "⚠️ Config ZIVPN inchangée (sécurité)"
+    rm -f /tmp/config.json
+  fi
 
-  systemctl restart "$ZIVPN_SERVICE"
-  echo "✅ $PHONE supprimé et config mise à jour"
   pause
 }
 
