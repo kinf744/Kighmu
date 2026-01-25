@@ -165,9 +165,9 @@ echo -e "➡️ 𝙎𝙎𝙃 𝙐𝘿𝙋 : ${GREEN}$HOST_IP:54000@$username:$pa
 echo -e "➡️ 𝙃𝙔𝙎𝙏𝙀𝙍𝙄𝘼 : ${GREEN}$DOMAIN:22000@$username:$password${RESET}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo -e "🚀 ${BOLD}𝗭𝗜𝗩𝗣𝗡 𝗨𝗗𝗣 𝗧𝗨𝗡𝗡𝗘𝗟${RESET}"
-echo -e "${GREEN}➡️ udp server: ${YELLOW}$HOST_IP 5667${RESET}"
-echo -e "${GREEN}➡️ Password: ${YELLOW}$password${RESET}"
-echo -e "${GREEN}➡️ ZIVPN App → udp server: $HOST_IP | $password${RESET}"
+echo -e "${GREEN}🌐 𝗗𝗼𝗺𝗮𝗶𝗻𝗲: ${YELLOW}$HOST_IP 5667${RESET}"
+echo -e "${GREEN}🔐 𝗢𝗯𝗳𝘀: ${YELLOW}zivpn${RESET}
+echo -e "${GREEN}🔐 𝗣𝗮𝘀𝘀𝘄𝗼𝗿𝗱: ${YELLOW}$password${RESET}
 echo ""
 echo -e "📜 𝙋𝘼𝙔𝙇𝙊𝘼𝘿 𝙒𝙎:"
 echo -e "${GREEN}GET / HTTP/1.1[crlf]Host: [host][crlf]Connection: Upgrade[crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]${RESET}"
