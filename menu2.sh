@@ -130,6 +130,38 @@ HOST_IP=$(curl -s https://api.ipify.org)
   echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
 ) 200>"$LOCK_FILE"
 
+# ================== ZIVPN SYNC (FORMAT CORRECT) ==================
+ZIVPN_CONFIG="/etc/zivpn/config.json"
+ZIVPN_USER_FILE="/etc/zivpn/users.list"
+
+if [[ -f "$ZIVPN_CONFIG" && -f "$ZIVPN_USER_FILE" ]]; then
+    command -v jq >/dev/null 2>&1 || { echo "jq manquant"; exit 0; }
+
+    # Format ZIVPN : téléphone|password|expire_date
+    PHONE="${username:0:10}"  # 1er 10 chars → téléphone
+    ZIVPN_LINE="$PHONE|$password|$expire_date"
+    
+    # Ajout/supp/remplace
+    tmp=$(mktemp)
+    grep -v "^$PHONE|" "$ZIVPN_USER_FILE" > "$tmp" 2>/dev/null || true
+    echo "$ZIVPN_LINE" >> "$tmp"
+    mv "$tmp" "$ZIVPN_USER_FILE"
+    chmod 600 "$ZIVPN_USER_FILE"
+
+    # Update config ZIVPN (passwords actifs)
+    TODAY=$(date +%Y-%m-%d)
+    PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$ZIVPN_USER_FILE" | \
+                sort -u | paste -sd, -)
+
+    jq --arg passwords "$PASSWORDS" \
+       '.auth.config = ($passwords | split(","))' \
+       "$ZIVPN_CONFIG" > /tmp/zivpn.json && \
+    mv /tmp/zivpn.json "$ZIVPN_CONFIG" && \
+    systemctl restart zivpn.service
+
+    echo -e "${GREEN}✅ ZIVPN SYNCHRONISÉ !${RESET}"
+fi
+
 # ==============================
 # Script de suppression automatique
 # ==============================
