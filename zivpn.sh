@@ -1,14 +1,12 @@
 #!/bin/bash
-# zivpn-panel.sh
+# zivpn-panel-v2.sh - Aligné sur arivpnstores/udp-zivpn
 set -euo pipefail
 
 ZIVPN_BIN="/usr/local/bin/zivpn"
-ZIVPN_SERVICE="zivpn"
+ZIVPN_SERVICE="zivpn.service"
 ZIVPN_CONFIG="/etc/zivpn/config.json"
-ZIVPN_USER_FILE="/etc/zivpn/users.list"   # mapping téléphone|password|expiry
-
-mkdir -p /etc/zivpn
-touch "$ZIVPN_USER_FILE"
+ZIVPN_USER_FILE="/etc/zivpn/users.list"
+ZIVPN_DOMAIN_FILE="/etc/zivpn/domain.txt"
 
 # ---------- Fonctions utilitaires ----------
 
@@ -19,100 +17,113 @@ pause() {
 
 check_root() {
   if [[ $EUID -ne 0 ]]; then
-    echo "Ce panneau doit être lancé en root."
+    echo "❌ Ce panneau doit être lancé en root."
     exit 1
   fi
 }
 
 zivpn_installed() {
-  [[ -x "$ZIVPN_BIN" ]] && systemctl list-unit-files | grep -q "^${ZIVPN_SERVICE}.service"
+  [[ -x "$ZIVPN_BIN" ]] && systemctl list-unit-files | grep -q "^$ZIVPN_SERVICE"
 }
 
 zivpn_running() {
-  systemctl is-active --quiet "$ZIVPN_SERVICE"
+  systemctl is-active --quiet "$ZIVPN_SERVICE" 2>/dev/null
 }
 
 print_title() {
   clear
   echo "╔═══════════════════════════════════════╗"
-  echo "║        ZIVPN CONTROL PANEL           ║"
+  echo "║        ZIVPN CONTROL PANEL v2        ║"
+  echo "║     (Compatible arivpnstores)        ║"
   echo "╚═══════════════════════════════════════╝"
   echo
 }
 
 show_status_block() {
-  echo "------ STATUT ZIVPN ------"
+  echo "------ STATUT ZIVPN (arivpnstores) ------"
   if zivpn_installed; then
     if zivpn_running; then
-      echo "ZIVPN : INSTALLÉ et ACTIF (service en cours d'exécution)"
+      echo "✅ ZIVPN : INSTALLÉ et ACTIF"
+      echo "   Service: $(systemctl is-active "$ZIVPN_SERVICE")"
+      echo "   Port interne: 5667 (DNAT 6000-19999)"
     else
-      echo "ZIVPN : INSTALLÉ mais INACTIF (service arrêté)"
+      echo "⚠️  ZIVPN : INSTALLÉ mais INACTIF"
+      echo "   $(systemctl is-active "$ZIVPN_SERVICE")"
     fi
   else
-    echo "ZIVPN : NON INSTALLÉ"
+    echo "❌ ZIVPN : NON INSTALLÉ"
   fi
-  echo "--------------------------"
+  echo "-----------------------------------------"
   echo
 }
 
-# ---------- 1) Installation de ZIVPN ----------
+# ---------- 1) Installation (exactement comme arivpnstores) ----------
 
 install_zivpn() {
   print_title
-  echo "[1] INSTALLATION DE ZIVPN"
+  echo "[1] INSTALLATION ZIVPN (arivpnstores style)"
   echo
 
   if zivpn_installed; then
-    echo "ZIVPN semble déjà installé."
+    echo "ZIVPN déjà installé. Utilisez 'Fix ZIVPN' si besoin."
     pause
     return
   fi
 
-  apt update -y
-  apt install -y wget curl jq nftables openssl
-
+  # Reset firewall comme arivpnstores
   systemctl stop "$ZIVPN_SERVICE" >/dev/null 2>&1 || true
+  ufw disable >/dev/null 2>&1 || true
+  iptables -F; iptables -t nat -F; iptables -t mangle -F
 
-  echo "[+] Téléchargement du binaire ZIVPN (amd64 1.4.9)"
-  wget -q https://github.com/zahidbd2/udp-zivpn/releases/download/udp-zivpn_1.4.9/udp-zivpn-linux-amd64 \
+  apt update -y
+  apt install -y wget curl jq openssl ufw nftables
+
+  echo "[+] Téléchargement binaire ZIVPN (1.4.9)"
+  wget -q "https://github.com/zahidbd2/udp-zivpn/releases/download/udp-zivpn_1.4.9/udp-zivpn-linux-amd64" \
     -O "$ZIVPN_BIN"
   chmod +x "$ZIVPN_BIN"
 
   mkdir -p /etc/zivpn
+  touch "$ZIVPN_USER_FILE" "$ZIVPN_DOMAIN_FILE"
+  chmod 600 "$ZIVPN_USER_FILE"
+
+  # Domaine pour certificat
+  if [[ ! -s "$ZIVPN_DOMAIN_FILE" ]]; then
+    read -rp "Domaine (pour cert, ex: zivpn.votredomaine.com) [zivpn.local]: " DOMAIN
+    DOMAIN=${DOMAIN:-"zivpn.local"}
+    echo "$DOMAIN" > "$ZIVPN_DOMAIN_FILE"
+  fi
+  DOMAIN=$(cat "$ZIVPN_DOMAIN_FILE")
+
+  # Certificat comme arivpnstores
   CERT="/etc/zivpn/zivpn.crt"
   KEY="/etc/zivpn/zivpn.key"
-
-  read -rp "Nom de domaine (CN du certificat, ex: zivpn.example.com) : " DOMAIN
-  [[ -z "$DOMAIN" ]] && DOMAIN="zivpn.local"
-
-  echo "[+] Génération certificat auto-signé pour $DOMAIN"
   openssl req -x509 -newkey rsa:2048 \
-    -keyout "$KEY" \
-    -out "$CERT" \
-    -nodes -days 3650 \
-    -subj "/CN=$DOMAIN"
+    -keyout "$KEY" -out "$CERT" \
+    -nodes -days 3650 -subj "/CN=$DOMAIN"
 
-  chmod 600 "$KEY"
-  chmod 644 "$CERT"
+  chmod 600 "$KEY" 644 "$CERT"
 
-  cat > "$ZIVPN_CONFIG" <<EOF
+  # config.json EXACTEMENT comme arivpnstores
+  cat > "$ZIVPN_CONFIG" << 'EOF'
 {
   "listen": ":5667",
-  "cert": "$CERT",
-  "key": "$KEY",
+  "cert": "/etc/zivpn/zivpn.crt",
+  "key": "/etc/zivpn/zivpn.key",
   "obfs": "zivpn",
   "auth": {
     "mode": "passwords",
-    "config": []
+    "config": ["zi"]
   }
 }
 EOF
 
-  # service systemd
-  cat > /etc/systemd/system/${ZIVPN_SERVICE}.service <<EOF
+  # systemd service IDENTIQUE à arivpnstores
+  cat > "/etc/systemd/system/$ZIVPN_SERVICE" << EOF
 [Unit]
 Description=ZIVPN UDP Server
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
@@ -120,6 +131,7 @@ ExecStart=$ZIVPN_BIN server -c $ZIVPN_CONFIG
 WorkingDirectory=/etc/zivpn
 Restart=always
 RestartSec=3
+Environment=ZIVPN_LOG_LEVEL=info
 AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
 NoNewPrivileges=true
@@ -131,222 +143,212 @@ EOF
   systemctl daemon-reload
   systemctl enable "$ZIVPN_SERVICE"
 
-  # nftables minimal (plage 6000-19999 -> 5667)
-  mkdir -p /etc/nftables.d
-  cat > /etc/nftables.d/zivpn.nft <<'EOF'
-table ip zivpn {
-  chain prerouting {
-    type nat hook prerouting priority -100;
-    udp dport 6000-19999 dnat to 0.0.0.0:5667
-  }
+  # Firewall/NAT EXACT comme arivpnstores (UFW + iptables)
+  cat > /etc/ufw/before.rules << 'EOF'
+# ZIVPN UDP NAT (6000-19999 -> 5667)
+*nat
+:PREROUTING ACCEPT [0:0]
+-A PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667
+COMMIT
 
-  chain input {
-    type filter hook input priority 0;
-    udp dport 5667 accept
-    udp dport 6000-19999 accept
-    ct state established,related accept
-  }
-
-  chain forward {
-    type filter hook forward priority 0;
-    accept
-  }
-
-  chain postrouting {
-    type nat hook postrouting priority 100;
-    oifname != "tun0" masquerade
-  }
-}
+# ZIVPN UDP INPUT
+*filter
+:ufw-before-input - [0:0]
+-A ufw-before-input -p udp --dport 5667 -j ACCEPT
+-A ufw-before-input -p udp --dport 6000:19999 -j ACCEPT
+COMMIT
 EOF
 
-  if ! grep -q "nftables.d" /etc/nftables.conf 2>/dev/null; then
-    echo 'include "/etc/nftables.d/*.nft"' >> /etc/nftables.conf
-  fi
+  ufw --force enable
+  ufw allow 22,80,443,53
 
-  systemctl enable nftables
-  systemctl restart nftables
+  # sysctl pour UDP buffers
+  echo 'net.core.rmem_max=16777216' > /etc/sysctl.d/99-zivpn.conf
+  echo 'net.core.wmem_max=16777216' >> /etc/sysctl.d/99-zivpn.conf
+  sysctl --system
 
-  systemctl restart "$ZIVPN_SERVICE"
+  systemctl start "$ZIVPN_SERVICE"
+  sleep 3
 
-  echo
   if zivpn_running; then
-    echo "✅ Installation ZIVPN terminée."
+    echo "✅ ZIVPN installé (arivpnstores compatible) !"
+    echo "   Password par défaut: zi"
+    echo "   Ports: 6000-19999 (redirigés vers 5667)"
+    echo "   Config client ZIVPN:"
+    echo "   Host: $(hostname -I | awk '{print $1}')"
+    echo "   Password: zi"
   else
-    echo "❌ Le service ZIVPN ne démarre pas, vérifiez 'journalctl -u $ZIVPN_SERVICE'."
+    echo "❌ Service ne démarre pas. Logs: journalctl -u $ZIVPN_SERVICE"
   fi
   pause
 }
 
-# ---------- 2) Création d’utilisateur ZIVPN ----------
+# ---------- 2) Création utilisateur ----------
 
 create_zivpn_user() {
   print_title
-  echo "[2] CRÉATION D'UTILISATEUR ZIVPN"
+  echo "[2] CRÉATION UTILISATEUR ZIVPN"
+  
+  if ! zivpn_installed; then
+    echo "❌ Installez ZIVPN d'abord (option 1)"
+    pause; return
+  fi
+
+  echo "Format: téléphone|password|expiration"
+  echo "Exemple: 22997000000|MonPass123|2026-02-01"
   echo
 
-  if ! zivpn_installed; then
-    echo "ZIVPN n'est pas installé. Installe-le d'abord."
-    pause
-    return
-  fi
+  read -rp "Téléphone: " PHONE
+  read -rp "Password ZIVPN: " PASS
+  read -rp "Durée (jours): " DAYS
 
-  read -rp "Numéro de téléphone (identifiant user, ex: 22997000000) : " PHONE
-  read -rp "Mot de passe ZIVPN (ex: Rerechan02) : " PASS
-  read -rp "Durée (en jours) : " DAYS
+  EXPIRE=$(date -d "+${DAYS} days" '+%Y-%m-%d')
+  
+  # Ajout/remplacement
+  tmp=$(mktemp)
+  grep -v "^$PHONE|" "$ZIVPN_USER_FILE" > "$tmp" 2>/dev/null || true
+  echo "$PHONE|$PASS|$EXPIRE" >> "$tmp"
+  mv "$tmp" "$ZIVPN_USER_FILE"
+  chmod 600 "$ZIVPN_USER_FILE"
 
-  if [[ -z "$PHONE" || -z "$PASS" || -z "$DAYS" ]]; then
-    echo "Champs invalides."
-    pause
-    return
-  fi
-
-  if ! [[ "$DAYS" =~ ^[0-9]+$ ]]; then
-    echo "Durée invalide."
-    pause
-    return
-  fi
-
-  EXPIRE_DATE=$(date -d "+${DAYS} days" '+%Y-%m-%d')
-
-  # Sauvegarde dans users.list : phone|pass|expire
-  # si le phone existe déjà, on le remplace
-  tmpfile=$(mktemp)
-  grep -v "^${PHONE}|" "$ZIVPN_USER_FILE" > "$tmpfile" || true
-  echo "${PHONE}|${PASS}|${EXPIRE_DATE}" >> "$tmpfile"
-  mv "$tmpfile" "$ZIVPN_USER_FILE"
-
-  # Regénérer auth.config avec tous les users non expirés
+  # Update config.json avec TOUS les passwords valides
   TODAY=$(date +%Y-%m-%d)
-  PASS_ARRAY=$(awk -F'|' -v today="$TODAY" '
-    $3 >= today { print $2 }
-  ' "$ZIVPN_USER_FILE" | sort -u | jq -R . | jq -s .)
+  PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$ZIVPN_USER_FILE" | \
+              sort -u | jq -R . | jq -s .)
 
-  jq --argjson arr "$PASS_ARRAY" '.auth.config = $arr' "$ZIVPN_CONFIG" > /tmp/zivpn.json
-  mv /tmp/zivpn.json "$ZIVPN_CONFIG"
+  jq --argjson arr "$PASSWORDS" '.auth.config = $arr' "$ZIVPN_CONFIG" > /tmp/config.json
+  mv /tmp/config.json "$ZIVPN_CONFIG"
 
   systemctl restart "$ZIVPN_SERVICE"
 
-  HOST_IP=$(hostname -I | awk '{print $1}')
-  echo
-  echo "✅ UTILISATEUR ZIVPN CRÉÉ"
-  echo "-------------------------"
-  echo "Téléphone : $PHONE"
-  echo "Password  : $PASS"
-  echo "Expire    : $EXPIRE_DATE"
-  echo
-  echo "Config à donner au client ZIVPN :"
-  echo "  Host/IP     : $HOST_IP"
-  echo "  UDP password: $PASS"
-  echo "  Port UDP    : un port entre 6000 et 19999 (redirigé vers 5667)"
-  echo
+  IP=$(hostname -I | awk '{print $1}')
+  DOMAIN=$(cat "$ZIVPN_DOMAIN_FILE" 2>/dev/null || echo "$IP")
 
+  echo
+  echo "✅ UTILISATEUR AJOUTÉ"
+  echo "━━━━━━━━━━━━━━━━━━━━━"
+  echo "📱 Téléphone : $PHONE"
+  echo "🔑 Password  : $PASS"
+  echo "📅 Expire    : $EXPIRE"
+  echo
+  echo "📲 CONFIG ZIVPN CLIENT:"
+  echo "   Host/IP: $IP"
+  echo "   Password: $PASS"
+  echo "   Port: 6000-19999 (auto)"
+  echo "   Domaine: $DOMAIN"
+  echo
+  echo "💡 Dans ZIVPN → UDP Tunnel → udp server: $IP, password: $PASS"
   pause
 }
 
-# ---------- 3) Suppression d’utilisateur ZIVPN ----------
+# ---------- 3) Suppression utilisateur ----------
 
 delete_zivpn_user() {
   print_title
-  echo "[3] SUPPRESSION D'UTILISATEUR ZIVPN"
-  echo
-
-  if ! zivpn_installed; then
-    echo "ZIVPN n'est pas installé."
-    pause
-    return
+  echo "[3] SUPPRIMER UTILISATEUR"
+  
+  if ! zivpn_installed || [[ ! -s "$ZIVPN_USER_FILE" ]]; then
+    echo "❌ Aucun utilisateur ou ZIVPN non installé"
+    pause; return
   fi
 
-  if ! [[ -s "$ZIVPN_USER_FILE" ]]; then
-    echo "Aucun utilisateur ZIVPN enregistré."
-    pause
-    return
-  fi
-
-  echo "Liste des utilisateurs (classés par téléphone) :"
-  echo "----------------------------------------------"
-  sort -t'|' -k1,1 "$ZIVPN_USER_FILE" | nl -w2 -s'. '
-  echo "----------------------------------------------"
+  echo "Utilisateurs actifs:"
+  echo "────────────────────"
+  nl -w2 -s'. ' <(awk -F'|' '{print $1" | "$2" | "$3}' "$ZIVPN_USER_FILE" | sort -k3)
   echo
-  read -rp "Saisis le numéro de téléphone à supprimer : " PHONE
+  read -rp "Téléphone à supprimer: " PHONE
 
-  tmpfile=$(mktemp)
-  grep -v "^${PHONE}|" "$ZIVPN_USER_FILE" > "$tmpfile" || true
-  mv "$tmpfile" "$ZIVPN_USER_FILE"
+  tmp=$(mktemp)
+  grep -v "^$PHONE|" "$ZIVPN_USER_FILE" > "$tmp"
+  mv "$tmp" "$ZIVPN_USER_FILE"
 
-  # Regénérer auth.config
+  # Refresh config
   TODAY=$(date +%Y-%m-%d)
-  PASS_ARRAY=$(awk -F'|' -v today="$TODAY" '
-    $3 >= today { print $2 }
-  ' "$ZIVPN_USER_FILE" | sort -u | jq -R . | jq -s .)
+  PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$ZIVPN_USER_FILE" | \
+              sort -u | jq -R . | jq -s .)
 
-  jq --argjson arr "$PASS_ARRAY" '.auth.config = $arr' "$ZIVPN_CONFIG" > /tmp/zivpn.json
-  mv /tmp/zivpn.json "$ZIVPN_CONFIG"
+  jq --argjson arr "$PASSWORDS" '.auth.config = $arr' "$ZIVPN_CONFIG" > /tmp/config.json
+  mv /tmp/config.json "$ZIVPN_CONFIG"
 
   systemctl restart "$ZIVPN_SERVICE"
-
-  echo
-  echo "✅ Utilisateur $PHONE supprimé (si existant) et config ZIVPN mise à jour."
+  echo "✅ $PHONE supprimé et config mise à jour"
   pause
 }
 
-# ---------- 4) Désinstallation de ZIVPN ----------
+# ---------- 4) Fix (comme fix-zivpn.sh d'arivpnstores) ----------
+
+fix_zivpn() {
+  print_title
+  echo "[4] FIX ZIVPN (arivpnstores style)"
+  
+  if ! zivpn_installed; then
+    echo "❌ ZIVPN non installé. Option 1 d'abord."
+    pause; return
+  fi
+
+  echo "[+] Reset firewall + NAT (UFW/iptables)"
+  ufw disable >/dev/null 2>&1 || true
+  iptables -F; iptables -t nat -F; iptables -t mangle -F
+
+  systemctl restart "$ZIVPN_SERVICE"
+  ufw --force enable >/dev/null 2>&1
+  sysctl --system >/dev/null 2>&1
+
+  if zivpn_running; then
+    echo "✅ ZIVPN fixé et actif !"
+    echo "   Passwords: $(jq -r '.auth.config[]' "$ZIVPN_CONFIG" | tr '
+' ' ')"
+  else
+    echo "❌ Toujours HS. Logs: journalctl -u $ZIVPN_SERVICE -n 20"
+  fi
+  pause
+}
+
+# ---------- 5) Désinstallation ----------
 
 uninstall_zivpn() {
   print_title
-  echo "[4] DÉSINSTALLATION DE ZIVPN"
-  echo
-
-  if ! zivpn_installed; then
-    echo "ZIVPN n'est pas installé."
-    pause
-    return
-  fi
-
-  read -rp "Confirmer la désinstallation complète de ZIVPN ? (o/N) : " ans
-  ans=${ans:-n}
-  if [[ "$ans" != "o" && "$ans" != "O" ]]; then
-    echo "Annulé."
-    pause
-    return
-  fi
+  echo "[5] DÉSINSTALLATION"
+  read -rp "Confirmer ? (o/N): " CONFIRM
+  [[ "$CONFIRM" =~ ^[oO]$ ]] || { echo "Annulé"; pause; return; }
 
   systemctl stop "$ZIVPN_SERVICE" || true
   systemctl disable "$ZIVPN_SERVICE" || true
-  rm -f /etc/systemd/system/${ZIVPN_SERVICE}.service
+  rm -f "/etc/systemd/system/$ZIVPN_SERVICE"
   systemctl daemon-reload
 
-  rm -f "$ZIVPN_BIN"
-  rm -rf /etc/zivpn
+  rm -f "$ZIVPN_BIN" /etc/zivpn/*
+  ufw delete 6000:19999/udp >/dev/null 2>&1 || true
+  iptables -t nat -F PREROUTING >/dev/null 2>&1 || true
 
-  # Optionnel : retirer la règle nft
-  rm -f /etc/nftables.d/zivpn.nft
-  systemctl restart nftables || true
-
-  echo "✅ ZIVPN désinstallé."
+  echo "✅ ZIVPN supprimé"
   pause
 }
 
-# ---------- Boucle principale ----------
+# ---------- MAIN LOOP ----------
 
 check_root
 
 while true; do
   print_title
   show_status_block
-  echo "1) Installer ZIVPN"
-  echo "2) Créer un utilisateur ZIVPN"
-  echo "3) Supprimer un utilisateur ZIVPN (par numéro de téléphone)"
-  echo "4) Désinstaller ZIVPN"
+  
+  echo "1) Installer ZIVPN (arivpnstores)"
+  echo "2) Créer utilisateur ZIVPN" 
+  echo "3) Supprimer utilisateur"
+  echo "4) Fix ZIVPN (reset firewall/NAT)"
+  echo "5) Désinstaller ZIVPN"
   echo "0) Quitter"
   echo
-  read -rp "Choix : " choice
+  read -rp "Choix: " CHOIX
 
-  case "$choice" in
+  case $CHOIX in
     1) install_zivpn ;;
     2) create_zivpn_user ;;
     3) delete_zivpn_user ;;
-    4) uninstall_zivpn ;;
+    4) fix_zivpn ;;
+    5) uninstall_zivpn ;;
     0) exit 0 ;;
-    *) echo "Choix invalide"; sleep 1 ;;
+    *) echo "❌ Choix invalide"; sleep 1 ;;
   esac
 done
