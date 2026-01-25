@@ -34,7 +34,7 @@ print_title() {
   clear
   echo "╔═══════════════════════════════════════╗"
   echo "║        ZIVPN CONTROL PANEL v2        ║"
-  echo "║     (Compatible arivpnstores)        ║"
+  echo "║     (Compatible @kighmu 🇨🇲)        ║"
   echo "╚═══════════════════════════════════════╝"
   echo
 }
