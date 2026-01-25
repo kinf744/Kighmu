@@ -152,10 +152,12 @@ EOF
 create_zivpn_user() {
   print_title
   echo "[2] CRÉATION UTILISATEUR ZIVPN"
-  
-  if ! zivpn_installed; then
-    echo "❌ Installez ZIVPN d'abord (option 1)"
-    pause; return
+
+  if ! systemctl is-active --quiet "$ZIVPN_SERVICE"; then
+    echo "❌ Service ZIVPN inactif ou non installé."
+    echo "   Lance l'option 1 ou: systemctl start $ZIVPN_SERVICE"
+    pause
+    return
   fi
 
   echo "Format: téléphone|password|expiration"
@@ -167,15 +169,13 @@ create_zivpn_user() {
   read -rp "Durée (jours): " DAYS
 
   EXPIRE=$(date -d "+${DAYS} days" '+%Y-%m-%d')
-  
-  # Ajout/remplacement
+
   tmp=$(mktemp)
   grep -v "^$PHONE|" "$ZIVPN_USER_FILE" > "$tmp" 2>/dev/null || true
   echo "$PHONE|$PASS|$EXPIRE" >> "$tmp"
   mv "$tmp" "$ZIVPN_USER_FILE"
   chmod 600 "$ZIVPN_USER_FILE"
 
-  # Update config.json avec TOUS les passwords valides
   TODAY=$(date +%Y-%m-%d)
   PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$ZIVPN_USER_FILE" | \
               sort -u | jq -R . | jq -s .)
