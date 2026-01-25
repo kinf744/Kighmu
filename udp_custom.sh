@@ -1,8 +1,9 @@
 #!/bin/bash
 # ==========================================================
-# UDP Custom Installer v1.5
+# UDP Custom Installer v1.6 (corrigé)
 # Ubuntu 20.04+ / Debian 10+
-# Fonctionnalité : UDP → HTTP Custom / VPN
+# Fonctionnalité : UDP Custom → HTTP Custom / VPN
+# Compatible multi-tunnels
 # ==========================================================
 
 set -euo pipefail
@@ -11,7 +12,7 @@ set -euo pipefail
 INSTALL_DIR="/opt/udp-custom"
 BIN_PATH="$INSTALL_DIR/bin/udp-custom-linux-amd64"
 CONFIG_FILE="$INSTALL_DIR/config/config.json"
-UDP_PORT=54000
+UDP_PORT=36712                 # Port serveur fixe
 LOG_DIR="/var/log/udp-custom"
 LOG_FILE="$LOG_DIR/install.log"
 RUN_USER="udpuser"
@@ -53,8 +54,6 @@ fi
 
 # ================= TELECHARGEMENT BINAIRE =================
 mkdir -p "$(dirname "$BIN_PATH")"
-
-# Arrêter le service si déjà existant
 systemctl stop "$SERVICE_NAME" 2>/dev/null || true
 
 TMP_BIN="$(dirname "$BIN_PATH")/udp-custom.tmp"
@@ -65,7 +64,6 @@ fi
 chmod +x "$TMP_BIN"
 mv "$TMP_BIN" "$BIN_PATH"
 log "✅ Binaire udp-custom téléchargé et exécutable"
-
 chown -R "$RUN_USER:$RUN_USER" "$INSTALL_DIR"
 
 # ================= CONFIG JSON =================
@@ -73,51 +71,27 @@ mkdir -p "$(dirname "$CONFIG_FILE")"
 cat > "$CONFIG_FILE" <<EOF
 {
   "server_port": $UDP_PORT,
-  "exclude_port": [5300, 53],
+  "exclude_port": [53,5300],
   "udp_timeout": 600,
-  "dns_cache": false
+  "dns_cache": true
 }
 EOF
 log "✅ Fichier de configuration créé : $CONFIG_FILE"
 
-# ================= NFTABLES =================
-log "Configuration nftables pour UDP Custom (port $UDP_PORT)..."
-
-systemctl enable nftables >/dev/null 2>&1
-systemctl start nftables >/dev/null 2>&1
-
-NFT_FILE="/etc/nftables.d/udp-custom.nft"
-mkdir -p /etc/nftables.d
-
-cat > "$NFT_FILE" <<EOF
-table inet udp_custom {
-  chain input {
-    type filter hook input priority 0;
-    policy accept;
-
-    udp dport $UDP_PORT accept
-  }
-}
-EOF
-
-# Charger la règle
-nft -f "$NFT_FILE"
-
-# Inclure automatiquement si pas déjà fait
-if ! grep -q "udp-custom.nft" /etc/nftables.conf; then
-    sed -i '/^include/i include "/etc/nftables.d/*.nft"' /etc/nftables.conf 2>/dev/null || true
-fi
-
-systemctl restart nftables
-
-log "✅ Règle nftables active pour UDP Custom (UDP $UDP_PORT)"
+# ================= IPTABLES =================
+log "Ouverture du port serveur fixe UDP $UDP_PORT..."
+iptables -C INPUT -p udp --dport "$UDP_PORT" -j ACCEPT 2>/dev/null || iptables -I INPUT -p udp --dport "$UDP_PORT" -j ACCEPT
+iptables-save | tee /etc/iptables/rules.v4 >/dev/null
+systemctl enable netfilter-persistent
+systemctl restart netfilter-persistent || true
+log "✅ Règles iptables appliquées et persistantes."
 
 # ================= SYSTEMD =================
 SERVICE_PATH="/etc/systemd/system/$SERVICE_NAME"
 log "Création du service systemd $SERVICE_NAME..."
 cat > "$SERVICE_PATH" <<EOF
 [Unit]
-Description=UDP Custom Service for HTTP Custom VPN
+Description=UDP Custom Service (HTTP Custom / VPN)
 After=network-online.target
 Wants=network-online.target
 
