@@ -166,8 +166,8 @@ echo -e "➡️ 𝙃𝙔𝙎𝙏𝙀𝙍𝙄𝘼 : ${GREEN}$DOMAIN:22000@$usern
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo -e "🚀 ${BOLD}𝗭𝗜𝗩𝗣𝗡 𝗨𝗗𝗣 𝗧𝗨𝗡𝗡𝗘𝗟${RESET}"
 echo -e "${GREEN}🌐 𝗗𝗼𝗺𝗮𝗶𝗻𝗲: ${YELLOW}$DOMAIN${RESET}"
-echo -e "${GREEN}🔐 𝗢𝗯𝗳𝘀: ${YELLOW}zivpn${RESET}
-echo -e "${GREEN}🔐 𝗣𝗮𝘀𝘀𝘄𝗼𝗿𝗱: ${YELLOW}$password${RESET}
+echo -e "${GREEN}🔐 𝗢𝗯𝗳𝘀: ${YELLOW}zivpn${RESET}"
+echo -e "${GREEN}🔐 𝗣𝗮𝘀𝘀𝘄𝗼𝗿𝗱: ${YELLOW}$password${RESET}"
 echo -e "${GREEN}🔌 𝐏𝐨𝐫𝐭    : ${YELLOW}5667${RESET}"
 echo ""
 echo -e "📜 𝙋𝘼𝙔𝙇𝙊𝘼𝘿 𝙒𝙎:"
