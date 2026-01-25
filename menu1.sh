@@ -86,29 +86,37 @@ HOST_IP=$(hostname -I | awk '{print $1}')
 # Sauvegarder les infos utilisateur dans le format attendu par hysteria.sh
 echo "$username|$password|$limite|$expire_date|$HOST_IP|$DOMAIN|$SLOWDNS_NS" >> "$USER_FILE"
 
-# ================== ZIVPN SYNC (POST USER ADD) ==================
+# ================== ZIVPN SYNC (FORMAT CORRECT) ==================
 ZIVPN_CONFIG="/etc/zivpn/config.json"
+ZIVPN_USER_FILE="/etc/zivpn/users.list"
 
-if [ -f "$ZIVPN_CONFIG" ]; then
-    command -v jq >/dev/null 2>&1 || {
-        echo "jq non installé, sync ZIVPN ignorée"
-        exit 0
-    }
+if [[ -f "$ZIVPN_CONFIG" && -f "$ZIVPN_USER_FILE" ]]; then
+    command -v jq >/dev/null 2>&1 || { echo "jq manquant"; exit 0; }
 
+    # Format ZIVPN : téléphone|password|expire_date
+    PHONE="${username:0:10}"  # 1er 10 chars → téléphone
+    ZIVPN_LINE="$PHONE|$password|$expire_date"
+    
+    # Ajout/supp/remplace
+    tmp=$(mktemp)
+    grep -v "^$PHONE|" "$ZIVPN_USER_FILE" > "$tmp" 2>/dev/null || true
+    echo "$ZIVPN_LINE" >> "$tmp"
+    mv "$tmp" "$ZIVPN_USER_FILE"
+    chmod 600 "$ZIVPN_USER_FILE"
+
+    # Update config ZIVPN (passwords actifs)
     TODAY=$(date +%Y-%m-%d)
+    PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$ZIVPN_USER_FILE" | \
+                sort -u | paste -sd, -)
 
-    ZIVPN_PASS=$(awk -F'|' -v today="$TODAY" '
-    {
-        if ($4 >= today) print $2
-    }' /etc/kighmu/users.list | sort -u | jq -R . | jq -s .)
+    jq --arg passwords "$PASSWORDS" \
+       '.auth.config = ($passwords | split(","))' \
+       "$ZIVPN_CONFIG" > /tmp/zivpn.json && \
+    mv /tmp/zivpn.json "$ZIVPN_CONFIG" && \
+    systemctl restart zivpn.service
 
-    jq --argjson arr "$ZIVPN_PASS" '
-        .auth.config = $arr
-    ' "$ZIVPN_CONFIG" > /tmp/zivpn.json && mv /tmp/zivpn.json "$ZIVPN_CONFIG"
-
-    systemctl restart zivpn
+    echo -e "${GREEN}✅ ZIVPN SYNCHRONISÉ !${RESET}"
 fi
-# ================================================================
 
 # Ajout automatique de l'affichage du banner personnalisé au login shell
 BANNER_PATH="/etc/ssh/sshd_banner"
