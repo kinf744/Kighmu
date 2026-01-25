@@ -171,38 +171,53 @@ create_zivpn_user() {
 
   EXPIRE=$(date -d "+${DAYS} days" '+%Y-%m-%d')
 
+  # ✅ SAUVEGARDE users.list
   tmp=$(mktemp)
   grep -v "^$PHONE|" "$ZIVPN_USER_FILE" > "$tmp" 2>/dev/null || true
   echo "$PHONE|$PASS|$EXPIRE" >> "$tmp"
   mv "$tmp" "$ZIVPN_USER_FILE"
   chmod 600 "$ZIVPN_USER_FILE"
 
+  # ✅ EXTRACTION PASSWORDS (NOUVEAU : simple et sûr)
   TODAY=$(date +%Y-%m-%d)
   PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$ZIVPN_USER_FILE" | \
-              sort -u | jq -R . | jq -s .)
+              sort -u | paste -sd, -)
 
-  jq --argjson arr "$PASSWORDS" '.auth.config = $arr' "$ZIVPN_CONFIG" > /tmp/config.json
-  mv /tmp/config.json "$ZIVPN_CONFIG"
+  # ✅ JQ CORRIGÉ (string → array avec split)
+  if jq --arg passwords "$PASSWORDS" \
+        '.auth.config = ($passwords | split(","))' \
+        "$ZIVPN_CONFIG" > /tmp/config.json 2>/dev/null; then
+    
+    # Vérif JSON valide
+    if jq empty /tmp/config.json >/dev/null 2>&1; then
+      mv /tmp/config.json "$ZIVPN_CONFIG"
+      systemctl restart "$ZIVPN_SERVICE"
+      
+      IP=$(hostname -I | awk '{print $1}')
+      DOMAIN=$(cat "$ZIVPN_DOMAIN_FILE" 2>/dev/null || echo "$IP")
 
-  systemctl restart "$ZIVPN_SERVICE"
+      echo
+      echo "✅ UTILISATEUR AJOUTÉ"
+      echo "━━━━━━━━━━━━━━━━━━━━━"
+      echo "📱 Téléphone : $PHONE"
+      echo "🔑 Password  : $PASS"
+      echo "📅 Expire    : $EXPIRE"
+      echo
+      echo "📲 CONFIG ZIVPN CLIENT:"
+      echo "   Domaine: $DOMAIN"
+      echo "   Host/IP: $IP"
+      echo "   Password: $PASS"
+      echo "   Port: 6000-19999 (auto)"
+      echo
+      echo "💡 ZIVPN App → udp server: $IP, password: $PASS"
+    else
+      echo "❌ JSON invalide → rollback"
+      rm -f /tmp/config.json
+    fi
+  else
+    echo "❌ Erreur jq → config inchangée"
+  fi
 
-  IP=$(hostname -I | awk '{print $1}')
-  DOMAIN=$(cat "$ZIVPN_DOMAIN_FILE" 2>/dev/null || echo "$IP")
-
-  echo
-  echo "✅ UTILISATEUR AJOUTÉ"
-  echo "━━━━━━━━━━━━━━━━━━━━━"
-  echo "📱 Téléphone : $PHONE"
-  echo "🔑 Password  : $PASS"
-  echo "📅 Expire    : $EXPIRE"
-  echo
-  echo "📲 CONFIG ZIVPN CLIENT:"
-  echo "   Domaine: $DOMAIN"
-  echo "   Host/IP: $IP"
-  echo "   Password: $PASS"
-  echo "   Port: 6000-19999 (auto)"
-  echo
-  echo "💡 Dans ZIVPN → UDP Tunnel → udp server: $IP, password: $PASS"
   pause
 }
 
