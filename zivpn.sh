@@ -102,7 +102,8 @@ install_zivpn() {
     -keyout "$KEY" -out "$CERT" \
     -nodes -days 3650 -subj "/CN=$DOMAIN"
 
-  chmod 600 "$KEY" 644 "$CERT"
+  chmod 600 "$KEY"
+  chmod 644 "$CERT"
 
   # config.json EXACTEMENT comme arivpnstores
   cat > "$ZIVPN_CONFIG" << 'EOF'
