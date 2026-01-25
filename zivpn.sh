@@ -40,7 +40,7 @@ print_title() {
 }
 
 show_status_block() {
-  echo "------ STATUT ZIVPN (arivpnstores) ------"
+  echo "------ STATUT ZIVPN ------"
   
   # Debug détaillé pour identifier le problème
   BIN_OK=$([[ -x "$ZIVPN_BIN" ]] && echo "✅" || echo "❌")
@@ -71,7 +71,7 @@ show_status_block() {
 
 install_zivpn() {
   print_title
-  echo "[1] INSTALLATION ZIVPN (arivpnstores style)"
+  echo "[1] INSTALLATION ZIVPN"
   echo
 
   if zivpn_installed; then
@@ -161,7 +161,7 @@ create_zivpn_user() {
   fi
 
   echo "Format: téléphone|password|expiration"
-  echo "Exemple: 22997000000|MonPass123|2026-02-01"
+  echo "Exemple: 2330|MonPass123|2026-02-01"
   echo
 
   read -rp "Téléphone: " PHONE
@@ -196,10 +196,10 @@ create_zivpn_user() {
   echo "📅 Expire    : $EXPIRE"
   echo
   echo "📲 CONFIG ZIVPN CLIENT:"
+  echo "   Domaine: $DOMAIN"
   echo "   Host/IP: $IP"
   echo "   Password: $PASS"
   echo "   Port: 6000-19999 (auto)"
-  echo "   Domaine: $DOMAIN"
   echo
   echo "💡 Dans ZIVPN → UDP Tunnel → udp server: $IP, password: $PASS"
   pause
@@ -241,11 +241,11 @@ delete_zivpn_user() {
   pause
 }
 
-# ---------- 4) Fix (comme fix-zivpn.sh d'arivpnstores) ----------
+# ---------- 4) Fix (comme fix-zivpn.sh) ----------
 
 fix_zivpn() {
   print_title
-  echo "[4] FIX ZIVPN (arivpnstores style)"
+  echo "[4] FIX ZIVPN (@kighmu style)"
   
   if ! zivpn_installed; then
     echo "❌ ZIVPN non installé. Option 1 d'abord."
