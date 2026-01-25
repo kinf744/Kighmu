@@ -199,17 +199,13 @@ create_zivpn_user() {
       echo
       echo "✅ UTILISATEUR AJOUTÉ"
       echo "━━━━━━━━━━━━━━━━━━━━━"
-      echo "📱 Téléphone : $PHONE"
-      echo "🔑 Password  : $PASS"
+      echo "🌐  Domaine: $DOMAIN"
+      echo "🎭 Obfs   : zivpn"
+      echo "🔐 Password  : $PASS"
       echo "📅 Expire    : $EXPIRE"
+      echo "🔌 Port: 5667"
       echo
-      echo "📲 CONFIG ZIVPN CLIENT:"
-      echo "   Domaine: $DOMAIN"
-      echo "   Host/IP: $IP"
-      echo "   Password: $PASS"
-      echo "   Port: 6000-19999 (auto)"
-      echo
-      echo "💡 ZIVPN App → udp server: $IP, password: $PASS"
+      echo"━━━━━━━━━━━━━━━━━━━━━"
     else
       echo "❌ JSON invalide → rollback"
       rm -f /tmp/config.json
