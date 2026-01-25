@@ -185,18 +185,49 @@ install_udp_custom() {
         return
     fi
 
+    echo "⚙️ Creating directory..."
     mkdir -p "/root/udp"
 
-    # Download FIXÉ
-    echo "📥 Downloading..."
-    wget -q --timeout=15 -O "/root/udp/udp-custom" \
-      "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp-custom-linux-amd64" || {
-      echo "❌ Download failed - check URL"
-      read -p "Press Enter..."; return
-    }
+    echo "⚙️ Detecting architecture..."
+    ARCH=$(uname -m)
+    if [[ "$ARCH" == "x86_64" ]]; then
+        # URLs MULTIPLES - au moins une marche !
+        URLS=(
+            "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp-custom-linux-amd64"
+            "https://fastly.jsdelivr.net/gh/kinf744/Kighmu@v1.0.0/udp-custom-linux-amd64"
+            "https://cdn.jsdelivr.net/gh/kinf744/Kighmu@v1.0.0/udp-custom-linux-amd64"
+        )
+    elif [[ "$ARCH" == "aarch64" ]]; then
+        URLS=(
+            "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp-custom-linux-arm"
+        )
+    else
+        echo "❌ Unsupported: $ARCH"
+        read -p "Press Enter..."
+        return
+    fi
+
+    # DOWNLOAD ROBUSTE (teste toutes les URLs)
+    echo "📥 Downloading udp-custom..."
+    SUCCESS=false
+    for URL in "${URLS[@]}"; do
+        if wget -q --timeout=15 -O "/root/udp/udp-custom" "$URL"; then
+            echo "✅ Downloaded from $URL"
+            SUCCESS=true
+            break
+        fi
+    done
+    
+    if [ "$SUCCESS" = false ]; then
+        echo "❌ All download URLs failed."
+        read -p "Press Enter..."
+        return
+    fi
+    
     chmod +x "/root/udp/udp-custom"
 
-    # TA CONFIG JSON PARFAITE (inchangée)
+    # TA CONFIG PARFAITE (inchangée)
+    echo "📝 Creating config.json..."
     cat > "/root/udp/config.json" <<EOF
 {
   "listen": ":36712",
@@ -208,19 +239,20 @@ install_udp_custom() {
 }
 EOF
 
-    # Firewall udp-custom (compatible ZIVPN+SLOWDNS)
-    iptables -A INPUT -p udp --dport 36712 -j ACCEPT 2>/dev/null || true
+    # FIREWALL (compatible ZIVPN + SlowDNS)
+    iptables -C INPUT -p udp --dport 36712 -j ACCEPT 2>/dev/null || \
+    iptables -A INPUT -p udp --dport 36712 -j ACCEPT
 
-    # Systemd CORRIGÉ
+    # SYSTEMD CORRIGÉ (avec config.json + network-online)
     cat > /etc/systemd/system/udp-custom.service <<EOF
 [Unit]
-Description=UDP Custom Tunnel
+Description=UDP Custom Tunnel (ZIVPN+SLOWDNS compatible)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=simple
 User=root
+Type=simple
 ExecStart=/root/udp/udp-custom server -c /root/udp/config.json -exclude 53,5300
 WorkingDirectory=/root/udp
 Restart=always
@@ -231,11 +263,22 @@ LimitNOFILE=65536
 WantedBy=multi-user.target
 EOF
 
+    echo "▶️ Starting service..."
     systemctl daemon-reload
-    systemctl enable --now udp-custom.service
+    systemctl enable udp-custom.service
+    systemctl start udp-custom.service
+    sleep 3
     
     if systemctl is-active --quiet udp-custom.service; then
-        echo "✅ udp-custom installé ! Port 36712"
+        IP=$(hostname -I | awk '{print $1}')
+        echo "✅ udp-custom installé et actif !"
+        echo "   Serveur: $IP:36712"
+        echo "   Format client: $IP:36712:username:password"
+        echo "   Ports exclus: 53,5300 (ZIVPN+SLOWDNS protégés)"
+        echo "   Vérification: ss -ulnp | grep 36712"
+    else
+        echo "❌ Service failed. Logs:"
+        journalctl -u udp-custom.service -n 15 --no-pager
     fi
     
     read -p "Press Enter..."
