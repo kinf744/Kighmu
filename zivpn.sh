@@ -199,11 +199,11 @@ create_zivpn_user() {
       echo
       echo "✅ UTILISATEUR AJOUTÉ"
       echo "━━━━━━━━━━━━━━━━━━━━━"
-      echo "🌐  Domaine: $DOMAIN"
-      echo "🎭 Obfs   : zivpn"
-      echo "🔐 Password  : $PASS"
-      echo "📅 Expire    : $EXPIRE"
-      echo "🔌 Port: 5667"
+      echo "🌐 𝗗𝗼𝗺𝗮𝗶𝗻𝗲  : $DOMAIN"
+      echo "🎭 𝗢𝗯𝗳𝘀     : zivpn"
+      echo "🔐 𝗣𝗮𝘀𝘀𝘄𝗼𝗿𝗱 : $PASS"
+      echo "📅 𝗘𝘅𝗽𝗶𝗿𝗲   : $EXPIRE"
+      echo "🔌 𝐏𝐨𝐫𝐭    : 5667"
       echo
       echo"━━━━━━━━━━━━━━━━━━━━━"
     else
