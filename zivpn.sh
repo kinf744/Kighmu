@@ -136,6 +136,7 @@ EOF
   iptables -t nat -A PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667
   iptables -A INPUT -p udp --dport 5667 -j ACCEPT
   iptables -A INPUT -p udp --dport 6000:19999 -j ACCEPT
+  iptables -A INPUT -p udp --dport 36712 -j ACCEPT 2>/dev/null || true
   netfilter-persistent save
 
   sysctl -w net.core.rmem_max=16777216
@@ -253,6 +254,7 @@ fix_zivpn() {
   # Reset + recréation ZIVPN (préserve SlowDNS port 53)
   iptables -t nat -F PREROUTING
   iptables -A INPUT -p udp --dport 5667 -j ACCEPT 2>/dev/null || true
+  iptables -A INPUT -p udp --dport 36712 -j ACCEPT 2>/dev/null || true
   iptables -t nat -A PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667
   
   netfilter-persistent save
