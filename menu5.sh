@@ -25,7 +25,6 @@ afficher_modes_ports() {
     if systemctl is-active --quiet histeria2.service || pgrep -f hysteria >/dev/null 2>&1; then any_active=1; fi
     if systemctl is-active --quiet sshws.service || pgrep -f sshws >/dev/null 2>&1; then any_active=1; fi
     if systemctl is-active --quiet udp-request.service || pgrep -f udp_request >/dev/null 2>&1; then any_active=1; fi
-    if systemctl is-active --quiet zivpn.service || pgrep -f zivpn >/dev/null 2>&1; then any_active=1; fi
 
     if [[ $any_active -eq 0 ]]; then
         return
@@ -72,9 +71,6 @@ afficher_modes_ports() {
     fi
     if systemctl is-active --quiet udp-request.service || pgrep -f udp_reuest >/dev/null 2>&1 || screen -list | grep -q udp_request; then
         echo -e "  - UDP_request: ${GREEN}4466${RESET}"
-    fi
-    if systemctl is-active --quiet zivpn.service || pgrep -f Zivpn >/dev/null 2>&1; then
-        echo -e "  - Zivpn: ${GREEN}port UDP 5667${RESET}"
     fi
 }
 
@@ -815,7 +811,6 @@ while true; do
     echo -e "${GREEN}${BOLD}[09]${RESET} ${YELLOW}Hysteria${RESET}"
     echo -e "${GREEN}${BOLD}[10]${RESET} ${YELLOW}Tunnel WS/WSS SSH${RESET}"
     echo -e "${GREEN}${BOLD}[11]${RESET} ${YELLOW}UDP_request${RESET}"
-    echo -e "${GREEN}${BOLD}[12]${RESET} ${YELLOW}ZIVPN TUNNEL${RESET}"
     echo -e "${GREEN}${BOLD}[00]${RESET} ${YELLOW}Quitter${RESET}"
     echo -e "${CYAN}+======================================================+${RESET}"
     echo -ne "${BOLD}${YELLOW}👉 Choisissez un mode : ${RESET}"
@@ -832,7 +827,6 @@ while true; do
         9) manage_mode "Hysteria" install_hysteria uninstall_hysteria ;;
         10) manage_mode "Tunnel WS/WSS SSH" install_sshws uninstall_sshws ;;
         11) manage_mode "UDP_request" install_udp_request uninstall_udp_request ;;
-        12) manage_mode "ZIVPN TUNNEL" install_zivpn uninstall_zivpn ;;
         0) echo -e "${RED}🚪 Sortie du panneau de contrôle.${RESET}" ; exit 0 ;;
         *) echo -e "${RED}❌ Option invalide, réessayez.${RESET}" ;;
     esac
