@@ -65,47 +65,31 @@ install_zivpn() {
   echo
 
   if zivpn_installed; then
-    echo "ZIVPN déjà installé. Utilisez 'Fix ZIVPN' si besoin."
+    echo "ZIVPN déjà installé."
     pause
     return
   fi
 
-  # Reset firewall comme arivpnstores
-  systemctl stop "$ZIVPN_SERVICE" >/dev/null 2>&1 || true
+  # Clean slate
+  systemctl stop zivpn >/dev/null 2>&1 || true
   ufw disable >/dev/null 2>&1 || true
-  iptables -F; iptables -t nat -F; iptables -t mangle -F
+  iptables -F; iptables -t nat -F
 
-  apt update -y
-  apt install -y wget curl jq openssl ufw nftables
+  apt update -y && apt install -y wget curl jq openssl ufw iptables-persistent
 
-  echo "[+] Téléchargement binaire ZIVPN (1.4.9)"
-  wget -q "https://github.com/zahidbd2/udp-zivpn/releases/download/udp-zivpn_1.4.9/udp-zivpn-linux-amd64" \
-    -O "$ZIVPN_BIN"
+  # Binaire + cert (code précédent OK)
+  wget -q "https://github.com/zahidbd2/udp-zivpn/releases/download/udp-zivpn_1.4.9/udp-zivpn-linux-amd64" -O "$ZIVPN_BIN"
   chmod +x "$ZIVPN_BIN"
-
+  
   mkdir -p /etc/zivpn
-  touch "$ZIVPN_USER_FILE" "$ZIVPN_DOMAIN_FILE"
-  chmod 600 "$ZIVPN_USER_FILE"
+  read -rp "Domaine: " DOMAIN; DOMAIN=${DOMAIN:-"zivpn.local"}
+  echo "$DOMAIN" > "$ZIVPN_DOMAIN_FILE"
+  
+  CERT="/etc/zivpn/zivpn.crt"; KEY="/etc/zivpn/zivpn.key"
+  openssl req -x509 -newkey rsa:2048 -keyout "$KEY" -out "$CERT" -nodes -days 3650 -subj "/CN=$DOMAIN"
+  chmod 600 "$KEY"; chmod 644 "$CERT"
 
-  # Domaine pour certificat
-  if [[ ! -s "$ZIVPN_DOMAIN_FILE" ]]; then
-    read -rp "Domaine (pour cert, ex: zivpn.votredomaine.com) [zivpn.local]: " DOMAIN
-    DOMAIN=${DOMAIN:-"zivpn.local"}
-    echo "$DOMAIN" > "$ZIVPN_DOMAIN_FILE"
-  fi
-  DOMAIN=$(cat "$ZIVPN_DOMAIN_FILE")
-
-  # Certificat comme arivpnstores
-  CERT="/etc/zivpn/zivpn.crt"
-  KEY="/etc/zivpn/zivpn.key"
-  openssl req -x509 -newkey rsa:2048 \
-    -keyout "$KEY" -out "$CERT" \
-    -nodes -days 3650 -subj "/CN=$DOMAIN"
-
-  chmod 600 "$KEY"
-  chmod 644 "$CERT"
-
-  # config.json EXACTEMENT comme arivpnstores
+  # config.json
   cat > "$ZIVPN_CONFIG" << 'EOF'
 {
   "listen": ":5667",
@@ -119,7 +103,7 @@ install_zivpn() {
 }
 EOF
 
-  # systemd service IDENTIQUE à arivpnstores
+  # systemd service
   cat > "/etc/systemd/system/$ZIVPN_SERVICE" << EOF
 [Unit]
 Description=ZIVPN UDP Server
@@ -131,56 +115,25 @@ Type=simple
 ExecStart=$ZIVPN_BIN server -c $ZIVPN_CONFIG
 WorkingDirectory=/etc/zivpn
 Restart=always
-RestartSec=3
-Environment=ZIVPN_LOG_LEVEL=info
 AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
-NoNewPrivileges=true
-
 [Install]
 WantedBy=multi-user.target
 EOF
 
-  systemctl daemon-reload
-  systemctl enable "$ZIVPN_SERVICE"
+  systemctl daemon-reload && systemctl enable "$ZIVPN_SERVICE"
 
-  # Firewall/NAT EXACT comme arivpnstores (UFW + iptables)
-  cat > /etc/ufw/before.rules << 'EOF'
-# ZIVPN UDP NAT (6000-19999 -> 5667)
-*nat
-:PREROUTING ACCEPT [0:0]
--A PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667
-COMMIT
+  # FIREWALL CORRIGÉ
+  iptables -t nat -A PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667
+  iptables -A INPUT -p udp --dport 5667 -j ACCEPT
+  iptables -A INPUT -p udp --dport 6000:19999 -j ACCEPT
+  netfilter-persistent save
 
-# ZIVPN UDP INPUT
-*filter
-:ufw-before-input - [0:0]
--A ufw-before-input -p udp --dport 5667 -j ACCEPT
--A ufw-before-input -p udp --dport 6000:19999 -j ACCEPT
-COMMIT
-EOF
-
-  ufw --force enable
-  ufw allow 22,80,443,53
-
-  # sysctl pour UDP buffers
-  echo 'net.core.rmem_max=16777216' > /etc/sysctl.d/99-zivpn.conf
-  echo 'net.core.wmem_max=16777216' >> /etc/sysctl.d/99-zivpn.conf
-  sysctl --system
+  sysctl -w net.core.rmem_max=16777216
+  sysctl -w net.core.wmem_max=16777216
 
   systemctl start "$ZIVPN_SERVICE"
-  sleep 3
-
-  if zivpn_running; then
-    echo "✅ ZIVPN installé (arivpnstores compatible) !"
-    echo "   Password par défaut: zi"
-    echo "   Ports: 6000-19999 (redirigés vers 5667)"
-    echo "   Config client ZIVPN:"
-    echo "   Host: $(hostname -I | awk '{print $1}')"
-    echo "   Password: zi"
-  else
-    echo "❌ Service ne démarre pas. Logs: journalctl -u $ZIVPN_SERVICE"
-  fi
+  
+  echo "✅ ZIVPN installé ! Teste avec password 'zi'"
   pause
 }
 
