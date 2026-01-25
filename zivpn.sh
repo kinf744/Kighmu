@@ -245,29 +245,21 @@ delete_zivpn_user() {
 
 fix_zivpn() {
   print_title
-  echo "[4] FIX ZIVPN (@kighmu style)"
+  echo "[4] FIX ZIVPN + SlowDNS (coexistence)"
   
-  if ! zivpn_installed; then
-    echo "❌ ZIVPN non installé. Option 1 d'abord."
-    pause; return
-  fi
-
-  echo "[+] Reset firewall + NAT (UFW/iptables)"
-  ufw disable >/dev/null 2>&1 || true
-  iptables -F; iptables -t nat -F; iptables -t mangle -F
-
-  systemctl restart "$ZIVPN_SERVICE"
-  ufw --force enable >/dev/null 2>&1
-  sysctl --system >/dev/null 2>&1
-
-  if zivpn_running; then
-    echo "✅ ZIVPN fixé et actif !"
-    echo "   Passwords: $(jq -r '.auth.config[]' "$ZIVPN_CONFIG" | tr '
-' ' ')"
-  else
-    echo "❌ Toujours HS. Logs: journalctl -u $ZIVPN_SERVICE -n 20"
-  fi
-  pause
+  # Force iptables legacy (pas de conflit nftables)
+  update-alternatives --set iptables /usr/sbin/iptables-legacy 2>/dev/null || true
+  
+  # Reset + recréation ZIVPN (préserve SlowDNS port 53)
+  iptables -t nat -F PREROUTING
+  iptables -A INPUT -p udp --dport 5667 -j ACCEPT 2>/dev/null || true
+  iptables -t nat -A PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667
+  
+  netfilter-persistent save
+  systemctl restart zivpn.service
+  
+  echo "✅ ZIVPN fixé (6000-19999→5667)"
+  echo "   SlowDNS préservé (53→5300)"
 }
 
 # ---------- 5) Désinstallation ----------
