@@ -220,6 +220,7 @@ echo -e "${CYAN}+============================${WHITE_BOLD}[❖]${RESET}=========
   echo -e "${GREEN}${BOLD}[09]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Xray All mode${RESET}"
   echo -e "${GREEN}${BOLD}[10]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Désinstaller le script${RESET}"
   echo -e "${GREEN}${BOLD}[11]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Blocage de torrents${RESET}"
+  echo -e "${GREEN}${BOLD}[12]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}ZIVPN TUNNEL${RESET}"
   echo -e "${RED}[00] ➜ Quitter${RESET}"
   echo -e "${CYAN}+==========================================================+${RESET}"
 
@@ -252,6 +253,7 @@ echo -e "${CYAN}+============================${WHITE_BOLD}[❖]${RESET}=========
       fi
       ;;
     11) bash "$SCRIPT_DIR/menu7.sh" ;;
+    12) bash "$SCRIPT_DIR/zivpn.sh" ;;
     00)
       clear
       echo -e "${RED}Au revoir !${RESET}"
