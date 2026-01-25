@@ -176,93 +176,97 @@ uninstall_dropbear() {
 }
 
 install_udp_custom() {
-    local SCRIPT="$HOME/Kighmu/udp_custom.sh"
-
-    echo ">>> Installation UDP Custom via script..."
-
-    if [[ ! -f "$SCRIPT" ]]; then
-        echo "❌ Script introuvable : $SCRIPT"
-        read -r -p "Appuyez sur Entrée..."
-        return 1
+    clear; show_banner
+    echo -e "${C_BOLD}${C_PURPLE}--- 🚀 Installing udp-custom ---${C_RESET}"
+    if [ -f "/etc/systemd/system/udp-custom.service" ]; then
+        echo -e "${YELLOW}ℹ️ udp-custom is already installed.${RESET}"
+        return
     fi
 
-    chmod +x "$SCRIPT"
+    echo -e "${GREEN}⚙️ Creating directory for udp-custom...${RESET}"
+    mkdir -p "/root/udp"
 
-    sudo bash "$SCRIPT"
-    local status=$?
-
-    if [[ $status -ne 0 ]]; then
-        echo "⚠️ Le script UDP Custom s'est terminé avec une erreur (code $status)."
-        read -r -p "Appuyez sur Entrée..."
-        return $status
+    echo -e "${GREEN}⚙️ Detecting system architecture...${RESET}"
+    local arch
+    arch=$(uname -m)
+    local binary_url=""
+    if [[ "$arch" == "x86_64" ]]; then
+        binary_url="https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp-custom-linux-amd64"
+        echo -e "${BLUE}ℹ️ Detected x86_64 (amd64) architecture.${RESET}"
+    elif [[ "$arch" == "aarch64" || "$arch" == "arm64" ]]; then
+        binary_url="https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp-custom-linux-arm"
+        echo -e "${BLUE}ℹ️ Detected ARM64 architecture.${RESET}"
+    else
+        echo -e "${RED}❌ Unsupported architecture: $arch. Cannot install udp-custom.${RESET}"
+        return
     fi
 
-    echo "✅ Installation UDP Custom terminée avec succès."
+    echo -e "${GREEN}📥 Downloading udp-custom binary...${RESET}"
+    wget -q --show-progress -O "/root/udp/udp-custom" "$binary_url"
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ Failed to download the udp-custom binary.${RESET}"
+        return
+    fi
+    chmod +x "/root/udp/udp-custom"
+
+    echo -e "${GREEN}📝 Creating default config.json...${RESET}"
+    cat > "/root/udp/config.json" <<EOF
+{
+  "listen": ":36712",
+  "stream_buffer": 33554432,
+  "receive_buffer": 83886080,
+  "auth": {
+    "mode": "passwords"
+  }
+}
+EOF
+    chmod 644 "/root/udp/config.json"
+
+    echo -e "${GREEN}📝 Creating systemd service file...${RESET}"
+    cat > /etc/systemd/system/udp-custom.service <<EOF
+[Unit]
+Description=UDP Custom by kighmu
+After=network.target
+
+[Service]
+User=root
+Type=simple
+ExecStart=/root/udp/udp-custom server -exclude 53,5300
+WorkingDirectory=/root/udp/
+Restart=always
+RestartSec=2s
+
+[Install]
+WantedBy=default.target
+EOF
+
+    echo -e "${YELLOW}▶️ Enabling and starting udp-custom service...${RESET}"
+    systemctl daemon-reload
+    systemctl enable udp-custom.service
+    systemctl start udp-custom.service
+    sleep 2
+    if systemctl is-active --quiet udp-custom; then
+        echo -e "${YELLOW}✅ SUCCESS: udp-custom is installed and active.${RESET}"
+    else
+        echo -e "${RED}❌ ERROR: udp-custom service failed to start.${RESET}"
+        echo -e "${YELLOW}ℹ️ Displaying last 15 lines of the service log for diagnostics:${RESET}"
+        journalctl -u udp-custom.service -n 15 --no-pager
+    fi
 }
 
-
 uninstall_udp_custom() {
-    echo "============================================"
-    echo "        Désinstallation UDP Custom"
-    echo "============================================"
-
-    SERVICE_NAME="udp-custom.service"
-    INSTALL_DIR="/opt/udp-custom"
-    LOG_DIR="/var/log/udp-custom"
-    RUN_USER="udpuser"
-    UDP_PORT=54000  # Port serveur fixe
-
-    # Arrêt et désactivation du service
-    if systemctl is-active --quiet "$SERVICE_NAME"; then
-        systemctl stop "$SERVICE_NAME"
-        echo "[+] Service $SERVICE_NAME arrêté."
+    echo -e "${BOLD}--- 🗑️ Uninstalling udp-custom ---${RESET}"
+    if [ ! -f "/etc/systemd/system/udp-custom.service" ]; then
+        echo -e "${YELLOW}ℹ️ udp-custom is not installed, skipping.${RESET}"
+        return
     fi
-
-    if systemctl is-enabled --quiet "$SERVICE_NAME"; then
-        systemctl disable "$SERVICE_NAME"
-        echo "[+] Service $SERVICE_NAME désactivé."
-    fi
-
-    # Suppression du service systemd
-    if [[ -f /etc/systemd/system/$SERVICE_NAME ]]; then
-        rm -f /etc/systemd/system/$SERVICE_NAME
-        systemctl daemon-reload
-        echo "[+] Service systemd supprimé."
-    fi
-
-    # Suppression des fichiers binaires et logs
-    if [[ -d "$INSTALL_DIR" ]]; then
-        rm -rf "$INSTALL_DIR"
-        echo "[+] Répertoire $INSTALL_DIR supprimé."
-    fi
-
-    if [[ -d "$LOG_DIR" ]]; then
-        rm -rf "$LOG_DIR"
-        echo "[+] Logs supprimés."
-    fi
-
-    # Suppression des processus résiduels
-    pkill -x udp-custom-linux-amd64 2>/dev/null || true
-
-    # Suppression des règles iptables pour le port serveur fixe
-    iptables -D INPUT -p udp --dport "$UDP_PORT" -j ACCEPT 2>/dev/null || true
-    iptables -D OUTPUT -p udp --sport "$UDP_PORT" -j ACCEPT 2>/dev/null || true
-    echo "[+] Règles iptables pour le port $UDP_PORT supprimées."
-
-    # Sauvegarde des règles iptables si netfilter-persistent installé
-    if command -v netfilter-persistent >/dev/null 2>&1; then
-        netfilter-persistent save >/dev/null 2>&1
-        echo "[+] Règles iptables sauvegardées."
-    fi
-
-    # Suppression de l'utilisateur dédié (optionnel)
-    if id "$RUN_USER" &>/dev/null; then
-        userdel -r "$RUN_USER" 2>/dev/null || true
-        echo "[+] Utilisateur dédié $RUN_USER supprimé."
-    fi
-
-    echo "[+] UDP Custom complètement désinstallé."
-    echo "============================================"
+    echo -e "${GREEN}🛑 Stopping and disabling udp-custom service...${RESET}"
+    systemctl stop udp-custom.service >/dev/null 2>&1
+    systemctl disable udp-custom.service >/dev/null 2>&1
+    echo -e "${GREEN}🗑️ Removing systemd service file...${C_RESET}"
+    systemctl daemon-reload
+    echo -e "${GREEN}🗑️ Removing udp-custom directory and files...${RESET}"
+    echo -e "${GREEN}✅ udp-custom has been uninstalled successfully.${RESET}"
 }
 
 install_socks_python() {
