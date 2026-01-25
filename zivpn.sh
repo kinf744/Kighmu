@@ -278,14 +278,25 @@ uninstall_zivpn() {
   read -rp "Confirmer ? (o/N): " CONFIRM
   [[ "$CONFIRM" =~ ^[oO]$ ]] || { echo "Annulé"; pause; return; }
 
-  systemctl stop "$ZIVPN_SERVICE" || true
-  systemctl disable "$ZIVPN_SERVICE" || true
+  # Arrêt et désactivation du service
+  systemctl stop "$ZIVPN_SERVICE" 2>/dev/null || true
+  systemctl disable "$ZIVPN_SERVICE" 2>/dev/null || true
   rm -f "/etc/systemd/system/$ZIVPN_SERVICE"
   systemctl daemon-reload
 
-  rm -f "$ZIVPN_BIN" /etc/zivpn/*
-  ufw delete 6000:19999/udp >/dev/null 2>&1 || true
-  iptables -t nat -F PREROUTING >/dev/null 2>&1 || true
+  # Suppression binaire + dossiers
+  rm -f "$ZIVPN_BIN"
+  rm -rf /etc/zivpn
+
+  # Nettoyage firewall / NAT
+  # 1) Supprimer la règle DNAT spécifique si tu veux être précis :
+  iptables -t nat -D PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667 2>/dev/null || true
+  # 2) Et à défaut, tu peux garder un flush global si tu préfères :
+  iptables -t nat -F PREROUTING 2>/dev/null || true
+
+  # UFW : ta ligne actuelle ne sert à rien car tu n'as pas créé de règle 6000:19999/udp via ufw
+  # soit tu vires complètement la ligne ufw, soit tu mets un reset général si tu veux :
+  # ufw --force reset >/dev/null 2>&1 || true
 
   echo "✅ ZIVPN supprimé"
   pause
