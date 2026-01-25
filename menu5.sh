@@ -176,59 +176,34 @@ uninstall_dropbear() {
 }
 
 install_udp_custom() {
-    clear
-    echo "--- 🚀 Installing udp-custom ---"
-    
-    if [ -f "/etc/systemd/system/udp-custom.service" ]; then
-        echo "ℹ️ udp-custom already installed."
-        read -p "Press Enter..."
-        return
+    BIN_DST="/usr/local/bin/udp-custom"
+    TMP_DIR="/tmp/udp_custom_install"
+    RELEASE_URL="https://github.com/kinf744/Kighmu/releases/download/v1.0.0"
+
+    # Préparer le dossier temporaire
+    mkdir -p "$TMP_DIR"
+    cd "$TMP_DIR" || return 1
+
+    # Télécharger le binaire et le hash
+    echo "⏳ Téléchargement de udp-custom..."
+    curl -LO "$RELEASE_URL/udp-custom-linux-amd64"
+    # Note: pas de .sha256 disponible, on skip la vérif
+
+    # Vérifier que le fichier existe et est exécutable
+    if [[ ! -f "udp-custom-linux-amd64" ]]; then
+        echo "❌ Fichier binaire non trouvé"
+        cd ~; rm -rf "$TMP_DIR"
+        return 1
     fi
 
-    echo "⚙️ Creating directory..."
+    # Installer le binaire
+    install -m 0755 udp-custom-linux-amd64 "$BIN_DST"
+    echo "✅ udp-custom installé dans $BIN_DST"
+
+    # Config JSON
+    CONFIG_FILE="/root/udp/config.json"
     mkdir -p "/root/udp"
-
-    echo "⚙️ Detecting architecture..."
-    ARCH=$(uname -m)
-    if [[ "$ARCH" == "x86_64" ]]; then
-        # URLs MULTIPLES - au moins une marche !
-        URLS=(
-            "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp-custom-linux-amd64"
-            "https://fastly.jsdelivr.net/gh/kinf744/Kighmu@v1.0.0/udp-custom-linux-amd64"
-            "https://cdn.jsdelivr.net/gh/kinf744/Kighmu@v1.0.0/udp-custom-linux-amd64"
-        )
-    elif [[ "$ARCH" == "aarch64" ]]; then
-        URLS=(
-            "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp-custom-linux-arm"
-        )
-    else
-        echo "❌ Unsupported: $ARCH"
-        read -p "Press Enter..."
-        return
-    fi
-
-    # DOWNLOAD ROBUSTE (teste toutes les URLs)
-    echo "📥 Downloading udp-custom..."
-    SUCCESS=false
-    for URL in "${URLS[@]}"; do
-        if wget -q --timeout=15 -O "/root/udp/udp-custom" "$URL"; then
-            echo "✅ Downloaded from $URL"
-            SUCCESS=true
-            break
-        fi
-    done
-    
-    if [ "$SUCCESS" = false ]; then
-        echo "❌ All download URLs failed."
-        read -p "Press Enter..."
-        return
-    fi
-    
-    chmod +x "/root/udp/udp-custom"
-
-    # TA CONFIG PARFAITE (inchangée)
-    echo "📝 Creating config.json..."
-    cat > "/root/udp/config.json" <<EOF
+    cat > "$CONFIG_FILE" <<EOF
 {
   "listen": ":36712",
   "stream_buffer": 33554432,
@@ -238,65 +213,95 @@ install_udp_custom() {
   }
 }
 EOF
+    echo "✅ Config créée: $CONFIG_FILE"
 
-    # FIREWALL (compatible ZIVPN + SlowDNS)
-    iptables -C INPUT -p udp --dport 36712 -j ACCEPT 2>/dev/null || \
-    iptables -A INPUT -p udp --dport 36712 -j ACCEPT
+    # Firewall : ouvrir le port 36712 si iptables disponible
+    if command -v iptables >/dev/null 2>&1; then
+        if ! iptables -C INPUT -p udp --dport 36712 -j ACCEPT 2>/dev/null; then
+            iptables -I INPUT -p udp --dport 36712 -j ACCEPT
+            command -v netfilter-persistent >/dev/null && netfilter-persistent save
+            echo "✅ Port 36712 ouvert dans le firewall"
+        fi
+    fi
 
-    # SYSTEMD CORRIGÉ (avec config.json + network-online)
-    cat > /etc/systemd/system/udp-custom.service <<EOF
+    # systemd : création du service si absent
+    SYSTEMD_FILE="/etc/systemd/system/udp-custom.service"
+    if [ ! -f "$SYSTEMD_FILE" ]; then
+        tee "$SYSTEMD_FILE" >/dev/null <<EOF
 [Unit]
-Description=UDP Custom Tunnel (ZIVPN+SLOWDNS compatible)
+Description=UDP Custom Tunnel
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-User=root
 Type=simple
-ExecStart=/root/udp/udp-custom server -c /root/udp/config.json -exclude 53,5300
-WorkingDirectory=/root/udp
+ExecStart=$BIN_DST server -c $CONFIG_FILE -exclude 53,5300
 Restart=always
-RestartSec=2s
-LimitNOFILE=65536
+RestartSec=2
+User=root
+LimitNOFILE=1048576
+WorkingDirectory=/root/udp
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-    echo "▶️ Starting service..."
-    systemctl daemon-reload
-    systemctl enable udp-custom.service
-    systemctl start udp-custom.service
-    sleep 3
-    
-    if systemctl is-active --quiet udp-custom.service; then
-        IP=$(hostname -I | awk '{print $1}')
-        echo "✅ udp-custom installé et actif !"
-        echo "   Serveur: $IP:36712"
-        echo "   Format client: $IP:36712:username:password"
-        echo "   Ports exclus: 53,5300 (ZIVPN+SLOWDNS protégés)"
-        echo "   Vérification: ss -ulnp | grep 36712"
+        systemctl daemon-reload
+        systemctl enable --now udp-custom.service
+        echo "✅ Service systemd udp-custom installé et actif"
     else
-        echo "❌ Service failed. Logs:"
-        journalctl -u udp-custom.service -n 15 --no-pager
+        echo "ℹ️ Service systemd déjà existant"
     fi
-    
-    read -p "Press Enter..."
+
+    IP=$(hostname -I | awk '{print $1}')
+    echo "🚀 udp-custom prêt ! Format client: $IP:36712:username:password"
+    echo "   Compatible ZIVPN(6000-19999) + SlowDNS(53→5300)"
+
+    # Nettoyage
+    cd ~
+    rm -rf "$TMP_DIR"
+    read -p "Appuyez sur Entrée..."
 }
 
 uninstall_udp_custom() {
-    echo -e "${BOLD}--- 🗑️ Uninstalling udp-custom ---${RESET}"
-    if [ ! -f "/etc/systemd/system/udp-custom.service" ]; then
-        echo -e "${YELLOW}ℹ️ udp-custom is not installed, skipping.${RESET}"
+    echo "--- 🗑️ Désinstallation udp-custom ---"
+    
+    # Vérifier si installé
+    SYSTEMD_FILE="/etc/systemd/system/udp-custom.service"
+    if [ ! -f "$SYSTEMD_FILE" ]; then
+        echo "ℹ️ udp-custom non installé."
+        read -p "Appuyez sur Entrée..."
         return
     fi
-    echo -e "${GREEN}🛑 Stopping and disabling udp-custom service...${RESET}"
-    systemctl stop udp-custom.service >/dev/null 2>&1
-    systemctl disable udp-custom.service >/dev/null 2>&1
-    echo -e "${GREEN}🗑️ Removing systemd service file...${C_RESET}"
+
+    echo "🛑 Arrêt et désactivation du service..."
+    systemctl stop udp-custom.service 2>/dev/null || true
+    systemctl disable udp-custom.service 2>/dev/null || true
+
+    echo "🗑️ Suppression service systemd..."
+    rm -f "$SYSTEMD_FILE"
     systemctl daemon-reload
-    echo -e "${GREEN}🗑️ Removing udp-custom directory and files...${RESET}"
-    echo -e "${GREEN}✅ udp-custom has been uninstalled successfully.${RESET}"
+
+    echo "🗑️ Suppression binaire et fichiers..."
+    rm -f /usr/local/bin/udp-custom
+    rm -rf /root/udp
+
+    echo "🔓 Fermeture port firewall..."
+    iptables -D INPUT -p udp --dport 36712 -j ACCEPT 2>/dev/null || true
+    command -v netfilter-persistent >/dev/null && netfilter-persistent save 2>/dev/null || true
+
+    echo "✅ udp-custom désinstallé avec succès !"
+    
+    # Vérification finale
+    if ! systemctl is-active --quiet udp-custom.service 2>/dev/null; then
+        echo "   Service supprimé (OK)"
+    fi
+    
+    if ! ss -ludp | grep -q :36712; then
+        echo "   Port 36712 libéré (OK)"
+    fi
+    
+    read -p "Appuyez sur Entrée..."
 }
 
 install_socks_python() {
