@@ -450,9 +450,11 @@ show_users_usage() {
   [[ -f "$ZIVPN_USER_FILE" ]]  || { echo "❌ Aucun utilisateur."; pause; return; }
   [[ -f "$ZIVPN_QUOTA_FILE" ]] || { echo "❌ Aucun quota."; pause; return; }
 
-  printf "%-15s %-22s %-22s %-15s %-10s
-" "PASSWORD" "CONSOMMATION" "QUOTA TOTAL" "EXPIRATION" "STATUT"
-  echo "────────────────────────────────────────────────────────────────────────────"
+  # 🔹 Mise à jour consommation avant affichage
+  update_user_consumption
+
+  printf "%-15s %-15s %-15s %-15s %-10s\n" "PASSWORD" "CONSOMMATION" "QUOTA TOTAL" "EXPIRATION" "STATUT"
+  echo "────────────────────────────────────────────────────────────"
 
   while IFS='|' read -r PHONE PASS EXPIRE; do
     QUOTA_LINE=$(grep "^$PHONE|" "$ZIVPN_QUOTA_FILE" 2>/dev/null || true)
@@ -460,23 +462,26 @@ show_users_usage() {
 
     IP=$(echo "$QUOTA_LINE" | cut -d'|' -f2)
     QUOTA_BYTES=$(echo "$QUOTA_LINE" | cut -d'|' -f3)
+    USED_BYTES=$(echo "$QUOTA_LINE" | cut -d'|' -f4)
 
-    USED_BYTES=$(get_ip_usage "$IP")
-    STATUS=$(get_user_status "$USED_BYTES" "$QUOTA_BYTES" "$EXPIRE")
-
-    [[ "$STATUS" == "EXPIRÉ" ]] && block_expired_user "$PHONE"
+    # Déterminer statut
+    TODAY=$(date +%Y-%m-%d)
+    if [[ "$EXPIRE" < "$TODAY" ]]; then
+      STATUS="EXPIRÉ"
+      STATUS_COLOR="⚫"
+    elif [[ "$QUOTA_BYTES" -ne 0 && "$USED_BYTES" -ge "$QUOTA_BYTES" ]]; then
+      STATUS="ÉPUISÉ"
+      STATUS_COLOR="🔴"
+    else
+      STATUS="ACTIF"
+      STATUS_COLOR="🟢"
+    fi
 
     USED_GB=$(bytes_to_gb "$USED_BYTES")
     QUOTA_GB=$(bytes_to_gb "$QUOTA_BYTES")
-    STATUS_DISPLAY=$(status_color "$STATUS")
 
-    printf "%-15s %-22s %-22s %-15s %-10s
-" \
-      "$PASS" \
-      "${USED_GB} Go" \
-      "${QUOTA_GB} Go" \
-      "$EXPIRE" \
-      "$STATUS_DISPLAY"
+    printf "%-15s %-15s %-15s %-15s %-10s\n" \
+      "$PASS" "${USED_GB} Go" "${QUOTA_GB} Go" "$EXPIRE" "$STATUS_COLOR $STATUS"
   done < "$ZIVPN_USER_FILE"
 
   pause
