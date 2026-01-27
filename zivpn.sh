@@ -45,20 +45,18 @@ print_title() {
 show_status_block() {
   echo "------ STATUT ZIVPN ------"
   
-  BIN_OK=$([[ -x "$ZIVPN_BIN" ]] && echo "✅" || echo "❌")
   SVC_FILE_OK=$([[ -f "/etc/systemd/system/$ZIVPN_SERVICE" ]] && echo "✅" || echo "❌")
   SVC_ACTIVE=$(systemctl is-active "$ZIVPN_SERVICE" 2>/dev/null || echo "N/A")
   PORT_OK=$(ss -ludp | grep -q 5667 && echo "✅" || echo "❌")
   
-  echo "Binaire $ZIVPN_BIN: $BIN_OK"
   echo "Service file: $SVC_FILE_OK"
   echo "Service actif: $SVC_ACTIVE"
   echo "Port 5667: $PORT_OK"
   
-  if [[ "$BIN_OK" == "✅" && "$SVC_FILE_OK" == "✅" ]]; then
+  if [[ "$SVC_FILE_OK" == "✅" ]]; then
     if systemctl is-active --quiet "$ZIVPN_SERVICE" 2>/dev/null; then
       echo "✅ ZIVPN : INSTALLÉ et ACTIF"
-      echo "   Port interne: 5667 (DNAT 6000-19999)"
+      echo "   Port interne: 5667"
     else
       echo "⚠️  ZIVPN : INSTALLÉ mais INACTIF"
     fi
