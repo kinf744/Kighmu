@@ -241,7 +241,7 @@ create_zivpn_user() {
 
   echo "Format: téléphone | password | durée | quota"
   echo "Exemple: 2330 / MonPass123 / 30 jours / 50 Go"
-  echo "NB: quota 0 = illimité (pas de blocage sur quota)"
+  echo "NB: quota 0 = illimité"
   echo
 
   read -rp "Téléphone: " PHONE
@@ -254,71 +254,57 @@ create_zivpn_user() {
   TODAY=$(date +%Y-%m-%d)
   QUOTA_BYTES=$(awk -v gb="${QUOTA_GB:-0}" 'BEGIN { print gb*1024*1024*1024 }')
   USER_IP=${USER_IP:-$(hostname -I | awk '{print $1}')}
-  USED_BYTES=0
+  USED_BYTES=0  # initialisé à zéro pour nouvel utilisateur
 
-  # -------------------
-  # 1) Sauvegarde users.list
-  # -------------------
+  # Sauvegarde users.list (PHONE|PASS|EXPIRE)
   tmp=$(mktemp)
   grep -v "^$PHONE|" "$ZIVPN_USER_FILE" > "$tmp" 2>/dev/null || true
   echo "$PHONE|$PASS|$EXPIRE" >> "$tmp"
   mv "$tmp" "$ZIVPN_USER_FILE"
 
-  # -------------------
-  # 2) Sauvegarde quotas.list
-  # -------------------
+  # Sauvegarde quotas.list (PHONE|IP|QUOTA_BYTES|USED_BYTES)
   tmpq=$(mktemp)
   grep -v "^$PHONE|" "$ZIVPN_QUOTA_FILE" > "$tmpq" 2>/dev/null || true
   echo "$PHONE|$USER_IP|$QUOTA_BYTES|$USED_BYTES" >> "$tmpq"
   mv "$tmpq" "$ZIVPN_QUOTA_FILE"
+
   chmod 600 "$ZIVPN_USER_FILE" "$ZIVPN_QUOTA_FILE"
 
-  # -------------------
-  # 3) Met à jour config.json avec tous les passwords valides
-  # -------------------
+  # Extraction des passwords valides pour config.json
   PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$ZIVPN_USER_FILE" | sort -u | paste -sd, -)
   if jq --arg passwords "$PASSWORDS" '.auth.config = ($passwords | split(","))' "$ZIVPN_CONFIG" > /tmp/config.json 2>/dev/null; then
     if jq empty /tmp/config.json >/dev/null 2>&1; then
       mv /tmp/config.json "$ZIVPN_CONFIG"
       systemctl restart "$ZIVPN_SERVICE"
+
+      DOMAIN=$(cat "$ZIVPN_DOMAIN_FILE" 2>/dev/null || echo "$USER_IP")
+
+      echo
+      echo "✅ UTILISATEUR CRÉÉ"
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      echo "📱 Téléphone : $PHONE"
+      echo "🌐 Domaine   : $DOMAIN"
+      echo "🎭 Obfs      : zivpn"
+      echo "🔐 Password  : $PASS"
+      echo "📅 Expire    : $EXPIRE"
+      echo "🔌 IP client : $USER_IP"
+      echo "📦 Quota     : ${QUOTA_GB} Go (0 = illimité)"
+      echo "📊 Consommé  : 0 Go"
+      echo "🟢 Statut    : ACTIF 🟢"
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    else
+      echo "❌ JSON invalide → rollback"
+      rm -f /tmp/config.json
     fi
-  fi
-
-  # -------------------
-  # 4) Blocage automatique si quota dépassé ou expiré
-  # -------------------
-  STATUS="ACTIF"
-  if [[ "$EXPIRE" < "$TODAY" ]]; then
-    STATUS="EXPIRÉ"
-    iptables -A INPUT -s "$USER_IP" -j DROP
-  elif [[ "$QUOTA_BYTES" -ne 0 && "$USED_BYTES" -ge "$QUOTA_BYTES" ]]; then
-    STATUS="ÉPUISÉ"
-    iptables -A INPUT -s "$USER_IP" -j DROP
   else
-    iptables -D INPUT -s "$USER_IP" -j DROP 2>/dev/null || true
+    echo "❌ Erreur jq → config inchangée"
   fi
 
-  STATUS_COLOR="🟢"
-  [[ "$STATUS" == "ÉPUISÉ" ]] && STATUS_COLOR="🔴"
-  [[ "$STATUS" == "EXPIRÉ" ]] && STATUS_COLOR="⚫"
-
-  # -------------------
-  # 5) Affichage final
-  # -------------------
-  DOMAIN=$(cat "$ZIVPN_DOMAIN_FILE" 2>/dev/null || echo "$USER_IP")
-  echo
-  echo "✅ UTILISATEUR CRÉÉ"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "📱 Téléphone : $PHONE"
-  echo "🌐 Domaine   : $DOMAIN"
-  echo "🎭 Obfs      : zivpn"
-  echo "🔐 Password  : $PASS"
-  echo "📅 Expire    : $EXPIRE"
-  echo "📌 IP client : $USER_IP"
-  echo "📦 Quota     : ${QUOTA_GB} Go (0 = illimité)"
-  echo "📊 Consommé  : ${USED_BYTES} Bytes"
-  echo "🟢 Statut    : $STATUS_COLOR $STATUS"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  # 🔹 Ajout d'une règle FORWARD pour le suivi consommation
+  iptables -N ZIVPN_USERS 2>/dev/null || true
+  iptables -F ZIVPN_USERS
+  iptables -A FORWARD -j ZIVPN_USERS
+  iptables -A ZIVPN_USERS -s "$USER_IP" -j ACCEPT 2>/dev/null || true
 
   pause
 }
