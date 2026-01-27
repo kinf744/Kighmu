@@ -495,7 +495,7 @@ while true; do
   print_title
   show_status_block
   
-  echo "1) Installer ZIVPN (arivpnstores)"
+  echo "1) Installer ZIVPN"
   echo "2) Créer utilisateur ZIVPN" 
   echo "3) Supprimer utilisateur"
   echo "4) Fix ZIVPN (reset firewall/NAT)"
