@@ -43,7 +43,7 @@ print_title() {
 }
 
 show_status_block() {
-  echo "------ STATUT ZIVPN ------"
+  echo "-------- STATUT ZIVPN --------"
   
   SVC_FILE_OK=$([[ -f "/etc/systemd/system/$ZIVPN_SERVICE" ]] && echo "✅" || echo "❌")
   SVC_ACTIVE=$(systemctl is-active "$ZIVPN_SERVICE" 2>/dev/null || echo "N/A")
