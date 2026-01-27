@@ -22,7 +22,7 @@ mkdir -p /etc/udp-custom
 cat > "$CONFIG_FILE" << 'EOF'
 {
   "listen": ":36712",
-  "exclude_port": [53,5300,5667],
+  "exclude_port": [53,5300,5667,4466],
   "timeout": 600
 }
 EOF
