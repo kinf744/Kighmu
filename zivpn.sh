@@ -334,10 +334,10 @@ delete_zivpn_user() {
   echo "────────────────────────────────────"
   read -rp "🔢 Numéro à supprimer (1-$(echo "${#USERS[@]}")): " NUM
 
-  if ! [[ "$NUM" =~ ^[0-9]+$ ]]  [ "$NUM" -lt 1 ]  [ "$NUM" -gt "${#USERS[@]}" ]; then
-    echo "❌ Numéro invalide."
-    pause
-    return
+  if ! [[ "$NUM" =~ ^[0-9]+$ ]] || [[ "$NUM" -lt 1 ]] || [[ "$NUM" -gt "${#USERS[@]}" ]]; then
+      echo "❌ Numéro invalide."
+      pause
+      return
   fi
 
   PHONE=$(awk -F'|' 'NR=='"$NUM"' {print $1}' "$ZIVPN_USER_FILE")
