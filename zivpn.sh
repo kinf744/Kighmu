@@ -50,24 +50,28 @@ print_title() {
 }
 
 show_status_block() {
-  title "-------- STATUT ZIVPN --------"
+  # Titre du bloc
+  echo -e "${MAGENTA}-------- STATUT ZIVPN --------${RESET}"
 
-  SVC_FILE_OK=$([[ -f "/etc/systemd/system/$ZIVPN_SERVICE" ]] && echo "✅" || echo "❌")
-  SVC_ACTIVE=$(systemctl is-active "$ZIVPN_SERVICE" 2>/dev/null || echo "N/A")
-  PORT_OK=$(ss -ludp | grep -q 5667 && echo "✅" || echo "❌")
+  # Vérification des statuts
+  SVC_FILE_OK=$([[ -f "/etc/systemd/system/$ZIVPN_SERVICE" ]] && echo -e "${GREEN}✅ OK${RESET}" || echo -e "${RED}❌ MANQUANT${RESET}")
+  SVC_ACTIVE=$(systemctl is-active "$ZIVPN_SERVICE" 2>/dev/null && echo -e "${GREEN}ACTIF${RESET}" || echo -e "${RED}INACTIF${RESET}")
+  PORT_OK=$(ss -ludp | grep -q 5667 && echo -e "${GREEN}✅ OUVERT${RESET}" || echo -e "${RED}❌ FERMÉ${RESET}")
 
-  info "Service file: $SVC_FILE_OK"
-  info "Service actif: $SVC_ACTIVE"
-  info "Port 5667: $PORT_OK"
+  # Affichage
+  echo -e "${CYAN}Service file :${RESET} $SVC_FILE_OK"
+  echo -e "${CYAN}Service actif :${RESET} $SVC_ACTIVE"
+  echo -e "${CYAN}Port 5667 :${RESET} $PORT_OK"
 
-  if [[ "$SVC_FILE_OK" == "✅" ]]; then
+  # Résumé général
+  if [[ "$SVC_FILE_OK" == *"✅"* ]]; then
     if zivpn_running; then
-      log "ZIVPN : INSTALLÉ et ACTIF (Port interne: 5667)"
+      echo -e "${GREEN}[✔] ZIVPN : INSTALLÉ et ACTIF (Port interne: 5667)${RESET}"
     else
-      warn "ZIVPN : INSTALLÉ mais INACTIF"
+      echo -e "${YELLOW}[!] ZIVPN : INSTALLÉ mais INACTIF${RESET}"
     fi
   else
-    err "ZIVPN : NON INSTALLÉ"
+    echo -e "${RED}[✖] ZIVPN : NON INSTALLÉ${RESET}"
   fi
   echo
 }
