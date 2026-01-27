@@ -329,7 +329,10 @@ fix_zivpn() {
 uninstall_zivpn() {
   print_title
   title "[5] DÉSINSTALLATION"
-  read -rp "$(echo -e ${YELLOW}Confirmer ? (o/N):${RESET}) " CONFIRM
+
+  echo -ne "${YELLOW}Confirmer ? (o/N): ${RESET}"
+  read -r CONFIRM
+
   [[ "$CONFIRM" =~ ^[oO]$ ]] || { warn "Annulé"; pause; return; }
 
   systemctl stop "$ZIVPN_SERVICE" 2>/dev/null || true
@@ -339,7 +342,9 @@ uninstall_zivpn() {
   rm -rf /etc/zivpn
   systemctl daemon-reload
 
-  iptables -t nat -D PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667 2>/dev/null || true
+  iptables -t nat -D PREROUTING -p udp --dport 6000:19999 \
+    -j DNAT --to-destination :5667 2>/dev/null || true
+
   log "ZIVPN supprimé"
   pause
 }
