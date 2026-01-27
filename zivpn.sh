@@ -247,21 +247,28 @@ create_zivpn_user() {
 # ---------- 3) SUPPRESSION UTILISATEUR ----------
 delete_zivpn_user() {
   print_title
-  title "[3] SUPPRIMER UTILISATEUR"
+  echo -e "${MAGENTA}[3] SUPPRIMER UTILISATEUR${RESET}"
+  echo
 
-  [[ ! -s "$ZIVPN_USER_FILE" ]] && { warn "Aucun utilisateur"; pause; return; }
+  # Vérifie s'il y a des utilisateurs
+  [[ ! -s "$ZIVPN_USER_FILE" ]] && { echo -e "${YELLOW}[!] Aucun utilisateur${RESET}"; pause; return; }
 
-  title "Utilisateurs actifs:"
-  nl -w2 -s'. ' "$ZIVPN_USER_FILE" | awk -F'|' '{printf "%s | %s | %s\n", $1, $2, $3}'
+  # Affiche les utilisateurs
+  echo -e "${MAGENTA}Utilisateurs actifs:${RESET}"
+  nl -w2 -s'. ' "$ZIVPN_USER_FILE" | awk -F'|' '{printf "'"$CYAN"'%s | %s | %s'"$RESET"'\n", $1, $2, $3}'
 
-  read -rp "🔢 Numéro: " NUM
+  # Demande le numéro
+  read -rp "$(echo -e ${BLUE}🔢 Numéro:${RESET} )" NUM
   PHONE=$(sed -n "${NUM}p" "$ZIVPN_USER_FILE" 2>/dev/null | cut -d'|' -f1)
 
-  [[ -z "$PHONE" ]] && { warn "Numéro invalide"; pause; return; }
+  # Vérification du choix
+  [[ -z "$PHONE" ]] && { echo -e "${YELLOW}[!] Numéro invalide${RESET}"; pause; return; }
 
+  # Supprime l'utilisateur sélectionné
   awk -F'|' -v phone="$PHONE" '$1!=phone' "$ZIVPN_USER_FILE" > /tmp/users.tmp
   mv /tmp/users.tmp "$ZIVPN_USER_FILE"
 
+  # Recharge la config ZIVPN
   TODAY=$(date +%Y-%m-%d)
   PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$ZIVPN_USER_FILE" | paste -sd,)
 
@@ -271,7 +278,8 @@ delete_zivpn_user() {
   jq empty /tmp/config.json >/dev/null 2>&1 && \
   mv /tmp/config.json "$ZIVPN_CONFIG" && systemctl restart "$ZIVPN_SERVICE"
 
-  log "$PHONE supprimé"
+  # Message de succès
+  echo -e "${GREEN}[✔] $PHONE supprimé${RESET}"
   pause
 }
 
