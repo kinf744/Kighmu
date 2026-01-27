@@ -42,10 +42,10 @@ zivpn_running() {
 
 print_title() {
   clear
-  title "╔═══════════════════════════════════════╗"
-  title "║        ZIVPN CONTROL PANEL v2        ║"
-  title "║     (Compatible @kighmu 🇨🇲)        ║"
-  title "╚═══════════════════════════════════════╝"
+  echo -e "${MAGENTA}╔═══════════════════════════════════════╗${RESET}"
+  echo -e "${MAGENTA}║        ZIVPN CONTROL PANEL v2        ║${RESET}"
+  echo -e "${MAGENTA}║     (Compatible @kighmu 🇨🇲)        ║${RESET}"
+  echo -e "${MAGENTA}╚═══════════════════════════════════════╝${RESET}"
   echo
 }
 
@@ -342,15 +342,15 @@ while true; do
   print_title
   show_status_block
   
-  echo "1) Installer ZIVPN"
-  echo "2) Créer utilisateur" 
-  echo "3) Supprimer utilisateur"
-  echo "4) Fix ZIVPN (SlowDNS OK)"
-  echo "5) Désinstaller"
-  echo "6) Utilisateurs + stats"
-  echo "0) Quitter"
-  echo
-  read -rp "Choix: " CHOIX
+  echo -e "${CYAN}1) Installer ZIVPN${RESET}"
+echo -e "${CYAN}2) Créer utilisateur${RESET}" 
+echo -e "${CYAN}3) Supprimer utilisateur${RESET}"
+echo -e "${CYAN}4) Fix ZIVPN (SlowDNS OK)${RESET}"
+echo -e "${CYAN}5) Désinstaller${RESET}"
+echo -e "${CYAN}6) Utilisateurs + stats${RESET}"
+echo -e "${CYAN}0) Quitter${RESET}"
+echo
+read -rp "$(echo -e ${BLUE}Choix:${RESET}) " CHOIX
 
   case $CHOIX in
     1) install_zivpn ;;
