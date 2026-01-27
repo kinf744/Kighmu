@@ -199,20 +199,24 @@ EOF
 # ---------- 2) CRÉATION UTILISATEUR ----------
 create_zivpn_user() {
   print_title
-  title "[2] CRÉATION UTILISATEUR ZIVPN"
-
-  ! zivpn_running && err "Service ZIVPN inactif."
-
-  echo "Exemple: 23301234567 | MonPass123 | 30 jours | 50 Go"
+  echo -e "${MAGENTA}[2] CRÉATION UTILISATEUR ZIVPN${RESET}"
   echo
 
-  read -rp "📱 Téléphone: " PHONE
-  read -rp "🔐 Password: " PASS
-  read -rp "📅 Jours: " DAYS
-  read -rp "📦 Quota Go (0=∞): " QUOTA_GB
+  # Vérifie si ZIVPN tourne
+  ! zivpn_running && { echo -e "${RED}[✖] Service ZIVPN inactif${RESET}"; pause; return; }
+
+  echo -e "${CYAN}Exemple: 23301234567 | MonPass123 | 30 jours | 50 Go${RESET}"
+  echo
+
+  # Demande les informations utilisateur
+  read -rp "$(echo -e ${BLUE}📱 Téléphone:${RESET} )" PHONE
+  read -rp "$(echo -e ${BLUE}🔐 Password:${RESET} )" PASS
+  read -rp "$(echo -e ${BLUE}📅 Jours:${RESET} )" DAYS
+  read -rp "$(echo -e ${BLUE}📦 Quota Go (0=∞):${RESET} )" QUOTA_GB
 
   EXPIRE=$(date -d "+${DAYS} days" '+%Y-%m-%d')
 
+  # Ajout ou mise à jour utilisateur
   tmp=$(mktemp)
   awk -F'|' -v phone="$PHONE" -v pass="$PASS" -v expire="$EXPIRE" -v quota="$QUOTA_GB" '
     $1!=phone {print}
@@ -221,6 +225,7 @@ create_zivpn_user() {
   mv "$tmp" "$ZIVPN_USER_FILE"
   chmod 600 "$ZIVPN_USER_FILE"
 
+  # Recharge la config ZIVPN
   TODAY=$(date +%Y-%m-%d)
   PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$ZIVPN_USER_FILE" | sort -u | paste -sd,)
 
@@ -230,19 +235,20 @@ create_zivpn_user() {
      jq empty /tmp/config.json >/dev/null 2>&1; then
     mv /tmp/config.json "$ZIVPN_CONFIG"
     systemctl restart "$ZIVPN_SERVICE"
-    
-      echo
-      echo "✅ 𝗨𝗧𝗜𝗟𝗜𝗦𝗔𝗧𝗘𝗨𝗥 𝗖𝗥𝗘𝗘𝗥"
-      echo "━━━━━━━━━━━━━━━━━━━━━"
-      echo "🌐 𝗗𝗼𝗺𝗮𝗶𝗻𝗲  : $DOMAIN"
-      echo "🎭 𝗢𝗯𝗳𝘀     : zivpn"
-      echo "🔐 𝗣𝗮𝘀𝘀𝘄𝗼𝗿𝗱 : $PASS"
-      echo "📦 𝗤𝘂𝗼𝘁𝗮.   : $QUOTA_GB Go"
-      echo "📅 𝗘𝘅𝗽𝗶𝗿𝗲   : $EXPIRE"
-      echo "🔌 𝐏𝐨𝐫𝐭    : 5667"
-      echo "━━━━━━━━━━━━━━━━━━━━━"
+
+    # Affichage des infos utilisateur colorisées
+    echo
+    echo -e "${GREEN}[✔] UTILISATEUR CRÉÉ${RESET}"
+    echo -e "${MAGENTA}━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo -e "${CYAN}🌐 Domaine    :${RESET} ${GREEN}$DOMAIN${RESET}"
+    echo -e "${CYAN}🎭 Obfs       :${RESET} ${GREEN}zivpn${RESET}"
+    echo -e "${CYAN}🔐 Password   :${RESET} ${GREEN}$PASS${RESET}"
+    echo -e "${CYAN}📦 Quota      :${RESET} ${GREEN}$QUOTA_GB Go${RESET}"
+    echo -e "${CYAN}📅 Expire     :${RESET} ${GREEN}$EXPIRE${RESET}"
+    echo -e "${CYAN}🔌 Port       :${RESET} ${GREEN}5667${RESET}"
+    echo -e "${MAGENTA}━━━━━━━━━━━━━━━━━━━━━${RESET}"
   else
-    err "Erreur config → supprimé"
+    echo -e "${RED}[✖] Erreur config → utilisateur non ajouté${RESET}"
     rm -f "$ZIVPN_USER_FILE"
   fi
 
