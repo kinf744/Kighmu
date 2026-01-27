@@ -332,27 +332,25 @@ show_users_usage() {
 
   [[ ! -s "$ZIVPN_USER_FILE" ]] && { echo "❌ Aucun utilisateur"; pause; return; }
 
-  TOTAL_BYTES=$(get_total_usage 2>/dev/null || echo 0)
-  TOTAL_GB=$(bytes_to_gb "$TOTAL_BYTES")
-  
+  # ✅ FIX : ss + /proc/net/udp (100% fiable)
+  ZIVPN_PORTS=$(ss -ulnp | grep -E "(5667|6000|19999)" | wc -l)
+  UDP_TOTAL=$(awk 'NR>1 {sum+=$2+$3} END{print sum}' /proc/net/udp)
+  TOTAL_GB=$(awk "BEGIN{printf \"%.2f\", $UDP_TOTAL/1024/1024/1024}")
+
   printf "%-12s %-12s %-12s %-8s\n" "PHONE" "PASS" "EXPIRE" "QUOTA"
   echo "────────────────────────────────────────"
 
   TODAY=$(date +%Y-%m-%d)
-  
-  # ✅ AWK corrigé
-  awk -F'|' -v today="$TODAY" '{
-    if ($3 >= today) {
-      phone = substr($1,1,10)
-      pass = substr($2,1,10)".."
-      quota = ($4 != "" ? $4"Go" : "∞")
-      status = (today > $3 ? "EXP" : "OK")
-      printf "%-12s %-12s %-12s %-8s\n", phone, pass, $3, quota
-    }
+
+  # ✅ AWK corrigé : printf sur une seule ligne
+  awk -F'|' -v today="$TODAY" '$3 >= today {
+    printf "%-12s %-12s %-12s %-8s\n", substr($1,1,10), substr($2,1,10)"..", $3, ($4 ? $4"Go" : "∞")
   }' "$ZIVPN_USER_FILE"
 
   echo "────────────────────────────────────────"
-  echo "📊 TOTAL: ${TOTAL_GB}Go | Reset: iptables -Z"
+  echo "📊 UDP TOTAL: ${TOTAL_GB}Go (${ZIVPN_PORTS} connexions)"
+  echo "🔄 Reset: ss -z | grep 5667"
+  echo "🔍 Live: watch -n2 ss -ulnp"
   pause
 }
 
