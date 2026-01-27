@@ -323,27 +323,34 @@ uninstall_zivpn() {
 # ---------- 6) UTILISATEURS + STATS ----------
 show_users_usage() {
   print_title
-  title "[6] UTILISATEURS & CONSOMMATION TOTALE"
+  echo -e "${MAGENTA}[6] UTILISATEURS & CONSOMMATION TOTALE${RESET}"
   echo
 
-  [[ ! -s "$ZIVPN_USER_FILE" ]] && { warn "Aucun utilisateur"; pause; return; }
+  # Vérifie s'il y a des utilisateurs
+  [[ ! -s "$ZIVPN_USER_FILE" ]] && { echo -e "${YELLOW}[!] Aucun utilisateur${RESET}"; pause; return; }
 
+  # Récupération stats
   ZIVPN_PORTS=$(ss -ulnp | grep -E "(5667|6000|19999)" | wc -l)
   UDP_TOTAL=$(awk 'NR>1 {sum+=$2+$3} END{print sum}' /proc/net/udp 2>/dev/null || echo 0)
   TOTAL_GB=$(awk "BEGIN{printf \"%.2f\", $UDP_TOTAL/1024/1024/1024}")
 
-  printf "%-12s %-12s %-12s %-8s\n" "PHONE" "PASS" "EXPIRE" "QUOTA"
-  title "────────────────────────────────────────"
+  # Tableau utilisateurs
+  echo -e "${CYAN}PHONE        PASS        EXPIRE      QUOTA${RESET}"
+  echo -e "${MAGENTA}────────────────────────────────────────${RESET}"
 
   TODAY=$(date +%Y-%m-%d)
-  awk -F'|' -v today="$TODAY" '$3 >= today {
-    printf "%-12s %-12s %-12s %-8s\n", substr($1,1,10), substr($2,1,10)"..", $3, ($4 ? $4"Go" : "∞")
+  awk -F'|' -v today="$TODAY" '{
+    if($3>=today) 
+      printf "'"$CYAN"'%-12s %-12s %-12s %-8s'"$RESET"'\n", substr($1,1,10), substr($2,1,10)"..", $3, ($4 ? $4"Go" : "∞")
   }' "$ZIVPN_USER_FILE"
 
-  title "────────────────────────────────────────"
-  info "📊 UDP TOTAL: ${TOTAL_GB}Go (${ZIVPN_PORTS} connexions)"
-  info "🔄 Reset: ss -z | grep 5667"
-  info "🔍 Live: watch -n2 ss -ulnp"
+  echo -e "${MAGENTA}────────────────────────────────────────${RESET}"
+
+  # Stats UDP
+  echo -e "${GREEN}📊 UDP TOTAL:${RESET} ${TOTAL_GB} Go (${ZIVPN_PORTS} connexions)"
+  echo -e "${CYAN}🔄 Reset:${RESET} ss -z | grep 5667"
+  echo -e "${CYAN}🔍 Live:${RESET} watch -n2 ss -ulnp"
+
   pause
 }
 
