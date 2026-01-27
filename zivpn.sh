@@ -450,8 +450,9 @@ show_users_usage() {
   [[ -f "$ZIVPN_USER_FILE" ]]  || { echo "❌ Aucun utilisateur."; pause; return; }
   [[ -f "$ZIVPN_QUOTA_FILE" ]] || { echo "❌ Aucun quota."; pause; return; }
 
-  # 🔹 Mise à jour consommation avant affichage
-  update_user_consumption
+  # 🔹 Création d'un fichier temporaire pour mettre à jour les quotas
+  tmpq=$(mktemp)
+  TODAY=$(date +%Y-%m-%d)
 
   printf "%-15s %-15s %-15s %-15s %-10s\n" "PASSWORD" "CONSOMMATION" "QUOTA TOTAL" "EXPIRATION" "STATUT"
   echo "────────────────────────────────────────────────────────────"
@@ -462,10 +463,23 @@ show_users_usage() {
 
     IP=$(echo "$QUOTA_LINE" | cut -d'|' -f2)
     QUOTA_BYTES=$(echo "$QUOTA_LINE" | cut -d'|' -f3)
-    USED_BYTES=$(echo "$QUOTA_LINE" | cut -d'|' -f4)
+    CONSO_USED=$(echo "$QUOTA_LINE" | cut -d'|' -f4)
 
-    # Déterminer statut
-    TODAY=$(date +%Y-%m-%d)
+    # 🔹 Calcul consommation réelle
+    USED_BYTES=$(iptables -L INPUT -v -n -x | awk -v ip="$IP" '$8==ip && $7=="udp" {sum+=$2*64} END{print sum+0}')
+
+    # 🔹 Vérification blocage
+    if [[ "$QUOTA_BYTES" -ne 0 && "$USED_BYTES" -ge "$QUOTA_BYTES" ]]; then
+      iptables -D INPUT -s "$IP" -j DROP 2>/dev/null || true
+      iptables -A INPUT -s "$IP" -j DROP
+    else
+      iptables -D INPUT -s "$IP" -j DROP 2>/dev/null || true
+    fi
+
+    # 🔹 Mise à jour temporaire du fichier quotas
+    echo "$PHONE|$IP|$QUOTA_BYTES|$USED_BYTES" >> "$tmpq"
+
+    # 🔹 Statut
     if [[ "$EXPIRE" < "$TODAY" ]]; then
       STATUS="EXPIRÉ"
       STATUS_COLOR="⚫"
@@ -482,7 +496,12 @@ show_users_usage() {
 
     printf "%-15s %-15s %-15s %-15s %-10s\n" \
       "$PASS" "${USED_GB} Go" "${QUOTA_GB} Go" "$EXPIRE" "$STATUS_COLOR $STATUS"
+
   done < "$ZIVPN_USER_FILE"
+
+  # 🔹 Remplacement du fichier quotas par la version mise à jour
+  mv "$tmpq" "$ZIVPN_QUOTA_FILE"
+  chmod 600 "$ZIVPN_QUOTA_FILE"
 
   pause
 }
