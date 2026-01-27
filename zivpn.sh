@@ -36,8 +36,8 @@ zivpn_running() {
 print_title() {
   clear
   echo "╔═══════════════════════════════════════╗"
-  echo "║        ZIVPN CONTROL PANEL v2        ║"
-  echo "║     (Compatible @kighmu 🇨🇲)        ║"
+  echo "║        ZIVPN CONTROL PANEL v2         ║"
+  echo "║     (Compatible @kighmu 🇨🇲)          ║"
   echo "╚═══════════════════════════════════════╝"
   echo
 }
