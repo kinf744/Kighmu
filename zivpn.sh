@@ -1,6 +1,6 @@
 #!/bin/bash
 # zivpn-panel-v2.sh - Panel UDP ZiVPN COMPLET (100% FONCTIONNEL)
-set -euo pipefail
+set -eo pipefail
 
 # ================= COULEURS =================
 RED="\033[31m"
