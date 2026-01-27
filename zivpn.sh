@@ -336,8 +336,8 @@ show_users_usage() {
   TOTAL_BYTES=$(get_total_usage 2>/dev/null || echo 0)
   TOTAL_GB=$(bytes_to_gb "$TOTAL_BYTES")
   
-  printf "%-12s %-12s %-12s %-8s
-" "PHONE" "PASS" "EXPIRE" "QUOTA"
+  printf "%-12s %-12s %-12s %-8s"
+  "PHONE" "PASS" "EXPIRE" "QUOTA"
   echo "────────────────────────────────────────"
 
   TODAY=$(date +%Y-%m-%d)
@@ -349,10 +349,9 @@ show_users_usage() {
       pass = substr($2,1,10)".."
       quota = $4 ? $4"Go" : "∞"
       status = (today > $3) ? "EXP" : "OK"
-      printf "%-12s %-12s %-12s %-8s
-", phone, pass, $3, quota
-    }
-  ' "$ZIVPN_USER_FILE"
+      printf "%-12s %-12s %-12s %-8s", phone, pass, $3, quota
+ }
+    "$ZIVPN_USER_FILE"
 
   echo "────────────────────────────────────────"
   echo "📊 TOTAL: ${TOTAL_GB}Go | Reset: iptables -Z"
