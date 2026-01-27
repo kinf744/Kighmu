@@ -2,8 +2,24 @@
 # zivpn-panel-v2.sh - Panel UDP ZiVPN COMPLET (100% FONCTIONNEL)
 set -euo pipefail
 
-# ---------- VARIABLES ----------
+# ================= COULEURS =================
+RED="\033[31m"
+GREEN="\033[32m"
+YELLOW="\033[33m"
+BLUE="\033[34m"
+CYAN="\033[36m"
+MAGENTA="\033[35m"
+RESET="\033[0m"
 
+# ================= FONCTIONS DE LOG =================
+log()   { echo -e "${GREEN}[✔]${RESET} $*"; }
+warn()  { echo -e "${YELLOW}[!]${RESET} $*"; }
+err()   { echo -e "${RED}[✖]${RESET} $*"; exit 1; }
+info()  { echo -e "${CYAN}[i]${RESET} $*"; }
+title() { echo -e "${MAGENTA}$*${RESET}"; }
+pause() { echo; read -rp "$(echo -e ${BLUE}Appuyez sur Entrée pour continuer...${RESET})"; }
+
+# ---------- VARIABLES ----------
 ZIVPN_BIN="/usr/local/bin/zivpn"
 ZIVPN_SERVICE="zivpn.service"
 ZIVPN_CONFIG="/etc/zivpn/config.json"
@@ -12,17 +28,8 @@ ZIVPN_DOMAIN_FILE="/etc/zivpn/domain.txt"
 ZIVPN_QUOTA_FILE="/etc/zivpn/quotas.list"
 
 # ---------- FONCTIONS UTILITAIRES ----------
-
-pause() {
-  echo
-  read -rp "Appuyez sur Entrée pour continuer..."
-}
-
 check_root() {
-  if [[ $EUID -ne 0 ]]; then
-    echo "❌ Ce panneau doit être lancé en root."
-    exit 1
-  fi
+  [[ $EUID -ne 0 ]] && err "Ce panneau doit être lancé en root."
 }
 
 zivpn_installed() {
@@ -35,46 +42,40 @@ zivpn_running() {
 
 print_title() {
   clear
-  echo "╔═══════════════════════════════════════╗"
-  echo "║        ZIVPN CONTROL PANEL v2        ║"
-  echo "║     (Compatible @kighmu 🇨🇲)        ║"
-  echo "╚═══════════════════════════════════════╝"
+  title "╔═══════════════════════════════════════╗"
+  title "║        ZIVPN CONTROL PANEL v2        ║"
+  title "║     (Compatible @kighmu 🇨🇲)        ║"
+  title "╚═══════════════════════════════════════╝"
   echo
 }
 
 show_status_block() {
-  echo "-------- STATUT ZIVPN --------"
-  
+  title "-------- STATUT ZIVPN --------"
+
   SVC_FILE_OK=$([[ -f "/etc/systemd/system/$ZIVPN_SERVICE" ]] && echo "✅" || echo "❌")
   SVC_ACTIVE=$(systemctl is-active "$ZIVPN_SERVICE" 2>/dev/null || echo "N/A")
   PORT_OK=$(ss -ludp | grep -q 5667 && echo "✅" || echo "❌")
-  
-  echo "Service file: $SVC_FILE_OK"
-  echo "Service actif: $SVC_ACTIVE"
-  echo "Port 5667: $PORT_OK"
-  
+
+  info "Service file: $SVC_FILE_OK"
+  info "Service actif: $SVC_ACTIVE"
+  info "Port 5667: $PORT_OK"
+
   if [[ "$SVC_FILE_OK" == "✅" ]]; then
-    if systemctl is-active --quiet "$ZIVPN_SERVICE" 2>/dev/null; then
-      echo "✅ ZIVPN : INSTALLÉ et ACTIF"
-      echo "   Port interne: 5667"
+    if zivpn_running; then
+      log "ZIVPN : INSTALLÉ et ACTIF (Port interne: 5667)"
     else
-      echo "⚠️  ZIVPN : INSTALLÉ mais INACTIF"
+      warn "ZIVPN : INSTALLÉ mais INACTIF"
     fi
   else
-    echo "❌ ZIVPN : NON INSTALLÉ"
+    err "ZIVPN : NON INSTALLÉ"
   fi
-  echo "-----------------------------------------"
   echo
 }
 
-# ---------- FONCTIONS QUOTA / STATUT ✅ 100% CORRIGÉ ----------
-
-bytes_to_gb() {
-  awk -v b="$1" 'BEGIN { printf "%.2f", b/1024/1024/1024 }'
-}
+# ---------- FONCTIONS QUOTA / STATUT ----------
+bytes_to_gb() { awk -v b="$1" 'BEGIN { printf "%.2f", b/1024/1024/1024 }'; }
 
 get_total_usage() {
-  # TOTAL trafic UDP 5667 (TOUS clients ZiVPN)
   iptables -L INPUT -v -n 2>/dev/null | awk '
     $1=="pkts" {next}
     $5 ~ /^5667$/ {sum+=$2}
@@ -84,22 +85,21 @@ get_total_usage() {
 status_color() {
   local STATUS="$1"
   case "$STATUS" in
-    ACTIF)   echo -e "e[32m🟢 ACTIFe[0m" ;;
-    ÉPUISÉ)  echo -e "e[31m🔴 ÉPUISÉe[0m" ;;
-    EXPIRÉ)  echo -e "e[90m⚫ EXPIRÉe[0m" ;;
-    *)       echo "$STATUS" ;;
+    ACTIF)  echo -e "${GREEN}🟢 ACTIF${RESET}" ;;
+    ÉPUISÉ) echo -e "${RED}🔴 ÉPUISÉ${RESET}" ;;
+    EXPIRÉ) echo -e "${BLUE}⚫ EXPIRÉ${RESET}" ;;
+    *)      echo "$STATUS" ;;
   esac
 }
 
 # ---------- 1) INSTALLATION ZIVPN ----------
-
 install_zivpn() {
   print_title
-  echo "[1] INSTALLATION ZIVPN (NO CONFLIT UFW)"
+  title "[1] INSTALLATION ZIVPN (NO CONFLIT UFW)"
   echo
 
   if zivpn_installed; then
-    echo "ZIVPN déjà installé."
+    log "ZIVPN déjà installé."
     pause
     return
   fi
@@ -167,7 +167,7 @@ EOF
   iptables -A INPUT -p udp --dport 36712 -j ACCEPT
   iptables -A INPUT -p udp --dport 6000:19999 -j ACCEPT
   iptables -t nat -A PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667
-  
+
   netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
 
   sysctl -w net.core.rmem_max=16777216
@@ -178,31 +178,26 @@ EOF
   systemctl start "$ZIVPN_SERVICE"
   
   sleep 3
-  if systemctl is-active --quiet "$ZIVPN_SERVICE"; then
+  if zivpn_running; then
     IP=$(hostname -I | awk '{print $1}')
-    echo "✅ ZIVPN installé et actif !"
-    echo "📱 Config ZIVPN App:"
-    echo "   Server: $IP"
-    echo "   Port: 6000-19999 (NAT → 5667)"
-    echo "   Password: zi"
+    log "ZIVPN installé et actif !"
+    info "📱 Config ZIVPN App:"
+    info "   Server: $IP"
+    info "   Port: 6000-19999 (NAT → 5667)"
+    info "   Password: zi"
   else
-    echo "❌ ZIVPN ne démarre pas → journalctl -u zivpn.service"
+    err "ZIVPN ne démarre pas → journalctl -u zivpn.service"
   fi
   
   pause
 }
 
 # ---------- 2) CRÉATION UTILISATEUR ----------
-
 create_zivpn_user() {
   print_title
-  echo "[2] CRÉATION UTILISATEUR ZIVPN"
+  title "[2] CRÉATION UTILISATEUR ZIVPN"
 
-  if ! zivpn_running; then
-    echo "❌ Service ZIVPN inactif."
-    pause
-    return
-  fi
+  ! zivpn_running && err "Service ZIVPN inactif."
 
   echo "Exemple: 23301234567 | MonPass123 | 30 jours | 50 Go"
   echo
@@ -214,7 +209,6 @@ create_zivpn_user() {
 
   EXPIRE=$(date -d "+${DAYS} days" '+%Y-%m-%d')
 
-  # users.list → PHONE|PASS|EXPIRE|QUOTA_GB
   tmp=$(mktemp)
   awk -F'|' -v phone="$PHONE" -v pass="$PASS" -v expire="$EXPIRE" -v quota="$QUOTA_GB" '
     $1!=phone {print}
@@ -223,10 +217,9 @@ create_zivpn_user() {
   mv "$tmp" "$ZIVPN_USER_FILE"
   chmod 600 "$ZIVPN_USER_FILE"
 
-  # Reload config ZIVPN
   TODAY=$(date +%Y-%m-%d)
   PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$ZIVPN_USER_FILE" | sort -u | paste -sd,)
-  
+
   if jq --arg passwords "$PASSWORDS" \
         '.auth.config = ($passwords | split(","))' \
         "$ZIVPN_CONFIG" > /tmp/config.json 2>/dev/null && \
@@ -234,37 +227,33 @@ create_zivpn_user() {
     mv /tmp/config.json "$ZIVPN_CONFIG"
     systemctl restart "$ZIVPN_SERVICE"
     
-    echo "✅ UTILISATEUR AJOUTÉ"
-    echo "━━━━━━━━━━━━━━━━━━━━━"
-    echo "📱 $PHONE"
-    echo "🔐 $PASS" 
-    echo "📅 $EXPIRE"
-    echo "📦 $QUOTA_GB Go"
-    echo "━━━━━━━━━━━━━━━━━━━━━"
+    log "UTILISATEUR AJOUTÉ"
+    info "📱 $PHONE"
+    info "🔐 $PASS" 
+    info "📅 $EXPIRE"
+    info "📦 $QUOTA_GB Go"
   else
-    echo "❌ Erreur config → supprimé"
+    err "Erreur config → supprimé"
     rm -f "$ZIVPN_USER_FILE"
   fi
-  
+
   pause
 }
 
 # ---------- 3) SUPPRESSION UTILISATEUR ----------
-
 delete_zivpn_user() {
   print_title
-  echo "[3] SUPPRIMER UTILISATEUR"
+  title "[3] SUPPRIMER UTILISATEUR"
 
-  [[ ! -s "$ZIVPN_USER_FILE" ]] && { echo "❌ Aucun utilisateur"; pause; return; }
+  [[ ! -s "$ZIVPN_USER_FILE" ]] && { warn "Aucun utilisateur"; pause; return; }
 
-  echo "Utilisateurs actifs:"
-  echo "───────────────────"
+  title "Utilisateurs actifs:"
   nl -w2 -s'. ' "$ZIVPN_USER_FILE" | awk -F'|' '{printf "%s | %s | %s\n", $1, $2, $3}'
 
   read -rp "🔢 Numéro: " NUM
   PHONE=$(sed -n "${NUM}p" "$ZIVPN_USER_FILE" 2>/dev/null | cut -d'|' -f1)
 
-  [[ -z "$PHONE" ]] && { echo "❌ Numéro invalide"; pause; return; }
+  [[ -z "$PHONE" ]] && { warn "Numéro invalide"; pause; return; }
 
   awk -F'|' -v phone="$PHONE" '$1!=phone' "$ZIVPN_USER_FILE" > /tmp/users.tmp
   mv /tmp/users.tmp "$ZIVPN_USER_FILE"
@@ -278,36 +267,34 @@ delete_zivpn_user() {
   jq empty /tmp/config.json >/dev/null 2>&1 && \
   mv /tmp/config.json "$ZIVPN_CONFIG" && systemctl restart "$ZIVPN_SERVICE"
 
-  echo "✅ $PHONE supprimé"
+  log "$PHONE supprimé"
   pause
 }
 
 # ---------- 4) FIX ZIVPN ----------
-
 fix_zivpn() {
   print_title
-  echo "[4] FIX ZIVPN + SlowDNS"
-  
+  title "[4] FIX ZIVPN + SlowDNS"
+
   iptables -t nat -F PREROUTING
   iptables -A INPUT -p udp --dport 5667 -j ACCEPT 2>/dev/null || true
   iptables -A INPUT -p udp --dport 36712 -j ACCEPT 2>/dev/null || true
   iptables -A INPUT -p udp --dport 6000:19999 -j ACCEPT 2>/dev/null || true
   iptables -t nat -A PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667
-  
+
   netfilter-persistent save 2>/dev/null || true
   systemctl restart "$ZIVPN_SERVICE" 2>/dev/null || true
-  
-  echo "✅ ZIVPN fixé (SlowDNS préservé)"
+
+  log "ZIVPN fixé (SlowDNS préservé)"
   pause
 }
 
 # ---------- 5) DÉSINSTALLATION ----------
-
 uninstall_zivpn() {
   print_title
-  echo "[5] DÉSINSTALLATION"
-  read -rp "Confirmer ? (o/N): " CONFIRM
-  [[ "$CONFIRM" =~ ^[oO]$ ]] || { echo "❌ Annulé"; pause; return; }
+  title "[5] DÉSINSTALLATION"
+  read -rp "$(echo -e ${YELLOW}Confirmer ? (o/N):${RESET}) " CONFIRM
+  [[ "$CONFIRM" =~ ^[oO]$ ]] || { warn "Annulé"; pause; return; }
 
   systemctl stop "$ZIVPN_SERVICE" 2>/dev/null || true
   systemctl disable "$ZIVPN_SERVICE" 2>/dev/null || true
@@ -317,43 +304,38 @@ uninstall_zivpn() {
   systemctl daemon-reload
 
   iptables -t nat -D PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667 2>/dev/null || true
-  echo "✅ ZIVPN supprimé"
+  log "ZIVPN supprimé"
   pause
 }
 
-# ---------- 6) UTILISATEURS + STATS TOTALES ----------
-
+# ---------- 6) UTILISATEURS + STATS ----------
 show_users_usage() {
   print_title
-  echo "[6] UTILISATEURS & CONSOMMATION TOTALE"
+  title "[6] UTILISATEURS & CONSOMMATION TOTALE"
   echo
 
-  [[ ! -s "$ZIVPN_USER_FILE" ]] && { echo "❌ Aucun utilisateur"; pause; return; }
+  [[ ! -s "$ZIVPN_USER_FILE" ]] && { warn "Aucun utilisateur"; pause; return; }
 
-  # ✅ FIX : ss + /proc/net/udp (100% fiable)
   ZIVPN_PORTS=$(ss -ulnp | grep -E "(5667|6000|19999)" | wc -l)
-  UDP_TOTAL=$(awk 'NR>1 {sum+=$2+$3} END{print sum}' /proc/net/udp)
+  UDP_TOTAL=$(awk 'NR>1 {sum+=$2+$3} END{print sum}' /proc/net/udp 2>/dev/null || echo 0)
   TOTAL_GB=$(awk "BEGIN{printf \"%.2f\", $UDP_TOTAL/1024/1024/1024}")
 
   printf "%-12s %-12s %-12s %-8s\n" "PHONE" "PASS" "EXPIRE" "QUOTA"
-  echo "────────────────────────────────────────"
+  title "────────────────────────────────────────"
 
   TODAY=$(date +%Y-%m-%d)
-
-  # ✅ AWK corrigé : printf sur une seule ligne
   awk -F'|' -v today="$TODAY" '$3 >= today {
     printf "%-12s %-12s %-12s %-8s\n", substr($1,1,10), substr($2,1,10)"..", $3, ($4 ? $4"Go" : "∞")
   }' "$ZIVPN_USER_FILE"
 
-  echo "────────────────────────────────────────"
-  echo "📊 UDP TOTAL: ${TOTAL_GB}Go (${ZIVPN_PORTS} connexions)"
-  echo "🔄 Reset: ss -z | grep 5667"
-  echo "🔍 Live: watch -n2 ss -ulnp"
+  title "────────────────────────────────────────"
+  info "📊 UDP TOTAL: ${TOTAL_GB}Go (${ZIVPN_PORTS} connexions)"
+  info "🔄 Reset: ss -z | grep 5667"
+  info "🔍 Live: watch -n2 ss -ulnp"
   pause
 }
 
-# ---------- MAIN LOOP ----------
-
+# ---------- BOUCLE PRINCIPALE ----------
 check_root
 
 while true; do
@@ -378,6 +360,6 @@ while true; do
     5) uninstall_zivpn ;;
     6) show_users_usage ;;
     0) exit 0 ;;
-    *) echo "❌ Choix invalide"; sleep 1 ;;
+    *) warn "Choix invalide"; sleep 1 ;;
   esac
 done
