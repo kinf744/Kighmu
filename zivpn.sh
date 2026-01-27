@@ -90,7 +90,7 @@ install_zivpn() {
   apt update -y && apt install -y wget curl jq openssl iptables-persistent netfilter-persistent
 
   # Binaire + cert
-  wget -q "https://github.com/zahidbd2/udp-zivpn/releases/download/udp-zivpn_1.4.9/udp-zivpn-linux-amd64" -O "$ZIVPN_BIN"
+  wget -q "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp-zivpn-linux-amd64" -O "$ZIVPN_BIN"
   chmod +x "$ZIVPN_BIN"
   
   mkdir -p /etc/zivpn
