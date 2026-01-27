@@ -391,14 +391,14 @@ while true; do
   show_status_block
   
   echo -e "${CYAN}1) Installer ZIVPN${RESET}"
-echo -e "${CYAN}2) Créer utilisateur${RESET}" 
-echo -e "${CYAN}3) Supprimer utilisateur${RESET}"
-echo -e "${CYAN}4) Fix ZIVPN (SlowDNS OK)${RESET}"
-echo -e "${CYAN}5) Désinstaller${RESET}"
-echo -e "${CYAN}6) Utilisateurs + stats${RESET}"
-echo -e "${CYAN}0) Quitter${RESET}"
-echo
-read -rp "$(echo -e ${BLUE}Choix:${RESET}) " CHOIX
+  echo -e "${CYAN}2) Créer utilisateur${RESET}" 
+  echo -e "${CYAN}3) Supprimer utilisateur${RESET}"
+  echo -e "${CYAN}4) Fix ZIVPN (SlowDNS OK)${RESET}"
+  echo -e "${CYAN}5) Désinstaller${RESET}"
+  echo -e "${CYAN}6) Utilisateurs + stats${RESET}"
+  echo -e "${CYAN}0) Quitter${RESET}"
+  echo
+  read -rp "$(echo -e ${BLUE}Choix:${RESET}) " CHOIX
 
   case $CHOIX in
     1) install_zivpn ;;
