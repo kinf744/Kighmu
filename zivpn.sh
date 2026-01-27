@@ -261,26 +261,25 @@ delete_zivpn_user() {
 
   echo "Utilisateurs actifs:"
   echo "───────────────────"
-  nl -w2 -s'. ' "$ZIVPN_USER_FILE" | awk -F'|' '{printf "%s | %s | %s
-", $1, $2, $3}'
-  
+  nl -w2 -s'. ' "$ZIVPN_USER_FILE" | awk -F'|' '{printf "%s | %s | %s\n", $1, $2, $3}'
+
   read -rp "🔢 Numéro: " NUM
   PHONE=$(sed -n "${NUM}p" "$ZIVPN_USER_FILE" 2>/dev/null | cut -d'|' -f1)
-  
+
   [[ -z "$PHONE" ]] && { echo "❌ Numéro invalide"; pause; return; }
 
   awk -F'|' -v phone="$PHONE" '$1!=phone' "$ZIVPN_USER_FILE" > /tmp/users.tmp
   mv /tmp/users.tmp "$ZIVPN_USER_FILE"
-  
+
   TODAY=$(date +%Y-%m-%d)
   PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$ZIVPN_USER_FILE" | paste -sd,)
-  
+
   jq --arg passwords "$PASSWORDS" \
      '.auth.config = ($passwords | split(","))' \
      "$ZIVPN_CONFIG" > /tmp/config.json && \
   jq empty /tmp/config.json >/dev/null 2>&1 && \
   mv /tmp/config.json "$ZIVPN_CONFIG" && systemctl restart "$ZIVPN_SERVICE"
-  
+
   echo "✅ $PHONE supprimé"
   pause
 }
