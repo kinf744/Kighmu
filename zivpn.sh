@@ -231,11 +231,16 @@ create_zivpn_user() {
     mv /tmp/config.json "$ZIVPN_CONFIG"
     systemctl restart "$ZIVPN_SERVICE"
     
-    log "UTILISATEUR AJOUTÉ"
-    info "📱 $PHONE"
-    info "🔐 $PASS" 
-    info "📅 $EXPIRE"
-    info "📦 $QUOTA_GB Go"
+      echo
+      echo "✅ 𝗨𝗧𝗜𝗟𝗜𝗦𝗔𝗧𝗘𝗨𝗥 𝗖𝗥𝗘𝗘𝗥"
+      echo "━━━━━━━━━━━━━━━━━━━━━"
+      echo "🌐 𝗗𝗼𝗺𝗮𝗶𝗻𝗲  : $DOMAIN"
+      echo "🎭 𝗢𝗯𝗳𝘀     : zivpn"
+      echo "🔐 𝗣𝗮𝘀𝘀𝘄𝗼𝗿𝗱 : $PASS"
+      echo "📦 𝗤𝘂𝗼𝘁𝗮.   : $QUOTA_GB Go"
+      echo "📅 𝗘𝘅𝗽𝗶𝗿𝗲   : $EXPIRE"
+      echo "🔌 𝐏𝐨𝐫𝐭    : 5667"
+      echo "━━━━━━━━━━━━━━━━━━━━━"
   else
     err "Erreur config → supprimé"
     rm -f "$ZIVPN_USER_FILE"
