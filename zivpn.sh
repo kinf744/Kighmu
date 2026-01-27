@@ -203,17 +203,30 @@ create_zivpn_user() {
   echo
 
   # Vérifie si ZIVPN tourne
-  ! zivpn_running && { echo -e "${RED}[✖] Service ZIVPN inactif${RESET}"; pause; return; }
+  if ! zivpn_running; then
+    echo -e "${RED}[✖] Service ZIVPN inactif${RESET}"
+    pause
+    return
+  fi
 
+  # Exemple
   echo -e "${CYAN}Exemple: 23301234567 | MonPass123 | 30 jours | 50 Go${RESET}"
   echo
 
-  # Demande les informations utilisateur
-  read -rp "$(echo -e ${BLUE}📱 Téléphone:${RESET} )" PHONE
-  read -rp "$(echo -e ${BLUE}🔐 Password:${RESET} )" PASS
-  read -rp "$(echo -e ${BLUE}📅 Jours:${RESET} )" DAYS
-  read -rp "$(echo -e ${BLUE}📦 Quota Go (0=∞):${RESET} )" QUOTA_GB
+  # Demande les informations utilisateur (prompt sécurisé)
+  echo -ne "${BLUE}📱 Téléphone: ${RESET}"
+  read -r PHONE
 
+  echo -ne "${BLUE}🔐 Password: ${RESET}"
+  read -r PASS
+
+  echo -ne "${BLUE}📅 Jours: ${RESET}"
+  read -r DAYS
+
+  echo -ne "${BLUE}📦 Quota Go (0=∞): ${RESET}"
+  read -r QUOTA_GB
+
+  # Calcul date d'expiration
   EXPIRE=$(date -d "+${DAYS} days" '+%Y-%m-%d')
 
   # Ajout ou mise à jour utilisateur
@@ -236,7 +249,7 @@ create_zivpn_user() {
     mv /tmp/config.json "$ZIVPN_CONFIG"
     systemctl restart "$ZIVPN_SERVICE"
 
-    # Affichage des infos utilisateur colorisées
+    # Affichage infos utilisateur colorisées
     echo
     echo -e "${GREEN}[✔] UTILISATEUR CRÉÉ${RESET}"
     echo -e "${MAGENTA}━━━━━━━━━━━━━━━━━━━━━${RESET}"
