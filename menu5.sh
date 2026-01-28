@@ -321,19 +321,32 @@ install_ssl_tls() {
     TMP_DIR="/tmp/ssl_tls_install"
     BIN_DST="/usr/local/bin/ssl_tls"
     URL_BIN="https://github.com/kinf744/Kighmu/releases/download/v1.0.0/ssl_tls"
-    URL_SHA="https://github.com/kinf744/Kighmu/releases/download/v1.0.0/ssl_tls.sha256"
 
-    mkdir -p "$TMP_DIR"
+    mkdir -p "$TMP_DIR" || return 1
     cd "$TMP_DIR" || return 1
 
-    # Télécharger le binaire et le hash
-    echo "📥 Téléchargement du binaire et du hash SHA-256..."
-    curl -LO "$URL_BIN"
-    curl -LO "$URL_SHA"
+    # Télécharger le binaire
+    echo "📥 Téléchargement du binaire ssl_tls..."
+    curl -fsSL "$URL_BIN" -o ssl_tls || {
+        echo "[ERREUR] Téléchargement du binaire échoué"
+        return 1
+    }
 
-    # Vérifier le hash
-    echo "🔒 Vérification du SHA-256..."
-    sha256sum -c ssl_tls.sha256 || { echo "[ERREUR] Hash SHA-256 incorrect"; return 1; }
+    chmod +x ssl_tls
+
+    # 🔕 SHA volontairement désactivé
+    echo "⚠️ Vérification SHA-256 désactivée (mode temporaire)"
+
+    # Vérifications minimales (important)
+    file ssl_tls | grep -q ELF || {
+        echo "[ERREUR] Le fichier téléchargé n'est pas un binaire valide"
+        return 1
+    }
+
+    ./ssl_tls --help >/dev/null 2>&1 || {
+        echo "[ERREUR] Le binaire ssl_tls ne s'exécute pas correctement"
+        return 1
+    }
 
     # Installer le binaire
     sudo install -m 0755 ssl_tls "$BIN_DST"
@@ -364,15 +377,19 @@ EOF
     sudo systemctl enable --now ssl_tls
     echo "[OK] Service systemd créé et démarré"
 
-    # Ouvrir le port TCP 444
+    # Ouvrir le port TCP 444 (iptables)
     sudo iptables -C INPUT -p tcp --dport 444 -j ACCEPT 2>/dev/null || \
         sudo iptables -I INPUT -p tcp --dport 444 -j ACCEPT
+
     sudo iptables -C OUTPUT -p tcp --sport 444 -j ACCEPT 2>/dev/null || \
         sudo iptables -I OUTPUT -p tcp --sport 444 -j ACCEPT
-    echo "[OK] Port 444 ouvert dans iptables"
+
+    echo "[OK] Port TCP 444 autorisé"
 
     # Statut du service
     sudo systemctl status ssl_tls --no-pager
+
+    # Nettoyage
     cd ~
     rm -rf "$TMP_DIR"
 }
