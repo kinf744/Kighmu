@@ -117,22 +117,25 @@ create_user() {
     
     color_echo yellow "=== NOUVEL UTILISATEUR ==="
     
+    # 1. OBFUSCATION
     read -p "Obfs password (Entrée=random): " obfs_pwd
     obfs_pwd=${obfs_pwd:-$(openssl rand -hex 16)}
     color_echo yellow "Obfs: $obfs_pwd"
     
+    # 2. AUTH PASSWORD
     read -s -p "Auth password (Entrée=random): " auth_pwd
     echo
     auth_pwd=${auth_pwd:-$(openssl rand -hex 16)}
     color_echo yellow "Auth: $auth_pwd"
     
+    # 3. EXPIRATION
     read -p "Durée (jours) [30]: " days
     days=${days:-30}
     EXP_DATE=$(date -d "+$days days" '+%d/%m/%Y')
     color_echo yellow "Expire: $EXP_DATE"
     
-    # JSON CORRIGÉ
-    cat > $CONFIG_FILE << EOF
+    # JSON CORRIGÉ ✅ (guillemets parfaits)
+    cat > "$CONFIG_FILE" << EOF
 {
     "protocol": "udp",
     "listen": ":$PORT",
@@ -141,7 +144,7 @@ create_user() {
     "cert": "$SLOWUDP_DIR/cert.crt",
     "key": "$SLOWUDP_DIR/private.key",
     "alpn": "h3",
-    $( [[ -n "$obfs_pwd" && "$obfs_pwd" != "" ]] && echo ""obfs": "$obfs_pwd"," || echo ""obfs": "",")
+    $( [[ -n "$obfs_pwd" && "$obfs_pwd" != "" ]] && echo ""obfs": "$obfs_pwd"," || echo ""obfs": ""," )
     "auth": {
         "mode": "password",
         "config": {
@@ -151,7 +154,8 @@ create_user() {
 }
 EOF
     
-    IP=$(curl -s4 ip.sb 2>/dev/null || curl -s6 ip.sb)
+    # URL HTTP INJECTOR
+    IP=$(curl -s4 ip.sb 2>/dev/null || curl -s6 ip.sb || hostname -I | awk '{print $1}')
     URL="hysteria://$IP:$PORT?protocol=udp&upmbps=50&downmbps=100&auth=$auth_pwd&obfsParam=$obfs_pwd&peer=$DEFAULT_SNI&insecure=1&alpn=h3&version=slowudp#SlowUDP-User"
     
     echo ""
@@ -162,8 +166,10 @@ EOF
     color_echo yellow "📅 Expire: $EXP_DATE"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     
+    # Sauvegarde fichiers
     mkdir -p /root/slowudp
     echo "$URL" > "/root/slowudp/user_$(date +%Y%m%d_%H%M).txt"
+    qrencode -s 8 -o "/root/slowudp/user_$(date +%Y%m%d_%H%M).png" "$URL" 2>/dev/null || true
     
     systemctl restart slowudp
     sleep 2
