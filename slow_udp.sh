@@ -203,16 +203,33 @@ show_current_config() {
 
 # 4. DÉSINSTALLER (IPTABLES UNIQUEMENT)
 uninstall_hysteria() {
-    color_echo yellow "🗑️ Désinstallation..."
-    systemctl stop slowudp >/dev/null 2>&1
-    rm -rf /etc/systemd/system/slowudp.service $SLOWUDP_DIR /usr/local/bin/slowudp /root/slowudp
-    systemctl daemon-reload
+    color_echo yellow "🗑️ Désinstallation complète SlowUDP..."
     
-    # Nettoyage IPTABLES seulement
+    # 🚨 1. STOP TOUS les services (Vôtre + Evozi)
+    systemctl stop slowudp slowudp-server slowudp-server@ 2>/dev/null || true
+    
+    # 2. DISABLE tous les services
+    systemctl disable slowudp slowudp-server slowudp-server@ 2>/dev/null || true
+    
+    # 3. SUPPRESSION fichiers services
+    rm -f /etc/systemd/system/slowudp*.service /etc/systemd/system/slowudp-server*.service
+    
+    # 4. Nettoyage COMPLETE
+    rm -rf "$SLOWUDP_DIR" /usr/local/bin/slowudp /root/slowudp /var/lib/slowudp
+    userdel slowudp 2>/dev/null || true
+    rm -rf /var/lib/slowudp /var/log/slowudp* /var/log/slowudp-install.log
+    
+    # 5. RELOAD systemd
+    systemctl daemon-reload
+    systemctl reset-failed 2>/dev/null || true
+    
+    # 6. IPTABLES Nettoyage
     iptables -D INPUT -p udp --dport $PORT -j ACCEPT 2>/dev/null || true
+    ip6tables -D INPUT -p udp --dport $PORT -j ACCEPT 2>/dev/null || true
     netfilter-persistent save 2>/dev/null || true
     
-    color_echo green "✅ Tunnel supprimé (IPTables nettoyé)"
+    color_echo green "✅ NETTOYAGE TERMINÉ (Evozi + Votre config + IPTables)"
+    color_echo yellow "📋 Vérifiez: systemctl | grep slowudp"
 }
 
 # PANNEAU PRINCIPAL
