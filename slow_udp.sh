@@ -52,8 +52,7 @@ install_hysteria() {
     check_status
     [[ $? -eq 0 ]] && { color_echo yellow "Tunnel déjà actif"; return; }
     
-    apt update -qq && apt install -y curl wget jq ufw qrencode openssl iptables-persistent
-    ufw allow $PORT/udp comment "Hysteria SlowUDP" && ufw reload
+    apt update -qq && apt install -y curl wget jq qrencode openssl iptables-persistent
     
     # SlowUDP evozi
     wget -N --no-check-certificate https://raw.githubusercontent.com/evozi/hysteria-install/main/slowudp/install_server.sh
