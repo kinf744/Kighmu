@@ -138,6 +138,7 @@ create_user() {
 {
     "protocol": "udp",
     "listen": ":$PORT",
+    "exclude_port": [53,5300,5667,4466,36712],
     "resolve_preference": "46",
     "cert": "$SLOWUDP_DIR/cert.crt",
     "key": "$SLOWUDP_DIR/private.key",
