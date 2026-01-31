@@ -266,7 +266,7 @@ EOF
     echo ""
     read -rp "► " choice
     
-    case $choice in 1) install_hysteria;; 2) create_user;; 3) show_current_config;; 4) uninstall_hysteria;; 0) exit;; *) color_echo red "Option invalide";; esac
+    case $choice in 1) install_hysteria;; 2) create_user;; 3) delete_user;; 4) uninstall_hysteria;; 0) exit;; *) color_echo red "Option invalide";; esac
     echo; read -p "Entrée..."; main_panel
 }
 
