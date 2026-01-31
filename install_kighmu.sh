@@ -196,8 +196,6 @@ FILES=(
   "sockspy.sh"
   "ws2_proxy.py"
   "hysteria.sh"
-  "slowdns_wsproxy.sh"
-  "slowdns_wsproxy.py"
   "menu_5.sh"
   "sshws.go"
   "ssl_tls.go"
