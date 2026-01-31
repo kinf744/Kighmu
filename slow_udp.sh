@@ -173,27 +173,57 @@ EOF
     check_status
 }
 
-show_current_config() {
-    check_status || { color_echo red "Tunnel non installé"; return 1; }
+# 3. SUPPRIMER UTILISATEUR (par numéro)
+delete_user() {
+    check_status || { color_echo red "Installez d'abord le tunnel"; return 1; }
     
-    color_echo cyan "=== CONFIGURATION ACTUELLE ==="
-    echo "Port: $PORT | SNI: $DEFAULT_SNI"
+    color_echo cyan "=== SUPPRIMER UTILISATEUR ==="
     
-    if [[ -f $CONFIG_FILE ]]; then
-        # ✅ REGEX CORRIGÉES
-        OBFS=$(grep '"obfs"' "$CONFIG_FILE" 2>/dev/null | sed 's/.*"obfs": "([^"]*)".*/\u0001/')
-        AUTH=$(grep -A3 '"password"' "$CONFIG_FILE" 2>/dev/null | grep '"password"' | tail -1 | sed 's/.*"password": "([^"]*)".*/\u0001/')
-        [[ -n "$OBFS" && "$OBFS" != "" ]] && color_echo yellow "Obfs: $OBFS"
-        [[ -n "$AUTH" ]] && color_echo yellow "Auth: $AUTH"
+    # 📋 Liste numérotée des utilisateurs (fichiers .txt)
+    echo ""
+    color_echo yellow "📄 Utilisateurs créés :"
+    USERS_LIST=()
+    COUNT=1
+    
+    if [[ ! -d /root/slowudp ]]; then
+        color_echo yellow "Aucun utilisateur trouvé"
+        return 1
     fi
     
-    IP=$(curl -s4 ip.sb 2>/dev/null || curl -s6 ip.sb || hostname -I | awk '{print $1}')
-    [[ -n "$AUTH" ]] && {
-        OBFS_URL=${OBFS:-""}
-        URL="hysteria://$IP:$PORT?protocol=udp&auth=$AUTH&obfsParam=$OBFS_URL&peer=$DEFAULT_SNI&insecure=1&alpn=h3&version=slowudp#Current"
-        echo ""
-        color_echo yellow "📱 Config actuelle: $URL"
-    }
+    for file in /root/slowudp/user_*.txt; do
+        if [[ -f "$file" ]]; then
+            USER_DATE=$(basename "$file" | sed 's/user_(.*).txt/\u0001/')
+            color_echo yellow "$COUNT) $USER_DATE"
+            USERS_LIST+=("$file")
+            ((COUNT++))
+        fi
+    done
+    
+    if [[ ${#USERS_LIST[@]} -eq 0 ]]; then
+        color_echo yellow "Aucun utilisateur à supprimer"
+        return 1
+    fi
+    
+    echo ""
+    read -p "Numéro utilisateur à supprimer [1-$((COUNT-1))]: " USER_NUM
+    
+    if [[ ! "$USER_NUM" =~ ^[0-9]+$ ]] || [[ "$USER_NUM" -lt 1 ]] || [[ "$USER_NUM" -gt "$((COUNT-1))" ]]; then
+        color_echo red "Numéro invalide !"
+        return 1
+    fi
+    
+    USER_FILE="${USERS_LIST[$((USER_NUM-1))]}"
+    
+    # Supprime fichier + QR
+    USER_BASE=$(basename "$USER_FILE" .txt)
+    rm -f "$USER_FILE" "/root/slowudp/${USER_BASE}.png"
+    
+    color_echo green "✅ Utilisateur $USER_NUM supprimé !"
+    color_echo yellow "$(basename "$USER_FILE") effacé"
+    
+    # Compte utilisateurs restants
+    REMAINING=$(ls /root/slowudp/user_*.txt 2>/dev/null | wc -l)
+    color_echo yellow "📊 $REMAINING utilisateurs restants"
 }
 
 uninstall_hysteria() {
@@ -230,8 +260,8 @@ EOF
     echo ""
     echo "1) 🚀 Installer Hysteria SlowUDP"
     echo "2) ➕ Créer/Modifier utilisateur"  
-    echo "3) 📋 Voir config actuelle"
-    echo "4) 🗑️  Désinstaller tunnel"
+    echo "3) 📋 SUPPRIMER UTILISATEUR"
+    echo "4) 🗑️ Désinstaller tunnel"
     echo "0) ❌ Quitter"
     echo ""
     read -rp "► " choice
