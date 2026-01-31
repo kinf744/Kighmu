@@ -54,13 +54,22 @@ install_hysteria() {
     check_status
     [[ $? -eq 0 ]] && { color_echo yellow "Tunnel déjà actif"; return; }
     
+    # 🧹 1. NETTOYAGE CRITIQUE EVOZI (manquant !)
+    color_echo yellow "🧹 Nettoyage Evozi..."
+    systemctl stop slowudp-server slowudp-server@ slowudp 2>/dev/null || true
+    systemctl disable slowudp-server slowudp-server@ slowudp 2>/dev/null || true
+    rm -f /etc/systemd/system/slowudp-server*.service /etc/systemd/system/slowudp.service
+    rm -rf /etc/slowudp /usr/local/bin/slowudp
+    userdel slowudp 2>/dev/null || true
+    systemctl daemon-reload
+    
     apt update -qq && apt install -y curl wget jq qrencode openssl iptables-persistent netfilter-persistent
     
-    # IPTABLES UNIQUEMENT (comme vous l'avez fait)
+    # IPTABLES
     iptables -I INPUT -p udp --dport $PORT -j ACCEPT
     netfilter-persistent save
     
-    # SlowUDP evozi
+    # SlowUDP evozi (binaire seulement)
     wget -N --no-check-certificate https://raw.githubusercontent.com/evozi/hysteria-install/main/slowudp/install_server.sh
     bash install_server.sh && rm install_server.sh
     
@@ -72,7 +81,7 @@ install_hysteria() {
     openssl ecparam -genkey -name prime256v1 -out "$key_path"
     openssl req -new -x509 -days 3650 -key "$key_path" -out "$cert_path" -subj "/CN=$DEFAULT_SNI"
     
-    # CONFIG JSON EVOZI
+    # CONFIG JSON VOTRE VERSION (écrase evozi)
     cat > $CONFIG_FILE << EOF
 {
     "protocol": "udp",
@@ -91,7 +100,8 @@ install_hysteria() {
 }
 EOF
 
-    # Service systemd (pas de dépendance ufw)
+    # VOTRE SERVICE (SUPPRIME evozi)
+    rm -f /etc/systemd/system/slowudp-server*.service
     cat > /etc/systemd/system/slowudp.service << EOF
 [Unit]
 Description=Hysteria SlowUDP (Port $PORT)
@@ -106,7 +116,10 @@ LimitNOFILE=65535
 WantedBy=multi-user.target
 EOF
     
-    systemctl daemon-reload && systemctl enable --now slowudp
+    systemctl daemon-reload
+    systemctl enable slowudp
+    systemctl start slowudp
+    
     sleep 3
     check_status
 }
