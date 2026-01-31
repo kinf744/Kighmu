@@ -105,7 +105,7 @@ After=network.target
 Type=simple
 ExecStart=/usr/local/bin/slowudp -c $CONFIG_FILE
 Restart=always
-User=nobody
+User=root
 LimitNOFILE=65535
 [Install]
 WantedBy=multi-user.target
