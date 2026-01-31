@@ -160,7 +160,8 @@ create_user() {
     
     color_echo yellow "=== NOUVEL UTILISATEUR ==="
     
-    read -p "Obfs password (Entrée=random): " obfs_pwd
+    printf "Obfs password (Entrée=random): "
+read obfs_pwd
     obfs_pwd=${obfs_pwd:-$(openssl rand -hex 16)}
     color_echo yellow "Obfs: $obfs_pwd"
     
