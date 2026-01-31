@@ -209,6 +209,7 @@ FILES=(
   "xray-quota-panel.sh"
   "install_v2ray.sh"
   "zivpn.sh"
+  "slow_udp.sh"
 )
 
 BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
