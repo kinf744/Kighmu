@@ -54,10 +54,8 @@ install_hysteria() {
     check_status
     [[ $? -eq 0 ]] && { color_echo yellow "Tunnel déjà actif"; return; }
     
-    # 🧹 1. NETTOYAGE CRITIQUE EVOZI (manquant !)
-    color_echo yellow "🧹 Nettoyage Evozi..."
+    # Nettoyage total
     systemctl stop slowudp-server slowudp-server@ slowudp 2>/dev/null || true
-    systemctl disable slowudp-server slowudp-server@ slowudp 2>/dev/null || true
     rm -f /etc/systemd/system/slowudp-server*.service /etc/systemd/system/slowudp.service
     rm -rf /etc/slowudp /usr/local/bin/slowudp
     userdel slowudp 2>/dev/null || true
@@ -65,23 +63,21 @@ install_hysteria() {
     
     apt update -qq && apt install -y curl wget jq qrencode openssl iptables-persistent netfilter-persistent
     
-    # IPTABLES
     iptables -I INPUT -p udp --dport $PORT -j ACCEPT
     netfilter-persistent save
     
-    # SlowUDP evozi (binaire seulement)
-    wget -N --no-check-certificate https://raw.githubusercontent.com/evozi/hysteria-install/main/slowudp/install_server.sh
-    bash install_server.sh && rm install_server.sh
+    # 🚀 BINAIRE DIRECT (v1.0.3 confirmé)
+    wget -q "https://github.com/evozi/hysteria-install/releases/download/v1.0.3/slowudp-linux-amd64" -O /usr/local/bin/slowudp
+    chmod +x /usr/local/bin/slowudp
     
     mkdir -p $SLOWUDP_DIR
     
-    # CERTIFICATS
+    # Certificats + Config + Service VOTRE VERSION
     cert_path="$SLOWUDP_DIR/cert.crt"
     key_path="$SLOWUDP_DIR/private.key"
     openssl ecparam -genkey -name prime256v1 -out "$key_path"
     openssl req -new -x509 -days 3650 -key "$key_path" -out "$cert_path" -subj "/CN=$DEFAULT_SNI"
     
-    # CONFIG JSON VOTRE VERSION (écrase evozi)
     cat > $CONFIG_FILE << EOF
 {
     "protocol": "udp",
@@ -100,8 +96,6 @@ install_hysteria() {
 }
 EOF
 
-    # VOTRE SERVICE (SUPPRIME evozi)
-    rm -f /etc/systemd/system/slowudp-server*.service
     cat > /etc/systemd/system/slowudp.service << EOF
 [Unit]
 Description=Hysteria SlowUDP (Port $PORT)
@@ -116,10 +110,7 @@ LimitNOFILE=65535
 WantedBy=multi-user.target
 EOF
     
-    systemctl daemon-reload
-    systemctl enable slowudp
-    systemctl start slowudp
-    
+    systemctl daemon-reload && systemctl enable --now slowudp
     sleep 3
     check_status
 }
