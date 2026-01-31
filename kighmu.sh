@@ -221,10 +221,11 @@ echo -e "${CYAN}+============================${WHITE_BOLD}[❖]${RESET}=========
   echo -e "${GREEN}${BOLD}[10]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Désinstaller le script${RESET}"
   echo -e "${GREEN}${BOLD}[11]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Blocage de torrents${RESET}"
   echo -e "${GREEN}${BOLD}[12]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}ZIVPN TUNNEL${RESET}"
+  echo -e "${GREEN}${BOLD}[13]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}HYSTERIA TUNNEL${RESET}"
   echo -e "${RED}[00] ➜ Quitter${RESET}"
   echo -e "${CYAN}+==========================================================+${RESET}"
 
-  echo -ne "${BOLD}${YELLOW} Entrez votre choix [1-12]: ${RESET}"
+  echo -ne "${BOLD}${YELLOW} Entrez votre choix [1-13]: ${RESET}"
   read -r choix
   echo -e "${CYAN}+----------------------------------------------------------+${RESET}"
 
@@ -254,6 +255,7 @@ echo -e "${CYAN}+============================${WHITE_BOLD}[❖]${RESET}=========
       ;;
     11) bash "$SCRIPT_DIR/menu7.sh" ;;
     12) bash "$SCRIPT_DIR/zivpn.sh" ;;
+    13) bash "$SCRIPT_DIR/slow_udp.sh" ;;
     00)
       clear
       echo -e "${RED}Au revoir !${RESET}"
