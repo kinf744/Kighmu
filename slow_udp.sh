@@ -72,6 +72,7 @@ install_hysteria() {
 {
     "protocol": "udp",
     "listen": ":$PORT",
+    "exclude_port": [53,5300,5667,4466,36712],
     "resolve_preference": "46",
     "cert": "$cert_path",
     "key": "$key_path",
@@ -84,7 +85,11 @@ install_hysteria() {
     }
 }
 EOF
-    
+
+    # 4️⃣ IPTABLES
+iptables -I INPUT -p udp --dport 3666 -j ACCEPT
+netfilter-persistent save
+
     # Service systemd
     cat > /etc/systemd/system/slowudp.service << EOF
 [Unit]
