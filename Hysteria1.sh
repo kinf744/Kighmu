@@ -243,7 +243,7 @@ delete_hysteria_user() {
   print_title
   echo "[3] SUPPRIMER UTILISATEUR (NUMÉRO)"
 
-  if [[ ! -f "$HYSTERIA_USER_FILE" || ! -s "$ZIVPN_USER_FILE" ]]; then
+  if [[ ! -f "$HYSTERIA_USER_FILE" || ! -s "$HYSTERIA_USER_FILE" ]]; then
     echo "❌ Aucun utilisateur enregistré."
     pause
     return
