@@ -95,7 +95,7 @@ install_hysteria() {
   
   mkdir -p /etc/zivpn
   read -rp "Domaine: " DOMAIN; DOMAIN=${DOMAIN:-"hysteria.local"}
-  echo "HYSTERIA" > "$HYSTERIA_DOMAIN_FILE"
+  echo "$DOMAIN" > "$HYSTERIA_DOMAIN_FILE"
   
   CERT="/etc/hysteria/hysteria.crt"; KEY="/etc/hysteria/hysteria.key"
   openssl req -x509 -newkey rsa:2048 -keyout "$KEY" -out "$CERT" -nodes -days 3650 -subj "/CN=$DOMAIN"
@@ -105,7 +105,7 @@ install_hysteria() {
   cat > "$HYSTERIA_CONFIG" << 'EOF'
 {
   "listen": ":20000",
-  "exclude_port": [53,5300,4466],
+  "exclude_port": [53,5300,5667,4466],
   "cert": "/etc/hysteria/hysteria.crt",
   "key": "/etc/hysteria/hysteria.key",
   "obfs": "hysteria",
