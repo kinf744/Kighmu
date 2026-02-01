@@ -289,7 +289,7 @@ delete_hysteria_user() {
 
   # ✅ JQ STABLE (comme avant)
   TODAY=$(date +%Y-%m-%d)
-  PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$ZIVPN_USER_FILE" | \
+  PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$HYSTERIA_USER_FILE" | \
               sort -u | paste -sd, -)
 
   if jq --arg passwords "$PASSWORDS" \
