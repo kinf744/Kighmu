@@ -36,18 +36,31 @@ check_status() {
         STATUS="🔴 ABSENT"
     fi
     
-    [[ ! -f /usr/local/bin/slowudp ]] && STATUS="🔴 NON INSTALLÉ"
-    [[ ! -f $CONFIG_FILE || ! -s $CONFIG_FILE || ! validate_json $CONFIG_FILE ]] && STATUS+=" (Config KO)"
-    [[ "$STATUS" == "🟢 ACTIF"* ]] && [[ $(ss -tunlp | grep -c ":$PORT ") -eq 0 ]] && STATUS+=" | UDP KO"
+    # ✅ CORRIGÉ : Conditions séparées
+    if [[ ! -f /usr/local/bin/slowudp ]]; then
+        STATUS="🔴 NON INSTALLÉ"
+    fi
     
-    USERS=$(grep -c '"password"' $CONFIG_FILE 2>/dev/null || echo 1)
+    if [[ ! -f "$CONFIG_FILE" || ! -s "$CONFIG_FILE" || ! validate_json "$CONFIG_FILE" ]]; then
+        STATUS+=" (Config KO)"
+    fi
+    
+    if [[ "$STATUS" == "🟢 ACTIF"* ]] && [[ $(ss -tunlp | grep -c ":$PORT ") -eq 0 ]]; then
+        STATUS+=" | UDP KO"
+    fi
+    
+    USERS=$(grep -c '"password"' "$CONFIG_FILE" 2>/dev/null || echo 1)
     PID=$(systemctl show -p MainPID --value slowudp 2>/dev/null || echo "N/A")
     
     echo ""
     color_echo cyan "┌─ STATUT TUNNEL HYSTERIA SLOWUDP ──────────────────┐"
-    if [[ "$STATUS" == 🟢* ]]; then color_echo green "│ $STATUS | Port $PORT | Users: $USERS"; 
-    elif [[ "$STATUS" == 🟡* ]]; then color_echo yellow "│ $STATUS | Port $PORT | Users: $USERS"; 
-    else color_echo red "│ $STATUS | Port $PORT | Users: $USERS"; fi
+    if [[ "$STATUS" == 🟢* ]]; then 
+        color_echo green "│ $STATUS | Port $PORT | Users: $USERS"
+    elif [[ "$STATUS" == 🟡* ]]; then 
+        color_echo yellow "│ $STATUS | Port $PORT | Users: $USERS"
+    else 
+        color_echo red "│ $STATUS | Port $PORT | Users: $USERS"
+    fi
     color_echo cyan "│ PID: $PID"
     color_echo cyan "└──────────────────────────────────────────────────┘"
     
