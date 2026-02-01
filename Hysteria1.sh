@@ -136,7 +136,7 @@ LimitNOFILE=1048576
 WantedBy=multi-user.target
 EOF
 
-  systemctl daemon-reload && systemctl enable "$ZIVPN_SERVICE"
+  systemctl daemon-reload && systemctl enable "$HYSTERIA_SERVICE"
 
   # 🔥 FIREWALL TRIPLE TUNNEL
   iptables -A INPUT -p udp --dport 20000 -j ACCEPT   # HYSTERIA interne
