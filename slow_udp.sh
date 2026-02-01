@@ -36,16 +36,19 @@ check_status() {
         STATUS="🔴 ABSENT"
     fi
     
-    # ✅ CORRIGÉ : Conditions séparées
+    # ✅ SÉPARÉ en IF simples (NO [[ ]] complexes)
     if [[ ! -f /usr/local/bin/slowudp ]]; then
         STATUS="🔴 NON INSTALLÉ"
     fi
     
-    if [[ ! -f "$CONFIG_FILE" || ! -s "$CONFIG_FILE" || ! validate_json "$CONFIG_FILE" ]]; then
-        STATUS+=" (Config KO)"
+    # ✅ Validation config SÉPARÉE
+    if [[ ! -f "$CONFIG_FILE" ]] || [[ ! -s "$CONFIG_FILE" ]]; then
+        STATUS+=" (Config manquante)"
+    elif ! validate_json "$CONFIG_FILE"; then
+        STATUS+=" (JSON KO)"
     fi
     
-    if [[ "$STATUS" == "🟢 ACTIF"* ]] && [[ $(ss -tunlp | grep -c ":$PORT ") -eq 0 ]]; then
+    if [[ "$STATUS" == "🟢 ACTIF"* ]] && [[ $(ss -tunlp | grep -c ":$PORT") -eq 0 ]]; then
         STATUS+=" | UDP KO"
     fi
     
