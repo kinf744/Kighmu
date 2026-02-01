@@ -112,6 +112,15 @@ WantedBy=multi-user.target
 EOF
     
     systemctl daemon-reload && systemctl enable --now slowudp
+
+    # 🔥 FIREWALL TRIPLE TUNNEL
+  iptables -A INPUT -p udp --dport 3666 -j ACCEPT   # ZIVPN interne
+  iptables -A INPUT -p udp --dport 30001:50000 -j ACCEPT  # UDP HYSTERIA clients
+  iptables -t nat -A PREROUTING -p udp --dport 30001:50000 -j DNAT --to-destination :3666
+  
+  # Persistance iptables
+  netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
+  
     sleep 3
     check_status
 }
