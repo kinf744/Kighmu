@@ -255,7 +255,7 @@ echo -e "${CYAN}+============================${WHITE_BOLD}[❖]${RESET}=========
       ;;
     11) bash "$SCRIPT_DIR/menu7.sh" ;;
     12) bash "$SCRIPT_DIR/zivpn.sh" ;;
-    13) bash "$SCRIPT_DIR/slow_udp.sh" ;;
+    13) bash "$SCRIPT_DIR/Hysteria1.sh" ;;
     00)
       clear
       echo -e "${RED}Au revoir !${RESET}"
