@@ -141,8 +141,8 @@ EOF
   # 🔥 FIREWALL TRIPLE TUNNEL
   iptables -A INPUT -p udp --dport 5667 -j ACCEPT   # ZIVPN interne
   iptables -A INPUT -p udp --dport 36712 -j ACCEPT  # UDP Custom
-  iptables -A INPUT -p udp --dport 10000:30000 -j ACCEPT  # ZIVPN clients
-  iptables -t nat -A PREROUTING -p udp --dport 10000:30000 -j DNAT --to-destination :5667
+  iptables -A INPUT -p udp --dport 6000:19999 -j ACCEPT  # ZIVPN clients
+  iptables -t nat -A PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667
   
   # Persistance iptables
   netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
