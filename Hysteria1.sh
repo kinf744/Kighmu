@@ -44,16 +44,16 @@ show_status_block() {
   
   SVC_FILE_OK=$([[ -f "/etc/systemd/system/$HYSTERIA_SERVICE" ]] && echo "✅" || echo "❌")
   SVC_ACTIVE=$(systemctl is-active "$HYSTERIA_SERVICE" 2>/dev/null || echo "N/A")
-  PORT_OK=$(ss -ludp | grep -q 5667 && echo "✅" || echo "❌")
+  PORT_OK=$(ss -ludp | grep -q 20000 && echo "✅" || echo "❌")
   
   echo "Service file: $SVC_FILE_OK"
   echo "Service actif: $SVC_ACTIVE"
-  echo "Port 5667: $PORT_OK"
+  echo "Port 20000: $PORT_OK"
   
   if [[ "$SVC_FILE_OK" == "✅" ]]; then
     if systemctl is-active --quiet "$HYSTERIA_SERVICE" 2>/dev/null; then
       echo "✅ HYSTERIA : INSTALLÉ et ACTIF"
-      echo "   Port interne: 30001"
+      echo "   Port interne: 20000"
     else
       echo "⚠️  HYSTERIA : INSTALLÉ mais INACTIF"
     fi
@@ -117,16 +117,16 @@ install_hysteria() {
 EOF
 
   # systemd service
-  cat > "/etc/systemd/system/$ZIVPN_SERVICE" << EOF
+  cat > "/etc/systemd/system/$HYSTERIA_SERVICE" << EOF
 [Unit]
-Description=ZIVPN UDP Server
+Description=HYSTERIA UDP Server
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=$ZIVPN_BIN server -c $ZIVPN_CONFIG
-WorkingDirectory=/etc/zivpn
+ExecStart=$HYSTERIA_BIN server -c $HYSTERIA_CONFIG
+WorkingDirectory=/etc/hysteria
 Restart=always
 RestartSec=5
 AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
@@ -140,7 +140,6 @@ EOF
 
   # 🔥 FIREWALL TRIPLE TUNNEL
   iptables -A INPUT -p udp --dport 20000 -j ACCEPT   # HYSTERIA interne
-  iptables -A INPUT -p udp --dport 36712 -j ACCEPT  # UDP Custom
   iptables -A INPUT -p udp --dport 20000:50000 -j ACCEPT  # ZIVPN clients
   iptables -t nat -A PREROUTING -p udp --dport 20000:50000 -j DNAT --to-destination :20000
   
@@ -164,7 +163,7 @@ EOF
     echo "   udp server: $IP"
     echo "   Password: zi"
   else
-    echo "❌ HYSTERIA ne démarre pas → journalctl -u zivpn.service"
+    echo "❌ HYSTERIA ne démarre pas → journalctl -u hysteria.service"
   fi
   
   pause
@@ -225,7 +224,7 @@ create_hysteria_user() {
       echo "🎭 𝗢𝗯𝗳𝘀     : hysteria"
       echo "🔐 𝗣𝗮𝘀𝘀𝘄𝗼𝗿𝗱 : $PASS"
       echo "📅 𝗘𝘅𝗽𝗶𝗿𝗲   : $EXPIRE"
-      echo "🔌 𝐏𝐨𝐫𝐭    : 5667"
+      echo "🔌 𝐏𝐨𝐫𝐭    : 20000-50000"
       echo "━━━━━━━━━━━━━━━━━━━━━"
     else
       echo "❌ JSON invalide → rollback"
@@ -321,7 +320,6 @@ fix_hysteria() {
   # Reset + recréation HYSTERIA (préserve SlowDNS port 53)
   iptables -t nat -F PREROUTING
   iptables -A INPUT -p udp --dport 20000 -j ACCEPT 2>/dev/null || true
-  iptables -A INPUT -p udp --dport 36712 -j ACCEPT 2>/dev/null || true
   iptables -t nat -A PREROUTING -p udp --dport 20000:50000 -j DNAT --to-destination :20000
   
   netfilter-persistent save
@@ -359,7 +357,7 @@ uninstall_hysteria() {
   # soit tu vires complètement la ligne ufw, soit tu mets un reset général si tu veux :
   # ufw --force reset >/dev/null 2>&1 || true
 
-  echo "✅ ZIVPN supprimé"
+  echo "✅ HYSTERIA supprimé"
   pause
 }
 
