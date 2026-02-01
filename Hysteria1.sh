@@ -93,7 +93,7 @@ install_hysteria() {
   wget -q "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/hysteria-linux-amd64" -O "$HYSTERIA_BIN"
   chmod +x "$HYSTERIA_BIN"
   
-  mkdir -p /etc/zivpn
+  mkdir -p /etc/hysteria
   read -rp "Domaine: " DOMAIN; DOMAIN=${DOMAIN:-"hysteria.local"}
   echo "$DOMAIN" > "$HYSTERIA_DOMAIN_FILE"
   
