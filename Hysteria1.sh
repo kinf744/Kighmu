@@ -66,19 +66,19 @@ show_status_block() {
 
 # ---------- 1) Installation (exactement comme arivpnstores) ----------
 
-install_zivpn() {
+install_hysteria() {
   print_title
-  echo "[1] INSTALLATION ZIVPN (NO CONFLIT UFW)"
+  echo "[1] INSTALLATION HYSTERIA (NO CONFLIT UFW)"
   echo
 
-  if zivpn_installed; then
-    echo "ZIVPN déjà installé."
+  if hysteria_installed; then
+    echo "HYSTERIA déjà installé."
     pause
     return
   fi
 
   # Clean slate + PURGE UFW
-  systemctl stop zivpn >/dev/null 2>&1 || true
+  systemctl stop hysteria >/dev/null 2>&1 || true
   systemctl stop ufw >/dev/null 2>&1 || true
   ufw disable >/dev/null 2>&1 || true
   apt purge ufw -y >/dev/null 2>&1 || true
@@ -90,25 +90,25 @@ install_zivpn() {
   apt update -y && apt install -y wget curl jq openssl iptables-persistent netfilter-persistent
 
   # Binaire + cert
-  wget -q "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp-zivpn-linux-amd64" -O "$ZIVPN_BIN"
-  chmod +x "$ZIVPN_BIN"
+  wget -q "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/hysteria-linux-amd64" -O "$HYSTERIA_BIN"
+  chmod +x "$HYSTERIA_BIN"
   
   mkdir -p /etc/zivpn
-  read -rp "Domaine: " DOMAIN; DOMAIN=${DOMAIN:-"zivpn.local"}
-  echo "$DOMAIN" > "$ZIVPN_DOMAIN_FILE"
+  read -rp "Domaine: " DOMAIN; DOMAIN=${DOMAIN:-"hysteria.local"}
+  echo "$HYSTERIA" > "$HYSTERIA_DOMAIN_FILE"
   
-  CERT="/etc/zivpn/zivpn.crt"; KEY="/etc/zivpn/zivpn.key"
+  CERT="/etc/hysteria/hysteria.crt"; KEY="/etc/hysteria/hysteria.key"
   openssl req -x509 -newkey rsa:2048 -keyout "$KEY" -out "$CERT" -nodes -days 3650 -subj "/CN=$DOMAIN"
   chmod 600 "$KEY"; chmod 644 "$CERT"
 
   # config.json
-  cat > "$ZIVPN_CONFIG" << 'EOF'
+  cat > "$HYSTERIA_CONFIG" << 'EOF'
 {
-  "listen": ":5667",
+  "listen": ":20000",
   "exclude_port": [53,5300,4466],
-  "cert": "/etc/zivpn/zivpn.crt",
-  "key": "/etc/zivpn/zivpn.key",
-  "obfs": "zivpn",
+  "cert": "/etc/hysteria/hysteria.crt",
+  "key": "/etc/hysteria/hysteria.key",
+  "obfs": "hysteria",
   "auth": {
     "mode": "passwords",
     "config": ["zi"]
@@ -139,10 +139,10 @@ EOF
   systemctl daemon-reload && systemctl enable "$ZIVPN_SERVICE"
 
   # 🔥 FIREWALL TRIPLE TUNNEL
-  iptables -A INPUT -p udp --dport 5667 -j ACCEPT   # ZIVPN interne
+  iptables -A INPUT -p udp --dport 20000 -j ACCEPT   # HYSTERIA interne
   iptables -A INPUT -p udp --dport 36712 -j ACCEPT  # UDP Custom
-  iptables -A INPUT -p udp --dport 6000:19999 -j ACCEPT  # ZIVPN clients
-  iptables -t nat -A PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667
+  iptables -A INPUT -p udp --dport 20000:50000 -j ACCEPT  # ZIVPN clients
+  iptables -t nat -A PREROUTING -p udp --dport 20000:50000 -j DNAT --to-destination :20000
   
   # Persistance iptables
   netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
@@ -153,18 +153,18 @@ EOF
   echo "net.core.rmem_max=16777216" >> /etc/sysctl.conf
   echo "net.core.wmem_max=16777216" >> /etc/sysctl.conf
 
-  systemctl start "$ZIVPN_SERVICE"
+  systemctl start "$HYSTERIA_SERVICE"
   
   # VÉRIFICATION FINALE
   sleep 3
-  if systemctl is-active --quiet "$ZIVPN_SERVICE"; then
+  if systemctl is-active --quiet "$HYSTERIA_SERVICE"; then
     IP=$(hostname -I | awk '{print $1}')
-    echo "✅ ZIVPN installé et actif !"
-    echo "📱 Config ZIVPN App:"
+    echo "✅ HYSTERIA installé et actif !"
+    echo "📱 Config HTTP INJECTOR App:"
     echo "   udp server: $IP"
     echo "   Password: zi"
   else
-    echo "❌ ZIVPN ne démarre pas → journalctl -u zivpn.service"
+    echo "❌ HYSTERIA ne démarre pas → journalctl -u zivpn.service"
   fi
   
   pause
@@ -172,13 +172,13 @@ EOF
 
 # ---------- 2) Création utilisateur ----------
 
-create_zivpn_user() {
+create_hysteria_user() {
   print_title
   echo "[2] CRÉATION UTILISATEUR ZIVPN"
 
-  if ! systemctl is-active --quiet "$ZIVPN_SERVICE"; then
-    echo "❌ Service ZIVPN inactif ou non installé."
-    echo "   Lance l'option 1 ou: systemctl start $ZIVPN_SERVICE"
+  if ! systemctl is-active --quiet "$HYSTERIA_SERVICE"; then
+    echo "❌ Service HYSTERIA inactif ou non installé."
+    echo "   Lance l'option 1 ou: systemctl start $HYSTERIA_SERVICE"
     pause
     return
   fi
@@ -188,41 +188,41 @@ create_zivpn_user() {
   echo
 
   read -rp "Téléphone: " PHONE
-  read -rp "Password ZIVPN: " PASS
+  read -rp "Password HYSTERIA: " PASS
   read -rp "Durée (jours): " DAYS
 
   EXPIRE=$(date -d "+${DAYS} days" '+%Y-%m-%d')
 
   # ✅ SAUVEGARDE users.list
   tmp=$(mktemp)
-  grep -v "^$PHONE|" "$ZIVPN_USER_FILE" > "$tmp" 2>/dev/null || true
+  grep -v "^$PHONE|" "$HYSTERIA_USER_FILE" > "$tmp" 2>/dev/null || true
   echo "$PHONE|$PASS|$EXPIRE" >> "$tmp"
-  mv "$tmp" "$ZIVPN_USER_FILE"
-  chmod 600 "$ZIVPN_USER_FILE"
+  mv "$tmp" "$HYSTERIA_USER_FILE"
+  chmod 600 "$HYSTERIA_USER_FILE"
 
   # ✅ EXTRACTION PASSWORDS (NOUVEAU : simple et sûr)
   TODAY=$(date +%Y-%m-%d)
-  PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$ZIVPN_USER_FILE" | \
+  PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$HYSTERIA_USER_FILE" | \
               sort -u | paste -sd, -)
 
   # ✅ JQ CORRIGÉ (string → array avec split)
   if jq --arg passwords "$PASSWORDS" \
         '.auth.config = ($passwords | split(","))' \
-        "$ZIVPN_CONFIG" > /tmp/config.json 2>/dev/null; then
+        "$HYSTERIA_CONFIG" > /tmp/config.json 2>/dev/null; then
     
     # Vérif JSON valide
     if jq empty /tmp/config.json >/dev/null 2>&1; then
-      mv /tmp/config.json "$ZIVPN_CONFIG"
-      systemctl restart "$ZIVPN_SERVICE"
+      mv /tmp/config.json "$HYSTERIA_CONFIG"
+      systemctl restart "$HYSTERIA_SERVICE"
       
       IP=$(hostname -I | awk '{print $1}')
-      DOMAIN=$(cat "$ZIVPN_DOMAIN_FILE" 2>/dev/null || echo "$IP")
+      DOMAIN=$(cat "$HYSTERIA_DOMAIN_FILE" 2>/dev/null || echo "$IP")
 
       echo
       echo "✅ 𝗨𝗧𝗜𝗟𝗜𝗦𝗔𝗧𝗘𝗨𝗥 𝗖𝗥𝗘𝗘𝗥"
       echo "━━━━━━━━━━━━━━━━━━━━━"
       echo "🌐 𝗗𝗼𝗺𝗮𝗶𝗻𝗲  : $DOMAIN"
-      echo "🎭 𝗢𝗯𝗳𝘀     : zivpn"
+      echo "🎭 𝗢𝗯𝗳𝘀     : hysteria"
       echo "🔐 𝗣𝗮𝘀𝘀𝘄𝗼𝗿𝗱 : $PASS"
       echo "📅 𝗘𝘅𝗽𝗶𝗿𝗲   : $EXPIRE"
       echo "🔌 𝐏𝐨𝐫𝐭    : 5667"
@@ -240,11 +240,11 @@ create_zivpn_user() {
 
 # ---------- 3) Suppression utilisateur ----------
 
-delete_zivpn_user() {
+delete_hysteria_user() {
   print_title
   echo "[3] SUPPRIMER UTILISATEUR (NUMÉRO)"
 
-  if [[ ! -f "$ZIVPN_USER_FILE" || ! -s "$ZIVPN_USER_FILE" ]]; then
+  if [[ ! -f "$HYSTERIA_USER_FILE" || ! -s "$ZIVPN_USER_FILE" ]]; then
     echo "❌ Aucun utilisateur enregistré."
     pause
     return
@@ -257,7 +257,7 @@ delete_zivpn_user() {
   mapfile -t USERS < <(awk -F'|' '{
     printf "%s | %s | %s
 ", $1, $2, $3
-  }' "$ZIVPN_USER_FILE" | sort -k3 | nl -w2 -s'. ')
+  }' "$HYSTERIA_USER_FILE" | sort -k3 | nl -w2 -s'. ')
   
   printf '%s
 ' "${USERS[@]}"
@@ -272,7 +272,7 @@ delete_zivpn_user() {
   fi
 
   # EXTRACTION téléphone du numéro choisi
-  PHONE=$(awk -F'|' 'NR=='$NUM' {print $1}' "$ZIVPN_USER_FILE")
+  PHONE=$(awk -F'|' 'NR=='$NUM' {print $1}' "$HYSTERIA_USER_FILE")
   
   if [[ -z "$PHONE" ]]; then
     echo "❌ Utilisateur introuvable."
@@ -284,9 +284,9 @@ delete_zivpn_user() {
 
   # SUPPRESSION
   tmp=$(mktemp)
-  grep -v "^$PHONE|" "$ZIVPN_USER_FILE" > "$tmp"
-  mv "$tmp" "$ZIVPN_USER_FILE"
-  chmod 600 "$ZIVPN_USER_FILE"
+  grep -v "^$PHONE|" "$HYSTERIA_USER_FILE" > "$tmp"
+  mv "$tmp" "$HYSTERIA_USER_FILE"
+  chmod 600 "$HYSTERIA_USER_FILE"
 
   # ✅ JQ STABLE (comme avant)
   TODAY=$(date +%Y-%m-%d)
@@ -295,67 +295,67 @@ delete_zivpn_user() {
 
   if jq --arg passwords "$PASSWORDS" \
         '.auth.config = ($passwords | split(","))' \
-        "$ZIVPN_CONFIG" > /tmp/config.json 2>/dev/null && \
+        "$HYSTERIA_CONFIG" > /tmp/config.json 2>/dev/null && \
      jq empty /tmp/config.json >/dev/null 2>&1; then
     
-    mv /tmp/config.json "$ZIVPN_CONFIG"
-    systemctl restart "$ZIVPN_SERVICE"
-    echo "✅ $PHONE (n°$NUM) supprimé et ZIVPN mis à jour"
+    mv /tmp/config.json "$HYSTERIA_CONFIG"
+    systemctl restart "$HYSTERIA_SERVICE"
+    echo "✅ $PHONE (n°$NUM) supprimé et HYSTERIA mis à jour"
   else
-    echo "⚠️ Config ZIVPN inchangée (sécurité)"
+    echo "⚠️ Config HYSTERIA inchangée (sécurité)"
     rm -f /tmp/config.json
   fi
 
   pause
 }
 
-# ---------- 4) Fix (comme fix-zivpn.sh) ----------
+# ---------- 4) Fix (comme fix-hysteria.sh) ----------
 
-fix_zivpn() {
+fix_hysteria() {
   print_title
-  echo "[4] FIX ZIVPN + SlowDNS (coexistence)"
+  echo "[4] FIX HYSTERIA + SlowDNS (coexistence)"
   
   # Force iptables legacy (pas de conflit nftables)
   update-alternatives --set iptables /usr/sbin/iptables-legacy 2>/dev/null || true
   
-  # Reset + recréation ZIVPN (préserve SlowDNS port 53)
+  # Reset + recréation HYSTERIA (préserve SlowDNS port 53)
   iptables -t nat -F PREROUTING
-  iptables -A INPUT -p udp --dport 5667 -j ACCEPT 2>/dev/null || true
+  iptables -A INPUT -p udp --dport 20000 -j ACCEPT 2>/dev/null || true
   iptables -A INPUT -p udp --dport 36712 -j ACCEPT 2>/dev/null || true
-  iptables -t nat -A PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667
+  iptables -t nat -A PREROUTING -p udp --dport 20000:50000 -j DNAT --to-destination :20000
   
   netfilter-persistent save
   systemctl restart zivpn.service
   
-  echo "✅ ZIVPN fixé (6000-19999→5667)"
+  echo "✅ HYSTERIA fixé (20000-50000→20000)"
   echo "   SlowDNS préservé (53→5300)"
 }
 
 # ---------- 5) Désinstallation ----------
 
-uninstall_zivpn() {
+uninstall_hysteria() {
   print_title
   echo "[5] DÉSINSTALLATION"
   read -rp "Confirmer ? (o/N): " CONFIRM
   [[ "$CONFIRM" =~ ^[oO]$ ]] || { echo "Annulé"; pause; return; }
 
   # Arrêt et désactivation du service
-  systemctl stop "$ZIVPN_SERVICE" 2>/dev/null || true
-  systemctl disable "$ZIVPN_SERVICE" 2>/dev/null || true
-  rm -f "/etc/systemd/system/$ZIVPN_SERVICE"
+  systemctl stop "$HYSTERIA_SERVICE" 2>/dev/null || true
+  systemctl disable "$HYSTERIA_SERVICE" 2>/dev/null || true
+  rm -f "/etc/systemd/system/$HYSTERIA_SERVICE"
   systemctl daemon-reload
 
   # Suppression binaire + dossiers
-  rm -f "$ZIVPN_BIN"
-  rm -rf /etc/zivpn
+  rm -f "$HYSTERIA_BIN"
+  rm -rf /etc/hysteria
 
   # Nettoyage firewall / NAT
   # 1) Supprimer la règle DNAT spécifique si tu veux être précis :
-  iptables -t nat -D PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667 2>/dev/null || true
+  iptables -t nat -D PREROUTING -p udp --dport 20000:50000 -j DNAT --to-destination :5667 2>/dev/null || true
   # 2) Et à défaut, tu peux garder un flush global si tu préfères :
   iptables -t nat -F PREROUTING 2>/dev/null || true
 
-  # UFW : ta ligne actuelle ne sert à rien car tu n'as pas créé de règle 6000:19999/udp via ufw
+  # UFW : ta ligne actuelle ne sert à rien car tu n'as pas créé de règle 20000:50000/udp via ufw
   # soit tu vires complètement la ligne ufw, soit tu mets un reset général si tu veux :
   # ufw --force reset >/dev/null 2>&1 || true
 
@@ -371,21 +371,21 @@ while true; do
   print_title
   show_status_block
   
-  echo "1) Installer ZIVPN (arivpnstores)"
-  echo "2) Créer utilisateur ZIVPN" 
+  echo "1) Installer HYSTERIA (arivpnstores)"
+  echo "2) Créer utilisateur HYSTERIA" 
   echo "3) Supprimer utilisateur"
-  echo "4) Fix ZIVPN (reset firewall/NAT)"
-  echo "5) Désinstaller ZIVPN"
+  echo "4) Fix HYSTERIA (reset firewall/NAT)"
+  echo "5) Désinstaller HYSTERIA"
   echo "0) Quitter"
   echo
   read -rp "Choix: " CHOIX
 
   case $CHOIX in
-    1) install_zivpn ;;
-    2) create_zivpn_user ;;
-    3) delete_zivpn_user ;;
-    4) fix_zivpn ;;
-    5) uninstall_zivpn ;;
+    1) install_hysteria ;;
+    2) create_hysteria_user ;;
+    3) delete_hysteria_user ;;
+    4) fix_hysteria ;;
+    5) uninstall_hysteria ;;
     0) exit 0 ;;
     *) echo "❌ Choix invalide"; sleep 1 ;;
   esac
