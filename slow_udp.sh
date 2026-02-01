@@ -105,8 +105,8 @@ install_hysteria() {
     openssl ecparam -genkey -name prime256v1 -out "$key_path"
     openssl req -new -x509 -days 3650 -key "$key_path" -out "$cert_path" -subj "/CN=$DEFAULT_SNI"
     
-    # ✅ CONFIG MULTI-USERS dès l'installation
-    cat > $CONFIG_FILE << 'EOF'
+    # Dans install_hysteria() → REMPLACEZ la config par :
+cat > $CONFIG_FILE << 'EOF'
 {
     "protocol": "udp",
     "listen": ":3666",
@@ -115,13 +115,10 @@ install_hysteria() {
     "cert": "/etc/slowudp/cert.crt",
     "key": "/etc/slowudp/private.key",
     "alpn": "h3",
-    "obfs": "default-obfs-init",
     "auth": {
-        "mode": "userpass",
+        "mode": "password",
         "config": {
-            "userpass": {
-                "admin": "install123"
-            }
+            "password": "admin123"
         }
     }
 }
