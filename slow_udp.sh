@@ -186,7 +186,7 @@ create_user() {
     sleep 3
     
     IP=$(curl -s4 ip.sb 2>/dev/null || curl -s6 ip.sb || hostname -I | awk '{print $1}')
-    URL="hysteria://$IP:$PORT?protocol=udp&upmbps=50&downmbps=100&auth=$auth_pwd&obfsParam=$obfs_pwd&peer=$DEFAULT_SNI&insecure=1&alpn=h3&version=slowudp#SlowUDP-User"
+    URL="hysteria://$IP:30001-50000?protocol=udp&upmbps=50&downmbps=100&auth=$auth_pwd&obfsParam=$obfs_pwd&peer=$DEFAULT_SNI&insecure=1&alpn=h3&version=slowudp#SlowUDP-User"
     
     echo ""
     color_echo green "✅ UTILISATEUR ACTIF !"
