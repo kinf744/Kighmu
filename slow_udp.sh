@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Panneau Hysteria SlowUDP v3.5 - 100% FONCTIONNEL CORRIGÉ
+# Panneau Hysteria SlowUDP v1.0 - 100% FONCTIONNEL CORRIGÉ
 #
 
 export LANG=fr_FR.UTF-8
