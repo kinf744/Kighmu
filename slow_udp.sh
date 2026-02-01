@@ -227,7 +227,7 @@ create_user() {
 list_users() {
     echo ""
     color_echo cyan "📋 UTILISATEURS ACTIFS :"
-    jq -r '.auth.config.userpass | keys_unsorted[] as $user | "($user)"' "$CONFIG_FILE" 2>/dev/null | nl -w2 -s') '
+    jq -r '.auth.config.userpass | keys[]' "$CONFIG_FILE" 2>/dev/null | nl -w2 -s') '
 }
 
 # ✅ delete_user() CORRIGÉ
@@ -245,6 +245,28 @@ delete_user() {
     else
         color_echo red "❌ $username introuvable"
     fi
+}
+
+uninstall_hysteria() {
+    color_echo yellow "🗑️ Désinstallation complète SlowUDP..."
+    
+    systemctl stop slowudp slowudp-server slowudp-server@ 2>/dev/null || true
+    systemctl disable slowudp slowudp-server slowudp-server@ 2>/dev/null || true
+    
+    rm -f /etc/systemd/system/slowudp*.service /etc/systemd/system/slowudp-server*.service
+    rm -rf "$SLOWUDP_DIR" /usr/local/bin/slowudp /root/slowudp /var/lib/slowudp
+    
+    # Nettoyage firewall
+    iptables -D INPUT -p udp --dport $PORT -j ACCEPT 2>/dev/null || true
+    iptables -D INPUT -p udp --dport 30001:50000 -j ACCEPT 2>/dev/null || true
+    iptables -t nat -D PREROUTING -p udp --dport 30001:50000 -j DNAT --to-destination :$PORT 2>/dev/null || true
+    
+    netfilter-persistent save 2>/dev/null || true
+    systemctl daemon-reload
+    systemctl reset-failed 2>/dev/null || true
+    
+    color_echo green "✅ DÉSINSTALLATION TERMINÉE"
+    color_echo yellow "📋 Vérifiez: systemctl | grep slowudp"
 }
 
 # ✅ main_panel() avec nouvelle option
