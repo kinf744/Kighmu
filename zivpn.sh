@@ -351,7 +351,7 @@ uninstall_zivpn() {
 
   # Nettoyage firewall / NAT
   # 1) Supprimer la règle DNAT spécifique si tu veux être précis :
-  iptables -t nat -D PREROUTING -p udp --dport 10000:30000 -j DNAT --to-destination :5667 2>/dev/null || true
+  iptables -t nat -D PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667 2>/dev/null || true
   # 2) Et à défaut, tu peux garder un flush global si tu préfères :
   iptables -t nat -F PREROUTING 2>/dev/null || true
 
