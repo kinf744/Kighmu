@@ -95,7 +95,7 @@ install_hysteria() {
   
   mkdir -p /etc/zivpn
   read -rp "Domaine: " DOMAIN; DOMAIN=${DOMAIN:-"hysteria.local"}
-  echo "$HYSTERIA" > "$HYSTERIA_DOMAIN_FILE"
+  echo "HYSTERIA" > "$HYSTERIA_DOMAIN_FILE"
   
   CERT="/etc/hysteria/hysteria.crt"; KEY="/etc/hysteria/hysteria.key"
   openssl req -x509 -newkey rsa:2048 -keyout "$KEY" -out "$CERT" -nodes -days 3650 -subj "/CN=$DOMAIN"
@@ -323,7 +323,7 @@ fix_hysteria() {
   iptables -t nat -A PREROUTING -p udp --dport 20000:50000 -j DNAT --to-destination :20000
   
   netfilter-persistent save
-  systemctl restart zivpn.service
+  systemctl restart hysteria.service
   
   echo "✅ HYSTERIA fixé (20000-50000→20000)"
   echo "   SlowDNS préservé (53→5300)"
