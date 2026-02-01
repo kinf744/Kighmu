@@ -173,7 +173,7 @@ EOF
 
 create_hysteria_user() {
   print_title
-  echo "[2] CRÉATION UTILISATEUR ZIVPN"
+  echo "[2] CRÉATION UTILISATEUR HYSTERIA"
 
   if ! systemctl is-active --quiet "$HYSTERIA_SERVICE"; then
     echo "❌ Service HYSTERIA inactif ou non installé."
