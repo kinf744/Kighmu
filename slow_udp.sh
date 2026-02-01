@@ -28,46 +28,56 @@ validate_json() {
 
 check_status() {
     local STATUS=""
+    local USERS=0
+    local PID="N/A"
+
     if systemctl is-active --quiet slowudp 2>/dev/null; then
         STATUS="🟢 ACTIF"
-    elif systemctl list-unit-files slowudp.service >/dev/null 2>/dev/null; then
+    elif systemctl list-unit-files slowudp.service >/dev/null 2>&1; then
         STATUS="🟡 STOPPÉ"
     else
         STATUS="🔴 ABSENT"
     fi
-    
-    # ✅ SÉPARÉ en IF simples (NO [[ ]] complexes)
+
     if [[ ! -f /usr/local/bin/slowudp ]]; then
         STATUS="🔴 NON INSTALLÉ"
     fi
-    
-    # ✅ Validation config SÉPARÉE
+
     if [[ ! -f "$CONFIG_FILE" ]] || [[ ! -s "$CONFIG_FILE" ]]; then
         STATUS+=" (Config manquante)"
     elif ! validate_json "$CONFIG_FILE"; then
         STATUS+=" (JSON KO)"
     fi
-    
-    if [[ "$STATUS" == "🟢 ACTIF"* ]] && [[ $(ss -tunlp | grep -c ":$PORT") -eq 0 ]]; then
+
+    if [[ "$STATUS" == "🟢"* ]] && [[ $(ss -tunlp | grep -c ":$PORT") -eq 0 ]]; then
         STATUS+=" | UDP KO"
     fi
-    
-    USERS=$(grep -c '"password"' "$CONFIG_FILE" 2>/dev/null || echo 1)
+
+    if [[ -f "$CONFIG_FILE" ]]; then
+        USERS=$(grep -c '"password"' "$CONFIG_FILE")
+    fi
+
     PID=$(systemctl show -p MainPID --value slowudp 2>/dev/null || echo "N/A")
-    
+
     echo ""
     color_echo cyan "┌─ STATUT TUNNEL HYSTERIA SLOWUDP ──────────────────┐"
-    if [[ "$STATUS" == 🟢* ]]; then 
+
+    if [[ "$STATUS" == "🟢"* ]]; then
         color_echo green "│ $STATUS | Port $PORT | Users: $USERS"
-    elif [[ "$STATUS" == 🟡* ]]; then 
+    elif [[ "$STATUS" == "🟡"* ]]; then
         color_echo yellow "│ $STATUS | Port $PORT | Users: $USERS"
-    else 
+    else
         color_echo red "│ $STATUS | Port $PORT | Users: $USERS"
     fi
+
     color_echo cyan "│ PID: $PID"
     color_echo cyan "└──────────────────────────────────────────────────┘"
-    
-    case $STATUS in *"NON INSTALLÉ"*|"🔴 ABSENT"*) return 2;; *"STOPPÉ"*) return 1;; *) return 0;; esac
+
+    case "$STATUS" in
+        *"NON INSTALLÉ"*|*"🔴 ABSENT"*) return 2 ;;
+        *"STOPPÉ"*) return 1 ;;
+        *) return 0 ;;
+    esac
 }
 
 install_hysteria() {
