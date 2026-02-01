@@ -62,9 +62,6 @@ install_hysteria() {
     
     apt update -qq && apt install -y curl wget jq qrencode openssl iptables-persistent netfilter-persistent
     
-    iptables -I INPUT -p udp --dport $PORT -j ACCEPT
-    netfilter-persistent save
-    
     color_echo yellow "⬇️ Binaire direct v1.0.3..."
     wget -q "https://github.com/evozi/hysteria-install/releases/download/v1.0.3/slowudp-linux-amd64" -O /usr/local/bin/slowudp
     chmod +x /usr/local/bin/slowudp
