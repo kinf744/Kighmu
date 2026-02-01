@@ -300,3 +300,4 @@ EOF
     esac
     echo; read -p "Entrée pour continuer..."; main_panel
 }
+main_panel
