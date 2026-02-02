@@ -89,18 +89,12 @@ install_hysteria() {
   # ✅ PAQUETS SANS CONFLIT UFW
   apt update -y && apt install -y wget curl jq openssl iptables-persistent netfilter-persistent
 
-  # Remplacez complètement la section binaire :
-  rm -f /usr/local/bin/hysteria*
-  cd /tmp
-
-  # Source archive v1.3.5 (stable)
-  wget -q "https://github.com/apernet/hysteria/archive/refs/tags/v1.3.5.tar.gz"
-  tar -xzf v1.3.5.tar.gz hysteria-1.3.5/hysteria-linux-amd64
-  mv hysteria-1.3.5/hysteria-linux-amd64 "$HYSTERIA_BIN"
-  chmod +x "$HYSTERIA_BIN"
-
-  echo "✅ v1.3.5 source code compilé"
-  "$HYSTERIA_BIN" version
+  # BINAIRE v1.3.5 (GitHub direct + version check)
+rm -f /usr/local/bin/hysteria*
+cd /tmp
+wget -q "https://github.com/apernet/hysteria/releases/download/v1.3.5/hysteria-linux-amd64"
+mv hysteria-linux-amd64 "$HYSTERIA_BIN"
+chmod +x "$HYSTERIA_BIN"
   
   mkdir -p /etc/hysteria
   read -rp "Domaine: " DOMAIN; DOMAIN=${DOMAIN:-"hysteria.local"}
