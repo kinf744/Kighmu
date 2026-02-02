@@ -255,52 +255,53 @@ delete_zivpn_user() {
 
   echo "Utilisateurs actifs (sélectionnez NUMÉRO):"
   echo "────────────────────────────────────"
-  
-  # 📋 LISTE NUMÉROTÉE avec awk
-  mapfile -t USERS < <(awk -F'|' '{
-    printf "%s | %s | %s
-", $1, $2, $3
-  }' "$ZIVPN_USER_FILE" | sort -k3 | nl -w2 -s'. ')
-  
-  printf '%s
-' "${USERS[@]}"
-  echo "────────────────────────────────────"
-  read -rp "🔢 Numéro à supprimer (1-$(echo "${#USERS[@]}")): " NUM
 
-  # VALIDATION numéro
-  if ! [[ "$NUM" =~ ^[0-9]+$ ]] || [ "$NUM" -lt 1 ] || [ "$NUM" -gt "${#USERS[@]}" ]; then
+  # 📋 Liste triée + numérotée (STABLE)
+  mapfile -t USERS < <(
+    awk -F'|' '{ printf "%s|%s|%s\n", $1, $2, $3 }' "$ZIVPN_USER_FILE" |
+    sort -t'|' -k3 |
+    nl -w2 -s'. '
+  )
+
+  printf '%s\n' "${USERS[@]}"
+  echo "────────────────────────────────────"
+
+  read -rp "🔢 Numéro à supprimer (1-${#USERS[@]}): " NUM
+
+  # VALIDATION
+  if ! [[ "$NUM" =~ ^[0-9]+$ ]] || (( NUM < 1 || NUM > ${#USERS[@]} )); then
     echo "❌ Numéro invalide."
     pause
     return
   fi
 
-  # EXTRACTION téléphone du numéro choisi
-  PHONE=$(awk -F'|' 'NR=='$NUM' {print $1}' "$ZIVPN_USER_FILE")
-  
+  # EXTRACTION ligne exacte sélectionnée
+  LINE=$(printf '%s\n' "${USERS[$((NUM-1))]}" | sed 's/^[0-9]*\. //')
+  PHONE=$(echo "$LINE" | cut -d'|' -f1)
+
   if [[ -z "$PHONE" ]]; then
     echo "❌ Utilisateur introuvable."
     pause
     return
   fi
 
-  echo "🗑️ Supprimant $PHONE..."
+  echo "🗑️ Suppression de $PHONE..."
 
-  # SUPPRESSION
+  # SUPPRESSION RÉELLE
   tmp=$(mktemp)
   grep -v "^$PHONE|" "$ZIVPN_USER_FILE" > "$tmp"
   mv "$tmp" "$ZIVPN_USER_FILE"
   chmod 600 "$ZIVPN_USER_FILE"
 
-  # ✅ JQ STABLE (comme avant)
+  # 🔄 Mise à jour ZIVPN
   TODAY=$(date +%Y-%m-%d)
-  PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$ZIVPN_USER_FILE" | \
-              sort -u | paste -sd, -)
+  PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$ZIVPN_USER_FILE" | sort -u | paste -sd, -)
 
   if jq --arg passwords "$PASSWORDS" \
         '.auth.config = ($passwords | split(","))' \
-        "$ZIVPN_CONFIG" > /tmp/config.json 2>/dev/null && \
+        "$ZIVPN_CONFIG" > /tmp/config.json 2>/dev/null &&
      jq empty /tmp/config.json >/dev/null 2>&1; then
-    
+
     mv /tmp/config.json "$ZIVPN_CONFIG"
     systemctl restart "$ZIVPN_SERVICE"
     echo "✅ $PHONE (n°$NUM) supprimé et ZIVPN mis à jour"
