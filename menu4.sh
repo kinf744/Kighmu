@@ -48,32 +48,84 @@ read -rp "${CYAN}Sélectionnez une option (1/2/0) : ${RESET}" option
 # Fonction : supprimer un utilisateur donné (sans confirmation)
 # ==========================================================
 supprimer_utilisateur() {
-    local username=$1
+    local username="$1"
+    local phone password
+    local TODAY
+    TODAY=$(date +%Y-%m-%d)
 
-    if ! grep -q "^$username|" "$USER_FILE"; then
-        echo -e "${RED}Utilisateur '$username' introuvable dans la liste.${RESET}"
+    # 🔎 Récupération AVANT suppression
+    read -r phone password < <(
+        awk -F'|' -v u="$username" '$1==u {print $1, $2}' "$USER_FILE"
+    )
+
+    if [[ -z "$password" ]]; then
+        echo -e "${RED}Utilisateur '$username' introuvable.${RESET}"
         return 1
     fi
 
-    # Suppression de l'utilisateur système
+    # 1️⃣ SUPPRESSION UTILISATEUR SYSTÈME
     if id "$username" &>/dev/null; then
         if userdel -r "$username" &>/dev/null; then
-            echo -e "${GREEN}Utilisateur système '${username}' supprimé avec succès.${RESET}"
+            echo -e "${GREEN}Utilisateur système '$username' supprimé.${RESET}"
         else
-            echo -e "${RED}Erreur lors de la suppression de l'utilisateur système '${username}'.${RESET}"
+            echo -e "${RED}Erreur suppression système '$username'.${RESET}"
             return 1
         fi
-    else
-        echo -e "${YELLOW}Utilisateur système '${username}' non trouvé ou déjà supprimé.${RESET}"
     fi
 
-    # Suppression de la ligne dans users.list
-    if grep -v "^$username|" "$USER_FILE" > "${USER_FILE}.tmp"; then
-        mv "${USER_FILE}.tmp" "$USER_FILE"
-        echo -e "${GREEN}Utilisateur '${username}' supprimé de la liste utilisateurs.${RESET}"
-    else
-        echo -e "${RED}Erreur : impossible de mettre à jour la liste des utilisateurs.${RESET}"
-        return 1
+    # 2️⃣ SUPPRESSION KIGHMU
+    grep -v "^$username|" "$USER_FILE" > "${USER_FILE}.tmp" &&
+    mv "${USER_FILE}.tmp" "$USER_FILE"
+    echo -e "${GREEN}Kighmu: '$username' supprimé.${RESET}"
+
+    # ================== ZIVPN SYNC ==================
+    ZIVPN_USER_FILE="/etc/zivpn/users.list"
+    ZIVPN_CONFIG="/etc/zivpn/config.json"
+
+    if [[ -f "$ZIVPN_USER_FILE" ]]; then
+        grep -v "^$phone|" "$ZIVPN_USER_FILE" > "${ZIVPN_USER_FILE}.tmp" &&
+        mv "${ZIVPN_USER_FILE}.tmp" "$ZIVPN_USER_FILE" &&
+        chmod 600 "$ZIVPN_USER_FILE"
+
+        ZPASS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$ZIVPN_USER_FILE" | sort -u)
+        tmp=$(mktemp)
+
+        if jq --argjson arr "$(printf '%s\n' "$ZPASS" | jq -R . | jq -s .)" \
+              '.auth.config = $arr' "$ZIVPN_CONFIG" > "$tmp" &&
+           jq empty "$tmp" >/dev/null 2>&1; then
+
+            mv "$tmp" "$ZIVPN_CONFIG"
+            systemctl restart zivpn.service
+            echo -e "${GREEN}✅ ZIVPN synchronisé.${RESET}"
+        else
+            rm -f "$tmp"
+            echo -e "${YELLOW}⚠️ ZIVPN non modifié (sécurité).${RESET}"
+        fi
+    fi
+
+    # ================== HYSTERIA SYNC ==================
+    HYSTERIA_USER_FILE="/etc/hysteria/users.txt"
+    HYSTERIA_CONFIG="/etc/hysteria/config.json"
+
+    if [[ -f "$HYSTERIA_USER_FILE" ]]; then
+        grep -v "^$username|" "$HYSTERIA_USER_FILE" > "${HYSTERIA_USER_FILE}.tmp" &&
+        mv "${HYSTERIA_USER_FILE}.tmp" "$HYSTERIA_USER_FILE" &&
+        chmod 600 "$HYSTERIA_USER_FILE"
+
+        HPASS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$HYSTERIA_USER_FILE" | sort -u)
+        tmp=$(mktemp)
+
+        if jq --argjson arr "$(printf '%s\n' "$HPASS" | jq -R . | jq -s .)" \
+              '.auth.config = $arr' "$HYSTERIA_CONFIG" > "$tmp" &&
+           jq empty "$tmp" >/dev/null 2>&1; then
+
+            mv "$tmp" "$HYSTERIA_CONFIG"
+            systemctl restart hysteria.service
+            echo -e "${GREEN}✅ HYSTERIA synchronisé.${RESET}"
+        else
+            rm -f "$tmp"
+            echo -e "${YELLOW}⚠️ HYSTERIA non modifié (sécurité).${RESET}"
+        fi
     fi
 
     return 0
