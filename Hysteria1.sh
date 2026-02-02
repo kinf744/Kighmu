@@ -209,35 +209,44 @@ create_hysteria_user() {
   mv "$tmp" "$HYSTERIA_USER_FILE"
   chmod 600 "$HYSTERIA_USER_FILE"
 
-  # ✅ EXTRACTION PASSWORDS + UPDATE CONFIG (simple et sûr)
+  # ✅ EXTRACTION PASSWORDS + UPDATE CONFIG (ULTRA-SIMPLE)
   TODAY=$(date +%Y-%m-%d)
   PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$HYSTERIA_USER_FILE" | \
               sort -u | paste -sd, -)
 
-  PASSWORDS=${PASSWORDS:-"zi"}  # Fallback si vide
-  if jq --arg passwords "$PASSWORDS" \
-        '.auth.config = ($passwords | split(",") | map(lstrip | rstrip))' \
-        "$HYSTERIA_CONFIG" > /tmp/config.json 2>/dev/null && \
-     jq empty /tmp/config.json >/dev/null 2>&1; then
-    mv /tmp/config.json "$HYSTERIA_CONFIG"
+  # ✅ FIX SIMPLE : direct array JSON (PAS de split complexe)
+  if [[ -n "$PASSWORDS" ]]; then
+    PASSWORDS=$(echo "$PASSWORDS" | sed 's/,/","/g' | sed 's/^/"/;s/$/"/')
+    jq --argjson passwords "[$PASSWORDS]" \
+       '.auth.config = $passwords' \
+       "$HYSTERIA_CONFIG" > /tmp/config.json 2>/dev/null && \
+    jq empty /tmp/config.json >/dev/null 2>&1 && \
+    mv /tmp/config.json "$HYSTERIA_CONFIG" && \
     systemctl restart "$HYSTERIA_SERVICE"
-    
-    IP=$(hostname -I | awk '{print $1}')
-    DOMAIN=$(cat "$HYSTERIA_DOMAIN_FILE" 2>/dev/null || echo "$IP")
-
-    echo
-    echo "✅ 𝗨𝗧𝗜𝗟𝗜𝗦𝗔𝗧𝗘𝗨𝗥 𝗖𝗥𝗘𝗘𝗥"
-    echo "━━━━━━━━━━━━━━━━━━━━━"
-    echo "🌐 𝗗𝗼𝗺𝗮𝗶𝗻𝗲  : $DOMAIN"
-    echo "🎭 𝗢𝗯𝗳𝘀     : hysteria"
-    echo "🔐 𝗣𝗮𝘀𝘀𝘄𝗼𝗿𝗱 : $PASS"
-    echo "📅 𝗘𝘅𝗽𝗶𝗿𝗲   : $EXPIRE"
-    echo "🔌 𝐏𝐨𝐫𝐭    : 20000-50000"
-    echo "━━━━━━━━━━━━━━━━━━━━━"
   else
-    echo "❌ Erreur mise à jour config → rollback"
-    rm -f /tmp/config.json
+    # Fallback "zi" si aucun user
+    jq '.auth.config = ["zi"]' "$HYSTERIA_CONFIG" > /tmp/config.json && \
+    jq empty /tmp/config.json >/dev/null 2>&1 && \
+    mv /tmp/config.json "$HYSTERIA_CONFIG" && \
+    systemctl restart "$HYSTERIA_SERVICE"
   fi
+      
+  IP=$(hostname -I | awk '{print $1}')
+  DOMAIN=$(cat "$HYSTERIA_DOMAIN_FILE" 2>/dev/null || echo "$IP")
+
+  echo
+  echo "✅ 𝗨𝗧𝗜𝗟𝗜𝗦𝗔𝗧𝗘𝗨𝗥 𝗖𝗥𝗘𝗘𝗥"
+  echo "━━━━━━━━━━━━━━━━━━━━━"
+  echo "🌐 𝗗𝗼𝗺𝗮𝗶𝗻𝗲  : $DOMAIN"
+  echo "🎭 𝗢𝗯𝗳𝘀     : hysteria"
+  echo "🔐 𝗣𝗮𝘀𝘀𝘄𝗼𝗿𝗱 : $PASS"
+  echo "📅 𝗘𝘅𝗽𝗶𝗿𝗲   : $EXPIRE"
+  echo "🔌 𝐏𝐨𝐫𝐭    : 20000-50000"
+  echo "━━━━━━━━━━━━━━━━━━━━━"
+  
+  # VÉRIFICATION synchro
+  echo "🔍 Passwords dans config:"
+  jq -r '.auth.config[]' "$HYSTERIA_CONFIG" 2>/dev/null || echo "❌ Erreur lecture config"
 
   pause
 }
