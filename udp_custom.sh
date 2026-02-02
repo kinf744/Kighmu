@@ -30,7 +30,9 @@ EOF
 # 4️⃣ IPTABLES INTELLIGENT 
 iptables -C INPUT -p udp --dport 36712 -j ACCEPT 2>/dev/null || \
 iptables -A INPUT -p udp --dport 36712 -j ACCEPT
-netfilter-persistent save
+
+# SAVE IPTABLES 
+netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
 
 # 5️⃣ SYSTEMD CORRIGÉ (**CLÉ : `server` comme ZIVPN**)
 cat > "/etc/systemd/system/$SERVICE_NAME" << EOF
