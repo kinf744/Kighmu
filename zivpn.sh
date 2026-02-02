@@ -84,7 +84,7 @@ install_zivpn() {
   apt purge ufw -y >/dev/null 2>&1 || true
   
   # RESET iptables propre
-  iptables -F; iptables -t nat -F; iptables -t mangle -F 2>/dev/null || true
+  # iptables -F; iptables -t nat -F; iptables -t mangle -F 2>/dev/null || true
 
   # ✅ PAQUETS SANS CONFLIT UFW
   apt update -y && apt install -y wget curl jq openssl iptables-persistent netfilter-persistent
