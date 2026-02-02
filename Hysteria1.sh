@@ -102,24 +102,20 @@ install_hysteria() {
   chmod 600 "$KEY"; chmod 644 "$CERT"
 
   # config.json
-  cat > "$HYSTERIA_CONFIG" << 'EOF'
+  cat > "$HYSTERIA_CONFIG" << EOF
 {
-  "server": "${DOMAIN}",
   "listen": ":20000",
-  "protocol": "udp",
+  "protocol": "udp", 
   "cert": "/etc/hysteria/hysteria.crt",
   "key": "/etc/hysteria/hysteria.key",
-  "up": "100 Mbps",
-  "up_mbps": 100,
-  "down": "100 Mbps",
-  "down_mbps": 100,
-  "disable_udp": false,
-  "insecure": false,
   "obfs": "hysteria",
   "auth": {
- 	  "mode": "passwords",
-      "config": ["zi"]
-         }
+    "mode": "passwords",
+    "config": ["testio"]
+  },
+  "up_mbps": 100,
+  "down_mbps": 100,
+  "disable_udp": false
 }
 EOF
 
