@@ -199,23 +199,25 @@ StandardError=append:/var/log/slowdns.log
 WantedBy=multi-user.target
 EOF
 
-# ===================== IPTABLES (Compatible ZIVPN) =====================
-# 1. NETTOYAGE COMPLET PREROUTING
-iptables -t nat -F PREROUTING
+# ===================== IPTABLES SLOWDNS (SAFE) =====================
 
-# 2. REDIRECT CORRIGÉ (TCP + UDP port 53 → 5300)
+# Autoriser le port local SlowDNS
+iptables -C INPUT -p udp --dport 5300 -j ACCEPT 2>/dev/null || \
 iptables -A INPUT -p udp --dport 5300 -j ACCEPT
+
+iptables -C INPUT -p tcp --dport 5300 -j ACCEPT 2>/dev/null || \
 iptables -A INPUT -p tcp --dport 5300 -j ACCEPT
+
+# Supprimer uniquement les anciennes règles SlowDNS (si présentes)
+iptables -t nat -D PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 5300 2>/dev/null || true
+iptables -t nat -D PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports 5300 2>/dev/null || true
+
+# Ajouter les redirections DNS vers SlowDNS
 iptables -t nat -A PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 5300
 iptables -t nat -A PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports 5300
 
-# 3. SAUVEGARDE + RESTART
+# Sauvegarde et redémarrage
 netfilter-persistent save
 systemctl restart slowdns
-
-log "✅ IPTables SlowDNS configuré (compatible ZIVPN)"
-
-systemctl daemon-reload
-systemctl enable --now slowdns.service
 
 log "✅ SlowDNS installé, sécurisé et compatible UDP Request"
