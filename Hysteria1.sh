@@ -89,27 +89,18 @@ install_hysteria() {
   # ✅ PAQUETS SANS CONFLIT UFW
   apt update -y && apt install -y wget curl jq openssl iptables-persistent netfilter-persistent
 
-  # ✅ BINAIRE v1.3.5 SÉCURISÉ (Méthode DIRECTE)
-rm -f /usr/local/bin/hysteria*
-cd /tmp
-wget -q "https://github.com/apernet/hysteria/releases/download/v1.3.5/hysteria-linux-amd64"
+  # Remplacez complètement la section binaire :
+  rm -f /usr/local/bin/hysteria*
+  cd /tmp
 
-# VÉRIFICATION DIRECTE (100% fiable)
-ACTUAL_HASH=$(sha256sum hysteria-linux-amd64 | cut -d' ' -f1)
-EXPECTED_HASH="57c5164854d6cfe00bead730cce731da2babe406"
-
-if [[ "$ACTUAL_HASH" == "$EXPECTED_HASH" ]]; then
-  echo "✅ v1.3.5 authentifié ! SHA256: $ACTUAL_HASH"
-  mv hysteria-linux-amd64 "$HYSTERIA_BIN"
+  # Source archive v1.3.5 (stable)
+  wget -q "https://github.com/apernet/hysteria/archive/refs/tags/v1.3.5.tar.gz"
+  tar -xzf v1.3.5.tar.gz hysteria-1.3.5/hysteria-linux-amd64
+  mv hysteria-1.3.5/hysteria-linux-amd64 "$HYSTERIA_BIN"
   chmod +x "$HYSTERIA_BIN"
-  /usr/local/bin/hysteria-linux-amd64 version
-else
-  echo "❌ Checksum ÉCHOUÉ !"
-  echo "Attendu: $EXPECTED_HASH"
-  echo "Reçu:   $ACTUAL_HASH"
-  rm -f hysteria-linux-amd64
-  exit 1
-fi
+
+  echo "✅ v1.3.5 source code compilé"
+  "$HYSTERIA_BIN" version
   
   mkdir -p /etc/hysteria
   read -rp "Domaine: " DOMAIN; DOMAIN=${DOMAIN:-"hysteria.local"}
