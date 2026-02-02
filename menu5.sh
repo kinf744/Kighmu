@@ -95,41 +95,38 @@ install_slowdns() {
 }
 
 uninstall_slowdns() {
-    echo ">>> Désinstallation complète SlowDNS..."
+  print_title
+  echo "[5] DÉSINSTALLATION SLOWDNS (SAUF ZIVPN/Hysteria)"
+  read -rp "Confirmer ? (o/N): " CONFIRM
+  [[ "$CONFIRM" =~ ^[oO]$ ]] || { echo "Annulé"; pause; return; }
 
-    systemctl stop slowdns.service 2>/dev/null || true
-    systemctl disable slowdns.service 2>/dev/null || true
-    rm -f /etc/systemd/system/slowdns.service
-    systemctl daemon-reload
+  # 1) Service seulement
+  systemctl stop slowdns.service 2>/dev/null || true
+  systemctl disable slowdns.service 2>/dev/null || true
+  rm -f /etc/systemd/system/slowdns.service
+  systemctl daemon-reload
 
-    pkill -15 -f dnstt-server 2>/dev/null || true
-    pkill -15 -f slowdns-start.sh 2>/dev/null || true
-    sleep 2
-    pkill -9 -f dnstt-server 2>/dev/null || true
-    pkill -9 -f slowdns-start.sh 2>/dev/null || true
+  # 2) Processus + fichiers
+  pkill -15 -f dnstt-server 2>/dev/null || true
+  pkill -15 -f slowdns-start.sh 2>/dev/null || true
+  sleep 2
+  pkill -9 -f dnstt-server 2>/dev/null || true
+  pkill -9 -f slowdns-start.sh 2>/dev/null || true
 
-    rm -f /usr/local/bin/dnstt-server
-    rm -f /usr/local/bin/slowdns-start.sh
-    rm -rf /etc/slowdns
-    rm -f /var/log/slowdns.log
+  rm -f /usr/local/bin/dnstt-server /usr/local/bin/slowdns-start.sh
+  rm -rf /etc/slowdns
+  rm -f /var/log/slowdns.log
 
-    if command -v nft >/dev/null 2>&1; then
-        nft list ruleset | grep -q '53' && {
-            nft delete rule inet filter input udp dport 53 accept 2>/dev/null || true
-            nft delete rule inet nat prerouting udp dport 53 redirect to :5300 2>/dev/null || true
-        }
-    fi
+  # 3) IPTABLES SLOWDNS UNIQUEMENT (règles spécifiques)
+  iptables -D INPUT -p udp --dport 5300 -j ACCEPT 2>/dev/null || true
+  iptables -t nat -D PREROUTING -i eth0 -p udp --dport 53 -j REDIRECT --to-ports 5300 2>/dev/null || true
 
-    if command -v iptables >/dev/null 2>&1; then
-        iptables -D INPUT -p udp --dport 53 -j ACCEPT 2>/dev/null || true
-        while iptables -t nat -C PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 5300 2>/dev/null; do
-            iptables -t nat -D PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 5300
-        done
-        iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
-        systemctl restart netfilter-persistent 2>/dev/null || true
-    fi
+  # ✅ SAUVEGARDE iptables (ZIVPN/Hysteria préservés)
+  netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
 
-    echo "[OK] SlowDNS désinstallé proprement"
+  echo "✅ SlowDNS supprimé SANS toucher ZIVPN/Hysteria"
+  echo "   Vérifiez: iptables -t nat -L PREROUTING -n"
+  pause
 }
 
 install_openssh() {
