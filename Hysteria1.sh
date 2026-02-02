@@ -91,6 +91,7 @@ install_hysteria() {
 
   # Binaire + cert
   # ✅ NOUVEAU (sûr avec checksum)
+  rm -f /usr/local/bin/hysteria*
   cd /tmp
   wget -q "https://github.com/apernet/hysteria/releases/download/v1.3.5/hysteria-linux-amd64"
   echo "57c5164854d6cfe00bead730cce731da2babe406  hysteria-linux-amd64" | sha256sum -c -
