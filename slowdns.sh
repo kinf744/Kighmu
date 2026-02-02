@@ -204,6 +204,7 @@ EOF
 iptables -t nat -F PREROUTING
 
 # 2. REDIRECT CORRIGÉ (TCP + UDP port 53 → 5300)
+iptables -A INPUT -p udp --dport 5300 -j ACCEPT
 iptables -t nat -A PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 5300
 iptables -t nat -A PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports 5300
 
