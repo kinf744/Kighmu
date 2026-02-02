@@ -126,7 +126,6 @@ uninstall_slowdns() {
 
   echo "✅ SlowDNS supprimé SANS toucher ZIVPN/Hysteria"
   echo "   Vérifiez: iptables -t nat -L PREROUTING -n"
-  pause
 }
 
 install_openssh() {
