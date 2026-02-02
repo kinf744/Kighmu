@@ -319,22 +319,29 @@ delete_zivpn_user() {
 
 fix_zivpn() {
   print_title
-  echo "[4] FIX ZIVPN + SlowDNS (coexistence)"
+  echo "[4] IPTABLES ZIVPN (Hysteria préservé)"
   
-  # Force iptables legacy (pas de conflit nftables)
+  # Force iptables legacy
   update-alternatives --set iptables /usr/sbin/iptables-legacy 2>/dev/null || true
   
-  # Reset + recréation ZIVPN (préserve SlowDNS port 53)
-  iptables -t nat -F PREROUTING
-  iptables -A INPUT -p udp --dport 5667 -j ACCEPT 2>/dev/null || true
-  iptables -A INPUT -p udp --dport 36712 -j ACCEPT 2>/dev/null || true
-  iptables -t nat -A PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667
+  # ✅ IPTABLES INTELLIGENT (comme install)
+  iptables -C INPUT -p udp --dport 5667 -j ACCEPT 2>/dev/null || \
+    iptables -A INPUT -p udp --dport 5667 -j ACCEPT
   
-  netfilter-persistent save
+  iptables -C INPUT -p udp --dport 36712 -j ACCEPT 2>/dev/null || \
+    iptables -A INPUT -p udp --dport 36712 -j ACCEPT
+  
+  iptables -C INPUT -p udp --dport 6000:19999 -j ACCEPT 2>/dev/null || \
+    iptables -A INPUT -p udp --dport 6000:19999 -j ACCEPT
+  
+  iptables -t nat -C PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667 2>/dev/null || \
+    iptables -t nat -A PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667
+  
+  netfilter-persistent save 2>/dev/null || true
   systemctl restart zivpn.service
   
   echo "✅ ZIVPN fixé (6000-19999→5667)"
-  echo "   SlowDNS préservé (53→5300)"
+  echo "   ✅ Hysteria PRÉSERVÉ !"
 }
 
 # ---------- 5) Désinstallation ----------
