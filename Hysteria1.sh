@@ -105,7 +105,7 @@ install_hysteria() {
   cat > "$HYSTERIA_CONFIG" << 'EOF'
 {
   "listen": ":20000",
-  "exclude_port": [53,5300,5667,4466],
+  "exclude_port": [53,5300,36712,5667,4466],
   "cert": "/etc/hysteria/hysteria.crt",
   "key": "/etc/hysteria/hysteria.key",
   "obfs": "hysteria",
