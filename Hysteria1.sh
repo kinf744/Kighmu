@@ -33,7 +33,7 @@ hysteria_running() {
 print_title() {
   clear
   echo "╔═══════════════════════════════════════╗"
-  echo "║        HYSTERIA CONTROL PANEL v1         ║"
+  echo "║        HYSTERIA CONTROL PANEL v1      ║"
   echo "║     (Compatible @kighmu 🇨🇲)           ║"
   echo "╚═══════════════════════════════════════╝"
   echo
