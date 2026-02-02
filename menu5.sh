@@ -179,60 +179,33 @@ install_udp_custom() {
 
 
 uninstall_udp_custom() {
-    echo "--- 🗑️ Désinstallation udp-custom ---"
-    
-    # Vérifier si installé (MULTIPLES emplacements possibles)
-    SYSTEMD_FILE="/etc/systemd/system/udp-custom.service"
-    if [[ ! -f "$SYSTEMD_FILE" ]]; then
-        echo "ℹ️ udp-custom non installé."
-        read -p "Appuyez sur Entrée..."; return 0
-    fi
+  print_title
+  echo "[5] DÉSINSTALLATION UDP-CUSTOM (SAUF ZIVPN/Hysteria/SlowDNS)"
+  read -rp "Confirmer ? (o/N): " CONFIRM
+  [[ "$CONFIRM" =~ ^[oO]$ ]] || { echo "Annulé"; pause; return; }
 
-    echo "🛑 Arrêt et désactivation du service..."
-    systemctl stop udp-custom.service 2>/dev/null || true
-    systemctl disable udp-custom.service 2>/dev/null || true
+  # 1) Service seulement
+  systemctl stop udp-custom.service 2>/dev/null || true
+  systemctl disable udp-custom.service 2>/dev/null || true
+  rm -f /etc/systemd/system/udp-custom.service
+  systemctl daemon-reload
+  systemctl reset-failed udp-custom.service 2>/dev/null || true
 
-    echo "🗑️ Suppression service systemd..."
-    rm -f "$SYSTEMD_FILE"
-    systemctl daemon-reload
-    systemctl reset-failed udp-custom.service 2>/dev/null || true
+  # 2) Fichiers UDP-CUSTOM UNIQUEMENT
+  rm -f /usr/local/bin/udp-custom
+  rm -rf /etc/udp-custom
+  rm -f /var/log/udp-custom 2>/dev/null || true
 
-    # SUPPRESSION COMPLÈTE (tous les emplacements possibles)
-    echo "🗑️ Suppression binaire et fichiers..."
-    rm -f /usr/local/bin/udp-custom
-    rm -f /opt/udp-custom/bin/udp-custom-linux-amd64
-    rm -f /opt/udp-custom/bin/udp-custom
-    rm -rf /opt/udp-custom
-    rm -rf /root/udp
-    rm -rf /etc/udp-custom
-    rm -rf /var/log/udp-custom
+  # 3) IPTABLES UDP-CUSTOM UNIQUEMENT (EXACT match installation)
+  iptables -D INPUT -p udp --dport 36712 -j ACCEPT 2>/dev/null || true
+  iptables -t nat -D PREROUTING -p udp --dport 36712 -j DNAT --to-destination :36712 2>/dev/null || true
 
-    # Nettoyage utilisateur si créé
-    userdel udpuser 2>/dev/null || true
-    rm -rf /home/udpuser 2>/dev/null || true
+  # ✅ SAUVEGARDE iptables (AUTRES tunnels préservés)
+  netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
 
-    # 🔓 FIREWALL COMPLET (tous les ports possibles)
-    echo "🔓 Fermeture ports firewall..."
-    for port in 36712 54000; do
-        iptables -D INPUT -p udp --dport "$port" -j ACCEPT 2>/dev/null || true
-        iptables -D INPUT -p udp --dport "$port" -j ACCEPT 2>/dev/null || true
-    done
-    
-    # NAT si présent
-    iptables -t nat -D PREROUTING -p udp --dport 36712 -j DNAT --to-destination :36712 2>/dev/null || true
-    netfilter-persistent save 2>/dev/null || true
-
-    echo "✅ udp-custom désinstallé avec succès !"
-    
-    # Vérification finale DÉTAILLÉE
-    echo
-    echo "🔍 VÉRIFICATION FINALE :"
-    [[ ! -f "$SYSTEMD_FILE" ]] && echo "   ✅ Service supprimé" || echo "   ❌ Service reste"
-    ! systemctl list-unit-files | grep -q udp-custom.service && echo "   ✅ systemd clean" || echo "   ❌ systemd sale"
-    ! ss -ulnp | grep -q :36712 && echo "   ✅ Port 36712 libéré" || echo "   ❌ Port 36712 occupé"
-    ! ss -ulnp | grep -q :54000 && echo "   ✅ Port 54000 libéré" || echo "   ❌ Port 54000 occupé"
-    
-    read -p "Appuyez sur Entrée..."
+  echo "✅ UDP-Custom supprimé SANS toucher autres tunnels"
+  echo "   Vérifiez: iptables -L INPUT -n | grep 36712"
+  pause
 }
 
 install_socks_python() {
