@@ -105,7 +105,7 @@ install_zivpn() {
   cat > "$ZIVPN_CONFIG" << 'EOF'
 {
   "listen": ":5667",
-  "exclude_port": [53,5300,4466],
+  "exclude_port": [53,5300,4466,20000],
   "cert": "/etc/zivpn/zivpn.crt",
   "key": "/etc/zivpn/zivpn.key",
   "obfs": "zivpn",
