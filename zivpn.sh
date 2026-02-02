@@ -142,9 +142,6 @@ EOF
   iptables -C INPUT -p udp --dport 5667 -j ACCEPT 2>/dev/null || \
   iptables -A INPUT -p udp --dport 5667 -j ACCEPT
 
-  iptables -C INPUT -p udp --dport 36712 -j ACCEPT 2>/dev/null || \
-  iptables -A INPUT -p udp --dport 36712 -j ACCEPT
-
   iptables -C INPUT -p udp --dport 6000:19999 -j ACCEPT 2>/dev/null || \
   iptables -A INPUT -p udp --dport 6000:19999 -j ACCEPT
 
@@ -348,31 +345,30 @@ fix_zivpn() {
 
 uninstall_zivpn() {
   print_title
-  echo "[5] DÉSINSTALLATION"
+  echo "[5] DÉSINSTALLATION ZIVPN (SAUF autres tunnels)"
   read -rp "Confirmer ? (o/N): " CONFIRM
   [[ "$CONFIRM" =~ ^[oO]$ ]] || { echo "Annulé"; pause; return; }
 
-  # Arrêt et désactivation du service
+  # 1) Service seulement
   systemctl stop "$ZIVPN_SERVICE" 2>/dev/null || true
   systemctl disable "$ZIVPN_SERVICE" 2>/dev/null || true
   rm -f "/etc/systemd/system/$ZIVPN_SERVICE"
   systemctl daemon-reload
 
-  # Suppression binaire + dossiers
+  # 2) Fichiers seulement
   rm -f "$ZIVPN_BIN"
   rm -rf /etc/zivpn
 
-  # Nettoyage firewall / NAT
-  # 1) Supprimer la règle DNAT spécifique si tu veux être précis :
+  # 3) IPTABLES ZIVPN UNIQUEMENT (règles spécifiques -C)
   iptables -t nat -D PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667 2>/dev/null || true
-  # 2) Et à défaut, tu peux garder un flush global si tu préfères :
-  iptables -t nat -F PREROUTING 2>/dev/null || true
+  iptables -D INPUT -p udp --dport 5667 -j ACCEPT 2>/dev/null || true
+  iptables -D INPUT -p udp --dport 6000:19999 -j ACCEPT 2>/dev/null || true
 
-  # UFW : ta ligne actuelle ne sert à rien car tu n'as pas créé de règle 6000:19999/udp via ufw
-  # soit tu vires complètement la ligne ufw, soit tu mets un reset général si tu veux :
-  # ufw --force reset >/dev/null 2>&1 || true
+  # ✅ SAUVEGARDE iptables (RESTORE autres tunnels)
+  netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
 
-  echo "✅ ZIVPN supprimé"
+  echo "✅ ZIVPN supprimé SANS toucher Hysteria/SlowDNS"
+  echo "   Vérifiez: iptables -t nat -L PREROUTING -n"
   pause
 }
 
