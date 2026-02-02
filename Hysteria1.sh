@@ -138,12 +138,16 @@ EOF
 
   systemctl daemon-reload && systemctl enable "$HYSTERIA_SERVICE"
 
-  # 🔥 FIREWALL TRIPLE TUNNEL
-  iptables -A INPUT -p udp --dport 20000 -j ACCEPT   # HYSTERIA interne
-  iptables -A INPUT -p udp --dport 20000:50000 -j ACCEPT  # ZIVPN clients
+  # ✅ IPTABLES INTELLIGENT (pas de flush !)
+  iptables -C INPUT -p udp --dport 20000 -j ACCEPT 2>/dev/null || \
+  iptables -A INPUT -p udp --dport 20000 -j ACCEPT
+
+  iptables -C INPUT -p udp --dport 20000:50000 -j ACCEPT 2>/dev/null || \
+  iptables -A INPUT -p udp --dport 20000:50000 -j ACCEPT
+
+  iptables -t nat -C PREROUTING -p udp --dport 20000:50000 -j DNAT --to-destination :20000 2>/dev/null || \
   iptables -t nat -A PREROUTING -p udp --dport 20000:50000 -j DNAT --to-destination :20000
-  
-  # Persistance iptables
+
   netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
 
   # Optimisations réseau
