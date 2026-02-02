@@ -118,6 +118,37 @@ if [[ -f "$ZIVPN_CONFIG" && -f "$ZIVPN_USER_FILE" ]]; then
     echo -e "${GREEN}✅ ZIVPN SYNCHRONISÉ !${RESET}"
 fi
 
+# ================== HYSTERIA SYNC (NOUVEAU) ==================
+HYSTERIA_CONFIG="/etc/hysteria/config.json"
+HYSTERIA_USER_FILE="/etc/hysteria/users.txt"
+
+if [[ -f "$HYSTERIA_CONFIG" && -f "$HYSTERIA_USER_FILE" ]]; then
+    command -v jq >/dev/null 2>&1 || { echo "jq manquant"; exit 0; }
+
+    # Format Hysteria : username|password|expire_date (comme ZIVPN)
+    HYSTERIA_LINE="$username|$password|$expire_date"
+    
+    # Ajout/remplace
+    tmp=$(mktemp)
+    grep -v "^$username|" "$HYSTERIA_USER_FILE" > "$tmp" 2>/dev/null || true
+    echo "$HYSTERIA_LINE" >> "$tmp"
+    mv "$tmp" "$HYSTERIA_USER_FILE"
+    chmod 600 "$HYSTERIA_USER_FILE"
+
+    # Update config Hysteria (passwords actifs)
+    TODAY=$(date +%Y-%m-%d)
+    PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$HYSTERIA_USER_FILE" | \
+                sort -u | paste -sd, -)
+
+    jq --arg passwords "$PASSWORDS" \
+       '.auth.config = ($passwords | split(","))' \
+       "$HYSTERIA_CONFIG" > /tmp/hysteria.json && \
+    mv /tmp/hysteria.json "$HYSTERIA_CONFIG" && \
+    systemctl restart hysteria.service
+
+    echo -e "${GREEN}✅ HYSTERIA SYNCHRONISÉ !${RESET}"
+fi
+
 # Ajout automatique de l'affichage du banner personnalisé au login shell
 BANNER_PATH="/etc/ssh/sshd_banner"
 
