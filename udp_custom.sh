@@ -27,8 +27,9 @@ cat > "$CONFIG_FILE" << 'EOF'
 }
 EOF
 
-# 4️⃣ IPTABLES
-iptables -I INPUT -p udp --dport 36712 -j ACCEPT
+# 4️⃣ IPTABLES INTELLIGENT 
+iptables -C INPUT -p udp --dport 36712 -j ACCEPT 2>/dev/null || \
+iptables -A INPUT -p udp --dport 36712 -j ACCEPT
 netfilter-persistent save
 
 # 5️⃣ SYSTEMD CORRIGÉ (**CLÉ : `server` comme ZIVPN**)
