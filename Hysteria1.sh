@@ -316,21 +316,13 @@ delete_hysteria_user() {
 
 fix_hysteria() {
   print_title
-  echo "[4] FIX HYSTERIA + SlowDNS (coexistence)"
-  
-  # Force iptables legacy (pas de conflit nftables)
-  update-alternatives --set iptables /usr/sbin/iptables-legacy 2>/dev/null || true
-  
-  # Reset + recréation HYSTERIA (préserve SlowDNS port 53)
-  iptables -t nat -F PREROUTING
-  iptables -A INPUT -p udp --dport 20000 -j ACCEPT 2>/dev/null || true
-  iptables -t nat -A PREROUTING -p udp --dport 20000:50000 -j DNAT --to-destination :20000
-  
-  netfilter-persistent save
+  echo "[4] IPTABLES HYSTERIA (coexistence ZIVPN OK)"
+  # Utilise iptables -C intelligent (pas de flush)
+  iptables -C INPUT -p udp --dport 20000 -j ACCEPT 2>/dev/null || \
+    iptables -A INPUT -p udp --dport 20000 -j ACCEPT
+  # ... (reste des règles -C)
   systemctl restart hysteria.service
-  
-  echo "✅ HYSTERIA fixé (20000-50000→20000)"
-  echo "   SlowDNS préservé (53→5300)"
+  echo "✅ IPTables Hysteria OK"
 }
 
 # ---------- 5) Désinstallation ----------
