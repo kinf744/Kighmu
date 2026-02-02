@@ -214,14 +214,15 @@ create_hysteria_user() {
   PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$HYSTERIA_USER_FILE" | \
               sort -u | paste -sd, -)
 
-  # ✅ JQ CORRIGÉ (string → array avec split)
-  if jq --arg passwords "$PASSWORDS" \
-        '.auth.config = ($passwords | split(","))' \
-        "$HYSTERIA_CONFIG" > /tmp/config.json 2>/dev/null; then
-    
-    # Vérif JSON valide
-    if jq empty /tmp/config.json >/dev/null 2>&1; then
-      mv /tmp/config.json "$HYSTERIA_CONFIG"
+  # ✅ SIMPLE ET SÛR (remplace les 10 lignes jq)
+  if [[ -n "$PASSWORDS" ]]; then
+    echo "$PASSWORDS" | jq -Rs '. | split(",")' > /tmp/pwords.json && \
+    jq --argjson passwords "$(cat /tmp/pwords.json)" \
+       '.auth.config = $passwords' \
+       "$HYSTERIA_CONFIG" > /tmp/config.json && \
+    jq empty /tmp/config.json >/dev/null 2>&1 && \
+    mv /tmp/config.json "$HYSTERIA_CONFIG" && rm -f /tmp/pwords.json
+  fi
       systemctl restart "$HYSTERIA_SERVICE"
       
       IP=$(hostname -I | awk '{print $1}')
