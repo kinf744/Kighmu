@@ -89,12 +89,9 @@ install_hysteria() {
   # ✅ PAQUETS SANS CONFLIT UFW
   apt update -y && apt install -y wget curl jq openssl iptables-persistent netfilter-persistent
 
-  # BINAIRE v1.3.5 (GitHub direct + version check)
-rm -f /usr/local/bin/hysteria*
-cd /tmp
-wget -q "https://github.com/apernet/hysteria/releases/download/v1.3.5/hysteria-linux-amd64"
-mv hysteria-linux-amd64 "$HYSTERIA_BIN"
-chmod +x "$HYSTERIA_BIN"
+  # Binaire + cert
+  wget -q "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/hysteria-linux-amd64" -O "$HYSTERIA_BIN"
+  chmod +x "$HYSTERIA_BIN"
   
   mkdir -p /etc/hysteria
   read -rp "Domaine: " DOMAIN; DOMAIN=${DOMAIN:-"hysteria.local"}
