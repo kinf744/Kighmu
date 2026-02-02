@@ -199,7 +199,7 @@ StandardError=append:/var/log/slowdns.log
 WantedBy=multi-user.target
 EOF
 
-# ===================== IPTABLES SLOWDNS (FIX) =====================
+# ===================== IPTABLES SLOWDNS (PROPRE) =====================
 
 # Autoriser SlowDNS local
 iptables -C INPUT -p udp --dport 5300 -j ACCEPT 2>/dev/null || \
@@ -209,22 +209,16 @@ iptables -C INPUT -p tcp --dport 5300 -j ACCEPT 2>/dev/null || \
 iptables -A INPUT -p tcp --dport 5300 -j ACCEPT
 
 
-# Nettoyage ciblé SlowDNS
+# Nettoyage ciblé
 iptables -t nat -D PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 5300 2>/dev/null || true
 iptables -t nat -D PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports 5300 2>/dev/null || true
-iptables -t nat -D OUTPUT     -p udp --dport 53 -j REDIRECT --to-ports 5300 2>/dev/null || true
-iptables -t nat -D OUTPUT     -p tcp --dport 53 -j REDIRECT --to-ports 5300 2>/dev/null || true
 
 
-# 🔥 INSERT EN PRIORITÉ (CRITIQUE)
+# 🔥 Redirection UNIQUEMENT trafic entrant client
 iptables -t nat -I PREROUTING 1 -p udp --dport 53 -j REDIRECT --to-ports 5300
 iptables -t nat -I PREROUTING 1 -p tcp --dport 53 -j REDIRECT --to-ports 5300
 
-iptables -t nat -I OUTPUT 1 -p udp --dport 53 -j REDIRECT --to-ports 5300
-iptables -t nat -I OUTPUT 1 -p tcp --dport 53 -j REDIRECT --to-ports 5300
 
-
-# Sauvegarde
 netfilter-persistent save
 systemctl restart slowdns
 
