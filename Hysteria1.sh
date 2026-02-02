@@ -4,7 +4,7 @@ set -euo pipefail
 
 HYSTERIA_BIN="/usr/local/bin/hysteria-linux-amd64"
 HYSTERIA_SERVICE="hysteria.service"
-HYSTERIA_CONFIG="/etc/hysteria/config.yaml"
+HYSTERIA_CONFIG="/etc/hysteria/config.json"
 HYSTERIA_USER_FILE="/etc/hysteria/users.txt"
 HYSTERIA_DOMAIN_FILE="/etc/hysteria/domain.txt"
 
@@ -90,7 +90,7 @@ install_hysteria() {
   apt update -y && apt install -y wget curl jq openssl iptables-persistent netfilter-persistent
 
   # Binaire + cert
-  wget -q "https://github.com/apernet/hysteria/releases/download/app/v2.7.0/hysteria-linux-amd64" -O "$HYSTERIA_BIN"
+  wget -q "https://github.com/apernet/hysteria/releases/download/v1.3.5/hysteria-linux-amd64" -O "$HYSTERIA_BIN"
   chmod +x "$HYSTERIA_BIN"
   
   mkdir -p /etc/hysteria
