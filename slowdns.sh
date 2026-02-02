@@ -200,15 +200,16 @@ WantedBy=multi-user.target
 EOF
 
 # ===================== IPTABLES (Compatible ZIVPN) =====================
-iptables -C INPUT -p udp --dport 5300 -j ACCEPT 2>/dev/null || \
-iptables -A INPUT -p udp --dport 5300 -j ACCEPT
+# 1. NETTOYAGE COMPLET PREROUTING
+iptables -t nat -F PREROUTING
 
-iptables -C PREROUTING -t nat -i eth0 -p udp --dport 53 -j REDIRECT --to-ports 5300 2>/dev/null || \
-iptables -t nat -A PREROUTING -i eth0 -p udp --dport 53 -j REDIRECT --to-ports 5300
+# 2. REDIRECT CORRIGÉ (TCP + UDP port 53 → 5300)
+iptables -t nat -A PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 5300
+iptables -t nat -A PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports 5300
 
-# Persistance iptables
-apt install -y iptables-persistent >/dev/null 2>&1 || true
-netfilter-persistent save >/dev/null 2>&1 || true
+# 3. SAUVEGARDE + RESTART
+netfilter-persistent save
+systemctl restart slowdns
 
 log "✅ IPTables SlowDNS configuré (compatible ZIVPN)"
 
