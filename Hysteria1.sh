@@ -105,7 +105,7 @@ install_hysteria() {
   cat > "$HYSTERIA_CONFIG" << 'EOF'
 {
   "server": "$DOMAIN",
-  "listen": "20000",
+  "listen": ":20000",
   "protocol": "udp",
   "cert": "/etc/hysteria/hysteria.crt",
   "key": "/etc/hysteria/hysteria.key",
