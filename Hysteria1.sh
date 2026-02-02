@@ -118,7 +118,7 @@ install_hysteria() {
   "obfs": "hysteria",
   "auth": {
  	  "mode": "passwords",
-    "config": ["zi"]
+      "config": ["zi"]
          }
 }
 EOF
