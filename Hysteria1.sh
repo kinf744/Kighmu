@@ -89,17 +89,25 @@ install_hysteria() {
   # ✅ PAQUETS SANS CONFLIT UFW
   apt update -y && apt install -y wget curl jq openssl iptables-persistent netfilter-persistent
 
-  # Binaire + cert (CORRIGÉ DÉFINITIVEMENT)
+  # ✅ BINAIRE v1.3.5 SÉCURISÉ (Méthode DIRECTE)
 rm -f /usr/local/bin/hysteria*
 cd /tmp
 wget -q "https://github.com/apernet/hysteria/releases/download/v1.3.5/hysteria-linux-amd64"
-CHECKSUM=$(sha256sum hysteria-linux-amd64 | cut -d' ' -f1)
-if [[ "$CHECKSUM" == "57c5164854d6cfe00bead730cce731da2babe406" ]]; then
-  echo "✅ v1.3.5 authentifié (SHA256: $CHECKSUM)"
+
+# VÉRIFICATION DIRECTE (100% fiable)
+ACTUAL_HASH=$(sha256sum hysteria-linux-amd64 | cut -d' ' -f1)
+EXPECTED_HASH="57c5164854d6cfe00bead730cce731da2babe406"
+
+if [[ "$ACTUAL_HASH" == "$EXPECTED_HASH" ]]; then
+  echo "✅ v1.3.5 authentifié ! SHA256: $ACTUAL_HASH"
   mv hysteria-linux-amd64 "$HYSTERIA_BIN"
   chmod +x "$HYSTERIA_BIN"
+  /usr/local/bin/hysteria-linux-amd64 version
 else
-  echo "❌ Checksum KO: $CHECKSUM ≠ v1.3.5"
+  echo "❌ Checksum ÉCHOUÉ !"
+  echo "Attendu: $EXPECTED_HASH"
+  echo "Reçu:   $ACTUAL_HASH"
+  rm -f hysteria-linux-amd64
   exit 1
 fi
   
