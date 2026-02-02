@@ -209,40 +209,34 @@ create_hysteria_user() {
   mv "$tmp" "$HYSTERIA_USER_FILE"
   chmod 600 "$HYSTERIA_USER_FILE"
 
-  # ✅ EXTRACTION PASSWORDS (NOUVEAU : simple et sûr)
+  # ✅ EXTRACTION PASSWORDS + UPDATE CONFIG (simple et sûr)
   TODAY=$(date +%Y-%m-%d)
   PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$HYSTERIA_USER_FILE" | \
               sort -u | paste -sd, -)
 
-  # ✅ SIMPLE ET SÛR (remplace les 10 lignes jq)
-  if [[ -n "$PASSWORDS" ]]; then
-    echo "$PASSWORDS" | jq -Rs '. | split(",")' > /tmp/pwords.json && \
-    jq --argjson passwords "$(cat /tmp/pwords.json)" \
-       '.auth.config = $passwords' \
-       "$HYSTERIA_CONFIG" > /tmp/config.json && \
-    jq empty /tmp/config.json >/dev/null 2>&1 && \
-    mv /tmp/config.json "$HYSTERIA_CONFIG" && rm -f /tmp/pwords.json
-  fi
-      systemctl restart "$HYSTERIA_SERVICE"
-      
-      IP=$(hostname -I | awk '{print $1}')
-      DOMAIN=$(cat "$HYSTERIA_DOMAIN_FILE" 2>/dev/null || echo "$IP")
+  PASSWORDS=${PASSWORDS:-"zi"}  # Fallback si vide
+  if jq --arg passwords "$PASSWORDS" \
+        '.auth.config = ($passwords | split(",") | map(lstrip | rstrip))' \
+        "$HYSTERIA_CONFIG" > /tmp/config.json 2>/dev/null && \
+     jq empty /tmp/config.json >/dev/null 2>&1; then
+    mv /tmp/config.json "$HYSTERIA_CONFIG"
+    systemctl restart "$HYSTERIA_SERVICE"
+    
+    IP=$(hostname -I | awk '{print $1}')
+    DOMAIN=$(cat "$HYSTERIA_DOMAIN_FILE" 2>/dev/null || echo "$IP")
 
-      echo
-      echo "✅ 𝗨𝗧𝗜𝗟𝗜𝗦𝗔𝗧𝗘𝗨𝗥 𝗖𝗥𝗘𝗘𝗥"
-      echo "━━━━━━━━━━━━━━━━━━━━━"
-      echo "🌐 𝗗𝗼𝗺𝗮𝗶𝗻𝗲  : $DOMAIN"
-      echo "🎭 𝗢𝗯𝗳𝘀     : hysteria"
-      echo "🔐 𝗣𝗮𝘀𝘀𝘄𝗼𝗿𝗱 : $PASS"
-      echo "📅 𝗘𝘅𝗽𝗶𝗿𝗲   : $EXPIRE"
-      echo "🔌 𝐏𝐨𝐫𝐭    : 20000-50000"
-      echo "━━━━━━━━━━━━━━━━━━━━━"
-    else
-      echo "❌ JSON invalide → rollback"
-      rm -f /tmp/config.json
-    fi
+    echo
+    echo "✅ 𝗨𝗧𝗜𝗟𝗜𝗦𝗔𝗧𝗘𝗨𝗥 𝗖𝗥𝗘𝗘𝗥"
+    echo "━━━━━━━━━━━━━━━━━━━━━"
+    echo "🌐 𝗗𝗼𝗺𝗮𝗶𝗻𝗲  : $DOMAIN"
+    echo "🎭 𝗢𝗯𝗳𝘀     : hysteria"
+    echo "🔐 𝗣𝗮𝘀𝘀𝘄𝗼𝗿𝗱 : $PASS"
+    echo "📅 𝗘𝘅𝗽𝗶𝗿𝗲   : $EXPIRE"
+    echo "🔌 𝐏𝐨𝐫𝐭    : 20000-50000"
+    echo "━━━━━━━━━━━━━━━━━━━━━"
   else
-    echo "❌ Erreur jq → config inchangée"
+    echo "❌ Erreur mise à jour config → rollback"
+    rm -f /tmp/config.json
   fi
 
   pause
