@@ -104,7 +104,7 @@ install_hysteria() {
   # config.json
   cat > "$HYSTERIA_CONFIG" << 'EOF'
 {
-  "server": "$DOMAIN",
+  "server": "${DOMAIN}",
   "listen": ":20000",
   "protocol": "udp",
   "cert": "/etc/hysteria/hysteria.crt",
