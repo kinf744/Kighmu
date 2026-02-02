@@ -104,15 +104,22 @@ install_hysteria() {
   # config.json
   cat > "$HYSTERIA_CONFIG" << 'EOF'
 {
-  "listen": ":20000",
-  "exclude_port": [53,5300,36712,5667,4466],
+  "server": "$DOMAIN",
+  "listen": "20000",
+  "protocol": "udp",
   "cert": "/etc/hysteria/hysteria.crt",
   "key": "/etc/hysteria/hysteria.key",
+  "up": "100 Mbps",
+  "up_mbps": 100,
+  "down": "100 Mbps",
+  "down_mbps": 100,
+  "disable_udp": false,
+  "insecure": false,
   "obfs": "hysteria",
   "auth": {
-    "mode": "passwords",
+ 	  "mode": "passwords",
     "config": ["zi"]
-  }
+         }
 }
 EOF
 
