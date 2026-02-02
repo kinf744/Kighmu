@@ -172,7 +172,6 @@ EOF
     echo "✅ HYSTERIA installé et actif !"
     echo "📱 Config HTTP INJECTOR App:"
     echo "   udp server: $IP"
-    echo "   Password: zi"
   else
     echo "❌ HYSTERIA ne démarre pas → journalctl -u hysteria.service"
   fi
