@@ -4,7 +4,7 @@ set -euo pipefail
 
 HYSTERIA_BIN="/usr/local/bin/hysteria-linux-amd64"
 HYSTERIA_SERVICE="hysteria.service"
-HYSTERIA_CONFIG="/etc/hysteria/config.json"
+HYSTERIA_CONFIG="/etc/hysteria/config.yaml"
 HYSTERIA_USER_FILE="/etc/hysteria/users.txt"
 HYSTERIA_DOMAIN_FILE="/etc/hysteria/domain.txt"
 
