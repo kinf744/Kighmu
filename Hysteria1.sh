@@ -89,14 +89,14 @@ install_hysteria() {
   # ✅ PAQUETS SANS CONFLIT UFW
   apt update -y && apt install -y wget curl jq openssl iptables-persistent netfilter-persistent
 
-  # Binaire + cert
-  # ✅ NOUVEAU (sûr avec checksum)
-  rm -f /usr/local/bin/hysteria*
-  cd /tmp
-  wget -q "https://github.com/apernet/hysteria/releases/download/v1.3.5/hysteria-linux-amd64"
-  echo "57c5164854d6cfe00bead730cce731da2babe406  hysteria-linux-amd64" | sha256sum -c -
-  mv hysteria-linux-amd64 "$HYSTERIA_BIN"
-  chmod +x "$HYSTERIA_BIN"
+  # Binaire + cert (CORRIGÉ)
+rm -f /usr/local/bin/hysteria*
+cd /tmp
+wget -q "https://github.com/apernet/hysteria/releases/download/v1.3.5/hysteria-linux-amd64"
+echo "57c5164854d6cfe00bead730cce731da2babe406  hysteria-linux-amd64" | sha256sum -c - && \
+echo "✅ v1.3.5 authentifié" || { echo "❌ Checksum échoué"; exit 1; }
+mv hysteria-linux-amd64 "$HYSTERIA_BIN"
+chmod +x "$HYSTERIA_BIN"
   
   mkdir -p /etc/hysteria
   read -rp "Domaine: " DOMAIN; DOMAIN=${DOMAIN:-"hysteria.local"}
