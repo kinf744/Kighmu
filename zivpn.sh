@@ -138,15 +138,21 @@ EOF
 
   systemctl daemon-reload && systemctl enable "$ZIVPN_SERVICE"
 
-  # 🔥 FIREWALL TRIPLE TUNNEL
-  iptables -A INPUT -p udp --dport 5667 -j ACCEPT   # ZIVPN interne
-  iptables -A INPUT -p udp --dport 36712 -j ACCEPT  # UDP Custom
-  iptables -A INPUT -p udp --dport 6000:19999 -j ACCEPT  # ZIVPN clients
-  iptables -t nat -A PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667
-  
-  # Persistance iptables
-  netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
+  # ✅ IPTABLES INTELLIGENT (pas de flush !)
+  iptables -C INPUT -p udp --dport 5667 -j ACCEPT 2>/dev/null || \
+  iptables -A INPUT -p udp --dport 5667 -j ACCEPT
 
+  iptables -C INPUT -p udp --dport 36712 -j ACCEPT 2>/dev/null || \
+  iptables -A INPUT -p udp --dport 36712 -j ACCEPT
+
+  iptables -C INPUT -p udp --dport 6000:19999 -j ACCEPT 2>/dev/null || \
+  iptables -A INPUT -p udp --dport 6000:19999 -j ACCEPT
+
+  iptables -t nat -C PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667 2>/dev/null || \
+  iptables -t nat -A PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667
+
+  netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
+  
   # Optimisations réseau
   sysctl -w net.core.rmem_max=16777216
   sysctl -w net.core.wmem_max=16777216
