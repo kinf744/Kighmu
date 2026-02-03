@@ -90,7 +90,7 @@ install_hysteria() {
   apt update -y && apt install -y wget curl jq openssl iptables-persistent netfilter-persistent
 
   # Binaire + cert
-  wget -q "https://github.com/apernet/hysteria/releases/download/v1.3.4/hysteria-linux-amd64" -O "$HYSTERIA_BIN"
+  wget -q "https://github.com/apernet/hysteria/releases/download/v1.3.5/hysteria-linux-amd64" -O "$HYSTERIA_BIN"
   chmod +x "$HYSTERIA_BIN"
   
   mkdir -p /etc/hysteria
@@ -102,17 +102,20 @@ install_hysteria() {
   chmod 600 "$KEY"; chmod 644 "$CERT"
 
   # config.json
-  cat > "$HYSTERIA_CONFIG" << 'EOF'
+  cat > "$HYSTERIA_CONFIG" << EOF
 {
   "listen": ":20000",
-  "exclude_port": [53,5300,36712,5667,4466],
+  "protocol": "udp", 
   "cert": "/etc/hysteria/hysteria.crt",
   "key": "/etc/hysteria/hysteria.key",
   "obfs": "hysteria",
   "auth": {
     "mode": "passwords",
-    "config": ["zi"]
-  }
+    "config": ["testio"]
+  },
+  "up_mbps": 100,
+  "down_mbps": 100,
+  "disable_udp": false
 }
 EOF
 
@@ -165,7 +168,6 @@ EOF
     echo "✅ HYSTERIA installé et actif !"
     echo "📱 Config HTTP INJECTOR App:"
     echo "   udp server: $IP"
-    echo "   Password: zi"
   else
     echo "❌ HYSTERIA ne démarre pas → journalctl -u hysteria.service"
   fi
@@ -203,40 +205,44 @@ create_hysteria_user() {
   mv "$tmp" "$HYSTERIA_USER_FILE"
   chmod 600 "$HYSTERIA_USER_FILE"
 
-  # ✅ EXTRACTION PASSWORDS (NOUVEAU : simple et sûr)
+  # ✅ EXTRACTION PASSWORDS + UPDATE CONFIG (ULTRA-SIMPLE)
   TODAY=$(date +%Y-%m-%d)
   PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$HYSTERIA_USER_FILE" | \
               sort -u | paste -sd, -)
 
-  # ✅ JQ CORRIGÉ (string → array avec split)
-  if jq --arg passwords "$PASSWORDS" \
-        '.auth.config = ($passwords | split(","))' \
-        "$HYSTERIA_CONFIG" > /tmp/config.json 2>/dev/null; then
-    
-    # Vérif JSON valide
-    if jq empty /tmp/config.json >/dev/null 2>&1; then
-      mv /tmp/config.json "$HYSTERIA_CONFIG"
-      systemctl restart "$HYSTERIA_SERVICE"
-      
-      IP=$(hostname -I | awk '{print $1}')
-      DOMAIN=$(cat "$HYSTERIA_DOMAIN_FILE" 2>/dev/null || echo "$IP")
-
-      echo
-      echo "✅ 𝗨𝗧𝗜𝗟𝗜𝗦𝗔𝗧𝗘𝗨𝗥 𝗖𝗥𝗘𝗘𝗥"
-      echo "━━━━━━━━━━━━━━━━━━━━━"
-      echo "🌐 𝗗𝗼𝗺𝗮𝗶𝗻𝗲  : $DOMAIN"
-      echo "🎭 𝗢𝗯𝗳𝘀     : hysteria"
-      echo "🔐 𝗣𝗮𝘀𝘀𝘄𝗼𝗿𝗱 : $PASS"
-      echo "📅 𝗘𝘅𝗽𝗶𝗿𝗲   : $EXPIRE"
-      echo "🔌 𝐏𝐨𝐫𝐭    : 20000-50000"
-      echo "━━━━━━━━━━━━━━━━━━━━━"
-    else
-      echo "❌ JSON invalide → rollback"
-      rm -f /tmp/config.json
-    fi
+  # ✅ FIX SIMPLE : direct array JSON (PAS de split complexe)
+  if [[ -n "$PASSWORDS" ]]; then
+    PASSWORDS=$(echo "$PASSWORDS" | sed 's/,/","/g' | sed 's/^/"/;s/$/"/')
+    jq --argjson passwords "[$PASSWORDS]" \
+       '.auth.config = $passwords' \
+       "$HYSTERIA_CONFIG" > /tmp/config.json 2>/dev/null && \
+    jq empty /tmp/config.json >/dev/null 2>&1 && \
+    mv /tmp/config.json "$HYSTERIA_CONFIG" && \
+    systemctl restart "$HYSTERIA_SERVICE"
   else
-    echo "❌ Erreur jq → config inchangée"
+    # Fallback "zi" si aucun user
+    jq '.auth.config = ["zi"]' "$HYSTERIA_CONFIG" > /tmp/config.json && \
+    jq empty /tmp/config.json >/dev/null 2>&1 && \
+    mv /tmp/config.json "$HYSTERIA_CONFIG" && \
+    systemctl restart "$HYSTERIA_SERVICE"
   fi
+      
+  IP=$(hostname -I | awk '{print $1}')
+  DOMAIN=$(cat "$HYSTERIA_DOMAIN_FILE" 2>/dev/null || echo "$IP")
+
+  echo
+  echo "✅ 𝗨𝗧𝗜𝗟𝗜𝗦𝗔𝗧𝗘𝗨𝗥 𝗖𝗥𝗘𝗘𝗥"
+  echo "━━━━━━━━━━━━━━━━━━━━━"
+  echo "🌐 𝗗𝗼𝗺𝗮𝗶𝗻𝗲  : $DOMAIN"
+  echo "🎭 𝗢𝗯𝗳𝘀     : hysteria"
+  echo "🔐 𝗣𝗮𝘀𝘀𝘄𝗼𝗿𝗱 : $PASS"
+  echo "📅 𝗘𝘅𝗽𝗶𝗿𝗲   : $EXPIRE"
+  echo "🔌 𝐏𝐨𝐫𝐭    : 20000-50000"
+  echo "━━━━━━━━━━━━━━━━━━━━━"
+  
+  # VÉRIFICATION synchro
+  echo "🔍 Passwords dans config:"
+  jq -r '.auth.config[]' "$HYSTERIA_CONFIG" 2>/dev/null || echo "❌ Erreur lecture config"
 
   pause
 }
