@@ -105,10 +105,19 @@ install_hysteria() {
   cat > "$HYSTERIA_CONFIG" << 'EOF'
 {
   "listen": ":20000",
-  "exclude_port": [53,5300,36712,5667,4466],
   "cert": "/etc/hysteria/hysteria.crt",
   "key": "/etc/hysteria/hysteria.key",
   "obfs": "hysteria",
+
+  "up_mbps": 150,
+  "down_mbps": 150,
+
+  "recv_window_conn": 33554432,
+  "recv_window_client": 8388608,
+
+  "disable_mtu_discovery": false,
+  "congestion": "bbr",
+
   "auth": {
     "mode": "passwords",
     "config": ["zi"]
