@@ -47,7 +47,7 @@
  
 
  ```bash
- apt-get update -y && apt-get upgrade -y && wget https://raw.githubusercontent.com/kinf744/Kighmu/main/install_kighmu.sh -O install_kighmu.sh && chmod +x install_kighmu.sh && bash install_kighmu.sh
+ apt-get update -y && apt-get upgrade -y && wget https://raw.githubusercontent.com/kinf744/adrieno/main/install_kighmu.sh -O install_kighmu.sh && chmod +x install_kighmu.sh && bash install_kighmu.sh
 ```
 
 
