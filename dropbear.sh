@@ -7,14 +7,13 @@ set -euo pipefail
 DROPBEAR_BIN="/usr/sbin/dropbear"
 DROPBEAR_DIR="/etc/dropbear"
 DROPBEAR_PORT=109
-LOG_FILE="/var/log/dropbear-port109.log"
 DROPBEAR_BANNER="/etc/dropbear/banner.txt"
+SYSTEMD_FILE="/etc/systemd/system/dropbear.service"
 
 # ==============================
-# DETECTION VERSION OS (DEBIAN + UBUNTU)
+# DETECTION VERSION OS (UBUNTU)
 # ==============================
 source /etc/os-release
-
 OS_ID="$ID"
 OS_VERSION="$VERSION_ID"
 
@@ -22,32 +21,27 @@ case "$OS_ID-$OS_VERSION" in
     ubuntu-20.04) DROPBEAR_VER="2019.78" ;;
     ubuntu-22.04) DROPBEAR_VER="2020.81" ;;
     ubuntu-24.04) DROPBEAR_VER="2022.83" ;;
-    debian-10)    DROPBEAR_VER="2019.78" ;;
-    debian-11)    DROPBEAR_VER="2022.83" ;;
-    debian-12)    DROPBEAR_VER="2022.83" ;;
-    *)            DROPBEAR_VER="2022.83" ;;
+    *) DROPBEAR_VER="2022.83" ;;
 esac
+
 BANNER="SSH-2.0-dropbear_$DROPBEAR_VER"
 
 # ==============================
-# COULEURS + FONCTIONS
+# COULEURS
 # ==============================
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-info()  { echo -e "${GREEN}[INFO]${NC} $1"; }
-warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
-error() { echo -e "${RED}[ERROR]${NC} $1"; }
+info(){ echo -e "${GREEN}[INFO]${NC} $1"; }
+warn(){ echo -e "${YELLOW}[WARN]${NC} $1"; }
+error(){ echo -e "${RED}[ERROR]${NC} $1"; }
 
 # ==============================
 # ROOT CHECK
 # ==============================
-if [ "$EUID" -ne 0 ]; then
-    error "Exécuter ce script en root"
-    exit 1
-fi
+[ "$EUID" -ne 0 ] && { error "Exécuter en root"; exit 1; }
 
 clear
 echo "=========================================="
@@ -62,7 +56,7 @@ echo
 # INSTALL DROPBEAR
 # ==============================
 if ! command -v dropbear >/dev/null 2>&1; then
-    info "Installation de Dropbear..."
+    info "Installation Dropbear..."
     apt update -y
     apt install -y dropbear
 else
@@ -70,39 +64,46 @@ else
 fi
 
 # ==============================
-# VERIFICATION DU BINAIRE
+# VERIFICATION BINAIRE
 # ==============================
-if [ ! -x "$DROPBEAR_BIN" ]; then
-    error "Le binaire Dropbear n'existe pas à $DROPBEAR_BIN"
-    exit 1
-fi
+[ ! -x "$DROPBEAR_BIN" ] && { error "Binaire absent"; exit 1; }
 
 # ==============================
-# PREPARATION DES CLES
+# PREPARATION DOSSIER + CLES
 # ==============================
-info "Vérification des clés Dropbear..."
+info "Préparation des clés host Dropbear..."
 mkdir -p "$DROPBEAR_DIR"
 chmod 755 "$DROPBEAR_DIR"
 
-if [ ! -f "$DROPBEAR_DIR/dropbear_rsa_host_key" ]; then
-    info "Génération clé RSA Dropbear..."
-    dropbearkey -t rsa -f "$DROPBEAR_DIR/dropbear_rsa_host_key"
-fi
+for key in rsa dss ecdsa ed25519; do
+    KEY_FILE="$DROPBEAR_DIR/dropbear_${key}_host_key"
+    if [ ! -f "$KEY_FILE" ]; then
+        info "Génération clé $key..."
+        dropbearkey -t "$key" -f "$KEY_FILE"
+    fi
+done
 
 chmod 600 "$DROPBEAR_DIR"/*
+chown root:root "$DROPBEAR_DIR"/*
 
 # ==============================
+# CREATION BANNER
+# ==============================
+info "Création du banner Dropbear..."
 mkdir -p "$(dirname "$DROPBEAR_BANNER")"
-echo "Bienvenue sur Dropbear SSH" > "$DROPBEAR_BANNER"
-chown root:root "$DROPBEAR_BANNER"
+
+cat <<EOF > "$DROPBEAR_BANNER"
+Bienvenue sur Dropbear SSH
+EOF
+
+dos2unix "$DROPBEAR_BANNER" 2>/dev/null || true
 chmod 644 "$DROPBEAR_BANNER"
+chown root:root "$DROPBEAR_BANNER"
 
 # ==============================
-# CREATION DU SERVICE SYSTEMD
+# CREATION SERVICE SYSTEMD
 # ==============================
-info "Création du service systemd pour Dropbear sur le port $DROPBEAR_PORT..."
-
-SYSTEMD_FILE="/etc/systemd/system/dropbear.service"
+info "Création service systemd..."
 
 cat <<EOF > "$SYSTEMD_FILE"
 [Unit]
@@ -110,7 +111,7 @@ Description=Dropbear SSH Server on port $DROPBEAR_PORT
 After=network.target
 
 [Service]
-ExecStart=$DROPBEAR_BIN -F -E -p $DROPBEAR_PORT -w -g $DROPBEAR_BANNER
+ExecStart=$DROPBEAR_BIN -F -E -p $DROPBEAR_PORT -w -g -B $DROPBEAR_BANNER
 Restart=always
 RestartSec=2
 LimitNOFILE=1048576
@@ -121,11 +122,11 @@ WantedBy=multi-user.target
 EOF
 
 # ==============================
-# RECHARGEMENT SYSTEMD ET DEMARRAGE
+# DEMARRAGE SERVICE
 # ==============================
 systemctl daemon-reload
 systemctl enable --now dropbear
 
-info "✅ Dropbear installé et service systemd actif sur le port $DROPBEAR_PORT"
-info "🔹 Utiliser 'systemctl status dropbear' pour vérifier l'état"
-info "🔹 Le script ne bloque plus le terminal"
+info "✅ Dropbear actif sur port $DROPBEAR_PORT"
+info "🔹 Vérifier : systemctl status dropbear"
+info "🔹 Voir logs : journalctl -u dropbear -n 50"
