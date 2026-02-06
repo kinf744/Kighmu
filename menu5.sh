@@ -149,26 +149,45 @@ install_dropbear() {
 }
 
 uninstall_dropbear() {
-    echo ">>> Désinstallation de Dropbear..."
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    NC='\033[0m'
 
-    if systemctl is-active --quiet dropbear || systemctl is-active --quiet dropbear-custom; then
-        systemctl stop dropbear dropbear-custom 2>/dev/null || true
-    fi
-    systemctl disable dropbear dropbear-custom 2>/dev/null || true
+    echo -e "${GREEN}>>> Désinstallation complète de Dropbear...${NC}"
 
-    if [[ -f /etc/systemd/system/dropbear-custom.service ]]; then
-        rm -f /etc/systemd/system/dropbear-custom.service
-        systemctl daemon-reload
-    fi
+    # Arrêt des services Dropbear actifs
+    for svc in dropbear dropbear-custom; do
+        if systemctl is-active --quiet "$svc" 2>/dev/null; then
+            systemctl stop "$svc" 2>/dev/null || true
+            echo "Service $svc arrêté"
+        fi
+        if systemctl is-enabled --quiet "$svc" 2>/dev/null; then
+            systemctl disable "$svc" 2>/dev/null || true
+            echo "Service $svc désactivé"
+        fi
+    done
 
+    # Suppression des services systemd
+    for file in /etc/systemd/system/dropbear.service /etc/systemd/system/dropbear-custom.service; do
+        if [[ -f "$file" ]]; then
+            rm -f "$file"
+            echo "Service systemd $file supprimé"
+        fi
+    done
+
+    systemctl daemon-reload
+
+    # Suppression du paquet et dépendances
     apt-get remove -y dropbear
     apt-get autoremove -y
 
+    # Suppression des fichiers de config et logs
     [[ -f /etc/default/dropbear ]] && rm -f /etc/default/dropbear
     [[ -d /etc/dropbear ]] && rm -rf /etc/dropbear
+    [[ -f /var/log/dropbear-port109.log ]] && rm -f /var/log/dropbear-port109.log
     [[ -f /var/log/dropbear_custom.log ]] && rm -f /var/log/dropbear_custom.log
 
-    echo -e "${GREEN}[OK] Dropbear supprimé proprement.${RESET}"
+    echo -e "${GREEN}[OK] Dropbear désinstallé complètement.${NC}"
 }
 
 install_udp_custom() {
