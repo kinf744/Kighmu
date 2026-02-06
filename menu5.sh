@@ -37,13 +37,13 @@ afficher_modes_ports() {
     fi
     if systemctl is-active --quiet dropbear || pgrep -x dropbear >/dev/null 2>&1; then
         DROPBEAR_PORT=$(grep -oP '(?<=-p )\d+' /etc/default/dropbear 2>/dev/null || echo "22")
-        echo -e "  - Dropbear: ${GREEN}port $DROPBEAR_PORT${RESET}"
+        echo -e "  - Dropbear: ${GREEN}port 109$DROPBEAR_PORT${RESET}"
     fi
     if systemctl is-active --quiet slowdns.service || pgrep -f "sldns-server" >/dev/null 2>&1 || screen -list | grep -q slowdns_session; then
         echo -e "  - SlowDNS: ${GREEN}ports UDP 5300${RESET}"
     fi
     if systemctl is-active --quiet udp-custom.service || pgrep -f ud-custom-linux-amd64 >/dev/null 2>&1 || screen -list | grep -q udp-custom; then
-        echo -e "  - UDP Custom: ${GREEN}port UDP 54000${RESET}"
+        echo -e "  - UDP Custom: ${GREEN}port UDP 1-65535${RESET}"
     fi
     if systemctl is-active --quiet socks_python.service || pgrep -f KIGHMUPROXY.py >/dev/null 2>&1 || screen -list | grep -q socks_python; then
         echo -e "  - SOCKS Python: ${GREEN}ports TCP 8080${RESET}"
@@ -64,7 +64,7 @@ afficher_modes_ports() {
         echo -e "  - badvpn: ${GREEN}port UDP 7300${RESET}"
     fi
     if systemctl is-active --quiet histeria2.service || pgrep -f hysteria >/dev/null 2>&1; then
-        echo -e "  - Hysteria 2 UDP : ${GREEN}port UDP 22000${RESET}"
+        echo -e "  - Hysteria 2 UDP : ${GREEN}port UDP 20000${RESET}"
     fi
     if systemctl is-active --quiet sshws.service || pgrep -f sshws >/dev/null 2>&1 || screen -list | grep -q ws_wssr; then
         echo -e "  - WS/WSS Tunnel: ${GREEN}WS port 80 | WSS port 443${RESET}"
@@ -550,7 +550,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=$BIN_DST -listen 80 -target-host 127.0.0.1 -target-port 22
+ExecStart=$BIN_DST -listen 80 -target-host 127.0.0.1 -target-port 109
 Restart=always
 RestartSec=2
 User=root
