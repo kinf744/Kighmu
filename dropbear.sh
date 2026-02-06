@@ -4,10 +4,10 @@ set -euo pipefail
 # ==============================
 # VARIABLES
 # ==============================
-DROPBEAR_BIN="/usr/bin/dropbear"
+DROPBEAR_BIN="/usr/sbin/dropbear"
 DROPBEAR_DIR="/etc/dropbear"
 DROPBEAR_PORT=109
-LOG_FILE="/var/log/dropbear-port22.log"
+LOG_FILE="/var/log/dropbear-port109.log"
 
 # ==============================
 # DETECTION VERSION UBUNTU
@@ -78,8 +78,8 @@ chmod 600 "$DROPBEAR_DIR"/*
 # ==============================
 # WATCHDOG PORT 109
 # ==============================
-info "Watchdog actif : Dropbear attend le port 109"
-warn "Si OpenSSH occupe le port 109, Dropbear patientera"
+info "Watchdog actif : Dropbear attend le port ${DROPBEAR_PORT}"
+warn "Si OpenSSH occupe le port ${DROPBEAR_PORT}, Dropbear patientera"
 
 while true; do
     # Si Dropbear écoute déjà → ne rien faire
@@ -88,18 +88,20 @@ while true; do
         continue
     fi
 
-    # Si le port 22 est libre → lancer Dropbear
+    # Si le port 109 est libre → lancer Dropbear
     if ! ss -tlnp 2>/dev/null | grep -q ":$DROPBEAR_PORT "; then
-        echo "[$(date)] Port 22 libre → lancement Dropbear ($BANNER)" >> "$LOG_FILE"
+        echo "[$(date)] Port ${DROPBEAR_PORT} libre → lancement Dropbear ($BANNER)" >> "$LOG_FILE"
 
-        exec $DROPBEAR_BIN \
+        $DROPBEAR_BIN \
             -F \
             -E \
             -p "$DROPBEAR_PORT" \
             -w \
             -s \
             -g \
-            >> "$LOG_FILE" 2>&1
+            >> "$LOG_FILE" 2>&1 &
+
+        sleep 1
     fi
 
     sleep 2
