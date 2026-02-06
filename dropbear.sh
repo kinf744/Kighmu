@@ -103,7 +103,7 @@ Description=Dropbear SSH Server on port $DROPBEAR_PORT
 After=network.target
 
 [Service]
-ExecStart=$DROPBEAR_BIN -F -E -p $DROPBEAR_PORT -w -g
+ExecStart=$DROPBEAR_BIN -F -E -p $DROPBEAR_PORT -w -g -B /etc/dropbear/banner.txt
 Restart=always
 RestartSec=2
 LimitNOFILE=1048576
