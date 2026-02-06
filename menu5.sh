@@ -36,8 +36,8 @@ afficher_modes_ports() {
         echo -e "  - OpenSSH: ${GREEN}port 22${RESET}"
     fi
     if systemctl is-active --quiet dropbear.service || pgrep -x dropbear >/dev/null 2>&1; then
-        DROPBEAR_PORT=$(grep -oP '(?<=-p )\d+' /etc/default/dropbear 2>/dev/null || echo "22")
-        echo -e "  - Dropbear: ${GREEN}port 109$DROPBEAR_PORT${RESET}"
+        DROPBEAR_PORT=$(grep -oP '(?<=-p )\d+' /etc/default/dropbear 2>/dev/null || echo "109")
+        echo -e "  - Dropbear: ${GREEN}port $DROPBEAR_PORT${RESET}"
     fi
     if systemctl is-active --quiet slowdns.service || pgrep -f "sldns-server" >/dev/null 2>&1 || screen -list | grep -q slowdns_session; then
         echo -e "  - SlowDNS: ${GREEN}ports UDP 5300${RESET}"
