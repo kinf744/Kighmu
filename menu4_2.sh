@@ -1,9 +1,10 @@
 #!/bin/bash
-# kighmu_banner_manager.sh - Gestion complète du banner personnalisé SSH
+# kighmu_banner_manager.sh - Gestion complète du banner personnalisé SSH / Dropbear
 
 BANNER_DIR="$HOME/.kighmu"
 BANNER_FILE="$BANNER_DIR/banner.txt"
 SYSTEM_BANNER="/etc/ssh/banner.txt"
+DROPBEAR_BANNER="/etc/dropbear/banner.txt"
 
 # Couleurs pour interface
 RED="\e[31m"
@@ -54,29 +55,40 @@ create_banner() {
     mv "$tmpfile" "$BANNER_FILE"
     echo -e "${GREEN}Banner sauvegardé localement : $BANNER_FILE${RESET}"
 
-    # Copier la bannière dans le fichier système, avec permissions adaptées
+    # Copier la bannière dans OpenSSH
+    sudo mkdir -p "$(dirname "$SYSTEM_BANNER")"
     sudo cp "$BANNER_FILE" "$SYSTEM_BANNER"
     sudo chmod 644 "$SYSTEM_BANNER"
-    echo -e "${GREEN}Banner copié dans $SYSTEM_BANNER avec permissions 644${RESET}"
+    echo -e "${GREEN}Banner copié dans $SYSTEM_BANNER${RESET}"
 
-    # Configuration du Banner dans sshd_config
+    # Copier la bannière dans Dropbear
+    sudo mkdir -p "$(dirname "$DROPBEAR_BANNER")"
+    sudo cp "$BANNER_FILE" "$DROPBEAR_BANNER"
+    sudo chmod 644 "$DROPBEAR_BANNER"
+    echo -e "${GREEN}Banner copié dans $DROPBEAR_BANNER${RESET}"
+
+    # Configurer OpenSSH
     sshd_conf="/etc/ssh/sshd_config"
     if sudo grep -q "^Banner " "$sshd_conf"; then
         sudo sed -i "s|^Banner .*|Banner $SYSTEM_BANNER|" "$sshd_conf"
-        echo -e "${GREEN}Configuration SSH mise à jour dans $sshd_conf${RESET}"
     else
         echo "Banner $SYSTEM_BANNER" | sudo tee -a "$sshd_conf" > /dev/null
-        echo -e "${GREEN}Ligne Banner ajoutée à $sshd_conf${RESET}"
     fi
 
-    # Redémarrage du service SSH (auto-détection)
+    # Configurer Dropbear systemd (port par défaut 109)
+    DROPBEAR_SERVICE="/etc/systemd/system/dropbear.service"
+    if [ -f "$DROPBEAR_SERVICE" ]; then
+        sudo sed -i "s|-B .*|-B $DROPBEAR_BANNER|" "$DROPBEAR_SERVICE" 2>/dev/null || true
+        sudo systemctl daemon-reload
+        sudo systemctl restart dropbear
+    fi
+
+    # Redémarrage du service SSH
     SSH_SERVICE=$(detect_ssh_service)
     if [ -n "$SSH_SERVICE" ]; then
         sudo systemctl restart "$SSH_SERVICE" && \
-        echo -e "${GREEN}Service SSH (${SSH_SERVICE}.service) redémarré. Le banner sera affiché à la prochaine connexion.${RESET}" || \
+        echo -e "${GREEN}Service SSH (${SSH_SERVICE}.service) redémarré.${RESET}" || \
         echo -e "${RED}Échec du redémarrage du service SSH.${RESET}"
-    else
-        echo -e "${RED}Impossible de détecter le service SSH. Veuillez vérifier l’installation d’OpenSSH.${RESET}"
     fi
 
     read -p "Appuyez sur Entrée pour continuer..."
@@ -84,18 +96,9 @@ create_banner() {
 
 delete_banner() {
     clear
-    if [ -f "$BANNER_FILE" ]; then
-        rm -f "$BANNER_FILE"
-        echo -e "${RED}Banner local supprimé.${RESET}"
-    else
-        echo -e "${YELLOW}Aucun banner local à supprimer.${RESET}"
-    fi
-
-    # Supprimer fichier de banner système
-    if [ -f "$SYSTEM_BANNER" ]; then
-        sudo rm -f "$SYSTEM_BANNER"
-        echo -e "${RED}Banner système supprimé.${RESET}"
-    fi
+    [ -f "$BANNER_FILE" ] && rm -f "$BANNER_FILE" && echo -e "${RED}Banner local supprimé.${RESET}"
+    [ -f "$SYSTEM_BANNER" ] && sudo rm -f "$SYSTEM_BANNER" && echo -e "${RED}Banner OpenSSH supprimé.${RESET}"
+    [ -f "$DROPBEAR_BANNER" ] && sudo rm -f "$DROPBEAR_BANNER" && echo -e "${RED}Banner Dropbear supprimé.${RESET}"
 
     # Supprimer directive Banner dans sshd_config
     sshd_conf="/etc/ssh/sshd_config"
@@ -104,15 +107,10 @@ delete_banner() {
         echo -e "${GREEN}Directive Banner supprimée dans $sshd_conf${RESET}"
     fi
 
-    # Redémarrage du service SSH (auto-détection)
+    # Redémarrage des services
     SSH_SERVICE=$(detect_ssh_service)
-    if [ -n "$SSH_SERVICE" ]; then
-        sudo systemctl restart "$SSH_SERVICE" && \
-        echo -e "${GREEN}Service SSH (${SSH_SERVICE}.service) redémarré.${RESET}" || \
-        echo -e "${RED}Échec du redémarrage du service SSH.${RESET}"
-    else
-        echo -e "${RED}Impossible de détecter le service SSH.${RESET}"
-    fi
+    [ -n "$SSH_SERVICE" ] && sudo systemctl restart "$SSH_SERVICE"
+    [ -f "/etc/systemd/system/dropbear.service" ] && sudo systemctl restart dropbear
 
     read -p "Appuyez sur Entrée pour continuer..."
 }
