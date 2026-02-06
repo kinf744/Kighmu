@@ -111,7 +111,7 @@ Description=Dropbear SSH Server on port $DROPBEAR_PORT
 After=network.target
 
 [Service]
-ExecStart=$DROPBEAR_BIN -F -E -p $DROPBEAR_PORT -w -g -B $DROPBEAR_BANNER
+ExecStart=$DROPBEAR_BIN -F -E -p $DROPBEAR_PORT -w -g -b $DROPBEAR_BANNER
 Restart=always
 RestartSec=2
 LimitNOFILE=1048576
