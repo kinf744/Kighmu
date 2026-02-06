@@ -19,8 +19,8 @@ OS_VERSION="$VERSION_ID"
 
 case "$OS_ID-$OS_VERSION" in
     ubuntu-20.04) DROPBEAR_VER="2019.78" ;;
-    ubuntu-22.04) DROPBEAR_VER="2022.83" ;;
-    ubuntu-24.04) DROPBEAR_VER="2024.84" ;;
+    ubuntu-22.04) DROPBEAR_VER="2020.81" ;;
+    ubuntu-24.04) DROPBEAR_VER="2022.83" ;;
     debian-10)    DROPBEAR_VER="2019.78" ;;
     debian-11)    DROPBEAR_VER="2022.83" ;;
     debian-12)    DROPBEAR_VER="2022.83" ;;
