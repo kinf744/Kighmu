@@ -8,6 +8,7 @@ DROPBEAR_BIN="/usr/sbin/dropbear"
 DROPBEAR_DIR="/etc/dropbear"
 DROPBEAR_PORT=109
 LOG_FILE="/var/log/dropbear-port109.log"
+DROPBEAR_BANNER="/etc/dropbear/banner.txt"
 
 # ==============================
 # DETECTION VERSION OS (DEBIAN + UBUNTU)
@@ -91,6 +92,12 @@ fi
 chmod 600 "$DROPBEAR_DIR"/*
 
 # ==============================
+mkdir -p "$(dirname "$DROPBEAR_BANNER")"
+echo "Bienvenue sur Dropbear SSH" > "$DROPBEAR_BANNER"
+chown root:root "$DROPBEAR_BANNER"
+chmod 644 "$DROPBEAR_BANNER"
+
+# ==============================
 # CREATION DU SERVICE SYSTEMD
 # ==============================
 info "Création du service systemd pour Dropbear sur le port $DROPBEAR_PORT..."
@@ -103,7 +110,7 @@ Description=Dropbear SSH Server on port $DROPBEAR_PORT
 After=network.target
 
 [Service]
-ExecStart=$DROPBEAR_BIN -F -E -p $DROPBEAR_PORT -w -g -B /etc/dropbear/banner.txt
+ExecStart=$DROPBEAR_BIN -F -E -p $DROPBEAR_PORT -w -g -B $DROPBEAR_BANNER
 Restart=always
 RestartSec=2
 LimitNOFILE=1048576
