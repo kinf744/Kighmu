@@ -10,14 +10,21 @@ DROPBEAR_PORT=109
 LOG_FILE="/var/log/dropbear-port109.log"
 
 # ==============================
-# DETECTION VERSION UBUNTU
+# DETECTION VERSION OS (DEBIAN + UBUNTU)
 # ==============================
-UBUNTU_VERSION=$(lsb_release -rs 2>/dev/null || echo "22.04")
-case "${UBUNTU_VERSION:0:5}" in
-    "20.04") DROPBEAR_VER="2019.78" ;;
-    "22.04") DROPBEAR_VER="2022.83" ;;
-    "24.04") DROPBEAR_VER="2024.84" ;;
-    *)       DROPBEAR_VER="2022.83" ;;
+source /etc/os-release
+
+OS_ID="$ID"
+OS_VERSION="$VERSION_ID"
+
+case "$OS_ID-$OS_VERSION" in
+    ubuntu-20.04) DROPBEAR_VER="2019.78" ;;
+    ubuntu-22.04) DROPBEAR_VER="2022.83" ;;
+    ubuntu-24.04) DROPBEAR_VER="2024.84" ;;
+    debian-10)    DROPBEAR_VER="2019.78" ;;
+    debian-11)    DROPBEAR_VER="2022.83" ;;
+    debian-12)    DROPBEAR_VER="2022.83" ;;
+    *)            DROPBEAR_VER="2022.83" ;;
 esac
 BANNER="SSH-2.0-dropbear_$DROPBEAR_VER"
 
