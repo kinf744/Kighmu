@@ -77,8 +77,12 @@ create_banner() {
 
     # Configurer Dropbear systemd (port par défaut 109)
     DROPBEAR_SERVICE="/etc/systemd/system/dropbear.service"
+    DROPBEAR_BANNER="/etc/dropbear/banner.txt"
+
     if [ -f "$DROPBEAR_SERVICE" ]; then
-        sudo sed -i "s|-B .*|-B $DROPBEAR_BANNER|" "$DROPBEAR_SERVICE" 2>/dev/null || true
+        if ! grep -q "\-B" "$DROPBEAR_SERVICE"; then
+            sudo sed -i "/ExecStart/ s|$| -B \"$DROPBEAR_BANNER\"|" "$DROPBEAR_SERVICE"
+        fi
         sudo systemctl daemon-reload
         sudo systemctl restart dropbear
     fi
