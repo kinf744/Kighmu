@@ -103,7 +103,7 @@ Description=Dropbear SSH Server on port $DROPBEAR_PORT
 After=network.target
 
 [Service]
-ExecStart=$DROPBEAR_BIN -F -E -p $DROPBEAR_PORT -w -s -g
+ExecStart=$DROPBEAR_BIN -F -E -p $DROPBEAR_PORT -w -g
 Restart=always
 RestartSec=2
 LimitNOFILE=1048576
