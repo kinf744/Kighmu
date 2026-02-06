@@ -59,12 +59,14 @@ create_banner() {
     sudo mkdir -p "$(dirname "$SYSTEM_BANNER")"
     sudo cp "$BANNER_FILE" "$SYSTEM_BANNER"
     sudo chmod 644 "$SYSTEM_BANNER"
+    sudo chown root:root "$SYSTEM_BANNER"
     echo -e "${GREEN}Banner copié dans $SYSTEM_BANNER${RESET}"
 
-    # Copier la bannière dans Dropbear
+    # Copier la bannière dans Dropbear (ASCII pur)
     sudo mkdir -p "$(dirname "$DROPBEAR_BANNER")"
     sudo cp "$BANNER_FILE" "$DROPBEAR_BANNER"
     sudo chmod 644 "$DROPBEAR_BANNER"
+    sudo chown root:root "$DROPBEAR_BANNER"
     echo -e "${GREEN}Banner copié dans $DROPBEAR_BANNER${RESET}"
 
     # Configurer OpenSSH
@@ -77,14 +79,13 @@ create_banner() {
 
     # Configurer Dropbear systemd (port par défaut 109)
     DROPBEAR_SERVICE="/etc/systemd/system/dropbear.service"
-    DROPBEAR_BANNER="/etc/dropbear/banner.txt"
-
     if [ -f "$DROPBEAR_SERVICE" ]; then
         if ! grep -q "\-B" "$DROPBEAR_SERVICE"; then
             sudo sed -i "/ExecStart/ s|$| -B \"$DROPBEAR_BANNER\"|" "$DROPBEAR_SERVICE"
         fi
         sudo systemctl daemon-reload
         sudo systemctl restart dropbear
+        echo -e "${GREEN}Dropbear redémarré avec la nouvelle bannière.${RESET}"
     fi
 
     # Redémarrage du service SSH
