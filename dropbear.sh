@@ -6,7 +6,7 @@ set -euo pipefail
 # ==============================
 DROPBEAR_BIN="/usr/bin/dropbear"
 DROPBEAR_DIR="/etc/dropbear"
-DROPBEAR_PORT=22
+DROPBEAR_PORT=109
 LOG_FILE="/var/log/dropbear-port22.log"
 
 # ==============================
@@ -76,10 +76,10 @@ fi
 chmod 600 "$DROPBEAR_DIR"/*
 
 # ==============================
-# WATCHDOG PORT 22
+# WATCHDOG PORT 109
 # ==============================
-info "Watchdog actif : Dropbear attend le port 22"
-warn "Si OpenSSH occupe le port 22, Dropbear patientera"
+info "Watchdog actif : Dropbear attend le port 109"
+warn "Si OpenSSH occupe le port 109, Dropbear patientera"
 
 while true; do
     # Si Dropbear écoute déjà → ne rien faire
