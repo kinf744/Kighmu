@@ -50,7 +50,7 @@ fi
 
 clear
 echo "=========================================="
-echo "   KIGHMU DROPBEAR WATCHDOG"
+echo "   KIGHMU DROPBEAR SERVICE"
 echo "   Bannière : $BANNER"
 echo "=========================================="
 echo "IP : $(hostname -I | awk '{print $1}')"
@@ -69,6 +69,14 @@ else
 fi
 
 # ==============================
+# VERIFICATION DU BINAIRE
+# ==============================
+if [ ! -x "$DROPBEAR_BIN" ]; then
+    error "Le binaire Dropbear n'existe pas à $DROPBEAR_BIN"
+    exit 1
+fi
+
+# ==============================
 # PREPARATION DES CLES
 # ==============================
 info "Vérification des clés Dropbear..."
@@ -83,33 +91,34 @@ fi
 chmod 600 "$DROPBEAR_DIR"/*
 
 # ==============================
-# WATCHDOG PORT 109
+# CREATION DU SERVICE SYSTEMD
 # ==============================
-info "Watchdog actif : Dropbear attend le port ${DROPBEAR_PORT}"
-warn "Si OpenSSH occupe le port ${DROPBEAR_PORT}, Dropbear patientera"
+info "Création du service systemd pour Dropbear sur le port $DROPBEAR_PORT..."
 
-while true; do
-    # Si Dropbear écoute déjà → ne rien faire
-    if ss -tlnp 2>/dev/null | grep -q ":$DROPBEAR_PORT.*dropbear"; then
-        sleep 2
-        continue
-    fi
+SYSTEMD_FILE="/etc/systemd/system/dropbear.service"
 
-    # Si le port 109 est libre → lancer Dropbear
-    if ! ss -tlnp 2>/dev/null | grep -q ":$DROPBEAR_PORT "; then
-        echo "[$(date)] Port ${DROPBEAR_PORT} libre → lancement Dropbear ($BANNER)" >> "$LOG_FILE"
+cat <<EOF > "$SYSTEMD_FILE"
+[Unit]
+Description=Dropbear SSH Server on port $DROPBEAR_PORT
+After=network.target
 
-        $DROPBEAR_BIN \
-            -F \
-            -E \
-            -p "$DROPBEAR_PORT" \
-            -w \
-            -s \
-            -g \
-            >> "$LOG_FILE" 2>&1 &
+[Service]
+ExecStart=$DROPBEAR_BIN -F -E -p $DROPBEAR_PORT -w -s -g
+Restart=always
+RestartSec=2
+LimitNOFILE=1048576
+User=root
 
-        sleep 1
-    fi
+[Install]
+WantedBy=multi-user.target
+EOF
 
-    sleep 2
-done
+# ==============================
+# RECHARGEMENT SYSTEMD ET DEMARRAGE
+# ==============================
+systemctl daemon-reload
+systemctl enable --now dropbear
+
+info "✅ Dropbear installé et service systemd actif sur le port $DROPBEAR_PORT"
+info "🔹 Utiliser 'systemctl status dropbear' pour vérifier l'état"
+info "🔹 Le script ne bloque plus le terminal"
