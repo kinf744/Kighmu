@@ -257,36 +257,39 @@ delete_zivpn_user() {
     return
   fi
 
-  # Liste triée + numérotée
-  mapfile -t USERS < <(sort -t'|' -k3 "$ZIVPN_USER_FILE" | nl -w2 -s'. ')
+  # Lire la liste réelle depuis users.list
+  mapfile -t USERS < <(sort -t'|' -k3 "$ZIVPN_USER_FILE")
   echo "Utilisateurs actifs (sélectionnez NUMÉRO):"
   echo "────────────────────────────────────"
-  printf '%s\n' "${USERS[@]}"
-  echo "────────────────────────────────────"
 
+  for i in "${!USERS[@]}"; do
+    echo "$((i+1)). ${USERS[$i]}"
+  done
+
+  echo "────────────────────────────────────"
   read -rp "🔢 Numéro à supprimer (1-${#USERS[@]}): " NUM
+
   if ! [[ "$NUM" =~ ^[0-9]+$ ]] || (( NUM < 1 || NUM > ${#USERS[@]} )); then
     echo "❌ Numéro invalide."
     pause
     return
   fi
 
-  # Extraction téléphone à partir de la ligne sélectionnée
+  # EXTRACTION DU NUMÉRO DE TÉLÉPHONE RÉEL
   LINE="${USERS[$((NUM-1))]}"
   PHONE=$(echo "$LINE" | cut -d'|' -f1 | tr -d '[:space:]')
-  # Échappe caractères spéciaux pour grep
-  PHONE_ESCAPED=$(echo "$PHONE" | sed 's/[][\\/.*^$]/\\&/g')
 
   echo "🗑️ Suppression de $PHONE..."
 
-  tmp=$(mktemp)
-  grep -v "^$PHONE_ESCAPED|" "$ZIVPN_USER_FILE" > "$tmp" || true
-  mv "$tmp" "$ZIVPN_USER_FILE"
+  # Supprimer la ligne correspondante dans users.list
+  grep -v "^$PHONE|" "$ZIVPN_USER_FILE" > "${ZIVPN_USER_FILE}.tmp" || true
+  mv "${ZIVPN_USER_FILE}.tmp" "$ZIVPN_USER_FILE"
   chmod 600 "$ZIVPN_USER_FILE"
 
   # Mise à jour config.json
   TODAY=$(date +%Y-%m-%d)
   PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$ZIVPN_USER_FILE" | sort -u | paste -sd, -)
+
   if jq --arg passwords "$PASSWORDS" '.auth.config = ($passwords | split(","))' "$ZIVPN_CONFIG" > /tmp/config.json 2>/dev/null &&
      jq empty /tmp/config.json >/dev/null 2>&1; then
     mv /tmp/config.json "$ZIVPN_CONFIG"
