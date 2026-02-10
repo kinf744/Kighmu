@@ -1,11 +1,5 @@
 #!/bin/bash
 
-# Mode automatique lancé par cron
-if [[ "$1" == "--expire-check" ]]; then
-    verifier_expiration_utilisateurs
-    exit 0
-fi
-
 # Fichier stockage utilisateurs (V2Ray)
 USER_DB="/etc/v2ray/utilisateurs.json"
 
@@ -44,63 +38,6 @@ charger_utilisateurs() {
 
 sauvegarder_utilisateurs() {
     echo "$utilisateurs" > "$USER_DB"
-}
-
-verifier_expiration_utilisateurs() {
-
-    # 🔹 Mode automatique appelé par cron
-    if [[ "$1" == "--expire-check" ]]; then
-        AUTO_MODE=1
-    else
-        AUTO_MODE=0
-    fi
-
-    charger_utilisateurs
-    today=$(date +%Y-%m-%d)
-    changed=0
-
-    echo "$utilisateurs" | jq -c '.[]' | while read -r row; do
-
-        uuid=$(echo "$row" | jq -r '.uuid')
-        nom=$(echo "$row" | jq -r '.nom')
-        expire=$(echo "$row" | jq -r '.expire')
-
-        if [[ "$expire" < "$today" ]]; then
-            echo "⛔ Expiré : $nom ($uuid)"
-
-            tmpfile=$(mktemp)
-
-            jq --arg uuid "$uuid" '
-            .inbounds |= map(
-                if .protocol=="vless" then
-                    .settings.clients |= map(select(.id != $uuid))
-                else .
-                end
-            )
-            ' /etc/v2ray/config.json > "$tmpfile"
-
-            if jq empty "$tmpfile" >/dev/null 2>&1; then
-                mv "$tmpfile" /etc/v2ray/config.json
-            else
-                rm -f "$tmpfile"
-                continue
-            fi
-
-            utilisateurs=$(echo "$utilisateurs" | jq --arg u "$uuid" 'map(select(.uuid != $u))')
-            changed=1
-        fi
-    done
-
-    if [[ $changed -eq 1 ]]; then
-        sauvegarder_utilisateurs
-        systemctl restart v2ray
-        echo "✅ Utilisateurs expirés supprimés automatiquement"
-    fi
-
-    # 🔹 Si lancé par cron → quitter après vérification
-    if [[ "$AUTO_MODE" == "1" ]]; then
-        exit 0
-    fi
 }
 
 # Générer lien vless au format adapter
@@ -473,7 +410,6 @@ desinstaller_v2ray() {
 
 # Programme principal
 while true; do
-    verifier_expiration_utilisateurs
     afficher_menu
     afficher_mode_v2ray_ws
     show_menu
