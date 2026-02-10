@@ -131,6 +131,8 @@ Restart=always
 RestartSec=5
 AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
 LimitNOFILE=1048576
+StandardOutput=append:/var/log/zivpn.log
+StandardError=append:/var/log/zivpn.log
 
 [Install]
 WantedBy=multi-user.target
