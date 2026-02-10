@@ -40,15 +40,15 @@ hysteria_running() {
 
 print_title() {
   clear
-  echo "╔═══════════════════════════════════════╗"
-  echo "║        HYSTERIA CONTROL PANEL v1      ║"
-  echo "║     (Compatible @kighmu 🇨🇲)           ║"
-  echo "╚═══════════════════════════════════════╝"
+  echo "${CYAN}╔═══════════════════════════════════════╗${RESET}"
+  echo "${CYAN}║        HYSTERIA CONTROL PANEL v1      ║${RESET}"
+  echo "${CYAN}║     (Compatible @kighmu 🇨🇲)           ║${RESET}"
+  echo "${CYAN}╚═══════════════════════════════════════╝${RESET}"
   echo
 }
 
 show_status_block() {
-  echo "-------- STATUT HYSTERIA --------"
+  echo "${CYAN}-------- STATUT HYSTERIA --------${RESET}"
   
   SVC_FILE_OK=$([[ -f "/etc/systemd/system/$HYSTERIA_SERVICE" ]] && echo "✅" || echo "❌")
   SVC_ACTIVE=$(systemctl is-active "$HYSTERIA_SERVICE" 2>/dev/null || echo "N/A")
