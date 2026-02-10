@@ -262,56 +262,41 @@ delete_hysteria_user() {
     return
   fi
 
+  # Lire la liste réelle depuis users.list
+  mapfile -t USERS < <(sort -t'|' -k3 "$HYSTERIA_USER_FILE")
   echo "Utilisateurs actifs (sélectionnez NUMÉRO):"
   echo "────────────────────────────────────"
 
-  # 📋 Liste triée + numérotée (STABLE)
-  mapfile -t USERS < <(
-    awk -F'|' '{ printf "%s|%s|%s\n", $1, $2, $3 }' "$HYSTERIA_USER_FILE" |
-    sort -t'|' -k3 |
-    nl -w2 -s'. '
-  )
+  for i in "${!USERS[@]}"; do
+    echo "$((i+1)). ${USERS[$i]}"
+  done
 
-  printf '%s\n' "${USERS[@]}"
   echo "────────────────────────────────────"
-
   read -rp "🔢 Numéro à supprimer (1-${#USERS[@]}): " NUM
 
-  # VALIDATION
   if ! [[ "$NUM" =~ ^[0-9]+$ ]] || (( NUM < 1 || NUM > ${#USERS[@]} )); then
     echo "❌ Numéro invalide."
     pause
     return
   fi
 
-  # EXTRACTION ligne exacte sélectionnée
-  LINE=$(printf '%s\n' "${USERS[$((NUM-1))]}" | sed 's/^[0-9]*\. //')
-  PHONE=$(echo "$LINE" | cut -d'|' -f1)
-
-  if [[ -z "$PHONE" ]]; then
-    echo "❌ Utilisateur introuvable."
-    pause
-    return
-  fi
+  # EXTRACTION DU NUMÉRO DE TÉLÉPHONE RÉEL
+  LINE="${USERS[$((NUM-1))]}"
+  PHONE=$(echo "$LINE" | cut -d'|' -f1 | tr -d '[:space:]')
 
   echo "🗑️ Suppression de $PHONE..."
 
-  # SUPPRESSION RÉELLE
-  tmp=$(mktemp)
-  grep -v "^$PHONE|" "$HYSTERIA_USER_FILE" > "$tmp"
-  mv "$tmp" "$HYSTERIA_USER_FILE"
+  # Supprimer la ligne correspondante dans users.list
+  grep -v "^$PHONE|" "$HYSTERIA_USER_FILE" > "${HYSTERIA_USER_FILE}.tmp" || true
+  mv "${HYSTERIA_USER_FILE}.tmp" "$HYSTERIA_USER_FILE"
   chmod 600 "$HYSTERIA_USER_FILE"
 
-  # 🔄 Mise à jour HYSTERIA
+  # Mise à jour config.json
   TODAY=$(date +%Y-%m-%d)
-  PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$HYSTERIA_USER_FILE" |
-              sort -u | paste -sd, -)
+  PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$HYSTERIA_USER_FILE" | sort -u | paste -sd, -)
 
-  if jq --arg passwords "$PASSWORDS" \
-        '.auth.config = ($passwords | split(","))' \
-        "$HYSTERIA_CONFIG" > /tmp/config.json 2>/dev/null &&
+  if jq --arg passwords "$PASSWORDS" '.auth.config = ($passwords | split(","))' "$HYSTERIA_CONFIG" > /tmp/config.json 2>/dev/null &&
      jq empty /tmp/config.json >/dev/null 2>&1; then
-
     mv /tmp/config.json "$HYSTERIA_CONFIG"
     systemctl restart "$HYSTERIA_SERVICE"
     echo "✅ $PHONE (n°$NUM) supprimé et HYSTERIA mis à jour"
