@@ -280,10 +280,8 @@ delete_zivpn_user() {
   fi
 
   # EXTRACTION ligne exacte sélectionnée
-  LINE=$(printf '%s'
-  "${USERS[$((NUM-1))]}")
-PHONE=$(echo "$LINE" | sed 's/^[0-9]*. *//' | cut -d'|' -f1 | xargs)  # Trim + extraction propre
-  PHONE=$(awk -F'|' 'NR=='$NUM' {print $1}' "$ZIVPN_USER_FILE" | xargs)
+  LINE="${USERS[$((NUM-1))]}"
+  PHONE=$(echo "$LINE" | cut -d'|' -f1 | tr -d '[:space:]')
 
   if [[ -z "$PHONE" ]]; then
     echo "❌ Utilisateur introuvable."
