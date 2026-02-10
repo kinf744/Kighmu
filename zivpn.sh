@@ -23,7 +23,7 @@ check_root() {
 }
 
 zivpn_installed() {
-  [[ -x "$ZIVPN_BIN" ]] && systemctl list-unit-files | grep -q "^$ZIVPN_SERVICE"
+  [[ -x "$ZIVPN_BIN" ]] && { systemctl list-unit-files | grep -q "^$ZIVPN_SERVICE" || systemctl list-unit-files | grep -q "socat-zivpn"; }
 }
 
 zivpn_running() {
