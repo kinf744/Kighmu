@@ -347,30 +347,40 @@ fix_zivpn() {
 
 uninstall_zivpn() {
   print_title
-  echo "[5] DÉSINSTALLATION ZIVPN (SAUF autres tunnels)"
+  echo "[5] DÉSINSTALLATION ZIVPN + SOCAT (SAUF autres tunnels)"
   read -rp "Confirmer ? (o/N): " CONFIRM
   [[ "$CONFIRM" =~ ^[oO]$ ]] || { echo "Annulé"; pause; return; }
 
-  # 1) Service seulement
-  systemctl stop "$ZIVPN_SERVICE" 2>/dev/null || true
-  systemctl disable "$ZIVPN_SERVICE" 2>/dev/null || true
-  rm -f "/etc/systemd/system/$ZIVPN_SERVICE"
+  # 1) Arrêt et suppression services ZIVPN + SOCAT
+  systemctl stop "$ZIVPN_SERVICE" socat-zivpn.service 2>/dev/null || true
+  systemctl disable "$ZIVPN_SERVICE" socat-zivpn.service 2>/dev/null || true
+  rm -f "/etc/systemd/system/$ZIVPN_SERVICE" "/etc/systemd/system/socat-zivpn.service"
   systemctl daemon-reload
+  systemctl reset-failed "$ZIVPN_SERVICE" socat-zivpn.service 2>/dev/null || true
 
-  # 2) Fichiers seulement
+  # 2) Suppression binaire et fichiers config
   rm -f "$ZIVPN_BIN"
   rm -rf /etc/zivpn
 
-  # 3) IPTABLES ZIVPN UNIQUEMENT (règles spécifiques -C)
-  iptables -t nat -D PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667 2>/dev/null || true
+  # 3) IPTABLES - SEULEMENT règle 5667 (socat n'ajoute rien d'autre)
   iptables -D INPUT -p udp --dport 5667 -j ACCEPT 2>/dev/null || true
-  iptables -D INPUT -p udp --dport 6000:19999 -j ACCEPT 2>/dev/null || true
 
-  # ✅ SAUVEGARDE iptables (RESTORE autres tunnels)
-  netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
+  # ✅ SAUVEGARDE iptables (autres tunnels préservés)
+  if command -v netfilter-persistent >/dev/null 2>&1; then
+    netfilter-persistent save 2>/dev/null || true
+  else
+    iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
+  fi
 
-  echo "✅ ZIVPN supprimé SANS toucher Hysteria/SlowDNS"
-  echo "   Vérifiez: iptables -t nat -L PREROUTING -n"
+  echo "✅ ZIVPN + SOCAT supprimés SANS toucher autres tunnels"
+  echo "   Services supprimés: zivpn.service, socat-zivpn.service"
+  echo "   Fichiers supprimés: $ZIVPN_BIN, /etc/zivpn/"
+  echo "   IPTables nettoyé: port 5667 seulement"
+  echo ""
+  echo "🔍 Vérifier status:"
+  echo "   systemctl status zivpn socat-zivpn"
+  echo "   iptables -t nat -L PREROUTING -n | grep 5667"
+  echo "   ss -ulnp | grep 5667"
   pause
 }
 
