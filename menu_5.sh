@@ -229,28 +229,63 @@ basculer_mode_v2only() {
 # ✅ CORRIGÉ: Création utilisateur avec UUID auto-ajouté
 creer_utilisateur() {
     local nom duree uuid date_exp domaine
+
     echo -n "Entrez un nom d'utilisateur : "
     read nom
+
     echo -n "Durée de validité (en jours) : "
     read duree
+
+    # Vérification durée
+    if ! [[ "$duree" =~ ^[0-9]+$ ]]; then
+        echo "❌ Durée invalide"
+        read -p "Entrée pour continuer..."
+        return
+    fi
+
+    # Vérifier si utilisateur Linux existe déjà
+    if id "$nom" &>/dev/null; then
+        echo "❌ L'utilisateur Linux existe déjà"
+        read -p "Entrée pour continuer..."
+        return
+    fi
 
     # Charger base utilisateurs
     charger_utilisateurs
 
-    # Génération UUID et date d'expiration
+    # Génération UUID et date expiration
     uuid=$(generer_uuid)
     date_exp=$(date -d "+${duree} days" +%Y-%m-%d)
 
-    # Sauvegarde utilisateur (UUID UNIQUE) en sécurité
+    # ===============================
+    # 🔐 CRÉATION UTILISATEUR LINUX
+    # ===============================
+    useradd -m -s /bin/bash "$nom" || {
+        echo "❌ Erreur création utilisateur Linux"
+        read -p "Entrée pour continuer..."
+        return
+    }
+
+    # Mot de passe = UUID (même logique que tes tunnels)
+    echo "$nom:$uuid" | chpasswd
+
+    # Expiration système
+    chage -E "$date_exp" "$nom"
+
+    # ===============================
+    # 💾 AJOUT DANS JSON UTILISATEURS
+    # ===============================
     utilisateurs=$(echo "$utilisateurs" | jq --arg n "$nom" --arg u "$uuid" --arg d "$date_exp" \
         '. += [{"nom": $n, "uuid": $u, "expire": $d}]')
 
-    local tmpfile=$(mktemp)          # créer fichier temporaire
+    local tmpfile=$(mktemp)
     echo "$utilisateurs" > "$tmpfile"
-    mv "$tmpfile" "$USER_DB"         # déplacer temp → utilisateur.json
-    chmod 600 "$USER_DB"             # sécuriser
+    mv "$tmpfile" "$USER_DB"
+    chmod 600 "$USER_DB"
 
-    # Ajout VLESS + VMESS + TROJAN (UUID = password)
+    # ===============================
+    # 🔌 AJOUT CLIENT V2RAY
+    # ===============================
     if [[ -f /etc/v2ray/config.json ]]; then
         if ! ajouter_client_v2ray "$uuid" "$nom"; then
             echo "❌ Erreur ajout utilisateur dans V2Ray"
@@ -273,19 +308,47 @@ creer_utilisateur() {
     local V2RAY_INTER_PORT="5401"
     local FASTDNS_PORT="${PORT:-5400}"
 
-    # 🔹 FastDNS / SlowDNS
+    # FastDNS / SlowDNS
     SLOWDNS_DIR="/etc/slowdns"
     if [[ -f "$SLOWDNS_DIR/slowdns.env" ]]; then
         source "$SLOWDNS_DIR/slowdns.env"
     fi
-
     local PUB_KEY=${PUB_KEY:-$( [[ -f "$SLOWDNS_DIR/server.pub" ]] && cat "$SLOWDNS_DIR/server.pub" || echo "clé_non_disponible" )}
     local NAMESERVER=${NS:-$( [[ -f "$SLOWDNS_DIR/ns.conf" ]] && cat "$SLOWDNS_DIR/ns.conf" || echo "NS_non_defini" )}
 
-    # Génération DES 3 LIENS (UUID UNIQUE)
+    # Génération lien V2Ray
     generer_liens_v2ray "$nom" "$domaine" "$V2RAY_INTER_PORT" "$uuid"
 
-    # AFFICHAGE
+    # ===============================
+    # ⚡ NETTOYAGE AUTOMATIQUE DES UUID EXPIRÉS
+    # ===============================
+    TODAY=$(date +%Y-%m-%d)
+
+    # Filtrer utilisateurs valides
+    utilisateurs_valides=$(echo "$utilisateurs" | jq --arg today "$TODAY" '[.[] | select(.expire >= $today)]')
+    uuids_expire=$(echo "$utilisateurs" | jq --arg today "$TODAY" -r '.[] | select(.expire < $today) | .uuid')
+
+    if [[ -f /etc/v2ray/config.json ]]; then
+        tmpfile=$(mktemp)
+        jq --argjson uuids "$(echo "$uuids_expire" | jq -R -s -c 'split("\n")[:-1]')" '
+            .inbounds |= map(
+                if .protocol=="vless" then
+                    .settings.clients |= map(select(.id as $id | $uuids | index($id) | not))
+                else .
+                end
+            )
+        ' /etc/v2ray/config.json > "$tmpfile"
+        mv "$tmpfile" /etc/v2ray/config.json
+        systemctl restart v2ray
+    fi
+
+    # Sauvegarder uniquement les utilisateurs valides
+    utilisateurs="$utilisateurs_valides"
+    sauvegarder_utilisateurs
+
+    # ===============================
+    # 📊 AFFICHAGE FINAL
+    # ===============================
     clear
     echo -e "${GREEN}============================================"
     echo -e "🧩 VLESS TCP + FASTDNS"
@@ -306,9 +369,9 @@ creer_utilisateur() {
     echo ""
     echo -e "${GREEN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
     echo -e "${YELLOW}┃ Lien VLESS  : $lien_vless${RESET}"
-    echo -e "${YELLOW}┃${RESET}"
     echo -e "${GREEN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●"
     echo ""
+
     read -p "Appuyez sur Entrée pour continuer..."
 }
 
