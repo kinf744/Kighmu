@@ -70,7 +70,7 @@ show_status_block() {
 
 install_zivpn() {
   print_title
-  echo "[1] INSTALLATION ZIVPN (NO CONFLIT UFW)"
+  echo "[1] INSTALLATION ZIVPN (SOCAT - NO CONFLIT UFW)"
   echo
 
   if zivpn_installed; then
@@ -81,15 +81,13 @@ install_zivpn() {
 
   # Clean slate + PURGE UFW
   systemctl stop zivpn >/dev/null 2>&1 || true
+  systemctl stop socat-zivpn >/dev/null 2>&1 || true
   systemctl stop ufw >/dev/null 2>&1 || true
   ufw disable >/dev/null 2>&1 || true
   apt purge ufw -y >/dev/null 2>&1 || true
   
-  # RESET iptables propre
-  # iptables -F; iptables -t nat -F; iptables -t mangle -F 2>/dev/null || true
-
-  # ✅ PAQUETS SANS CONFLIT UFW
-  apt update -y && apt install -y wget curl jq openssl iptables-persistent netfilter-persistent
+  # ✅ PAQUETS (socat + iptables-persistent)
+  apt update -y && apt install -y wget curl jq openssl iptables-persistent netfilter-persistent socat
 
   # Binaire + cert
   wget -q "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp-zivpn-linux-amd64" -O "$ZIVPN_BIN"
@@ -118,7 +116,7 @@ install_zivpn() {
 }
 EOF
 
-  # systemd service
+  # ✅ ZIVPN systemd service
   cat > "/etc/systemd/system/$ZIVPN_SERVICE" << EOF
 [Unit]
 Description=ZIVPN UDP Server
@@ -140,17 +138,31 @@ StandardError=append:/var/log/zivpn.log
 WantedBy=multi-user.target
 EOF
 
-  systemctl daemon-reload && systemctl enable "$ZIVPN_SERVICE"
+  # ✅ SOCAT service (REMPLACE iptables 6000-19999→5667)
+  cat > "/etc/systemd/system/socat-zivpn.service" << 'EOF'
+[Unit]
+Description=Socat ZIVPN UDP Forwarder (6000-19999 → 5667)
+After=zivpn.service network-online.target
+Wants=network-online.target
 
-  # ✅ IPTABLES INTELLIGENT (pas de flush !)
+[Service]
+Type=simple
+ExecStart=/usr/bin/socat UDP-LISTEN:6000-19999,fork,reuseaddr,bind=0.0.0.0 UDP:127.0.0.1:5667
+Restart=always
+RestartSec=5
+LimitNOFILE=1048576
+AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_NET_RAW
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  systemctl daemon-reload
+  systemctl enable "$ZIVPN_SERVICE" socat-zivpn.service
+
+  # ✅ UNE SEULE règle iptables (5667 direct access)
   iptables -C INPUT -p udp --dport 5667 -j ACCEPT 2>/dev/null || \
   iptables -A INPUT -p udp --dport 5667 -j ACCEPT
-
-  iptables -C INPUT -p udp --dport 6000:19999 -j ACCEPT 2>/dev/null || \
-  iptables -A INPUT -p udp --dport 6000:19999 -j ACCEPT
-
-  iptables -t nat -C PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667 2>/dev/null || \
-  iptables -t nat -A PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667
 
   netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
   
@@ -159,19 +171,27 @@ EOF
   sysctl -w net.core.wmem_max=16777216
   echo "net.core.rmem_max=16777216" >> /etc/sysctl.conf
   echo "net.core.wmem_max=16777216" >> /etc/sysctl.conf
+  sysctl -p
 
-  systemctl start "$ZIVPN_SERVICE"
+  # Démarrage services
+  systemctl start "$ZIVPN_SERVICE" socat-zivpn.service
   
   # VÉRIFICATION FINALE
   sleep 3
-  if systemctl is-active --quiet "$ZIVPN_SERVICE"; then
+  ZIVPN_OK=$(systemctl is-active --quiet "$ZIVPN_SERVICE" 2>/dev/null && echo "✅" || echo "❌")
+  SOCAT_OK=$(systemctl is-active --quiet socat-zivpn.service 2>/dev/null && echo "✅" || echo "❌")
+  
+  if [[ "$ZIVPN_OK" == "✅" && "$SOCAT_OK" == "✅" ]]; then
     IP=$(hostname -I | awk '{print $1}')
-    echo "✅ ZIVPN installé et actif !"
+    echo "✅ ZIVPN + SOCAT installé et actif !"
     echo "📱 Config ZIVPN App:"
-    echo "   udp server: $IP"
-    echo "   Password: zi"
+    echo "   Serveur UDP: $IP"
+    echo ""
+    echo "🔍 Status: systemctl status zivpn socat-zivpn"
+    echo "📊 Logs:   journalctl -u socat-zivpn -f"
   else
-    echo "❌ ZIVPN ne démarre pas → journalctl -u zivpn.service"
+    echo "❌ Problème → Vérifie:"
+    echo "   journalctl -u zivpn.service -u socat-zivpn.service"
   fi
   
   pause
