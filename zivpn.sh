@@ -44,7 +44,9 @@ show_status_block() {
   
   SVC_FILE_OK=$([[ -f "/etc/systemd/system/$ZIVPN_SERVICE" ]] && echo "✅" || echo "❌")
   SVC_ACTIVE=$(systemctl is-active "$ZIVPN_SERVICE" 2>/dev/null || echo "N/A")
-  PORT_OK=$(ss -ludp | grep -q 5667 && echo "✅" || echo "❌")
+  PORT_OK=$(
+  ss -lunat | grep -q ":5667" && echo "✅" || echo "❌"
+)
   
   echo "Service file: $SVC_FILE_OK"
   echo "Service actif: $SVC_ACTIVE"
