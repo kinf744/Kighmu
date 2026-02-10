@@ -258,8 +258,6 @@ creer_utilisateur() {
     date_exp=$(date -d "+${duree} days" +%Y-%m-%d)
 
     # ===============================
-    # 🔐 CRÉATION UTILISATEUR LINUX
-    # ===============================
     useradd -m -s /bin/bash "$nom" || {
         echo "❌ Erreur création utilisateur Linux"
         read -p "Entrée pour continuer..."
@@ -273,8 +271,6 @@ creer_utilisateur() {
     chage -E "$date_exp" "$nom"
 
     # ===============================
-    # 💾 AJOUT DANS JSON UTILISATEURS
-    # ===============================
     utilisateurs=$(echo "$utilisateurs" | jq --arg n "$nom" --arg u "$uuid" --arg d "$date_exp" \
         '. += [{"nom": $n, "uuid": $u, "expire": $d}]')
 
@@ -283,8 +279,6 @@ creer_utilisateur() {
     mv "$tmpfile" "$USER_DB"
     chmod 600 "$USER_DB"
 
-    # ===============================
-    # 🔌 AJOUT CLIENT V2RAY
     # ===============================
     if [[ -f /etc/v2ray/config.json ]]; then
         if ! ajouter_client_v2ray "$uuid" "$nom"; then
@@ -320,8 +314,6 @@ creer_utilisateur() {
     generer_liens_v2ray "$nom" "$domaine" "$V2RAY_INTER_PORT" "$uuid"
 
     # ===============================
-    # ⚡ NETTOYAGE AUTOMATIQUE DES UUID EXPIRÉS
-    # ===============================
     TODAY=$(date +%Y-%m-%d)
 
     # Filtrer utilisateurs valides
@@ -346,8 +338,6 @@ creer_utilisateur() {
     utilisateurs="$utilisateurs_valides"
     sauvegarder_utilisateurs
 
-    # ===============================
-    # 📊 AFFICHAGE FINAL
     # ===============================
     clear
     echo -e "${GREEN}============================================"
