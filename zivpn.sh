@@ -23,7 +23,7 @@ check_root() {
 }
 
 zivpn_installed() {
-  [[ -x "$ZIVPN_BIN" ]] && { systemctl list-unit-files | grep -q "^$ZIVPN_SERVICE" || systemctl list-unit-files | grep -q "socat-zivpn"; }
+  [[ -x "$ZIVPN_BIN" ]] && systemctl list-unit-files | grep -q "^$ZIVPN_SERVICE"
 }
 
 zivpn_running() {
@@ -70,7 +70,7 @@ show_status_block() {
 
 install_zivpn() {
   print_title
-  echo "[1] INSTALLATION ZIVPN (SOCAT - NO CONFLIT UFW)"
+  echo "[1] INSTALLATION ZIVPN (NO CONFLIT UFW)"
   echo
 
   if zivpn_installed; then
@@ -81,13 +81,15 @@ install_zivpn() {
 
   # Clean slate + PURGE UFW
   systemctl stop zivpn >/dev/null 2>&1 || true
-  systemctl stop socat-zivpn >/dev/null 2>&1 || true
   systemctl stop ufw >/dev/null 2>&1 || true
   ufw disable >/dev/null 2>&1 || true
   apt purge ufw -y >/dev/null 2>&1 || true
   
-  # ✅ PAQUETS (socat + iptables-persistent)
-  apt update -y && apt install -y wget curl jq openssl iptables-persistent netfilter-persistent socat
+  # RESET iptables propre
+  # iptables -F; iptables -t nat -F; iptables -t mangle -F 2>/dev/null || true
+
+  # ✅ PAQUETS SANS CONFLIT UFW
+  apt update -y && apt install -y wget curl jq openssl iptables-persistent netfilter-persistent
 
   # Binaire + cert
   wget -q "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp-zivpn-linux-amd64" -O "$ZIVPN_BIN"
@@ -116,7 +118,7 @@ install_zivpn() {
 }
 EOF
 
-  # ✅ ZIVPN systemd service
+  # systemd service
   cat > "/etc/systemd/system/$ZIVPN_SERVICE" << EOF
 [Unit]
 Description=ZIVPN UDP Server
@@ -138,71 +140,38 @@ StandardError=append:/var/log/zivpn.log
 WantedBy=multi-user.target
 EOF
 
-  # ✅ SOCAT service (REMPLACE iptables 6000-19999→5667)
-  cat > "/etc/systemd/system/socat-zivpn.service" << 'EOF'
-[Unit]
-Description=Socat ZIVPN UDP Forwarder (6000-19999 → 5667)
-After=zivpn.service network-online.target
-Wants=network-online.target
+  systemctl daemon-reload && systemctl enable "$ZIVPN_SERVICE"
 
-[Service]
-Type=simple
-ExecStart=/usr/bin/socat UDP-LISTEN:6000-19999,fork,reuseaddr,bind=0.0.0.0 UDP:127.0.0.1:5667
-Restart=always
-RestartSec=5
-LimitNOFILE=1048576
-AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_NET_RAW
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-  systemctl daemon-reload
-  systemctl enable "$ZIVPN_SERVICE" socat-zivpn.service
-
-  # ✅ UNE SEULE règle iptables (5667 direct access)
+  # ✅ IPTABLES INTELLIGENT (pas de flush !)
   iptables -C INPUT -p udp --dport 5667 -j ACCEPT 2>/dev/null || \
   iptables -A INPUT -p udp --dport 5667 -j ACCEPT
 
+  iptables -C INPUT -p udp --dport 6000:19999 -j ACCEPT 2>/dev/null || \
+  iptables -A INPUT -p udp --dport 6000:19999 -j ACCEPT
+
+  iptables -t nat -C PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667 2>/dev/null || \
+  iptables -t nat -A PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667
+
   netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
   
-  # REMPLACE ta section sysctl par :
-echo "Optimisations réseau PRO (ZIVPN + SOCAT)"
-cat >> /etc/sysctl.conf << 'EOF'
-# ZIVPN/SOCAT UDP High Performance
-net.core.rmem_max = 134217728
-net.core.wmem_max = 134217728
-net.core.rmem_default = 134217728
-net.core.wmem_default = 134217728
-net.core.netdev_max_backlog = 5000
-net.ipv4.udp_mem = 8388608 1048576 16777216
-net.ipv4.udp_rmem_min = 131071
-net.ipv4.udp_wmem_min = 131071
-EOF
-sysctl -p /etc/sysctl.conf
+  # Optimisations réseau
+  sysctl -w net.core.rmem_max=16777216
+  sysctl -w net.core.wmem_max=16777216
+  echo "net.core.rmem_max=16777216" >> /etc/sysctl.conf
+  echo "net.core.wmem_max=16777216" >> /etc/sysctl.conf
 
-# Vérif
-sysctl net.core.rmem_max net.core.wmem_max | grep 134217728 && echo "✅ Buffers OK"
-  
-  # Démarrage services
-  systemctl start "$ZIVPN_SERVICE" socat-zivpn.service
+  systemctl start "$ZIVPN_SERVICE"
   
   # VÉRIFICATION FINALE
   sleep 3
-  ZIVPN_OK=$(systemctl is-active --quiet "$ZIVPN_SERVICE" 2>/dev/null && echo "✅" || echo "❌")
-  SOCAT_OK=$(systemctl is-active --quiet socat-zivpn.service 2>/dev/null && echo "✅" || echo "❌")
-  
-  if [[ "$ZIVPN_OK" == "✅" && "$SOCAT_OK" == "✅" ]]; then
+  if systemctl is-active --quiet "$ZIVPN_SERVICE"; then
     IP=$(hostname -I | awk '{print $1}')
-    echo "✅ ZIVPN + SOCAT installé et actif !"
+    echo "✅ ZIVPN installé et actif !"
     echo "📱 Config ZIVPN App:"
-    echo "   Serveur UDP: $IP"
-    echo ""
-    echo "🔍 Status: systemctl status zivpn socat-zivpn"
-    echo "📊 Logs:   journalctl -u socat-zivpn -f"
+    echo "   udp server: $IP"
+    echo "   Password: zi"
   else
-    echo "❌ Problème → Vérifie:"
-    echo "   journalctl -u zivpn.service -u socat-zivpn.service"
+    echo "❌ ZIVPN ne démarre pas → journalctl -u zivpn.service"
   fi
   
   pause
@@ -358,40 +327,30 @@ fix_zivpn() {
 
 uninstall_zivpn() {
   print_title
-  echo "[5] DÉSINSTALLATION ZIVPN + SOCAT (SAUF autres tunnels)"
+  echo "[5] DÉSINSTALLATION ZIVPN (SAUF autres tunnels)"
   read -rp "Confirmer ? (o/N): " CONFIRM
   [[ "$CONFIRM" =~ ^[oO]$ ]] || { echo "Annulé"; pause; return; }
 
-  # 1) Arrêt et suppression services ZIVPN + SOCAT
-  systemctl stop "$ZIVPN_SERVICE" socat-zivpn.service 2>/dev/null || true
-  systemctl disable "$ZIVPN_SERVICE" socat-zivpn.service 2>/dev/null || true
-  rm -f "/etc/systemd/system/$ZIVPN_SERVICE" "/etc/systemd/system/socat-zivpn.service"
+  # 1) Service seulement
+  systemctl stop "$ZIVPN_SERVICE" 2>/dev/null || true
+  systemctl disable "$ZIVPN_SERVICE" 2>/dev/null || true
+  rm -f "/etc/systemd/system/$ZIVPN_SERVICE"
   systemctl daemon-reload
-  systemctl reset-failed "$ZIVPN_SERVICE" socat-zivpn.service 2>/dev/null || true
 
-  # 2) Suppression binaire et fichiers config
+  # 2) Fichiers seulement
   rm -f "$ZIVPN_BIN"
   rm -rf /etc/zivpn
 
-  # 3) IPTABLES - SEULEMENT règle 5667 (socat n'ajoute rien d'autre)
+  # 3) IPTABLES ZIVPN UNIQUEMENT (règles spécifiques -C)
+  iptables -t nat -D PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667 2>/dev/null || true
   iptables -D INPUT -p udp --dport 5667 -j ACCEPT 2>/dev/null || true
+  iptables -D INPUT -p udp --dport 6000:19999 -j ACCEPT 2>/dev/null || true
 
-  # ✅ SAUVEGARDE iptables (autres tunnels préservés)
-  if command -v netfilter-persistent >/dev/null 2>&1; then
-    netfilter-persistent save 2>/dev/null || true
-  else
-    iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
-  fi
+  # ✅ SAUVEGARDE iptables (RESTORE autres tunnels)
+  netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
 
-  echo "✅ ZIVPN + SOCAT supprimés SANS toucher autres tunnels"
-  echo "   Services supprimés: zivpn.service, socat-zivpn.service"
-  echo "   Fichiers supprimés: $ZIVPN_BIN, /etc/zivpn/"
-  echo "   IPTables nettoyé: port 5667 seulement"
-  echo ""
-  echo "🔍 Vérifier status:"
-  echo "   systemctl status zivpn socat-zivpn"
-  echo "   iptables -t nat -L PREROUTING -n | grep 5667"
-  echo "   ss -ulnp | grep 5667"
+  echo "✅ ZIVPN supprimé SANS toucher Hysteria/SlowDNS"
+  echo "   Vérifiez: iptables -t nat -L PREROUTING -n"
   pause
 }
 
