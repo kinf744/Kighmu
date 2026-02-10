@@ -180,52 +180,46 @@ EOF
 # ---------- 2) Création utilisateur ----------
 
 create_zivpn_user() {
-  print_title
-  echo "[2] CRÉATION UTILISATEUR ZIVPN"
+    print_title
+    echo "[2] CRÉATION UTILISATEUR ZIVPN"
 
-  if ! systemctl is-active --quiet "$ZIVPN_SERVICE"; then
-    echo "❌ Service ZIVPN inactif ou non installé."
-    echo "   Lance l'option 1 ou: systemctl start $ZIVPN_SERVICE"
-    pause
-    return
-  fi
+    if ! systemctl is-active --quiet "$ZIVPN_SERVICE"; then
+        echo "❌ Service ZIVPN inactif ou non installé."
+        echo "   Lance l'option 1 ou: systemctl start $ZIVPN_SERVICE"
+        pause
+        return
+    fi
 
-  echo "Format: téléphone|password|expiration"
-  echo "Exemple: 2330|MonPass123|2026-02-01"
-  echo
+    # --- Entrée utilisateur ---
+    read -rp "Téléphone: " PHONE
+    read -rp "Password ZIVPN: " PASS
+    read -rp "Durée (jours): " DAYS
+    EXPIRE=$(date -d "+${DAYS} days" '+%Y-%m-%d')
 
-  read -rp "Téléphone: " PHONE
-  read -rp "Password ZIVPN: " PASS
-  read -rp "Durée (jours): " DAYS
+    # --- Nettoyage utilisateurs expirés ---
+    TODAY=$(date +%Y-%m-%d)
+    tmp=$(mktemp)
+    awk -F'|' -v today="$TODAY" '$3>=today {print $0}' "$ZIVPN_USER_FILE" > "$tmp" 2>/dev/null || true
+    mv "$tmp" "$ZIVPN_USER_FILE"
 
-  EXPIRE=$(date -d "+${DAYS} days" '+%Y-%m-%d')
+    # --- Suppression éventuelle doublon PHONE ---
+    tmp=$(mktemp)
+    grep -v "^$PHONE|" "$ZIVPN_USER_FILE" > "$tmp" 2>/dev/null || true
+    echo "$PHONE|$PASS|$EXPIRE" >> "$tmp"
+    mv "$tmp" "$ZIVPN_USER_FILE"
+    chmod 600 "$ZIVPN_USER_FILE"
 
-  # ✅ SAUVEGARDE users.list
-  tmp=$(mktemp)
-  grep -v "^$PHONE|" "$ZIVPN_USER_FILE" > "$tmp" 2>/dev/null || true
-  echo "$PHONE|$PASS|$EXPIRE" >> "$tmp"
-  mv "$tmp" "$ZIVPN_USER_FILE"
-  chmod 600 "$ZIVPN_USER_FILE"
-
-  # ✅ EXTRACTION PASSWORDS (NOUVEAU : simple et sûr)
-  TODAY=$(date +%Y-%m-%d)
-  PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$ZIVPN_USER_FILE" | \
-              sort -u | paste -sd, -)
-
-  # ✅ JQ CORRIGÉ (string → array avec split)
-  if jq --arg passwords "$PASSWORDS" \
-        '.auth.config = ($passwords | split(","))' \
-        "$ZIVPN_CONFIG" > /tmp/config.json 2>/dev/null; then
+    # --- Mise à jour auth.config dans config.json ---
+    PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$ZIVPN_USER_FILE" | sort -u | paste -sd, -)
     
-    # Vérif JSON valide
-    if jq empty /tmp/config.json >/dev/null 2>&1; then
-      mv /tmp/config.json "$ZIVPN_CONFIG"
-      systemctl restart "$ZIVPN_SERVICE"
-      
-      IP=$(hostname -I | awk '{print $1}')
-      DOMAIN=$(cat "$ZIVPN_DOMAIN_FILE" 2>/dev/null || echo "$IP")
+    if jq --arg passwords "$PASSWORDS" '.auth.config = ($passwords | split(","))' "$ZIVPN_CONFIG" > /tmp/config.json 2>/dev/null &&
+       jq empty /tmp/config.json >/dev/null 2>&1; then
+        mv /tmp/config.json "$ZIVPN_CONFIG"
+        systemctl restart "$ZIVPN_SERVICE"
 
-      echo
+        DOMAIN=$(cat "$ZIVPN_DOMAIN_FILE" 2>/dev/null || hostname -I | awk '{print $1}')
+
+        echo
       echo "✅ 𝗨𝗧𝗜𝗟𝗜𝗦𝗔𝗧𝗘𝗨𝗥 𝗖𝗥𝗘𝗘𝗥"
       echo "━━━━━━━━━━━━━━━━━━━━━"
       echo "🌐 𝗗𝗼𝗺𝗮𝗶𝗻𝗲  : $DOMAIN"
@@ -235,14 +229,11 @@ create_zivpn_user() {
       echo "🔌 𝐏𝐨𝐫𝐭    : 5667"
       echo "━━━━━━━━━━━━━━━━━━━━━"
     else
-      echo "❌ JSON invalide → rollback"
-      rm -f /tmp/config.json
+        echo "❌ JSON invalide → rollback"
+        rm -f /tmp/config.json
     fi
-  else
-    echo "❌ Erreur jq → config inchangée"
-  fi
 
-  pause
+    pause
 }
 
 # ---------- 3) Suppression utilisateur ----------
