@@ -257,55 +257,38 @@ delete_zivpn_user() {
     return
   fi
 
+  # Liste triée + numérotée
+  mapfile -t USERS < <(sort -t'|' -k3 "$ZIVPN_USER_FILE" | nl -w2 -s'. ')
   echo "Utilisateurs actifs (sélectionnez NUMÉRO):"
   echo "────────────────────────────────────"
-
-  # 📋 Liste triée + numérotée (STABLE)
-  mapfile -t USERS < <(
-    awk -F'|' '{ printf "%s|%s|%s\n", $1, $2, $3 }' "$ZIVPN_USER_FILE" |
-    sort -t'|' -k3 |
-    nl -w2 -s'. '
-  )
-
   printf '%s\n' "${USERS[@]}"
   echo "────────────────────────────────────"
 
   read -rp "🔢 Numéro à supprimer (1-${#USERS[@]}): " NUM
-
-  # VALIDATION
   if ! [[ "$NUM" =~ ^[0-9]+$ ]] || (( NUM < 1 || NUM > ${#USERS[@]} )); then
     echo "❌ Numéro invalide."
     pause
     return
   fi
 
-  # EXTRACTION ligne exacte sélectionnée
+  # Extraction téléphone à partir de la ligne sélectionnée
   LINE="${USERS[$((NUM-1))]}"
   PHONE=$(echo "$LINE" | cut -d'|' -f1 | tr -d '[:space:]')
-
-  if [[ -z "$PHONE" ]]; then
-    echo "❌ Utilisateur introuvable."
-    pause
-    return
-  fi
+  # Échappe caractères spéciaux pour grep
+  PHONE_ESCAPED=$(echo "$PHONE" | sed 's/[][\\/.*^$]/\\&/g')
 
   echo "🗑️ Suppression de $PHONE..."
 
-  # SUPPRESSION RÉELLE
   tmp=$(mktemp)
-  grep -v "^$PHONE|" "$ZIVPN_USER_FILE" > "$tmp"
+  grep -v "^$PHONE_ESCAPED|" "$ZIVPN_USER_FILE" > "$tmp" || true
   mv "$tmp" "$ZIVPN_USER_FILE"
   chmod 600 "$ZIVPN_USER_FILE"
 
-  # 🔄 Mise à jour ZIVPN
+  # Mise à jour config.json
   TODAY=$(date +%Y-%m-%d)
   PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$ZIVPN_USER_FILE" | sort -u | paste -sd, -)
-
-  if jq --arg passwords "$PASSWORDS" \
-        '.auth.config = ($passwords | split(","))' \
-        "$ZIVPN_CONFIG" > /tmp/config.json 2>/dev/null &&
+  if jq --arg passwords "$PASSWORDS" '.auth.config = ($passwords | split(","))' "$ZIVPN_CONFIG" > /tmp/config.json 2>/dev/null &&
      jq empty /tmp/config.json >/dev/null 2>&1; then
-
     mv /tmp/config.json "$ZIVPN_CONFIG"
     systemctl restart "$ZIVPN_SERVICE"
     echo "✅ $PHONE (n°$NUM) supprimé et ZIVPN mis à jour"
