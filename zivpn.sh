@@ -166,13 +166,24 @@ EOF
 
   netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
   
-  # Optimisations réseau
-  sysctl -w net.core.rmem_max=16777216
-  sysctl -w net.core.wmem_max=16777216
-  echo "net.core.rmem_max=16777216" >> /etc/sysctl.conf
-  echo "net.core.wmem_max=16777216" >> /etc/sysctl.conf
-  sysctl -p
+  # REMPLACE ta section sysctl par :
+echo "Optimisations réseau PRO (ZIVPN + SOCAT)"
+cat >> /etc/sysctl.conf << 'EOF'
+# ZIVPN/SOCAT UDP High Performance
+net.core.rmem_max = 134217728
+net.core.wmem_max = 134217728
+net.core.rmem_default = 134217728
+net.core.wmem_default = 134217728
+net.core.netdev_max_backlog = 5000
+net.ipv4.udp_mem = 8388608 1048576 16777216
+net.ipv4.udp_rmem_min = 131071
+net.ipv4.udp_wmem_min = 131071
+EOF
+sysctl -p /etc/sysctl.conf
 
+# Vérif
+sysctl net.core.rmem_max net.core.wmem_max | grep 134217728 && echo "✅ Buffers OK"
+  
   # Démarrage services
   systemctl start "$ZIVPN_SERVICE" socat-zivpn.service
   
