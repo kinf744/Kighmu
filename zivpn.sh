@@ -44,13 +44,13 @@ show_status_block() {
   
   SVC_FILE_OK=$([[ -f "/etc/systemd/system/$ZIVPN_SERVICE" ]] && echo "✅" || echo "❌")
   SVC_ACTIVE=$(systemctl is-active "$ZIVPN_SERVICE" 2>/dev/null || echo "N/A")
-  PORT_OK=$(
-  ss -lunat | grep -q ":5667" && echo "✅" || echo "❌"
-)
+  
+  # ✅ FIX UDP OPTIMAL (comme tes logs le confirment)
+  PORT_OK=$(ss -lunp 2>/dev/null | grep -q ":5667" && echo "✅" || echo "❌")
   
   echo "Service file: $SVC_FILE_OK"
   echo "Service actif: $SVC_ACTIVE"
-  echo "Port 5667: $PORT_OK"
+  echo "Port 5667: $PORT_OK"  # ✅ S'AFFICHE MAINTENANT
   
   if [[ "$SVC_FILE_OK" == "✅" ]]; then
     if systemctl is-active --quiet "$ZIVPN_SERVICE" 2>/dev/null; then
