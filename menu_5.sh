@@ -1,8 +1,10 @@
 #!/bin/bash
 
-verifier_expiration_utilisateurs "$1"
-crontab -e
-*/5 * * * * /root/Kighmu/ton_script.sh --expire-check >/dev/null 2>&1
+# Mode automatique lancé par cron
+if [[ "$1" == "--expire-check" ]]; then
+    verifier_expiration_utilisateurs
+    exit 0
+fi
 
 # Fichier stockage utilisateurs (V2Ray)
 USER_DB="/etc/v2ray/utilisateurs.json"
