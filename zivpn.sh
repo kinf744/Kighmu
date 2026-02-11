@@ -71,7 +71,7 @@ print_title() {
 }
 
 show_status_block() {
-  echo "-------- STATUT ZIVPN --------"
+  echo "${CYAN}-------------- STATUT ZIVPN --------------${RESET}"
   
   SVC_FILE_OK=$([[ -f "/etc/systemd/system/$ZIVPN_SERVICE" ]] && echo "✅" || echo "❌")
   SVC_ACTIVE=$(systemctl is-active "$ZIVPN_SERVICE" 2>/dev/null || echo "N/A")
@@ -93,7 +93,7 @@ show_status_block() {
   else
     echo "${RED}❌ HYSTERIA : NON INSTALLÉ${RESET}"
   fi
-  echo "-----------------------------------------"
+  echo "${CYAN}------------------------------------------${RESET}"
   echo
 }
 
