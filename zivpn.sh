@@ -8,6 +8,37 @@ ZIVPN_CONFIG="/etc/zivpn/config.json"
 ZIVPN_USER_FILE="/etc/zivpn/users.list"
 ZIVPN_DOMAIN_FILE="/etc/zivpn/domain.txt"
 
+# ==========================================================
+# 🎨 COULEURS PRO STYLE KIGHMU (PORTABLE)
+# ==========================================================
+setup_colors() {
+    RED=""
+    GREEN=""
+    YELLOW=""
+    CYAN=""
+    WHITE=""
+    MAGENTA=""
+    MAGENTA_VIF=""
+    BOLD=""
+    RESET=""
+
+    if [ -t 1 ]; then
+        if [ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]; then
+            RED="$(tput setaf 1)"
+            GREEN="$(tput setaf 2)"
+            YELLOW="$(tput setaf 3)"
+            MAGENTA="$(tput setaf 5)"
+            CYAN="$(tput setaf 6)"
+            WHITE="$(tput setaf 7)"
+            MAGENTA_VIF="$(tput setaf 5; tput bold)"
+            BOLD="$(tput bold)"
+            RESET="$(tput sgr0)"
+        fi
+    fi
+}
+
+setup_colors
+
 # ---------- Fonctions utilitaires ----------
 
 pause() {
