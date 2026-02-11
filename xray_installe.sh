@@ -136,14 +136,12 @@ cat > /etc/xray/config.json << EOF
       "settings": {
         "decryption": "none",
         "clients": [
-          { "id": "$uuid" }
+          { "id": "$uuid", "email": "$username" }
         ]
       },
       "streamSettings": {
         "network": "ws",
-        "wsSettings": {
-          "path": "/vless"
-        }
+        "wsSettings": { "path": "/vless" }
       }
     },
 
@@ -155,15 +153,14 @@ cat > /etc/xray/config.json << EOF
         "clients": [
           {
             "id": "$uuid",
-            "alterId": 0
+            "alterId": 0,
+            "email": "$username"
           }
         ]
       },
       "streamSettings": {
         "network": "ws",
-        "wsSettings": {
-          "path": "/vmess"
-        }
+        "wsSettings": { "path": "/vmess" }
       }
     },
 
@@ -173,15 +170,13 @@ cat > /etc/xray/config.json << EOF
       "protocol": "trojan",
       "settings": {
         "clients": [
-          { "password": "$uuid" }
+          { "password": "$uuid", "email": "$username" }
         ],
         "udp": true
       },
       "streamSettings": {
         "network": "ws",
-        "wsSettings": {
-          "path": "/trojan-ws"
-        }
+        "wsSettings": { "path": "/trojan-ws" }
       }
     },
 
@@ -193,16 +188,15 @@ cat > /etc/xray/config.json << EOF
         "clients": [
           {
             "method": "aes-128-gcm",
-            "password": "$uuid"
+            "password": "$uuid",
+            "email": "$username"
           }
         ],
         "network": "tcp,udp"
       },
       "streamSettings": {
         "network": "ws",
-        "wsSettings": {
-          "path": "/ss-ws"
-        }
+        "wsSettings": { "path": "/ss-ws" }
       }
     },
 
@@ -213,14 +207,12 @@ cat > /etc/xray/config.json << EOF
       "settings": {
         "decryption": "none",
         "clients": [
-          { "id": "$uuid" }
+          { "id": "$uuid", "email": "$username" }
         ]
       },
       "streamSettings": {
         "network": "grpc",
-        "grpcSettings": {
-          "serviceName": "vless-grpc"
-        }
+        "grpcSettings": { "serviceName": "vless-grpc" }
       }
     },
 
@@ -232,15 +224,14 @@ cat > /etc/xray/config.json << EOF
         "clients": [
           {
             "id": "$uuid",
-            "alterId": 0
+            "alterId": 0,
+            "email": "$username"
           }
         ]
       },
       "streamSettings": {
         "network": "grpc",
-        "grpcSettings": {
-          "serviceName": "vmess-grpc"
-        }
+        "grpcSettings": { "serviceName": "vmess-grpc" }
       }
     },
 
@@ -250,14 +241,12 @@ cat > /etc/xray/config.json << EOF
       "protocol": "trojan",
       "settings": {
         "clients": [
-          { "password": "$uuid" }
+          { "password": "$uuid", "email": "$username" }
         ]
       },
       "streamSettings": {
         "network": "grpc",
-        "grpcSettings": {
-          "serviceName": "trojan-grpc"
-        }
+        "grpcSettings": { "serviceName": "trojan-grpc" }
       }
     },
 
@@ -269,16 +258,15 @@ cat > /etc/xray/config.json << EOF
         "clients": [
           {
             "method": "aes-128-gcm",
-            "password": "$uuid"
+            "password": "$uuid",
+            "email": "$username"
           }
         ],
         "network": "tcp,udp"
       },
       "streamSettings": {
         "network": "grpc",
-        "grpcSettings": {
-          "serviceName": "ss-grpc"
-        }
+        "grpcSettings": { "serviceName": "ss-grpc" }
       }
     }
   ],
