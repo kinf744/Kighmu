@@ -215,7 +215,7 @@ EOF
 
 create_hysteria_user() {
   print_title
-  echo "[2] CRÉATION UTILISATEUR HYSTERIA"
+  echo "${MAGENTA_VIF}[2] CRÉATION UTILISATEUR HYSTERIA${RESET}"
 
   if ! systemctl is-active --quiet "$HYSTERIA_SERVICE"; then
     echo "❌ Service HYSTERIA inactif ou non installé."
@@ -260,20 +260,20 @@ create_hysteria_user() {
       DOMAIN=$(cat "$HYSTERIA_DOMAIN_FILE" 2>/dev/null || echo "$IP")
 
       echo
-      echo "✅ 𝗨𝗧𝗜𝗟𝗜𝗦𝗔𝗧𝗘𝗨𝗥 𝗖𝗥𝗘𝗘𝗥"
-      echo "━━━━━━━━━━━━━━━━━━━━━"
-      echo "🌐 𝗗𝗼𝗺𝗮𝗶𝗻𝗲  : $DOMAIN"
-      echo "🎭 𝗢𝗯𝗳𝘀     : hysteria"
-      echo "🔐 𝗣𝗮𝘀𝘀𝘄𝗼𝗿𝗱 : $PASS"
-      echo "📅 𝗘𝘅𝗽𝗶𝗿𝗲   : $EXPIRE"
-      echo "🔌 𝐏𝐨𝐫𝐭    : 20000-50000"
-      echo "━━━━━━━━━━━━━━━━━━━━━"
+      echo "${MAGENTA}✅ 𝗨𝗧𝗜𝗟𝗜𝗦𝗔𝗧𝗘𝗨𝗥 𝗖𝗥𝗘𝗘𝗥${RESET}"
+      echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━${RESET}"
+      echo "${BOLD}🌐 𝗗𝗼𝗺𝗮𝗶𝗻𝗲  : ${YELLOW}$DOMAIN${RESET}"
+      echo "${BOLD}🎭 𝗢𝗯𝗳𝘀     : hysteria${RESET}"
+      echo "${BOLD}🔐 𝗣𝗮𝘀𝘀𝘄𝗼𝗿𝗱 : ${YELLOW}$PASS${RESET}"
+      echo "${BOLD}📅 𝗘𝘅𝗽𝗶𝗿𝗲   : $EXPIRE${RESET}"
+      echo "${BOLD}🔌 𝐏𝐨𝐫𝐭    : 20000-50000${RESET}"
+      echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━${RESET}"
     else
-      echo "❌ JSON invalide → rollback"
+      echo "${RED}❌ JSON invalide → rollback${RESET}"
       rm -f /tmp/config.json
     fi
   else
-    echo "❌ Erreur jq → config inchangée"
+    echo "${RED}❌ Erreur jq → config inchangée${RESET}"
   fi
 
   pause
