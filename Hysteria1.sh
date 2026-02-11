@@ -69,7 +69,7 @@ print_title() {
 }
 
 show_status_block() {
-  echo "${CYAN}-------- STATUT HYSTERIA --------${RESET}"
+  echo "${CYAN}----------- STATUT HYSTERIA -----------${RESET}"
   
   SVC_FILE_OK=$([[ -f "/etc/systemd/system/$HYSTERIA_SERVICE" ]] && echo "✅" || echo "❌")
   SVC_ACTIVE=$(systemctl is-active "$HYSTERIA_SERVICE" 2>/dev/null || echo "N/A")
@@ -89,7 +89,7 @@ show_status_block() {
   else
     echo "${RED}❌ HYSTERIA : NON INSTALLÉ${RESET}"
   fi
-  echo "${CYAN}-----------------------------------------${CYAN}"
+  echo "${CYAN}----------------------------------------${CYAN}"
   echo
 }
 
