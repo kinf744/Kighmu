@@ -304,7 +304,7 @@ delete_hysteria_user() {
   read -rp "${BOLD}🔢 Numéro à supprimer (1-${#USERS[@]}): ${RESET}" NUM
 
   if ! [[ "$NUM" =~ ^[0-9]+$ ]] || (( NUM < 1 || NUM > ${#USERS[@]} )); then
-    echo "${RED}❌ Numéro invalide.${RESET"
+    echo "${RED}❌ Numéro invalide.${RESET}"
     pause
     return
   fi
