@@ -63,10 +63,10 @@ zivpn_running() {
 
 print_title() {
   clear
-  echo "╔═══════════════════════════════════════╗"
-  echo "║        ZIVPN CONTROL PANEL v2         ║"
-  echo "║     (Compatible @kighmu 🇨🇲)           ║"
-  echo "╚═══════════════════════════════════════╝"
+  echo "${CYAN}${BOLD}╔═══════════════════════════════════════╗${RESET}"
+  echo "${CYAN}║        ZIVPN CONTROL PANEL v2         ║${RESET}"
+  echo "${CYAN}║     (Compatible @kighmu 🇨🇲)           ║${RESET}"
+  echo "${CYAN}${BOLD}╚═══════════════════════════════════════╝${RESET}"
   echo
 }
 
@@ -79,19 +79,19 @@ show_status_block() {
   # ✅ FIX UDP OPTIMAL (comme tes logs le confirment)
   PORT_OK=$(ss -lunp 2>/dev/null | grep -q ":5667" && echo "✅" || echo "❌")
   
-  echo "Service file: $SVC_FILE_OK"
-  echo "Service actif: $SVC_ACTIVE"
-  echo "Port 5667: $PORT_OK"  # ✅ S'AFFICHE MAINTENANT
+  echo "${WHITE}Service file:${RESET} $SVC_FILE_OK"
+  echo "${WHITE}Service actif:${RESET} $SVC_ACTIVE"
+  echo "${WHITE}Port 20000:${RESET} $PORT_OK"
   
   if [[ "$SVC_FILE_OK" == "✅" ]]; then
     if systemctl is-active --quiet "$ZIVPN_SERVICE" 2>/dev/null; then
-      echo "✅ ZIVPN : INSTALLÉ et ACTIF"
+      echo "${GREEN}✅ ZIVPN : INSTALLÉ et ACTIF${RESET}"
       echo "   Port interne: 5667"
     else
       echo "⚠️  ZIVPN : INSTALLÉ mais INACTIF"
     fi
   else
-    echo "❌ ZIVPN : NON INSTALLÉ"
+    echo "${RED}❌ HYSTERIA : NON INSTALLÉ${RESET}"
   fi
   echo "-----------------------------------------"
   echo
@@ -393,14 +393,15 @@ while true; do
   print_title
   show_status_block
   
-  echo "1) Installer ZIVPN (arivpnstores)"
-  echo "2) Créer utilisateur ZIVPN" 
-  echo "3) Supprimer utilisateur"
-  echo "4) Fix ZIVPN (reset firewall/NAT)"
-  echo "5) Désinstaller ZIVPN"
-  echo "0) Quitter"
+  echo "${GREEN}${BOLD}[01]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Installation de Hysteria${RESET}"
+  echo "${GREEN}${BOLD}[02]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Créer un utilisateur HYSTERIA${RESET}" 
+  echo "${GREEN}${BOLD}[03]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Supprimer utilisateur${RESET}"
+  echo "${GREEN}${BOLD}[04]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Fix HYSTERIA (reset firewall/NAT)${RESET}"
+  echo "${GREEN}${BOLD}[05]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Désinstaller HYSTERIA${RESET}"
+  echo "${RED}[00] ➜ Quitter${RESET}"
   echo
-  read -rp "Choix: " CHOIX
+  echo -n "${BOLD}${YELLOW} Entrez votre choix [1-5]: ${RESET}"
+  read -r CHOIX
 
   case $CHOIX in
     1) install_zivpn ;;
@@ -409,6 +410,6 @@ while true; do
     4) fix_zivpn ;;
     5) uninstall_zivpn ;;
     0) exit 0 ;;
-    *) echo "❌ Choix invalide"; sleep 1 ;;
+    *) echo "${RED}❌ Choix invalide${RESET}"; sleep 1 ;;
   esac
 done
