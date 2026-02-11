@@ -283,10 +283,10 @@ create_hysteria_user() {
 
 delete_hysteria_user() {
   print_title
-  echo "[3] SUPPRIMER UTILISATEUR (NUMÉRO)"
+  echo "${MAGENTA_VIF}[3] SUPPRIMER UTILISATEUR${RESET}"
 
   if [[ ! -f "$HYSTERIA_USER_FILE" || ! -s "$HYSTERIA_USER_FILE" ]]; then
-    echo "❌ Aucun utilisateur enregistré."
+    echo "${RED}❌ Aucun utilisateur enregistré.${RESET"
     pause
     return
   fi
@@ -294,17 +294,17 @@ delete_hysteria_user() {
   # Lire la liste réelle depuis users.list
   mapfile -t USERS < <(sort -t'|' -k3 "$HYSTERIA_USER_FILE")
   echo "Utilisateurs actifs (sélectionnez NUMÉRO):"
-  echo "────────────────────────────────────"
+  echo "${CYAN}${BOLD}────────────────────────────────────${RESET"
 
   for i in "${!USERS[@]}"; do
     echo "$((i+1)). ${USERS[$i]}"
   done
 
-  echo "────────────────────────────────────"
-  read -rp "🔢 Numéro à supprimer (1-${#USERS[@]}): " NUM
+  echo "${CYAN}${BOLD}────────────────────────────────────${RESET"
+  read -rp "${BOLD}🔢 Numéro à supprimer (1-${#USERS[@]}): ${RESET" NUM
 
   if ! [[ "$NUM" =~ ^[0-9]+$ ]] || (( NUM < 1 || NUM > ${#USERS[@]} )); then
-    echo "❌ Numéro invalide."
+    echo "${RED}❌ Numéro invalide.${RESET"
     pause
     return
   fi
