@@ -15,6 +15,8 @@ setup_colors() {
     YELLOW=""
     CYAN=""
     WHITE=""
+    MAGENTA=""
+    MAGENTA_VIF=""
     BOLD=""
     RESET=""
 
@@ -23,6 +25,8 @@ setup_colors() {
             RED="$(tput setaf 1)"
             GREEN="$(tput setaf 2)"
             YELLOW="$(tput setaf 3)"
+            MAGENTA="$(tput setaf 5)"
+            MAGENTA_VIF="$(tput setaf 5; tput bold)"
             CYAN="$(tput setaf 6)"
             WHITE="$(tput setaf 7)"
             BOLD="$(tput bold)"
@@ -385,12 +389,12 @@ while true; do
   print_title
   show_status_block
   
-  echo -e "${GREEN}${BOLD}[01]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Installation de Hysteria${RESET}"
-  echo -e "${GREEN}${BOLD}[02]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Créer un utilisateur HYSTERIA${RESET}" 
-  echo -e "${GREEN}${BOLD}[03]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Supprimer utilisateur${RESET}"
-  echo -e "${GREEN}${BOLD}[04]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Fix HYSTERIA (reset firewall/NAT)${RESET}"
-  echo -e "${GREEN}${BOLD}[05]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Désinstaller HYSTERIA${RESET}"
-  echo -e "${RED}[00] ➜ Quitter${RESET}"
+  echo "${GREEN}${BOLD}[01]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Installation de Hysteria${RESET}"
+  echo "${GREEN}${BOLD}[02]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Créer un utilisateur HYSTERIA${RESET}" 
+  echo "${GREEN}${BOLD}[03]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Supprimer utilisateur${RESET}"
+  echo "${GREEN}${BOLD}[04]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Fix HYSTERIA (reset firewall/NAT)${RESET}"
+  echo "${GREEN}${BOLD}[05]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Désinstaller HYSTERIA${RESET}"
+  echo "${RED}[00] ➜ Quitter${RESET}"
   echo
   echo -ne "${BOLD}${YELLOW} Entrez votre choix [1-13]: ${RESET}"
 
