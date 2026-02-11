@@ -396,8 +396,8 @@ while true; do
   echo "${GREEN}${BOLD}[05]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Désinstaller HYSTERIA${RESET}"
   echo "${RED}[00] ➜ Quitter${RESET}"
   echo
-  echo "${BOLD}${YELLOW} Entrez votre choix [1-5]: ${RESET}"
-  read -rp CHOIX
+  echo -n "${BOLD}${YELLOW} Entrez votre choix [1-5]: ${RESET}"
+  read -r CHOIX
 
   case $CHOIX in
     1) install_hysteria ;;
