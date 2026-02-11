@@ -81,13 +81,13 @@ show_status_block() {
   
   if [[ "$SVC_FILE_OK" == "✅" ]]; then
     if systemctl is-active --quiet "$HYSTERIA_SERVICE" 2>/dev/null; then
-      echo "✅ HYSTERIA : INSTALLÉ et ACTIF"
+      echo "${GREEN}✅ HYSTERIA : INSTALLÉ et ACTIF${RESET}"
       echo "   Port interne: 20000"
     else
       echo "⚠️  HYSTERIA : INSTALLÉ mais INACTIF"
     fi
   else
-    echo "❌ HYSTERIA : NON INSTALLÉ"
+    echo "${RED}❌ HYSTERIA : NON INSTALLÉ${RESET}"
   fi
   echo "${CYAN}-----------------------------------------${CYAN}"
   echo
@@ -396,8 +396,8 @@ while true; do
   echo "${GREEN}${BOLD}[05]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Désinstaller HYSTERIA${RESET}"
   echo "${RED}[00] ➜ Quitter${RESET}"
   echo
-  echo -n "${BOLD}${YELLOW} Entrez votre choix [1-13]: ${RESET}"
-  read -r choix
+  echo "${BOLD}${YELLOW} Entrez votre choix [1-5]: ${RESET}"
+  read -rp Choix
 
   case $CHOIX in
     1) install_hysteria ;;
