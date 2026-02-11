@@ -8,13 +8,30 @@ HYSTERIA_CONFIG="/etc/hysteria/config.json"
 HYSTERIA_USER_FILE="/etc/hysteria/users.txt"
 HYSTERIA_DOMAIN_FILE="/etc/hysteria/domain.txt"
 
-# Couleurs ANSI pour mise en forme
-CYAN="\u001B[1;36m"
-YELLOW="\u001B[1;33m"
-GREEN="\u001B[1;32m"
-RED="\u001B[1;31m"
-WHITE="\u001B[1;37m"
-RESET="\u001B[0m"
+# ==========================================================
+setup_colors() {
+    RED=""
+    GREEN=""
+    YELLOW=""
+    CYAN=""
+    WHITE=""
+    BOLD=""
+    RESET=""
+
+    if [ -t 1 ]; then
+        if [ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]; then
+            RED="$(tput setaf 1)"
+            GREEN="$(tput setaf 2)"
+            YELLOW="$(tput setaf 3)"
+            CYAN="$(tput setaf 6)"
+            WHITE="$(tput setaf 7)"
+            BOLD="$(tput bold)"
+            RESET="$(tput sgr0)"
+        fi
+    fi
+}
+
+setup_colors
 
 # ---------- Fonctions utilitaires ----------
 
