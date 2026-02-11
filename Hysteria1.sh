@@ -397,7 +397,7 @@ while true; do
   echo "${RED}[00] ➜ Quitter${RESET}"
   echo
   echo "${BOLD}${YELLOW} Entrez votre choix [1-5]: ${RESET}"
-  read -rp Choix
+  read -rp CHOIX
 
   case $CHOIX in
     1) install_hysteria ;;
