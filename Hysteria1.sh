@@ -75,9 +75,9 @@ show_status_block() {
   SVC_ACTIVE=$(systemctl is-active "$HYSTERIA_SERVICE" 2>/dev/null || echo "N/A")
   PORT_OK=$(ss -ludp | grep -q 20000 && echo "✅" || echo "❌")
   
-  echo "Service file: $SVC_FILE_OK"
-  echo "Service actif: $SVC_ACTIVE"
-  echo "Port 20000: $PORT_OK"
+  echo "${WHITE}Service file:${RESET} $SVC_FILE_OK"
+  echo "${WHITE}Service actif:${RESET} $SVC_ACTIVE"
+  echo "${WHITE}Port 20000:${RESET} $PORT_OK"
   
   if [[ "$SVC_FILE_OK" == "✅" ]]; then
     if systemctl is-active --quiet "$HYSTERIA_SERVICE" 2>/dev/null; then
