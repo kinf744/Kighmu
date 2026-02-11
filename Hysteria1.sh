@@ -57,10 +57,10 @@ hysteria_running() {
 
 print_title() {
   clear
-  echo "${CYAN}╔═══════════════════════════════════════╗${RESET}"
+  echo "${CYAN}${BOLD}╔═══════════════════════════════════════╗${RESET}"
   echo "${CYAN}║        HYSTERIA CONTROL PANEL v1      ║${RESET}"
   echo "${CYAN}║     (Compatible @kighmu 🇨🇲)           ║${RESET}"
-  echo "${CYAN}╚═══════════════════════════════════════╝${RESET}"
+  echo "${CYAN}${BOLD}╚═══════════════════════════════════════╝${RESET}"
   echo
 }
 
@@ -85,7 +85,7 @@ show_status_block() {
   else
     echo "❌ HYSTERIA : NON INSTALLÉ"
   fi
-  echo "-----------------------------------------"
+  echo "${CYAN}-----------------------------------------${CYAN}"
   echo
 }
 
@@ -385,14 +385,14 @@ while true; do
   print_title
   show_status_block
   
-  echo "1) Installer HYSTERIA (arivpnstores)"
-  echo "2) Créer utilisateur HYSTERIA" 
-  echo "3) Supprimer utilisateur"
-  echo "4) Fix HYSTERIA (reset firewall/NAT)"
-  echo "5) Désinstaller HYSTERIA"
-  echo "0) Quitter"
+  echo -e "${GREEN}${BOLD}[01]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Installation de Hysteria${RESET}"
+  echo -e "${GREEN}${BOLD}[02]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Créer un utilisateur HYSTERIA${RESET}" 
+  echo -e "${GREEN}${BOLD}[03]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Supprimer utilisateur${RESET}"
+  echo -e "${GREEN}${BOLD}[04]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Fix HYSTERIA (reset firewall/NAT)${RESET}"
+  echo -e "${GREEN}${BOLD}[05]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Désinstaller HYSTERIA${RESET}"
+  echo -e "${RED}[00] ➜ Quitter${RESET}"
   echo
-  read -rp "Choix: " CHOIX
+  echo -ne "${BOLD}${YELLOW} Entrez votre choix [1-13]: ${RESET}"
 
   case $CHOIX in
     1) install_hysteria ;;
