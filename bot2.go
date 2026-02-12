@@ -240,6 +240,7 @@ f.WriteString(bashrcContent)
 		"Pub KEY SlowDNS:\n" + slowdnsKey,
 		"NameServer NS:\n" + slowdnsNS,
 	}, "\n")
+	syncUDPTunnels(username, password, expireDate)
 }
 
 func creerUtilisateurTest(username, password string, limite, minutes int) string {
@@ -296,6 +297,7 @@ func creerUtilisateurTest(username, password string, limite, minutes int) string
 		"Pub KEY SlowDNS:\n" + slowdnsKey,
 		"NameServer NS:\n" + slowdnsNS,
 	}, "\n")
+	syncUDPTunnels(username, password, expireDate)
 }
 
 func syncUDPTunnels(username, password, expireDate string) {
