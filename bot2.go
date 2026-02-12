@@ -6,6 +6,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -229,7 +230,7 @@ f.WriteString(bashrcContent)
 	}
 	exec.Command("systemctl", "reload", "ssh").Run()
     exec.Command("systemctl", "reload", "dropbear").Run()
-	syncUDPTunnels(username, password, expireDate)
+	syncUDPTunnels(username, password, expireTime)
 	
 	return strings.Join([]string{
 		fmt.Sprintf("✅ Utilisateur %s créé avec succès", username),
@@ -287,7 +288,7 @@ func creerUtilisateurTest(username, password string, limite, minutes int) string
 	}
 	exec.Command("systemctl", "reload", "ssh").Run()
     exec.Command("systemctl", "reload", "dropbear").Run()
-	syncUDPTunnels(username, password, expireDate)
+	syncUDPTunnels(username, password, expireTime)
 
 	return strings.Join([]string{
 		fmt.Sprintf("✅ Utilisateur test %s créé avec succès", username),
