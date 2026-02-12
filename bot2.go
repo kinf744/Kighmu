@@ -330,7 +330,7 @@ func creerUtilisateurTest(username, password string, limite, minutes int) string
     builder.WriteString(fmt.Sprintf("👤 Utilisateur    : %s\n", username))
     builder.WriteString(fmt.Sprintf("🔑 Mot de passe   : %s\n", password))
     builder.WriteString(fmt.Sprintf("📦 Limite devices : %d\n", limite))
-    builder.WriteString(fmt.Sprintf("📅 Expiration     : %s\n", expireDate))
+    builder.WriteString(fmt.Sprintf("📅 Expiration     : %s\n", expireTime))
     builder.WriteString("\n━━━━━━━━ PORTS DISPONIBLES ━━━━━━━━\n")
     builder.WriteString(" SSH:22   WS:80   SSL:444   PROXY:9090\n")
     builder.WriteString(" DROPBEAR:109   FASTDNS:5300   HYSTERIA:22000\n")
