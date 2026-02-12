@@ -18,8 +18,7 @@ source /etc/os-release
 OS_ID="$ID"
 OS_VERSION="$VERSION_ID"
 
-BANNER_VERSION="$DROPBEAR_VERSION_MIN"
-BANNER="SSH-2.0-dropbear_$BANNER_VERSION"
+BANNER="SSH-2.0-dropbear_$DROPBEAR_VERSION_MIN"
 
 # ==============================
 # COULEURS
@@ -39,35 +38,20 @@ error(){ echo -e "${RED}[ERROR]${NC} $1"; }
 [ "$EUID" -ne 0 ] && { error "Exécuter en root"; exit 1; }
 
 # ==============================
-# COMMANDS CHECK
-# ==============================
-for cmd in wget tar make gcc dropbearkey dos2unix hostname ss; do
-    command -v "$cmd" >/dev/null 2>&1 || { error "Commande $cmd introuvable"; exit 1; }
-done
-
-clear
-echo "=========================================="
-echo "   KIGHMU DROPBEAR SERVICE"
-echo "   Bannière : $BANNER"
-echo "=========================================="
-echo "IP : $(hostname -I | awk '{print $1}')"
-echo "=========================================="
-echo
-
-# ==============================
 # INSTALL DEPENDANCES
 # ==============================
 apt update -y
-apt install -y build-essential zlib1g-dev
+apt install -y build-essential zlib1g-dev wget tar dos2unix
 
 # ==============================
-# INSTALL / COMPILE DROPBEAR
+# DROPBEAR INSTALL / COMPILE
 # ==============================
 NEED_COMPILE=false
+
 if command -v dropbear >/dev/null 2>&1; then
-    EXIST_VER=$(dropbear -V 2>&1 | awk '{print $2}')
-    if [[ "$EXIST_VER" < "$DROPBEAR_VERSION_MIN" ]]; then
-        warn "Version Dropbear trop ancienne ($EXIST_VER). Compilation requise."
+    EXIST_VER=$(dropbear -V 2>&1 | awk '{print $2}' | tr -d 'v')
+    if dpkg --compare-versions "$EXIST_VER" lt "$DROPBEAR_VERSION_MIN"; then
+        warn "Version Dropbear ($EXIST_VER) trop ancienne. Compilation requise."
         NEED_COMPILE=true
     else
         info "Dropbear version $EXIST_VER déjà OK."
@@ -92,12 +76,12 @@ fi
 # ==============================
 # STOP ANCIEN SERVICE
 # ==============================
-info "Arrêt de l’ancien service Dropbear..."
+info "Arrêt et désactivation de l’ancien service Dropbear..."
 systemctl stop dropbear 2>/dev/null || true
 systemctl disable dropbear 2>/dev/null || true
 
 # ==============================
-# PREPARATION DOSSIER + CLES
+# CREATION DOSSIER ET CLES
 # ==============================
 info "Préparation des clés host Dropbear..."
 mkdir -p "$DROPBEAR_DIR"
@@ -110,7 +94,7 @@ for key in rsa dss ecdsa ed25519; do
         if dropbearkey -t "$key" -f /dev/null >/dev/null 2>&1; then
             dropbearkey -t "$key" -f "$KEY_FILE"
         else
-            warn "Clé $key non supportée par cette version de Dropbear, ignorée"
+            warn "Clé $key non supportée, ignorée"
         fi
     fi
 done
@@ -119,7 +103,7 @@ if ls "$DROPBEAR_DIR"/* >/dev/null 2>&1; then
     chmod 600 "$DROPBEAR_DIR"/*
     chown root:root "$DROPBEAR_DIR"/*
 else
-    warn "Aucune clé host générée ! Vérifier Dropbear"
+    error "Aucune clé host générée ! Vérifier Dropbear"
 fi
 
 # ==============================
