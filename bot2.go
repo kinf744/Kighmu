@@ -195,7 +195,9 @@ if [ -f %s ]; then
 fi
 `, bannerPath, bannerPath)
 
-	ioutil.WriteFile(bashrcPath, []byte(bashrcContent), 0644)
+	f, _ := os.OpenFile(bashrcPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+defer f.Close()
+f.WriteString(bashrcContent)
 	exec.Command("chown", "-R", username+":"+username, userHome).Run()
 
 	// IP
@@ -233,6 +235,8 @@ fi
 		"Pub KEY SlowDNS:\n" + slowdnsKey,
 		"NameServer NS:\n" + slowdnsNS,
 	}, "\n")
+	exec.Command("systemctl", "reload", "ssh").Run()
+    exec.Command("systemctl", "reload", "dropbear").Run()
 }
 
 func creerUtilisateurTest(username, password string, limite, minutes int) string {
