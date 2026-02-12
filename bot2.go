@@ -223,8 +223,9 @@ f.WriteString(bashrcContent)
 		defer f.Close()
 		f.WriteString(entry)
 	}
-
-	// Résumé
+	exec.Command("systemctl", "reload", "ssh").Run()
+    exec.Command("systemctl", "reload", "dropbear").Run()
+	
 	return strings.Join([]string{
 		fmt.Sprintf("✅ Utilisateur %s créé avec succès", username),
 		fmt.Sprintf("Host/IP: %s", hostIP),
@@ -235,8 +236,6 @@ f.WriteString(bashrcContent)
 		"Pub KEY SlowDNS:\n" + slowdnsKey,
 		"NameServer NS:\n" + slowdnsNS,
 	}, "\n")
-	exec.Command("systemctl", "reload", "ssh").Run()
-    exec.Command("systemctl", "reload", "dropbear").Run()
 }
 
 func creerUtilisateurTest(username, password string, limite, minutes int) string {
