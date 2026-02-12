@@ -496,6 +496,11 @@ func creerUtilisateurV2Ray(nom string, duree int) string {
 		return fmt.Sprintf("❌ Erreur sauvegarde utilisateur : %v", err)
 	}
 
+	// ⚡️ Ajouter l'UUID dans config.json V2Ray
+	if err := ajouterClientV2Ray(u.UUID, u.Nom); err != nil {
+		return fmt.Sprintf("❌ Erreur ajout UUID dans config.json : %v", err)
+	}
+
 	// Ports et infos FastDNS / V2Ray
 	v2rayPort := 5401
 	fastdnsPort := 5400
