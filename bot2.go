@@ -232,16 +232,47 @@ f.WriteString(bashrcContent)
     exec.Command("systemctl", "reload", "dropbear").Run()
 	syncUDPTunnels(username, password, expireDate)
 	
-	return strings.Join([]string{
-		fmt.Sprintf("✅ Utilisateur %s créé avec succès", username),
-		fmt.Sprintf("Host/IP: %s", hostIP),
-		fmt.Sprintf("Utilisateur: %s", username),
-		fmt.Sprintf("Mot de passe: %s", password),
-		fmt.Sprintf("Limite appareils: %d", limite),
-		fmt.Sprintf("Date expiration: %s", expireDate),
-		"Pub KEY SlowDNS:\n" + slowdnsKey,
-		"NameServer NS:\n" + slowdnsNS,
-	}, "\n")
+	var builder strings.Builder
+    builder.WriteString("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+    builder.WriteString("✨ 𝙉𝙊𝙐𝙑𝙀𝘼𝙐 𝙐𝙏𝙄𝙇𝙄𝙎𝘼𝙏𝙀𝙐𝙍 𝘾𝙍𝙀́𝙀 ✨\n")
+    builder.WriteString("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")
+    builder.WriteString(fmt.Sprintf("🌍 Domaine        : %s\n", DOMAIN))
+    builder.WriteString(fmt.Sprintf("📌 IP Host        : %s\n", HOST_IP))
+    builder.WriteString(fmt.Sprintf("👤 Utilisateur    : %s\n", username))
+    builder.WriteString(fmt.Sprintf("🔑 Mot de passe   : %s\n", password))
+    builder.WriteString(fmt.Sprintf("📦 Limite devices : %d\n", limite))
+    builder.WriteString(fmt.Sprintf("📅 Expiration     : %s\n", expireDate))
+    builder.WriteString("\n━━━━━━━━ PORTS DISPONIBLES ━━━━━━━━\n")
+    builder.WriteString(" SSH:22   WS:80   SSL:444   PROXY:9090\n")
+    builder.WriteString(" DROPBEAR:2222   FASTDNS:5300   HYSTERIA:22000\n")
+    builder.WriteString(" UDP-CUSTOM:1-65535   BADVPN:7200/7300\n")
+    builder.WriteString("\n━━━━━━━━ SSH CONFIG ━━━━━━━━\n")
+    builder.WriteString(fmt.Sprintf("➡️ SSH WS     : %s:80@%s:%s\n", DOMAIN, username, password))
+    builder.WriteString(fmt.Sprintf("➡️ SSL/TLS    : %s:444@%s:%s\n", DOMAIN, username, password))
+    builder.WriteString(fmt.Sprintf("➡️ PROXY WS   : %s:9090@%s:%s\n", DOMAIN, username, password))
+    builder.WriteString(fmt.Sprintf("➡️ SSH UDP    : %s:1-65535@%s:%s\n", DOMAIN, username, password))
+    builder.WriteString("\n━━━━━━━━ PAYLOAD WS ━━━━━━━━\n")
+    builder.WriteString("GET / HTTP/1.1[crlf]Host: [host][crlf]Connection: Upgrade[crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]\n")
+    builder.WriteString("\n━━━━━━━━ HYSTERIA UDP ━━━━━━━━\n")
+    builder.WriteString(fmt.Sprintf("🌐 Domaine : %s\n", DOMAIN))
+    builder.WriteString("👤 Obfs    : hysteria\n")
+    builder.WriteString(fmt.Sprintf("🔐 Pass    : %s\n", password))
+    builder.WriteString("🔌 Port    : 22000\n")
+    builder.WriteString("\n━━━━━━━━ ZIVPN UDP ━━━━━━━━\n")
+    builder.WriteString(fmt.Sprintf("🌐 Domaine : %s\n", DOMAIN))
+    builder.WriteString("👤 Obfs    : zivpn\n")
+    builder.WriteString(fmt.Sprintf("🔐 Pass    : %s\n", password))
+    builder.WriteString("🔌 Port    : 5667\n")
+    builder.WriteString("\n━━━━━━━━ FASTDNS CONFIG ━━━━━━━━\n")
+    builder.WriteString("🔐 PubKey:\n")
+    builder.WriteString(slowdnsKey + "\n")
+    builder.WriteString("NameServer:\n")
+    builder.WriteString(slowdnsNS + "\n")
+    builder.WriteString("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+    builder.WriteString("✅ COMPTE CRÉÉ AVEC SUCCÈS\n")
+    builder.WriteString("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+
+return builder.String()
 }
 
 func creerUtilisateurTest(username, password string, limite, minutes int) string {
