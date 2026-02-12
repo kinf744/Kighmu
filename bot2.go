@@ -367,21 +367,26 @@ func chargerUtilisateursV2Ray() {
 	utilisateursV2Ray = []UtilisateurV2Ray{}
 	data, err := ioutil.ReadFile(v2rayFile)
 	if err != nil {
-		// fichier inexistant, on continue avec slice vide
 		return
 	}
 	lignes := strings.Split(string(data), "\n")
+	today := time.Now().Format("2006-01-02")
 	for _, ligne := range lignes {
 		if strings.TrimSpace(ligne) == "" {
 			continue
 		}
 		parts := strings.Split(ligne, "|")
 		if len(parts) >= 3 {
-			utilisateursV2Ray = append(utilisateursV2Ray, UtilisateurV2Ray{
-				Nom:    parts[0],
-				UUID:   parts[1],
-				Expire: parts[2],
-			})
+			if parts[2] >= today { // ne garder que les valides
+				utilisateursV2Ray = append(utilisateursV2Ray, UtilisateurV2Ray{
+					Nom:    parts[0],
+					UUID:   parts[1],
+					Expire: parts[2],
+				})
+			} else {
+				// supprimer UUID expiré côté config.json
+				supprimerClientV2Ray(parts[1])
+			}
 		}
 	}
 }
