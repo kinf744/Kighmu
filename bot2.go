@@ -234,7 +234,7 @@ f.WriteString(bashrcContent)
 	
 	var builder strings.Builder
     builder.WriteString("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-    builder.WriteString("✨ 𝙉𝙊𝙐𝙑𝙀𝘼𝙐 𝙐𝙏𝙄𝙇𝙄𝙎𝘼𝙏𝙀𝙐𝙍 𝘾𝙍𝙀́𝙀 ✨\n")
+    builder.WriteString("✨ 𝙉𝙊𝙐𝙑𝙀𝘼𝙐 𝙐𝙏𝙄𝙇𝙄𝙎𝘼𝙏𝙀𝙐𝙍 𝘾𝙍𝙀𝙀𝙍 ✨\n")
     builder.WriteString("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")
     builder.WriteString(fmt.Sprintf("🌍 Domaine        : %s\n", DOMAIN))
     builder.WriteString(fmt.Sprintf("📌 IP Host        : %s\n", hostIP))
@@ -323,7 +323,7 @@ func creerUtilisateurTest(username, password string, limite, minutes int) string
 
 	var builder strings.Builder
     builder.WriteString("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-    builder.WriteString("✨ 𝙉𝙊𝙐𝙑𝙀𝘼𝙐 𝙐𝙏𝙄𝙇𝙄𝙎𝘼𝙏𝙀𝙐𝙍 𝘾𝙍𝙀́𝙀 ✨\n")
+    builder.WriteString("✨ 𝙉𝙊𝙐𝙑𝙀𝘼𝙐 𝙐𝙏𝙄𝙇𝙄𝙎𝘼𝙏𝙀𝙐𝙍 𝗧𝗘𝗦𝗧 𝘾𝙍𝙀𝙀𝙍 ✨\n")
     builder.WriteString("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")
     builder.WriteString(fmt.Sprintf("🌍 Domaine        : %s\n", DOMAIN))
     builder.WriteString(fmt.Sprintf("📌 IP Host        : %s\n", hostIP))
