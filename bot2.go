@@ -391,6 +391,82 @@ func chargerUtilisateursV2Ray() {
 	}
 }
 
+func ajouterClientV2Ray(uuid, nom string) error {
+	configFile := "/etc/v2ray/config.json"
+
+	data, err := ioutil.ReadFile(configFile)
+	if err != nil {
+		return fmt.Errorf("Impossible de lire config.json : %v", err)
+	}
+
+	var config map[string]interface{}
+	if err := json.Unmarshal(data, &config); err != nil {
+		return fmt.Errorf("JSON invalide : %v", err)
+	}
+
+	inbounds, ok := config["inbounds"].([]interface{})
+	if !ok {
+		return fmt.Errorf("Structure inbounds invalide")
+	}
+
+	for _, inbound := range inbounds {
+		inb, ok := inbound.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if proto, ok := inb["protocol"].(string); ok && proto == "vless" {
+			settings, ok := inb["settings"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			clients, ok := settings["clients"].([]interface{})
+			if !ok {
+				clients = []interface{}{}
+			}
+
+			existe := false
+			for _, c := range clients {
+				clientMap, ok := c.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				if clientMap["id"] == uuid {
+					existe = true
+					break
+				}
+			}
+			if existe {
+				return fmt.Errorf("UUID %s déjà existant", uuid)
+			}
+
+			nouveauClient := map[string]interface{}{
+				"id":    uuid,
+				"email": nom,
+			}
+			clients = append(clients, nouveauClient)
+			settings["clients"] = clients
+			inb["settings"] = settings
+		}
+	}
+
+	newData, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return fmt.Errorf("Erreur lors du marshalling JSON : %v", err)
+	}
+
+	if err := ioutil.WriteFile(configFile, newData, 0644); err != nil {
+		return fmt.Errorf("Impossible d'écrire config.json : %v", err)
+	}
+
+	cmd := exec.Command("systemctl", "restart", "v2ray")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("Impossible de redémarrer V2Ray : %v", err)
+	}
+
+	return nil
+}
+
 // Enregistrer un utilisateur V2Ray dans le fichier
 // ===============================
 func enregistrerUtilisateurV2Ray(u UtilisateurV2Ray) error {
