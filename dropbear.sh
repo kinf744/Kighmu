@@ -65,9 +65,9 @@ fi
 if [ "$NEED_COMPILE" = true ]; then
     info "Téléchargement et compilation Dropbear $DROPBEAR_VERSION_MIN..."
     cd /usr/local/src
-    wget -q https://matt.ucc.asn.au/dropbear/dropbear-$DROPBEAR_VERSION_MIN.tar.bz2
-    tar -xjf dropbear-$DROPBEAR_VERSION_MIN.tar.bz2
-    cd dropbear-$DROPBEAR_VERSION_MIN
+    wget -q "https://matt.ucc.asn.au/dropbear/releases/dropbear-$DROPBEAR_VERSION_MIN.tar.bz2"
+    tar -xjf "dropbear-$DROPBEAR_VERSION_MIN.tar.bz2"
+    cd "dropbear-$DROPBEAR_VERSION_MIN"
     ./configure --prefix=/usr/local
     make && make install
     info "Dropbear compilé et installé dans /usr/local/bin/dropbear"
