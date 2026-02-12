@@ -43,6 +43,13 @@ error(){ echo -e "${RED}[ERROR]${NC} $1"; }
 # ==============================
 [ "$EUID" -ne 0 ] && { error "Exécuter en root"; exit 1; }
 
+# ==============================
+# COMMANDS CHECK
+# ==============================
+for cmd in dropbearkey dos2unix hostname ss; do
+    command -v "$cmd" >/dev/null 2>&1 || { error "Commande $cmd introuvable"; exit 1; }
+done
+
 clear
 echo "=========================================="
 echo "   KIGHMU DROPBEAR SERVICE"
@@ -64,6 +71,13 @@ else
 fi
 
 # ==============================
+# STOP ANCIEN SERVICE
+# ==============================
+info "Arrêt de l’ancien service Dropbear..."
+systemctl stop dropbear 2>/dev/null || true
+systemctl disable dropbear 2>/dev/null || true
+
+# ==============================
 # VERIFICATION BINAIRE
 # ==============================
 [ ! -x "$DROPBEAR_BIN" ] && { error "Binaire absent"; exit 1; }
@@ -79,7 +93,11 @@ for key in rsa dss ecdsa ed25519; do
     KEY_FILE="$DROPBEAR_DIR/dropbear_${key}_host_key"
     if [ ! -f "$KEY_FILE" ]; then
         info "Génération clé $key..."
-        dropbearkey -t "$key" -f "$KEY_FILE"
+        if dropbearkey -t "$key" -f /dev/null >/dev/null 2>&1; then
+            dropbearkey -t "$key" -f "$KEY_FILE"
+        else
+            warn "Clé $key non supportée par cette version de Dropbear, ignorée"
+        fi
     fi
 done
 
@@ -125,8 +143,17 @@ EOF
 # DEMARRAGE SERVICE
 # ==============================
 systemctl daemon-reload
-systemctl enable --now dropbear
+systemctl enable --now dropbear.service
 
 info "✅ Dropbear actif sur port $DROPBEAR_PORT"
-info "🔹 Vérifier : systemctl status dropbear"
-info "🔹 Voir logs : journalctl -u dropbear -n 50"
+info "🔹 Vérifier : systemctl status dropbear.service"
+info "🔹 Voir logs : journalctl -u dropbear.service -n 50"
+
+# ==============================
+# VERIFICATION PORT
+# ==============================
+if ss -tulpn | grep -q ":$DROPBEAR_PORT "; then
+    info "Port $DROPBEAR_PORT OK et à l’écoute"
+else
+    warn "Port $DROPBEAR_PORT non ouvert ! Vérifier les logs"
+fi
