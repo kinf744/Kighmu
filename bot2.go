@@ -152,7 +152,7 @@ func fixHome(username string) {
         os.MkdirAll(home, 0700)
     }
     exec.Command("chown", "-R", username+":"+username, home).Run()
-    exec.Command("chmod", "700", home).Run()
+    exec.Command("chmod", "755", home).Run()
 }
 
 func creerUtilisateurNormal(username, password string, limite, days int) string {
@@ -222,6 +222,10 @@ f.WriteString(bashrcContent)
 	if f, err := os.OpenFile(userFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600); err == nil {
 		defer f.Close()
 		f.WriteString(entry)
+
+	// Restart tunnels (comme menu1.sh)
+    exec.Command("systemctl", "restart", "zivpn.service").Run()
+    exec.Command("systemctl", "restart", "hysteria.service").Run()
 	}
 	exec.Command("systemctl", "reload", "ssh").Run()
     exec.Command("systemctl", "reload", "dropbear").Run()
@@ -280,6 +284,8 @@ func creerUtilisateurTest(username, password string, limite, minutes int) string
 		defer f.Close()
 		f.WriteString(entry)
 	}
+	exec.Command("systemctl", "reload", "ssh").Run()
+    exec.Command("systemctl", "reload", "dropbear").Run()
 
 	return strings.Join([]string{
 		fmt.Sprintf("✅ Utilisateur test %s créé avec succès", username),
