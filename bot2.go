@@ -298,6 +298,67 @@ func creerUtilisateurTest(username, password string, limite, minutes int) string
 	}, "\n")
 }
 
+func syncUDPTunnels(username, password, expireDate string) {
+
+    // ================= ZIVPN =================
+    zivpnConfig := "/etc/zivpn/config.json"
+    zivpnUsers := "/etc/zivpn/users.list"
+
+    if _, err := os.Stat(zivpnConfig); err == nil {
+        phone := username
+        if len(username) > 10 {
+            phone = username[:10]
+        }
+
+        line := fmt.Sprintf("%s|%s|%s\n", phone, password, expireDate)
+
+        data, _ := ioutil.ReadFile(zivpnUsers)
+        lines := strings.Split(string(data), "\n")
+
+        var newLines []string
+        for _, l := range lines {
+            if !strings.HasPrefix(l, phone+"|") {
+                newLines = append(newLines, l)
+            }
+        }
+        newLines = append(newLines, strings.TrimSpace(line))
+        ioutil.WriteFile(zivpnUsers, []byte(strings.Join(newLines, "\n")), 0600)
+
+        exec.Command("bash","-c",
+            `TODAY=$(date +%F); PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' `+zivpnUsers+` | sort -u | paste -sd, -); jq --arg passwords "$PASSWORDS" '.auth.config = ($passwords | split(","))' `+zivpnConfig+` > /tmp/zivpn.json && mv /tmp/zivpn.json `+zivpnConfig,
+        ).Run()
+
+        exec.Command("systemctl","restart","zivpn.service").Run()
+    }
+
+    // ================= HYSTERIA =================
+    hysteriaConfig := "/etc/hysteria/config.json"
+    hysteriaUsers := "/etc/hysteria/users.txt"
+
+    if _, err := os.Stat(hysteriaConfig); err == nil {
+
+        line := fmt.Sprintf("%s|%s|%s\n", username, password, expireDate)
+
+        data, _ := ioutil.ReadFile(hysteriaUsers)
+        lines := strings.Split(string(data), "\n")
+
+        var newLines []string
+        for _, l := range lines {
+            if !strings.HasPrefix(l, username+"|") {
+                newLines = append(newLines, l)
+            }
+        }
+        newLines = append(newLines, strings.TrimSpace(line))
+        ioutil.WriteFile(hysteriaUsers, []byte(strings.Join(newLines, "\n")), 0600)
+
+        exec.Command("bash","-c",
+            `TODAY=$(date +%F); PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' `+hysteriaUsers+` | sort -u | paste -sd, -); jq --arg passwords "$PASSWORDS" '.auth.config = ($passwords | split(","))' `+hysteriaConfig+` > /tmp/hysteria.json && mv /tmp/hysteria.json `+hysteriaConfig,
+        ).Run()
+
+        exec.Command("systemctl","restart","hysteria.service").Run()
+    }
+}
+
 // Charger utilisateurs V2Ray depuis fichier
 // ===============================
 func chargerUtilisateursV2Ray() {
