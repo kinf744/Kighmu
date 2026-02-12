@@ -2,108 +2,78 @@
 set -euo pipefail
 
 # ==============================
-# VARIABLES GLOBALES
+# VARIABLES
 # ==============================
 DROPBEAR_DIR="/etc/dropbear"
 DROPBEAR_PORT=109
 DROPBEAR_BANNER="/etc/dropbear/banner.txt"
 SYSTEMD_FILE="/etc/systemd/system/dropbear-custom.service"
+DROPBEAR_VERSION_MIN="2022.83"
 
 # ==============================
-# DETECTION SYSTEME
+# DETECTION VERSION OS
 # ==============================
-source /etc/os-release 2>/dev/null || source /etc/lsb-release 2>/dev/null || {
-    echo "❌ Système non supporté (Ubuntu/Debian requis)" >&2
-    exit 1
-}
-
-# Détection famille + version
-if [[ "$ID" == "ubuntu" || "$ID_LIKE" == *"ubuntu"* || "$DISTRIB_ID" == "Ubuntu" ]]; then
-    FAMILY="ubuntu"
-    OS_VERSION="${VERSION_ID:-$DISTRIB_RELEASE}"
-elif [[ "$ID" == "debian" || "$ID_LIKE" == *"debian"* ]]; then
-    FAMILY="debian"
-    OS_VERSION="${VERSION_ID}"
-else
-    echo "❌ Seulement Ubuntu/Debian supportés" >&2
-    exit 1
-fi
-
-# Version majeure
-OS_MAJOR=$(echo "$OS_VERSION" | cut -d. -f1)
-
-info "🖥️  Système détecté: ${FAMILY^} $OS_VERSION (v$OS_MAJOR)"
+source /etc/os-release
+OS_ID="$ID"
+OS_VERSION="$VERSION_ID"
 
 # ==============================
-# COULEURS + FONCTIONS
+# COULEURS
 # ==============================
-RED='\u001B[0;31m'; GREEN='\u001B[0;32m'; YELLOW='\u001B[1;33m'; NC='\u001B[0m'
+RED='\u001B[0;31m'
+GREEN='\u001B[0;32m'
+YELLOW='\u001B[1;33m'
+NC='\u001B[0m'
+
 info(){ echo -e "${GREEN}[INFO]${NC} $1"; }
 warn(){ echo -e "${YELLOW}[WARN]${NC} $1"; }
 error(){ echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 
-# Root check
+# ==============================
+# ROOT CHECK
+# ==============================
 [ "$EUID" -ne 0 ] && { error "Exécuter en root"; }
 
 # ==============================
-# STRATEGIE D'INSTALL PAR VERSION
+# INSTALL DEPENDANCES
 # ==============================
-install_dropbear() {
-    case $FAMILY in
-        ubuntu)
-            case $OS_MAJOR in
-                20|22|24)
-                    info "Installation Dropbear via APT (paquet officiel)"
-                    apt update
-                    apt install -y dropbear-bin dropbear-initramfs  # dropbear-bin = outils + dropbear-initramfs = clés auto
-                    return 0
-                    ;;
-                *)
-                    compile_dropbear
-                    ;;
-            esac
-            ;;
-        debian)
-            case $OS_MAJOR in
-                11|12)
-                    info "Installation Dropbear via APT (Debian)"
-                    apt update
-                    apt install -y dropbear-bin dropbear-run
-                    return 0
-                    ;;
-                *)
-                    compile_dropbear
-                    ;;
-            esac
-            ;;
-    esac
-}
+info "Mise à jour et installation des dépendances..."
+apt update -y
+apt install -y build-essential zlib1g-dev wget tar dos2unix
 
-compile_dropbear() {
-    local VERSION="2022.83"
-    info "Compilation Dropbear $VERSION (fallback)"
-    
-    apt update
-    apt install -y build-essential zlib1g-dev wget tar
-    
+# ==============================
+# DROPBEAR INSTALL / COMPILE
+# ==============================
+NEED_COMPILE=false
+
+if command -v dropbear >/dev/null 2>&1; then
+    EXIST_VER=$(dropbear -V 2>&1 | awk '{print $2}' | tr -d 'v')
+    if dpkg --compare-versions "$EXIST_VER" lt "$DROPBEAR_VERSION_MIN"; then
+        warn "Version Dropbear ($EXIST_VER) trop ancienne. Compilation requise."
+        NEED_COMPILE=true
+    else
+        info "Dropbear version $EXIST_VER déjà OK."
+    fi
+else
+    info "Dropbear absent, compilation requise."
+    NEED_COMPILE=true
+fi
+
+if [ "$NEED_COMPILE" = true ]; then
+    info "Téléchargement et compilation Dropbear $DROPBEAR_VERSION_MIN..."
+    mkdir -p /usr/local/src
     cd /usr/local/src
-    wget -q "https://matt.ucc.asn.au/dropbear/releases/dropbear-$VERSION.tar.bz2"
-    tar -xjf "dropbear-$VERSION.tar.bz2" && rm -f "dropbear-$VERSION.tar.bz2"
-    cd "dropbear-$VERSION"
+    wget -q "https://matt.ucc.asn.au/dropbear/releases/dropbear-$DROPBEAR_VERSION_MIN.tar.bz2"
+    tar -xjf "dropbear-$DROPBEAR_VERSION_MIN.tar.bz2"
+    cd "dropbear-$DROPBEAR_VERSION_MIN"
     ./configure --prefix=/usr/local
     make && make install
-    
-    echo "/usr/local/bin" > /etc/ld.so.conf.d/dropbear.conf
-    ldconfig
-}
+    info "Dropbear compilé et installé dans /usr/local/bin/"
+fi
 
 # ==============================
-# INSTALL + CONFIG
+# DETECTION BINAIRE CORRECTE (FIX PRINCIPAL)
 # ==============================
-info "🚀 Installation Dropbear adaptée à $FAMILY $OS_VERSION..."
-install_dropbear
-
-# Détection binaire installé
 if [ -x "/usr/local/bin/dropbear" ]; then
     DROPBEAR_BIN="/usr/local/bin/dropbear"
     DROPBEARKEY="/usr/local/bin/dropbearkey"
@@ -111,59 +81,66 @@ elif command -v dropbear >/dev/null 2>&1; then
     DROPBEAR_BIN="$(command -v dropbear)"
     DROPBEARKEY="$(command -v dropbearkey)"
 else
-    error "Binaire Dropbear introuvable après installation"
+    error "Binaire Dropbear introuvable !"
 fi
 
-info "Binaire: $DROPBEAR_BIN (version: $($DROPBEAR_BIN -V 2>&1 | head -n1))"
+info "Binaire détecté: $DROPBEAR_BIN"
+info "dropbearkey: $DROPBEARKEY"
+$DROPBEARKEY -V || error "dropbearkey ne fonctionne pas: $DROPBEARKEY"
 
 # ==============================
-# ARRET SERVICES ANCIENS
+# STOP ANCIEN SERVICE
 # ==============================
-info "🛑 Arrêt services Dropbear existants..."
-systemctl stop dropbear dropbear.service dropbear-custom.service 2>/dev/null | grep -v "not-loaded" || true
-systemctl disable dropbear dropbear.service dropbear-custom.service 2>/dev/null | grep -v "not-loaded" || true
+info "Arrêt et désactivation de l'ancien service Dropbear..."
+systemctl stop dropbear dropbear.service dropbear-custom.service 2>/dev/null || true
+systemctl disable dropbear dropbear.service dropbear-custom.service 2>/dev/null || true
 
 # ==============================
-# CONFIG + CLES
+# CREATION DOSSIER ET CLES (FIX GÉNÉRATION)
 # ==============================
-info "🔐 Configuration Dropbear personnalisée..."
-
-# Dossier + clés
+info "Préparation des clés host Dropbear..."
 mkdir -p "$DROPBEAR_DIR"
 chmod 755 "$DROPBEAR_DIR"
 
-# Génération clés (seulement si absentes)
-for type in rsa ecdsa ed25519; do
-    keyfile="$DROPBEAR_DIR/dropbear_${type}_host_key"
-    if [[ ! -f "$keyfile" ]]; then
-        info "Génération clé $type..."
-        $DROPBEARKEY -t "$type" -f "$keyfile" || {
-            warn "Clé $type échouée (ignorée)"
-            rm -f "$keyfile"
-        }
+for key in rsa ecdsa ed25519; do
+    KEY_FILE="$DROPBEAR_DIR/dropbear_${key}_host_key"
+    if [ ! -f "$KEY_FILE" ]; then
+        info "Génération clé $key..."
+        if "$DROPBEARKEY" -t "$key" -f "$KEY_FILE"; then
+            info "✅ Clé $key générée"
+        else
+            warn "❌ Échec clé $key (ignorée)"
+            rm -f "$KEY_FILE"
+        fi
+    else
+        info "Clé $key déjà présente"
     fi
 done
 
-# Vérif critique
-if ! ls "$DROPBEAR_DIR"/*host_key >/dev/null 2>&1; then
+# Vérification critique
+if ! ls "$DROPBEAR_DIR"/*_host_key >/dev/null 2>&1; then
     error "Aucune clé host générée !"
 fi
-chmod 600 "$DROPBEAR_DIR"/*host_key
-chown root:root "$DROPBEAR_DIR"/*host_key
+chmod 600 "$DROPBEAR_DIR"/*_host_key
+chown root:root "$DROPBEAR_DIR"/*_host_key
+info "Clés prêtes: $(ls "$DROPBEAR_DIR"/*_host_key | xargs -n1 basename)"
 
-# Banner
-cat > "$DROPBEAR_BANNER" << EOF
-Dropbear SSH Server - $(hostname) 
-Ubuntu/$OS_VERSION | Port: $DROPBEAR_PORT
+# ==============================
+# CREATION BANNER
+# ==============================
+info "Création du banner Dropbear..."
+cat <<EOF > "$DROPBEAR_BANNER"
+Dropbear SSH Server - $(hostname)
+Ubuntu $OS_VERSION | Port: $DROPBEAR_PORT
 EOF
 chmod 644 "$DROPBEAR_BANNER"
+chown root:root "$DROPBEAR_BANNER"
 
 # ==============================
-# SYSTEMD ADAPTE
+# CREATION SERVICE SYSTEMD
 # ==============================
-info "⚙️  Service systemd personnalisé..."
-
-cat > "$SYSTEMD_FILE" << EOF
+info "Création service systemd..."
+cat > "$SYSTEMD_FILE" <<EOF
 [Unit]
 Description=Dropbear SSH Server Custom (port $DROPBEAR_PORT)
 After=network-online.target
@@ -171,41 +148,30 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=$DROPBEAR_BIN -F -E \\
-    -p $DROPBEAR_PORT \\
-    -w -g \\
-    -b $DROPBEAR_BANNER \\
-    -R \\
-    -K 300 -I 180
+ExecStart=$DROPBEAR_BIN -F -E -p $DROPBEAR_PORT -w -g -b $DROPBEAR_BANNER -R
 Restart=always
-RestartSec=3
-User=root
+RestartSec=2
 LimitNOFILE=1048576
+User=root
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable --now "$SYSTEMD_FILE"
+systemctl enable --now dropbear-custom.service
 
 # ==============================
-# VERIFICATIONS FINALES
+# VERIFICATION FINALE
 # ==============================
 sleep 2
-
-if systemctl is-active --quiet dropbear-custom.service; then
-    if ss -tulpn | grep -q ":$DROPBEAR_PORT "; then
-        info "🎉 ✅ Dropbear ${FAMILY^} $OS_VERSION - PORT $DROPBEAR_PORT OK !"
-        info "🔗 Test: ssh -p $DROPBEAR_PORT root@$(hostname -I | awk '{print $1}')"
-    else
-        warn "⚠️ Service OK mais port fermé (firewall?)"
-        warn "🔍 Logs: journalctl -u dropbear-custom.service -f"
-    fi
+if systemctl is-active --quiet dropbear-custom.service && ss -tulpn | grep -q ":$DROPBEAR_PORT "; then
+    info "🎉 ✅ Dropbear OK sur port $DROPBEAR_PORT !"
+    info "🔗 Test: ssh -p $DROPBEAR_PORT root@$(hostname -I | awk '{print $1}')"
 else
-    error "❌ Service échoué !"
+    warn "⚠️  Vérifier les logs:"
     systemctl status dropbear-custom.service --no-pager
-    journalctl -u dropbear-custom.service -n 50 --no-pager
+    journalctl -u dropbear-custom.service -n 20 --no-pager
 fi
 
 info "📋 Status: systemctl status dropbear-custom.service"
