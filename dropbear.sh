@@ -8,7 +8,7 @@ DROPBEAR_DIR="/etc/dropbear"
 DROPBEAR_PORT=109
 DROPBEAR_BANNER="/etc/dropbear/banner.txt"
 SYSTEMD_FILE="/etc/systemd/system/dropbear-custom.service"
-DROPBEAR_VERSION_MIN="2022.83"
+DROPBEAR_VERSION_MIN="2019.78"
 
 # ==============================
 # DETECTION VERSION OS
@@ -68,37 +68,49 @@ if [ "$NEED_COMPILE" = true ]; then
     cd "dropbear-$DROPBEAR_VERSION_MIN"
     ./configure --prefix=/usr/local
     make && make install
-    info "Dropbear compilé et installé dans /usr/local/bin/"
+    info "Dropbear compilé et installé dans /usr/local/"
 fi
 
 # ==============================
-# DETECTION BINAIRE CORRECTE (FIX PRINCIPAL)
+# DETECTION BINAIRE ROBUSTE (FIX DEFINITIF)
 # ==============================
-if [ -x "/usr/local/bin/dropbear" ]; then
-    DROPBEAR_BIN="/usr/local/bin/dropbear"
-    DROPBEARKEY="/usr/local/bin/dropbearkey"
-elif command -v dropbear >/dev/null 2>&1; then
-    DROPBEAR_BIN="$(command -v dropbear)"
-    DROPBEARKEY="$(command -v dropbearkey)"
-else
-    error "Binaire Dropbear introuvable !"
-fi
+# Recherche dropbear (priorité compilé > système)
+for path in /usr/local/sbin/dropbear /usr/local/bin/dropbear /usr/sbin/dropbear /usr/bin/dropbear; do
+    if [ -x "$path" ]; then
+        DROPBEAR_BIN="$path"
+        break
+    fi
+done
 
-info "Binaire détecté: $DROPBEAR_BIN"
-info "dropbearkey: $DROPBEARKEY"
-$DROPBEARKEY -V || error "dropbearkey ne fonctionne pas: $DROPBEARKEY"
+# Recherche dropbearkey (priorité compilé > système)
+for path in /usr/local/bin/dropbearkey /usr/local/sbin/dropbearkey /usr/bin/dropbearkey /usr/sbin/dropbearkey; do
+    if [ -x "$path" ]; then
+        DROPBEARKEY="$path"
+        break
+    fi
+done
+
+# Vérification finale
+[ -z "${DROPBEAR_BIN:-}" ] && error "dropbear introuvable !"
+[ -z "${DROPBEARKEY:-}" ] && error "dropbearkey introuvable !"
+
+info "✅ dropbear: $DROPBEAR_BIN ($(dropbear -V 2>&1 | head -n1))"
+info "✅ dropbearkey: $DROPBEARKEY"
+
+# Test dropbearkey (sans -V qui n'existe pas !)
+"$DROPBEARKEY" -t rsa -f /dev/null >/dev/null 2>&1 || warn "dropbearkey test échoué (continu)"
 
 # ==============================
 # STOP ANCIEN SERVICE
 # ==============================
-info "Arrêt et désactivation de l'ancien service Dropbear..."
+info "🛑 Arrêt services Dropbear existants..."
 systemctl stop dropbear dropbear.service dropbear-custom.service 2>/dev/null || true
 systemctl disable dropbear dropbear.service dropbear-custom.service 2>/dev/null || true
 
 # ==============================
-# CREATION DOSSIER ET CLES (FIX GÉNÉRATION)
+# CREATION CLES
 # ==============================
-info "Préparation des clés host Dropbear..."
+info "🔐 Préparation clés host Dropbear..."
 mkdir -p "$DROPBEAR_DIR"
 chmod 755 "$DROPBEAR_DIR"
 
@@ -107,42 +119,37 @@ for key in rsa ecdsa ed25519; do
     if [ ! -f "$KEY_FILE" ]; then
         info "Génération clé $key..."
         if "$DROPBEARKEY" -t "$key" -f "$KEY_FILE"; then
-            info "✅ Clé $key générée"
+            info "✅ Clé $key OK"
         else
-            warn "❌ Échec clé $key (ignorée)"
+            warn "❌ Clé $key échouée"
             rm -f "$KEY_FILE"
         fi
-    else
-        info "Clé $key déjà présente"
     fi
 done
 
-# Vérification critique
+# Vérif critique (au moins 1 clé)
 if ! ls "$DROPBEAR_DIR"/*_host_key >/dev/null 2>&1; then
-    error "Aucune clé host générée !"
+    error "AUCUNE clé host générée !"
 fi
+
 chmod 600 "$DROPBEAR_DIR"/*_host_key
 chown root:root "$DROPBEAR_DIR"/*_host_key
-info "Clés prêtes: $(ls "$DROPBEAR_DIR"/*_host_key | xargs -n1 basename)"
+info "Clés prêtes: $(ls "$DROPBEAR_DIR"/*_host_key 2>/dev/null | xargs -n1 basename)"
 
 # ==============================
-# CREATION BANNER
+# BANNER + SYSTEMD
 # ==============================
-info "Création du banner Dropbear..."
-cat <<EOF > "$DROPBEAR_BANNER"
+info "📄 Création banner..."
+cat > "$DROPBEAR_BANNER" <<EOF
 Dropbear SSH Server - $(hostname)
 Ubuntu $OS_VERSION | Port: $DROPBEAR_PORT
 EOF
 chmod 644 "$DROPBEAR_BANNER"
-chown root:root "$DROPBEAR_BANNER"
 
-# ==============================
-# CREATION SERVICE SYSTEMD
-# ==============================
-info "Création service systemd..."
+info "⚙️  Service systemd..."
 cat > "$SYSTEMD_FILE" <<EOF
 [Unit]
-Description=Dropbear SSH Server Custom (port $DROPBEAR_PORT)
+Description=Dropbear Custom (port $DROPBEAR_PORT)
 After=network-online.target
 Wants=network-online.target
 
@@ -151,8 +158,8 @@ Type=simple
 ExecStart=$DROPBEAR_BIN -F -E -p $DROPBEAR_PORT -w -g -b $DROPBEAR_BANNER -R
 Restart=always
 RestartSec=2
-LimitNOFILE=1048576
 User=root
+LimitNOFILE=1048576
 
 [Install]
 WantedBy=multi-user.target
@@ -162,17 +169,20 @@ systemctl daemon-reload
 systemctl enable --now dropbear-custom.service
 
 # ==============================
-# VERIFICATION FINALE
+# VERIF FINALE
 # ==============================
-sleep 2
-if systemctl is-active --quiet dropbear-custom.service && ss -tulpn | grep -q ":$DROPBEAR_PORT "; then
-    info "🎉 ✅ Dropbear OK sur port $DROPBEAR_PORT !"
-    info "🔗 Test: ssh -p $DROPBEAR_PORT root@$(hostname -I | awk '{print $1}')"
+sleep 3
+if systemctl is-active --quiet dropbear-custom.service; then
+    if ss -tulpn | grep -q ":$DROPBEAR_PORT "; then
+        info "🎉 ✅ DROPBEAR OK port $DROPBEAR_PORT !"
+        info "🔗 Test: ssh -p $DROPBEAR_PORT root@$(hostname -I | awk '{print $1}')"
+    else
+        warn "⚠️ Service OK mais port fermé (firewall?)"
+    fi
 else
-    warn "⚠️  Vérifier les logs:"
+    error "❌ Service KO !"
     systemctl status dropbear-custom.service --no-pager
-    journalctl -u dropbear-custom.service -n 20 --no-pager
 fi
 
-info "📋 Status: systemctl status dropbear-custom.service"
-info "📋 Logs:   journalctl -u dropbear-custom.service -f"
+info "📋 systemctl status dropbear-custom.service"
+info "📋 journalctl -u dropbear-custom.service -f"
