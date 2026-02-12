@@ -230,7 +230,7 @@ f.WriteString(bashrcContent)
 	}
 	exec.Command("systemctl", "reload", "ssh").Run()
     exec.Command("systemctl", "reload", "dropbear").Run()
-	syncUDPTunnels(username, password, expireTime)
+	syncUDPTunnels(username, password, expireDate)
 	
 	return strings.Join([]string{
 		fmt.Sprintf("✅ Utilisateur %s créé avec succès", username),
