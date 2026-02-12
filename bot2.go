@@ -536,22 +536,109 @@ func supprimerUtilisateurV2Ray(index int) string {
 	if index < 0 || index >= len(utilisateursV2Ray) {
 		return "❌ Index invalide"
 	}
+
 	u := utilisateursV2Ray[index]
+
 	// Retirer du slice
 	utilisateursV2Ray = append(utilisateursV2Ray[:index], utilisateursV2Ray[index+1:]...)
+
 	// Réécrire le fichier complet
 	if err := os.MkdirAll("/etc/kighmu", 0755); err != nil {
 		return fmt.Sprintf("❌ Erreur dossier : %v", err)
 	}
+
 	f, err := os.Create(v2rayFile)
 	if err != nil {
 		return fmt.Sprintf("❌ Erreur fichier : %v", err)
 	}
 	defer f.Close()
-	for _, u := range utilisateursV2Ray {
-		f.WriteString(fmt.Sprintf("%s|%s|%s\n", u.Nom, u.UUID, u.Expire))
+
+	for _, user := range utilisateursV2Ray {
+		f.WriteString(fmt.Sprintf("%s|%s|%s\n", user.Nom, user.UUID, user.Expire))
 	}
+
+	// Supprimer l'utilisateur du config.json V2Ray
+	if err := supprimerClientV2Ray(u.UUID); err != nil {
+		return fmt.Sprintf("⚠️ Utilisateur supprimé du fichier, mais erreur V2Ray : %v", err)
+	}
+
 	return fmt.Sprintf("✅ Utilisateur %s supprimé.", u.Nom)
+}
+
+func supprimerClientV2Ray(uuid string) error {
+	configFile := "/etc/v2ray/config.json"
+
+	data, err := ioutil.ReadFile(configFile)
+	if err != nil {
+		return fmt.Errorf("Impossible de lire config.json : %v", err)
+	}
+
+	var config map[string]interface{}
+	if err := json.Unmarshal(data, &config); err != nil {
+		return fmt.Errorf("JSON invalide : %v", err)
+	}
+
+	inbounds, ok := config["inbounds"].([]interface{})
+	if !ok {
+		return fmt.Errorf("Structure inbounds invalide")
+	}
+
+	modifie := false
+
+	for i, inbound := range inbounds {
+		inb, ok := inbound.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if proto, ok := inb["protocol"].(string); ok && proto == "vless" {
+			settings, ok := inb["settings"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+			clients, ok := settings["clients"].([]interface{})
+			if !ok {
+				continue
+			}
+
+			nouveauxClients := []interface{}{}
+			for _, c := range clients {
+				clientMap, ok := c.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				if clientMap["id"] != uuid {
+					nouveauxClients = append(nouveauxClients, clientMap)
+				} else {
+					modifie = true
+				}
+			}
+			settings["clients"] = nouveauxClients
+			inb["settings"] = settings
+			inbounds[i] = inb
+		}
+	}
+
+	config["inbounds"] = inbounds
+
+	if !modifie {
+		return nil
+	}
+
+	newData, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return fmt.Errorf("Erreur lors du marshalling JSON : %v", err)
+	}
+
+	if err := ioutil.WriteFile(configFile, newData, 0644); err != nil {
+		return fmt.Errorf("Impossible d'écrire config.json : %v", err)
+	}
+
+	cmd := exec.Command("systemctl", "restart", "v2ray")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("Impossible de redémarrer V2Ray : %v", err)
+	}
+
+	return nil
 }
 
 // Lancement Bot Telegram
