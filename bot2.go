@@ -966,30 +966,37 @@ SÉLECTIONNEZ UNE OPTION CI-DESSOUS !
 			continue
 		}
 
-    // 🔘 CALLBACK BUTTONS (TOUJOURS AVANT)
     // ====================================
-    if update.CallbackQuery != nil {
+// 🔘 CALLBACK BUTTONS (TOUJOURS AVANT)
+// ====================================
+if update.CallbackQuery != nil {
 
-        bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
+    // Répond au callback (compatible anciennes versions)
+    callback := tgbotapi.NewCallback(update.CallbackQuery.ID, "")
+    bot.AnswerCallbackQuery(callback)
 
-        data := update.CallbackQuery.Data
-        chatID := update.CallbackQuery.Message.Chat.ID
+    data := update.CallbackQuery.Data
+    chatID := update.CallbackQuery.Message.Chat.ID
 
-        if data == "voir_appareils" {
-            msg := resumeAppareils()
-            bot.Send(tgbotapi.NewMessage(chatID, msg))
-        }
-
-        continue
+    // Bouton APPAREILS
+    if data == "voir_appareils" {
+        msg := resumeAppareils()
+        bot.Send(tgbotapi.NewMessage(chatID, msg))
     }
 
-    // ====================================
-    if update.Message == nil {
-        continue
-    }
+    continue
+}
 
-    text := update.Message.Text
-    chatID := update.Message.Chat.ID
+// ====================================
+// 💬 MESSAGE TEXTE
+// ====================================
+if update.Message == nil {
+    continue
+}
+
+// Réutilisation des variables existantes (pas :=)
+text = update.Message.Text
+chatID = update.Message.Chat.ID
 
 		/* ===== INCONNU ===== */
 		bot.Send(tgbotapi.NewMessage(chatID, "❌ Commande ou format inconnu"))
