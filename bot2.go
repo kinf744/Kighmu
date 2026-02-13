@@ -1004,8 +1004,8 @@ func enregistrerUtilisateurV2Ray(u UtilisateurV2Ray) error {
 // Créer utilisateur V2Ray + FastDNS
 // ===============================
 func creerUtilisateurV2Ray(nom string, duree int) string {
-	uuid := genererUUID()
-	expire := time.Now().AddDate(0, 0, duree).Format("2006-01-02")
+	// uuid := genererUUID()
+	// expire := time.Now().AddDate(0, 0, duree).Format("2006-01-02")
 
 	// Ajouter au slice et fichier
 	u := UtilisateurV2Ray{Nom: nom, UUID: uuid, Expire: expire}
