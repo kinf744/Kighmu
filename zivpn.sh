@@ -216,13 +216,12 @@ create_zivpn_user() {
 
     if ! systemctl is-active --quiet "$ZIVPN_SERVICE"; then
         echo "❌ Service ZIVPN inactif ou non installé."
-        echo "   Lance l'option 1 ou: systemctl start $ZIVPN_SERVICE"
         pause
         return
     fi
 
     # --- Entrée utilisateur ---
-    read -rp "Téléphone: " PHONE
+    read -rp "Identifiant (téléphone ou username): " USER_ID
     read -rp "Password ZIVPN: " PASS
     read -rp "Durée (jours): " DAYS
     EXPIRE=$(date -d "+${DAYS} days" '+%Y-%m-%d')
@@ -233,10 +232,10 @@ create_zivpn_user() {
     awk -F'|' -v today="$TODAY" '$3>=today {print $0}' "$ZIVPN_USER_FILE" > "$tmp" 2>/dev/null || true
     mv "$tmp" "$ZIVPN_USER_FILE"
 
-    # --- Suppression éventuelle doublon PHONE ---
+    # --- Suppression éventuelle doublon USER_ID ---
     tmp=$(mktemp)
-    grep -v "^$PHONE|" "$ZIVPN_USER_FILE" > "$tmp" 2>/dev/null || true
-    echo "$PHONE|$PASS|$EXPIRE" >> "$tmp"
+    grep -v "^$USER_ID|" "$ZIVPN_USER_FILE" > "$tmp" 2>/dev/null || true
+    echo "$USER_ID|$PASS|$EXPIRE" >> "$tmp"
     mv "$tmp" "$ZIVPN_USER_FILE"
     chmod 600 "$ZIVPN_USER_FILE"
 
@@ -251,14 +250,14 @@ create_zivpn_user() {
         DOMAIN=$(cat "$ZIVPN_DOMAIN_FILE" 2>/dev/null || hostname -I | awk '{print $1}')
 
         echo
-      echo "✅ 𝗨𝗧𝗜𝗟𝗜𝗦𝗔𝗧𝗘𝗨𝗥 𝗖𝗥𝗘𝗘𝗥"
-      echo "━━━━━━━━━━━━━━━━━━━━━"
-      echo "🌐 𝗗𝗼𝗺𝗮𝗶𝗻𝗲  : $DOMAIN"
-      echo "🎭 𝗢𝗯𝗳𝘀     : zivpn"
-      echo "🔐 𝗣𝗮𝘀𝘀𝘄𝗼𝗿𝗱 : $PASS"
-      echo "📅 𝗘𝘅𝗽𝗶𝗿𝗲   : $EXPIRE"
-      echo "🔌 𝐏𝐨𝐫𝐭    : 5667"
-      echo "━━━━━━━━━━━━━━━━━━━━━"
+        echo "✅ UTILISATEUR CRÉÉ"
+        echo "━━━━━━━━━━━━━━━━━━━━━"
+        echo "🌐 Domaine  : $DOMAIN"
+        echo "🎭 Obfs    : zivpn"
+        echo "🔐 Password: $PASS"
+        echo "📅 Expire  : $EXPIRE"
+        echo "🔌 Port    : 5667"
+        echo "━━━━━━━━━━━━━━━━━━━━━"
     else
         echo "❌ JSON invalide → rollback"
         rm -f /tmp/config.json
