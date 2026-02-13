@@ -485,30 +485,14 @@ func resumeAppareils() string {
     return builder.String()
 }
 
-type UtilisateurSSH struct {
-    Nom    string
-    Pass   string
-    Limite int
-    Expire string
-    HostIP string
-    Domain string
-    SlowDNS string
-}
+// Slice global des utilisateurs SSH
+var utilisateursSSH []UtilisateurSSH
 
-// Map pour gérer l'état de modification par chat
-type EtatModification struct {
-    Etape   string // "attente_numero", "attente_type", "attente_valeur"
-    Indices []int
-    Type    string // "duree" ou "pass"
-}
-
-var etatsModifs = make(map[int64]*EtatModification)
-
-// Fonction pour charger les utilisateurs depuis le fichier
 func chargerUtilisateursSSH() {
     utilisateursSSH = []UtilisateurSSH{}
     data, err := ioutil.ReadFile("/etc/kighmu/users.list")
     if err != nil {
+        fmt.Println("⚠️ Impossible de lire users.list:", err)
         return
     }
     lignes := strings.Split(string(data), "\n")
@@ -520,64 +504,49 @@ func chargerUtilisateursSSH() {
         if len(parts) >= 2 {
             utilisateursSSH = append(utilisateursSSH, UtilisateurSSH{
                 Nom:    parts[0],
-                Expire: parts[1],
+                Pass:   parts[1],
+                Limite: 0,
+                Expire: parts[2],
             })
         }
     }
 }
 
-// Fonction pour sauvegarder les utilisateurs dans le fichier
-func sauvegarderUtilisateursSSH(utilisateurs []UtilisateurSSH) error {
+func sauvegarderUtilisateursSSH() error {
     var lines []string
-    for _, u := range utilisateurs {
+    for _, u := range utilisateursSSH {
         lines = append(lines, fmt.Sprintf("%s|%s|%d|%s|%s|%s|%s", u.Nom, u.Pass, u.Limite, u.Expire, u.HostIP, u.Domain, u.SlowDNS))
     }
     return ioutil.WriteFile("/etc/kighmu/users.list", []byte(strings.Join(lines, "\n")), 0600)
 }
 
-// Calcul de la nouvelle date en fonction du nombre de jours
-func calculerNouvelleDate(jours int) string {
-    if jours == 0 {
-        return "none"
-    }
-    return time.Now().AddDate(0, 0, jours).Format("2006-01-02")
-}
-
-// Fonction principale pour gérer la modification SSH
 func gererModificationSSH(bot *tgbotapi.BotAPI, chatID int64, text string) {
-    utilisateurs, err := chargerUtilisateursSSH()
-    if err != nil || len(utilisateurs) == 0 {
+    if len(utilisateursSSH) == 0 {
         bot.Send(tgbotapi.NewMessage(chatID, "❌ Aucun utilisateur SSH trouvé"))
         return
     }
 
-    // Vérifier si on est en cours de modification
     etat, ok := etatsModifs[chatID]
-
     if !ok || etat.Etape == "" {
-        // Étape 1 : afficher liste et demander numéros
+        // Étape 1 : afficher liste
         msg := "📝   MODIFIER DUREE / MOT DE PASSE\n\nListe des utilisateurs :\n"
-        for i, u := range utilisateurs {
+        for i, u := range utilisateursSSH {
             msg += fmt.Sprintf("[%02d] %s   (expire : %s)\n", i+1, u.Nom, u.Expire)
         }
         msg += "\nEntrez le(s) numéro(s) des utilisateurs à modifier (ex: 1,3) :"
         bot.Send(tgbotapi.NewMessage(chatID, msg))
 
-        // Initialiser état
-        etatsModifs[chatID] = &EtatModification{
-            Etape: "attente_numero",
-        }
+        etatsModifs[chatID] = &EtatModification{Etape: "attente_numero"}
         return
     }
 
     switch etat.Etape {
     case "attente_numero":
-        // Lire indices
         indicesStr := strings.Split(text, ",")
         var indices []int
         for _, s := range indicesStr {
             n, err := strconv.Atoi(strings.TrimSpace(s))
-            if err != nil || n < 1 || n > len(utilisateurs) {
+            if err != nil || n < 1 || n > len(utilisateursSSH) {
                 bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("❌ Numéro invalide : %s", s)))
                 delete(etatsModifs, chatID)
                 return
@@ -586,10 +555,7 @@ func gererModificationSSH(bot *tgbotapi.BotAPI, chatID int64, text string) {
         }
         etat.Indices = indices
         etat.Etape = "attente_type"
-
-        // Afficher menu durée / mot de passe
-        menuMsg := "[01] Durée d'expiration du compte\n[02] Mot de passe\n[00] Retour au menu\nEntrez votre choix [00-02] :"
-        bot.Send(tgbotapi.NewMessage(chatID, menuMsg))
+        bot.Send(tgbotapi.NewMessage(chatID, "[01] Durée\n[02] Mot de passe\n[00] Retour\nChoix :"))
 
     case "attente_type":
         switch text {
@@ -618,19 +584,17 @@ func gererModificationSSH(bot *tgbotapi.BotAPI, chatID int64, text string) {
                 return
             }
             for _, i := range etat.Indices {
-                utilisateurs[i].Expire = calculerNouvelleDate(jours)
-                bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("✅ Durée modifiée pour %s", utilisateurs[i].Nom)))
+                utilisateursSSH[i].Expire = calculerNouvelleDate(jours)
+                bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("✅ Durée modifiée pour %s", utilisateursSSH[i].Nom)))
             }
         } else if etat.Type == "pass" {
             for _, i := range etat.Indices {
-                cmd := exec.Command("bash", "-c", fmt.Sprintf("echo -e '%s\n%s' | passwd %s", text, text, utilisateurs[i].Nom))
+                cmd := exec.Command("bash", "-c", fmt.Sprintf("echo -e '%s\n%s' | passwd %s", text, text, utilisateursSSH[i].Nom))
                 cmd.Run()
-                bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("✅ Mot de passe modifié pour %s", utilisateurs[i].Nom)))
+                bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("✅ Mot de passe modifié pour %s", utilisateursSSH[i].Nom)))
             }
         }
-
-        // Sauvegarder modifications
-        sauvegarderUtilisateursSSH(utilisateurs)
+        sauvegarderUtilisateursSSH()
         delete(etatsModifs, chatID)
     }
 }
