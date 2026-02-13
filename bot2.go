@@ -484,63 +484,70 @@ func traiterSuppressionMultiple(bot *tgbotapi.BotAPI, chatID int64, text string)
 }
 
 func resumeAppareils() string {
-    file := "/etc/kighmu/users.list"
+	file := "/etc/kighmu/users.list"
 
-    data, err := ioutil.ReadFile(file)
-    if err != nil {
-        return "❌ Impossible de lire users.list"
-    }
+	data, err := ioutil.ReadFile(file)
+	if err != nil {
+		return "❌ Impossible de lire users.list"
+	}
 
-    lines := strings.Split(string(data), "\n")
+	lines := strings.Split(string(data), "\n")
 
-    var builder strings.Builder
-    builder.WriteString("📊 APPAREILS CONNECTÉS PAR COMPTE\n\n")
+	var builder strings.Builder
+	builder.WriteString("📊 APPAREILS CONNECTÉS PAR COMPTE\n\n")
 
-    total := 0
+	total := 0
 
-    // Récupérer toutes les sessions SSH/Dropbear en une seule passe
-    userCounts := make(map[string]int)
-    out, _ := exec.Command("ps", "-eo", "user,comm").Output()
-    for _, line := range strings.Split(string(out), "\n") {
-        fields := strings.Fields(line)
-        if len(fields) < 2 {
-            continue
-        }
-        user := fields[0]
-        cmd := fields[1]
-        if (cmd == "sshd" || cmd == "dropbear") && user != "root" {
-            userCounts[user]++
-        }
-    }
+	// Compter toutes les sessions SSH/Dropbear en une seule passe
+	userCounts := make(map[string]int)
+	out, _ := exec.Command("ps", "-eo", "user,comm").Output()
+	for _, line := range strings.Split(string(out), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		user := fields[0]
+		cmd := fields[1]
+		if (cmd == "sshd" || cmd == "dropbear") && user != "root" {
+			userCounts[user]++
+		}
+	}
 
-    for _, line := range lines {
-        if strings.TrimSpace(line) == "" {
-            continue
-        }
-        parts := strings.Split(line, "|")
-        if len(parts) < 3 {
-            continue
-        }
-        username := parts[0]
-        limite := parts[2]
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		parts := strings.Split(line, "|")
+		if len(parts) < 4 {
+			continue
+		}
+		username := parts[0]
+		limite := parts[2]
+		expire := parts[3]
 
-        nb := userCounts[username]
-        total += nb
+		nb := userCounts[username]
+		total += nb
 
-        status := "🔴 HORS LIGNE"
-        if nb > 0 {
-            status = "🟢 EN LIGNE"
-        }
+		status := "🔴 HORS LIGNE"
+		if nb > 0 {
+			status = "🟢 EN LIGNE"
+		}
 
-        builder.WriteString(
-            fmt.Sprintf("👤 %-10s : [ %d/%s ] %s\n", username, nb, limite, status),
-        )
-    }
+		// Détecter si c’est un compte test
+		compteType := "NORMAL"
+		if len(parts) >= 7 && parts[6] == "test" {
+			compteType = "TEST"
+		}
 
-    builder.WriteString("━━━━━━━━━━━━━━\n")
-    builder.WriteString(fmt.Sprintf("📱 TOTAL      : %d\n", total))
+		builder.WriteString(
+			fmt.Sprintf("👤 %-10s [%s] : [ %d/%s ] %s | Expire : %s\n", username, compteType, nb, limite, status, expire),
+		)
+	}
 
-    return builder.String()
+	builder.WriteString("━━━━━━━━━━━━━━\n")
+	builder.WriteString(fmt.Sprintf("📱 TOTAL CONNECTÉS : %d\n", total))
+
+	return builder.String()
 }
 
 // Slice global des utilisateurs SSH
