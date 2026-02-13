@@ -447,7 +447,7 @@ func resumeAppareils() string {
 			continue
 		}
 
-		// Format :
+		// Format users.list :
 		// username|password|limite|expire|hostip|domain|slowdns
 		parts := strings.Split(line, "|")
 		if len(parts) < 3 {
@@ -457,7 +457,7 @@ func resumeAppareils() string {
 		username := parts[0]
 		limite := parts[2]
 
-		// récupérer appareils connectés via ton script bash
+		// 👉 Appel de ton script monitoring (qui compte déjà les sessions)
 		cmd := exec.Command("/root/Kighmu/monitoring.sh", username)
 		out, _ := cmd.Output()
 
@@ -467,8 +467,13 @@ func resumeAppareils() string {
 
 		total += nb
 
+		status := "🔴 HORS LIGNE"
+		if nb > 0 {
+			status = "🟢 EN LIGNE"
+		}
+
 		builder.WriteString(
-			fmt.Sprintf("👤 %-10s : [ %d/%s ]\n", username, nb, limite),
+			fmt.Sprintf("👤 %-10s : [ %d/%s ] %s\n", username, nb, limite, status),
 		)
 	}
 
