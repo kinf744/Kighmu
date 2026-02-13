@@ -1004,32 +1004,33 @@ func enregistrerUtilisateurV2Ray(u UtilisateurV2Ray) error {
 // Créer utilisateur V2Ray + FastDNS
 // ===============================
 func creerUtilisateurV2Ray(nom string, duree int) string {
-	// uuid := genererUUID()
-	// expire := time.Now().AddDate(0, 0, duree).Format("2006-01-02")
+    // Générer UUID et date d'expiration
+    uuid := genererUUID()
+    expire := time.Now().AddDate(0, 0, duree).Format("2006-01-02")
 
-	// Ajouter au slice et fichier
-	u := UtilisateurV2Ray{Nom: nom, UUID: uuid, Expire: expire}
-	utilisateursV2Ray = append(utilisateursV2Ray, u)
-	if err := enregistrerUtilisateurV2Ray(u); err != nil {
-		return fmt.Sprintf("❌ Erreur sauvegarde utilisateur : %v", err)
-	}
+    // Ajouter au slice et fichier
+    u := UtilisateurV2Ray{Nom: nom, UUID: uuid, Expire: expire}
+    utilisateursV2Ray = append(utilisateursV2Ray, u)
+    if err := enregistrerUtilisateurV2Ray(u); err != nil {
+        return fmt.Sprintf("❌ Erreur sauvegarde utilisateur : %v", err)
+    }
 
-	// ⚡️ Ajouter l'UUID dans config.json V2Ray
-	if err := ajouterClientV2Ray(u.UUID, u.Nom); err != nil {
-		return fmt.Sprintf("❌ Erreur ajout UUID dans config.json : %v", err)
-	}
+    // ⚡️ Ajouter l'UUID dans config.json V2Ray
+    if err := ajouterClientV2Ray(u.UUID, u.Nom); err != nil {
+        return fmt.Sprintf("❌ Erreur ajout UUID dans config.json : %v", err)
+    }
 
-	// Ports et infos FastDNS / V2Ray
-	v2rayPort := 5401
-	fastdnsPort := 5400
-	pubKey := slowdnsPubKey()
-	nameServer := slowdnsNameServer()
+    // Ports et infos FastDNS / V2Ray
+    v2rayPort := 5401
+    fastdnsPort := 5400
+    pubKey := slowdnsPubKey()
+    nameServer := slowdnsNameServer()
 
-	// Lien VLESS TCP
-	lienVLESS := fmt.Sprintf(
-		"vless://%s@%s:%d?type=tcp&encryption=none&host=%s#%s-VLESS-TCP",
-		u.UUID, DOMAIN, v2rayPort, DOMAIN, u.Nom,
-	)
+    // Lien VLESS TCP
+    lienVLESS := fmt.Sprintf(
+        "vless://%s@%s:%d?type=tcp&encryption=none&host=%s#%s-VLESS-TCP",
+        u.UUID, DOMAIN, v2rayPort, DOMAIN, u.Nom,
+    )
 
 	// Message complet
 	var builder strings.Builder
