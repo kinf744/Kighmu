@@ -966,12 +966,19 @@ SÉLECTIONNEZ UNE OPTION CI-DESSOUS !
 			continue
 		}
 
+		// ===== CALLBACK BUTTONS =====
+        if update.CallbackQuery != nil {
+
+	       data := update.CallbackQuery.Data
+	       chatID := update.CallbackQuery.Message.Chat.ID
+
 		// ===== BOUTON APPAREILS =====
 	    if data == "voir_appareils" {
 		    msg := resumeAppareils()
 		    bot.Send(tgbotapi.NewMessage(chatID, msg))
 		    continue
-	    }
+	       }
+		  }
 
 		/* ===== INCONNU ===== */
 		bot.Send(tgbotapi.NewMessage(chatID, "❌ Commande ou format inconnu"))
