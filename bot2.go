@@ -232,9 +232,6 @@ func peutVoir(bot Bot, utilisateur string) bool {
 func creerUtilisateur(botIndex int, nom string, duree int) string {
     bot := BotsData.Bots[botIndex]
 
-    uuid := genererUUID()
-    expire := time.Now().AddDate(0, 0, duree).Format("2006-01-02")
-
     // Créer utilisateur sur V2Ray / SSH
     msg := creerUtilisateurV2Ray(nom, duree) // ta fonction existante
 
