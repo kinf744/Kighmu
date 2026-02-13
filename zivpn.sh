@@ -283,7 +283,7 @@ create_zivpn_user() {
 
 delete_zivpn_user() {
   print_title
-  echo "[3] SUPPRIMER UTILISATEUR (NUMÉRO)"
+  echo "[3] SUPPRIMER UTILISATEUR ZIVPN"
 
   if [[ ! -f "$ZIVPN_USER_FILE" || ! -s "$ZIVPN_USER_FILE" ]]; then
     echo "❌ Aucun utilisateur enregistré."
@@ -291,44 +291,54 @@ delete_zivpn_user() {
     return
   fi
 
-  # Lire la liste réelle depuis users.list
+  # --- Nettoyage comptes expirés avant affichage ---
+  TODAY=$(date +%Y-%m-%d)
+  TMP_FILE=$(mktemp)
+  awk -F'|' -v today="$TODAY" '$3>=today {print $0}' "$ZIVPN_USER_FILE" > "$TMP_FILE" || true
+  mv "$TMP_FILE" "$ZIVPN_USER_FILE"
+  chmod 600 "$ZIVPN_USER_FILE"
+
+  # --- Lire la liste réelle des utilisateurs actifs ---
   mapfile -t USERS < <(sort -t'|' -k3 "$ZIVPN_USER_FILE")
+  if [[ ${#USERS[@]} -eq 0 ]]; then
+    echo "❌ Aucun utilisateur actif trouvé."
+    pause
+    return
+  fi
+
   echo "Utilisateurs actifs (sélectionnez NUMÉRO):"
   echo "────────────────────────────────────"
-
   for i in "${!USERS[@]}"; do
-    echo "$((i+1)). ${USERS[$i]}"
+    USER_ID=$(echo "${USERS[$i]}" | cut -d'|' -f1)
+    EXP=$(echo "${USERS[$i]}" | cut -d'|' -f3)
+    echo "$((i+1)). $USER_ID | Expire: $EXP"
   done
-
   echo "────────────────────────────────────"
-  read -rp "🔢 Numéro à supprimer (1-${#USERS[@]}): " NUM
 
+  read -rp "🔢 Numéro à supprimer (1-${#USERS[@]}): " NUM
   if ! [[ "$NUM" =~ ^[0-9]+$ ]] || (( NUM < 1 || NUM > ${#USERS[@]} )); then
     echo "❌ Numéro invalide."
     pause
     return
   fi
 
-  # EXTRACTION DU NUMÉRO DE TÉLÉPHONE RÉEL
+  # --- Extraction de l'identifiant réel ---
   LINE="${USERS[$((NUM-1))]}"
-  PHONE=$(echo "$LINE" | cut -d'|' -f1 | tr -d '[:space:]')
+  USER_ID=$(echo "$LINE" | cut -d'|' -f1 | tr -d '[:space:]')
+  echo "🗑️ Suppression de $USER_ID..."
 
-  echo "🗑️ Suppression de $PHONE..."
-
-  # Supprimer la ligne correspondante dans users.list
-  grep -v "^$PHONE|" "$ZIVPN_USER_FILE" > "${ZIVPN_USER_FILE}.tmp" || true
+  # --- Supprimer la ligne correspondante dans users.list ---
+  grep -v "^$USER_ID|" "$ZIVPN_USER_FILE" > "${ZIVPN_USER_FILE}.tmp" || true
   mv "${ZIVPN_USER_FILE}.tmp" "$ZIVPN_USER_FILE"
   chmod 600 "$ZIVPN_USER_FILE"
 
-  # Mise à jour config.json
-  TODAY=$(date +%Y-%m-%d)
+  # --- Mise à jour config.json avec mots de passe encore valides ---
   PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$ZIVPN_USER_FILE" | sort -u | paste -sd, -)
-
   if jq --arg passwords "$PASSWORDS" '.auth.config = ($passwords | split(","))' "$ZIVPN_CONFIG" > /tmp/config.json 2>/dev/null &&
      jq empty /tmp/config.json >/dev/null 2>&1; then
     mv /tmp/config.json "$ZIVPN_CONFIG"
     systemctl restart "$ZIVPN_SERVICE"
-    echo "✅ $PHONE (n°$NUM) supprimé et ZIVPN mis à jour"
+    echo "✅ $USER_ID (n°$NUM) supprimé et ZIVPN mis à jour"
   else
     echo "⚠️ Config ZIVPN inchangée (sécurité)"
     rm -f /tmp/config.json
