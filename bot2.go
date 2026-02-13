@@ -668,28 +668,42 @@ func gererModificationSSH(bot *tgbotapi.BotAPI, chatID int64, text string) {
 // ===============================
 func chargerUtilisateursV2Ray() {
 	utilisateursV2Ray = []UtilisateurV2Ray{}
+
 	data, err := ioutil.ReadFile(v2rayFile)
 	if err != nil {
 		return
 	}
+
 	lignes := strings.Split(string(data), "\n")
-	today := time.Now().Format("2006-01-02")
+	today := time.Now()
+
 	for _, ligne := range lignes {
-		if strings.TrimSpace(ligne) == "" {
+		ligne = strings.TrimSpace(ligne)
+		if ligne == "" {
 			continue
 		}
+
 		parts := strings.Split(ligne, "|")
-		if len(parts) >= 3 {
-			if parts[2] >= today { // ne garder que les valides
-				utilisateursV2Ray = append(utilisateursV2Ray, UtilisateurV2Ray{
-					Nom:    parts[0],
-					UUID:   parts[1],
-					Expire: parts[2],
-				})
-			} else {
-				// supprimer UUID expiré côté config.json
-				supprimerClientV2Ray(parts[1])
-			}
+		if len(parts) < 3 {
+			continue
+		}
+
+		nom := strings.TrimSpace(parts[0])
+		uuid := strings.TrimSpace(parts[1])
+		expireStr := strings.TrimSpace(parts[2])
+
+		expireDate, err := time.Parse("2006-01-02", expireStr)
+		if err != nil {
+			continue
+		}
+
+		// garder seulement les valides
+		if !expireDate.Before(today) {
+			utilisateursV2Ray = append(utilisateursV2Ray, UtilisateurV2Ray{
+				Nom:    nom,
+				UUID:   uuid,
+				Expire: expireStr,
+			})
 		}
 	}
 }
