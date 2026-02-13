@@ -103,7 +103,7 @@ show_status_block() {
   else
     ACTIVE_USERS=0
   fi
-  echo "${WHITE}Utilisateurs actifs:${RESET} $ACTIVE_USERS"
+  echo "${CYAN}Utilisateurs Créé:${RESET} $ACTIVE_USERS"
 
   # ----- Affichage général -----
   if [[ "$SVC_FILE_OK" == "✅" ]]; then
@@ -114,7 +114,7 @@ show_status_block() {
       echo "⚠️  ZIVPN : INSTALLÉ mais INACTIF"
     fi
   else
-    echo "${RED}❌ HYSTERIA : NON INSTALLÉ${RESET}"
+    echo "${RED}❌ ZIVPN : NON INSTALLÉ${RESET}"
   fi
   echo "${CYAN}------------------------------------------${RESET}"
   echo
