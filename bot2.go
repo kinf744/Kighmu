@@ -942,6 +942,7 @@ SÉLECTIONNEZ UNE OPTION CI-DESSOUS !
             switch data {
             case "voir_appareils":
             msg := resumeAppareils()
+				
             bot.Send(tgbotapi.NewMessage(chatID, msg))
             }
 
