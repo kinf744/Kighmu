@@ -426,10 +426,9 @@ func syncUDPTunnels(username, password, expireDate string) {
 }
 
 func resumeAppareils() string {
-
     file := "/etc/kighmu/users.list"
 
-    data, err := ioutil.ReadFile(file) // <-- ici
+    data, err := ioutil.ReadFile(file)
     if err != nil {
         return "❌ Impossible de lire users.list"
     }
@@ -441,30 +440,33 @@ func resumeAppareils() string {
 
     total := 0
 
-    for _, line := range lines {
+    // Récupérer toutes les sessions SSH/Dropbear en une seule passe
+    userCounts := make(map[string]int)
+    out, _ := exec.Command("ps", "-eo", "user,comm").Output()
+    for _, line := range strings.Split(string(out), "\n") {
+        fields := strings.Fields(line)
+        if len(fields) < 2 {
+            continue
+        }
+        user := fields[0]
+        cmd := fields[1]
+        if (cmd == "sshd" || cmd == "dropbear") && user != "root" {
+            userCounts[user]++
+        }
+    }
 
+    for _, line := range lines {
         if strings.TrimSpace(line) == "" {
             continue
         }
-
-        // Format users.list :
-        // username|password|limite|expire|hostip|domain|slowdns
         parts := strings.Split(line, "|")
         if len(parts) < 3 {
             continue
         }
-
         username := parts[0]
         limite := parts[2]
 
-        // Appel du script monitoring (qui compte déjà les sessions)
-        cmd := exec.Command("/root/Kighmu/monitoring.sh", username)
-        out, _ := cmd.Output()
-
-        nbStr := strings.TrimSpace(string(out))
-        nb := 0
-        fmt.Sscanf(nbStr, "%d", &nb)
-
+        nb := userCounts[username]
         total += nb
 
         status := "🔴 HORS LIGNE"
