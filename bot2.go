@@ -40,6 +40,18 @@ type BotsFile struct {
 
 var BotsData BotsFile
 
+type SSHUser struct {
+    Username    string
+    Password    string
+    OwnerBotID  int64     // ID du client bot créateur
+    ExpireAt    time.Time // expiration du user
+}
+
+type ClientBot struct {
+    BotID     int64
+    ExpireAt  time.Time
+}
+
 type UtilisateurSSH struct {
     Nom     string
     Pass    string
@@ -273,6 +285,44 @@ func appareilsConnectes(botIndex int) map[string]int {
         result[u.Nom] = compterAppareils(u.Nom) // ta fonction existante
     }
     return result
+}
+
+func startExpirationWatcher() {
+    go func() {
+        for {
+            checkExpiredClientBots()
+            time.Sleep(1 * time.Minute)
+        }
+    }()
+}
+
+func checkExpiredClientBots() {
+    now := time.Now()
+
+    clients := loadClientBots()
+    users := loadSSHUsers()
+
+    for _, client := range clients {
+
+        if now.After(client.ExpireAt) {
+
+            for _, u := range users {
+                if u.OwnerBotID == client.BotID {
+
+                    // Supprimer SSH Linux
+                    exec.Command("userdel", "-r", u.Username).Run()
+
+                    // Supprimer dans ta DB
+                    deleteSSHUser(u.Username)
+
+                    // Optionnel: supprimer appareils connectés
+                    removeConnectedDevices(u.Username)
+                }
+            }
+
+            deleteClientBot(client.BotID)
+        }
+    }
 }
 
 func creerUtilisateurNormal(username, password string, limite, days int) string {
@@ -1251,6 +1301,7 @@ SÉLECTIONNEZ UNE OPTION CI-DESSOUS !
 func main() {
 	initAdminID()
 	DOMAIN = loadDomain()
+	startExpirationWatcher()
 	chargerUtilisateursV2Ray() // <- ajouter cette ligne
 	fmt.Println("✅ Bot prêt à être lancé")
 	chargerUtilisateursSSH()
