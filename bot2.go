@@ -271,29 +271,69 @@ func supprimerUtilisateur(botIndex int, nom string) string {
     return fmt.Sprintf("✅ Utilisateur %s supprimé.", nom)
 }
 
-func listerUtilisateurs(botIndex int) []string {
-    bot := BotsData.Bots[botIndex]
-    visibles := []string{}
+// Vérifie et supprime les utilisateurs SSH/V2Ray des bots expirés
+func checkExpiredClientBots() {
+	now := time.Now()
 
-    for _, u := range getTousUtilisateurs() { // ta fonction existante
-        if peutVoir(bot, u.Nom) {
-            visibles = append(visibles, u.Nom)
-        }
-    }
-    return visibles
+	for i, bot := range BotsData.Bots {
+		// Vérifie seulement les clients
+		if bot.Role != "client" || bot.ExpireAt.IsZero() {
+			continue
+		}
+
+		if now.After(bot.ExpireAt) {
+			fmt.Printf("⚠️ Bot client '%s' expiré, suppression des utilisateurs...\n", bot.NomBot)
+
+			// Supprimer tous les utilisateurs associés à ce bot
+			for _, username := range bot.Utilisateurs {
+				// Supprimer SSH
+				exec.Command("userdel", "-r", username).Run()
+
+				// Supprimer de la base des utilisateurs
+				deleteSSHUser(username)
+
+				// Supprimer appareils connectés
+				removeConnectedDevices(username)
+			}
+
+			// Vider la liste des utilisateurs et marquer bot comme expiré
+			BotsData.Bots[i].Utilisateurs = []string{}
+			BotsData.Bots[i].Role = "expired"
+			fmt.Printf("✅ Bot client '%s' désactivé.\n", bot.NomBot)
+		}
+	}
+
+	// Sauvegarde les changements
+	sauvegarderBots()
 }
 
+// Retourne le nombre d'appareils connectés par utilisateur visible pour ce bot
 func appareilsConnectes(botIndex int) map[string]int {
-    bot := BotsData.Bots[botIndex]
-    result := make(map[string]int)
+	bot := BotsData.Bots[botIndex]
+	result := make(map[string]int)
 
-    for _, u := range getTousUtilisateurs() {
-        if !peutVoir(bot, u.Nom) {
-            continue
-        }
-        result[u.Nom] = compterAppareils(u.Nom) // ta fonction existante
-    }
-    return result
+	for _, username := range getTousUtilisateurs() {
+		if !peutVoir(bot, username) {
+			continue
+		}
+		result[username] = compterAppareils(username)
+	}
+
+	return result
+}
+
+// Retourne la liste des utilisateurs visibles pour ce bot
+func listerUtilisateurs(botIndex int) []string {
+	bot := BotsData.Bots[botIndex]
+	visibles := []string{}
+
+	for _, username := range getTousUtilisateurs() {
+		if peutVoir(bot, username) {
+			visibles = append(visibles, username)
+		}
+	}
+
+	return visibles
 }
 
 func startExpirationWatcher() {
@@ -303,35 +343,6 @@ func startExpirationWatcher() {
             time.Sleep(1 * time.Minute)
         }
     }()
-}
-
-func checkExpiredClientBots() {
-    now := time.Now()
-
-    clients := loadClientBots()
-    users := loadSSHUsers()
-
-    for _, client := range clients {
-
-        if now.After(client.ExpireAt) {
-
-            for _, u := range users {
-                if u.OwnerBotID == client.BotID {
-
-                    // Supprimer SSH Linux
-                    exec.Command("userdel", "-r", u.Username).Run()
-
-                    // Supprimer dans ta DB
-                    deleteSSHUser(u.Username)
-
-                    // Optionnel: supprimer appareils connectés
-                    removeConnectedDevices(u.Username)
-                }
-            }
-
-            deleteClientBot(client.BotID)
-        }
-    }
 }
 
 // ================== STUB FUNCTIONS ==================
