@@ -1022,16 +1022,15 @@ func creerUtilisateurV2Ray(nom string, duree int) string {
         return fmt.Sprintf("❌ Erreur ajout UUID dans config.json : %v", err)
     }
 
-    // Construire le message avec lien VLESS
-    v2rayPort := 5401
-    fastdnsPort := 5400
-    pubKey := slowdnsPubKey()
-    nameServer := slowdnsNameServer()
+    // Construire le message final
+    lienVLESS := fmt.Sprintf("vless://%s@%s:5401?type=tcp&encryption=none&host=%s#%s-VLESS-TCP",
+        u.UUID, DOMAIN, DOMAIN, u.Nom)
 
-    lienVLESS := fmt.Sprintf(
-        "vless://%s@%s:%d?type=tcp&encryption=none&host=%s#%s-VLESS-TCP",
-        u.UUID, DOMAIN, v2rayPort, DOMAIN, u.Nom,
+    return fmt.Sprintf(
+        "Utilisateur : %s\nUUID : %s\nExpire : %s\nLien VLESS : %s",
+        u.Nom, u.UUID, u.Expire, lienVLESS,
     )
+}
 
     var builder strings.Builder
     builder.WriteString("====================================================\n")
