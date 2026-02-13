@@ -444,6 +444,45 @@ func syncUDPTunnels(username, password, expireDate string) {
     }
 }
 
+// Calculer la nouvelle date d'expiration selon les jours
+func calculerNouvelleDate(jours int) string {
+    if jours == 0 {
+        return "none"
+    }
+    return time.Now().AddDate(0, 0, jours).Format("2006-01-02 15:04:05")
+}
+
+func traiterSuppressionMultiple(bot *tgbotapi.BotAPI, chatID int64, text string) {
+    users := strings.FieldsFunc(text, func(r rune) bool { return r == ',' || r == ' ' })
+    var results []string
+    for _, u := range users {
+        u = strings.TrimSpace(u)
+        if u == "" {
+            continue
+        }
+        if _, err := user.Lookup(u); err == nil {
+            cmd := exec.Command("userdel", "-r", u)
+            if err := cmd.Run(); err != nil {
+                results = append(results, fmt.Sprintf("❌ Erreur suppression %s", u))
+            } else {
+                data, _ := ioutil.ReadFile("/etc/kighmu/users.list")
+                lines := strings.Split(string(data), "\n")
+                var newLines []string
+                for _, line := range lines {
+                    if !strings.HasPrefix(line, u+"|") {
+                        newLines = append(newLines, line)
+                    }
+                }
+                ioutil.WriteFile("/etc/kighmu/users.list", []byte(strings.Join(newLines, "\n")), 0600)
+                results = append(results, fmt.Sprintf("✅ Utilisateur %s supprimé", u))
+            }
+        } else {
+            results = append(results, fmt.Sprintf("⚠️ Utilisateur %s introuvable", u))
+        }
+    }
+    bot.Send(tgbotapi.NewMessage(chatID, strings.Join(results, "\n")))
+}
+
 func resumeAppareils() string {
     file := "/etc/kighmu/users.list"
 
