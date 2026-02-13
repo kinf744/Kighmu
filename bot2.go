@@ -902,8 +902,6 @@ func supprimerClientV2Ray(uuid string) error {
 
 // Lancement Bot Telegram
 // ===============================
-var utilisateursSSH []UtilisateurSSH
-var etatsModifs = make(map[int64]*EtatModification)
 
 func lancerBot() {
     bot, err := tgbotapi.NewBotAPI(botToken)
