@@ -966,8 +966,6 @@ SÉLECTIONNEZ UNE OPTION CI-DESSOUS !
 			continue
 		}
 
-		for update := range updates {
-
     // ====================================
     // 🔘 CALLBACK BUTTONS (TOUJOURS AVANT)
     // ====================================
