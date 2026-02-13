@@ -32,6 +32,7 @@ type Bot struct {
     ID           int64    `json:"ID"`
     Role         string   `json:"Role"`
     Utilisateurs []string `json:"Utilisateurs"`
+	ExpireAt     time.Time `json:"ExpireAt"`
 }
 
 type BotsFile struct {
@@ -361,6 +362,10 @@ func loadSSHUsers() {
 
 func removeConnectedDevices(user string) {
 	fmt.Println("DEBUG: removeConnectedDevices:", user)
+}
+
+func deleteSSHUser(username string) {
+    // Rien à faire, suppression uniquement sur le système Linux
 }
 
 func creerUtilisateurNormal(username, password string, limite, days int) string {
@@ -1275,7 +1280,7 @@ func lancerBot() {
 
                 // 🔒 Client bot ne voit que ses users (à filtrer dans resumeAppareils)
                 bot.Send(tgbotapi.NewMessage(chatID,
-                    resumeAppareilsFiltre(userID, isAdmin(userID))))
+                    resumeAppareils(userID, isAdmin(userID))))
 
             case "modifier_ssh":
 
