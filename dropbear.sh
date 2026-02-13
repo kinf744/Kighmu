@@ -39,7 +39,7 @@ error(){ echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 # ==============================
 info "Mise à jour et installation des dépendances..."
 apt update -y
-apt install -y build-essential zlib1g-dev wget tar dos2unix
+apt install -y build-essential bzip2 zlib1g-dev wget tar dos2unix
 
 # ==============================
 # DROPBEAR INSTALL / COMPILE
