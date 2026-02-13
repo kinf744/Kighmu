@@ -485,6 +485,83 @@ func resumeAppareils() string {
     return builder.String()
 }
 
+func modifierUtilisateurSSH(chatID int64) {
+    if len(utilisateursSSH) == 0 {
+        bot.Send(tgbotapi.NewMessage(chatID, "❌ Aucun utilisateur SSH trouvé"))
+        return
+    }
+
+    // 📋 Afficher la liste des utilisateurs
+    msg := "📝   MODIFIER DUREE / MOT DE PASSE\n\nListe des utilisateurs :\n"
+    for i, u := range utilisateursSSH {
+        msg += fmt.Sprintf("[%02d] %s   (expire : %s)\n", i+1, u.Nom, u.Expire)
+    }
+    msg += "\nEntrez le(s) numéro(s) des utilisateurs à modifier (ex: 1,3) :"
+    bot.Send(tgbotapi.NewMessage(chatID, msg))
+
+    // Attente du message utilisateur pour choisir les numéros
+    update := <-updates
+    if update.Message == nil || int64(update.Message.From.ID) != adminID {
+        return
+    }
+
+    input := strings.TrimSpace(update.Message.Text)
+    indicesStr := strings.Split(input, ",")
+    var indices []int
+    for _, s := range indicesStr {
+        n, err := strconv.Atoi(strings.TrimSpace(s))
+        if err != nil || n < 1 || n > len(utilisateursSSH) {
+            bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("❌ Numéro invalide : %s", s)))
+            return
+        }
+        indices = append(indices, n-1)
+    }
+
+    // 📌 Menu choix durée / mot de passe
+    menuMsg := "[01] Durée d'expiration du compte\n[02] Mot de passe\n[00] Retour au menu\nEntrez votre choix [00-02] :"
+    bot.Send(tgbotapi.NewMessage(chatID, menuMsg))
+
+    // Attente du choix
+    update = <-updates
+    if update.Message == nil || int64(update.Message.From.ID) != adminID {
+        return
+    }
+
+    choix := strings.TrimSpace(update.Message.Text)
+
+    switch choix {
+    case "1", "01":
+        bot.Send(tgbotapi.NewMessage(chatID, "Entrez la nouvelle durée en jours (0 = pas d'expiration) :"))
+        update = <-updates
+        if update.Message == nil { return }
+        newLimit, err := strconv.Atoi(update.Message.Text)
+        if err != nil {
+            bot.Send(tgbotapi.NewMessage(chatID, "❌ Durée invalide"))
+            return
+        }
+        for _, i := range indices {
+            utilisateursSSH[i].Expire = calculerNouvelleDate(newLimit) // fonction à créer
+            bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("✅ Durée modifiée pour %s", utilisateursSSH[i].Nom)))
+        }
+    case "2", "02":
+        bot.Send(tgbotapi.NewMessage(chatID, "Entrez le nouveau mot de passe :"))
+        update = <-updates
+        if update.Message == nil { return }
+        newPass := update.Message.Text
+        for _, i := range indices {
+            // Appliquer mot de passe système
+            cmd := exec.Command("bash", "-c", fmt.Sprintf("echo -e '%s\n%s' | passwd %s", newPass, newPass, utilisateursSSH[i].Nom))
+            cmd.Run()
+            bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("✅ Mot de passe modifié pour %s", utilisateursSSH[i].Nom)))
+        }
+    case "0", "00":
+        bot.Send(tgbotapi.NewMessage(chatID, "Retour au menu"))
+        return
+    default:
+        bot.Send(tgbotapi.NewMessage(chatID, "❌ Choix invalide"))
+    }
+}
+
 // Charger utilisateurs V2Ray depuis fichier
 // ===============================
 func chargerUtilisateursV2Ray() {
