@@ -962,6 +962,13 @@ SÉLECTIONNEZ UNE OPTION CI-DESSOUS !
 			continue
 		}
 
+		// ===== BOUTON APPAREILS =====
+	    if data == "voir_appareils" {
+		    msg := resumeAppareils()
+		    bot.Send(tgbotapi.NewMessage(chatID, msg))
+		    continue
+	    }
+
 		/* ===== INCONNU ===== */
 		bot.Send(tgbotapi.NewMessage(chatID, "❌ Commande ou format inconnu"))
 	}
