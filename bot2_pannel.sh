@@ -17,8 +17,84 @@ stop_and_uninstall_bot() {
     echo "✅ Bot arrêté et désinstallé"
 }
 
-sudo chmod 600 /etc/kighmu/bots.json
-sudo chown root:root /etc/kighmu/bots.json
+# Fonction pour ajouter un nouveau client bot
+ajouter_client_bot() {
+    echo "➤ Ajouter un client bot"
+    read -p "Nom du bot : " NOM_BOT
+    read -p "Token du bot : " TOKEN_BOT
+    read -p "ID du bot : " ID_BOT
+    read -p "Rôle (client/admin) : " ROLE_BOT
+    read -p "Utilisateurs initiaux (séparés par des virgules, vide si aucun) : " USERS_INPUT
+    IFS=',' read -ra USERS <<< "$USERS_INPUT"
+
+    # Lire le JSON actuel
+    TMP_JSON=$(mktemp)
+    jq --arg nom "$NOM_BOT" \
+       --arg token "$TOKEN_BOT" \
+       --argjson id "$ID_BOT" \
+       --arg role "$ROLE_BOT" \
+       --argjson users "$(printf '%s\n' "${USERS[@]}" | jq -R . | jq -s .)" \
+       '.bots += [{"NomBot": $nom, "Token": $token, "ID": $id, "Role": $role, "Utilisateurs": $users}]' \
+       "$BOTS_CLIENT" > "$TMP_JSON" && mv "$TMP_JSON" "$BOTS_CLIENT"
+
+    sudo chmod 600 "$BOTS_CLIENT"
+    sudo chown root:root "$BOTS_CLIENT"
+    echo "✅ Client bot $NOM_BOT ajouté"
+}
+
+# Fonction pour lister les utilisateurs et supprimer un utilisateur d'un client bot
+gerer_utilisateurs_client() {
+    echo "➤ Gestion des utilisateurs client bot"
+    # Afficher tous les clients
+    jq -r '.bots[] | "\(.NomBot) (ID: \(.ID))"' "$BOTS_CLIENT"
+    read -p "Nom du client bot à gérer : " NOM_CLIENT
+
+    # Vérifier si le client existe
+    EXISTS=$(jq --arg nom "$NOM_CLIENT" '.bots[] | select(.NomBot == $nom)' "$BOTS_CLIENT")
+    if [ -z "$EXISTS" ]; then
+        echo "❌ Client bot non trouvé"
+        return
+    fi
+
+    # Lister les utilisateurs du client
+    USERS=$(jq -r --arg nom "$NOM_CLIENT" '.bots[] | select(.NomBot == $nom) | .Utilisateurs[]' "$BOTS_CLIENT")
+    if [ -z "$USERS" ]; then
+        echo "Aucun utilisateur pour ce client bot"
+        return
+    fi
+
+    echo "Utilisateurs :"
+    i=1
+    declare -a USER_ARR
+    for u in $USERS; do
+        echo "$i) $u"
+        USER_ARR+=("$u")
+        ((i++))
+    done
+
+    read -p "Numéro de l'utilisateur à supprimer (ou vide pour annuler) : " NUM
+    if [ -z "$NUM" ]; then
+        echo "❌ Annulé"
+        return
+    fi
+
+    if ! [[ "$NUM" =~ ^[0-9]+$ ]] || [ "$NUM" -lt 1 ] || [ "$NUM" -gt "${#USER_ARR[@]}" ]; then
+        echo "❌ Numéro invalide"
+        return
+    fi
+
+    USER_DELETE="${USER_ARR[$((NUM-1))]}"
+
+    # Supprimer l'utilisateur du JSON
+    TMP_JSON=$(mktemp)
+    jq --arg nom "$NOM_CLIENT" --arg userdel "$USER_DELETE" \
+       '(.bots[] | select(.NomBot == $nom) | .Utilisateurs) |= map(select(. != $userdel))' \
+       "$BOTS_CLIENT" > "$TMP_JSON" && mv "$TMP_JSON" "$BOTS_CLIENT"
+
+    sudo chmod 600 "$BOTS_CLIENT"
+    sudo chown root:root "$BOTS_CLIENT"
+    echo "✅ Utilisateur $USER_DELETE supprimé du client bot $NOM_CLIENT"
+}
 
 cat > "$BOTS_CLIENT" << 'EOF'
 {
@@ -84,9 +160,11 @@ while true; do
     echo "      🤖 PANNEAU DE CONTRÔLE BOT"
     echo "======================================"
     echo "1️⃣  Installer / Compiler le bot"
-    echo "2️⃣  Lancer le bot (systemd)"
+    echo "2️⃣  Lancer le bot admin(systemd)"
     echo "3️⃣  Quitter"
     echo "4️⃣  Arrêter / Désinstaller le bot"
+    echo "5️⃣  Ajouter un client bot"
+    echo "6️⃣  Gérer les utilisateurs d'un client bot"
     echo "======================================"
     read -p "👉 Choisissez une option [1-4] : " option
 
@@ -136,6 +214,16 @@ while true; do
         3)
             echo "👋 Au revoir"
             exit 0
+            ;;
+
+        5)
+          ajouter_client_bot
+          read -p "Entrée pour continuer..."
+            ;;
+
+        6)
+          gerer_utilisateurs_client
+          read -p "Entrée pour continuer..."
             ;;
 
         *)
