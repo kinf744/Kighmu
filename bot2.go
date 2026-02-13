@@ -976,9 +976,16 @@ SÉLECTIONNEZ UNE OPTION CI-DESSOUS !
 	    if data == "voir_appareils" {
 		    msg := resumeAppareils()
 		    bot.Send(tgbotapi.NewMessage(chatID, msg))
-		    continue
-	       }
-		  }
+		    }
+			continue
+	    } 
+
+		if update.Message == nil {
+        continue
+       }
+
+           text := update.Message.Text
+           chatID := update.Message.Chat.ID
 
 		/* ===== INCONNU ===== */
 		bot.Send(tgbotapi.NewMessage(chatID, "❌ Commande ou format inconnu"))
