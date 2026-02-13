@@ -1008,51 +1008,47 @@ func creerUtilisateurV2Ray(nom string, duree int) string {
     uuid := genererUUID()
     expire := time.Now().AddDate(0, 0, duree).Format("2006-01-02")
 
-    // Ajouter au slice et fichier
+    // Créer l'utilisateur et l'ajouter au slice
     u := UtilisateurV2Ray{Nom: nom, UUID: uuid, Expire: expire}
     utilisateursV2Ray = append(utilisateursV2Ray, u)
+
+    // Sauvegarder
     if err := enregistrerUtilisateurV2Ray(u); err != nil {
         return fmt.Sprintf("❌ Erreur sauvegarde utilisateur : %v", err)
     }
 
-    // ⚡️ Ajouter l'UUID dans config.json V2Ray
+    // Ajouter au config.json V2Ray
     if err := ajouterClientV2Ray(u.UUID, u.Nom); err != nil {
         return fmt.Sprintf("❌ Erreur ajout UUID dans config.json : %v", err)
     }
 
-    // Ports et infos FastDNS / V2Ray
+    // Construire le message avec lien VLESS
     v2rayPort := 5401
     fastdnsPort := 5400
     pubKey := slowdnsPubKey()
     nameServer := slowdnsNameServer()
 
-    // Lien VLESS TCP
     lienVLESS := fmt.Sprintf(
         "vless://%s@%s:%d?type=tcp&encryption=none&host=%s#%s-VLESS-TCP",
         u.UUID, DOMAIN, v2rayPort, DOMAIN, u.Nom,
     )
 
-	// Message complet
-	var builder strings.Builder
-	builder.WriteString("====================================================\n")
-	builder.WriteString("🧩 VLESS TCP + FASTDNS\n")
-	builder.WriteString("====================================================\n")
-	builder.WriteString(fmt.Sprintf("📄 Configuration pour : %s\n", u.Nom))
-	builder.WriteString("----------------------------------------------------\n")
-	builder.WriteString(fmt.Sprintf("➤ DOMAINE : %s\n", DOMAIN))
-	builder.WriteString("➤ PORTS :\n")
-	builder.WriteString(fmt.Sprintf("   FastDNS UDP : %d\n", fastdnsPort))
-	builder.WriteString(fmt.Sprintf("   V2Ray TCP   : %d\n", v2rayPort))
-	builder.WriteString(fmt.Sprintf("➤ UUID / Password : %s\n", u.UUID))
-	builder.WriteString(fmt.Sprintf("➤ Validité : %d jours (expire : %s)\n", duree, expire))
-	builder.WriteString("\n━━━━━━━━━━━━━  CONFIGS SLOWDNS PORT 5400 ━━━━━━━━━━━━━\n")
-	builder.WriteString(fmt.Sprintf("Clé publique FastDNS :\n%s\n", pubKey))
-	builder.WriteString(fmt.Sprintf("NameServer : %s\n", nameServer))
-	builder.WriteString("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-	builder.WriteString(fmt.Sprintf("Lien VLESS  : %s\n", lienVLESS))
-	builder.WriteString("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+    var builder strings.Builder
+    builder.WriteString("====================================================\n")
+    builder.WriteString("🧩 VLESS TCP + FASTDNS\n")
+    builder.WriteString("====================================================\n")
+    builder.WriteString(fmt.Sprintf("📄 Configuration pour : %s\n", u.Nom))
+    builder.WriteString("----------------------------------------------------\n")
+    builder.WriteString(fmt.Sprintf("➤ DOMAINE : %s\n", DOMAIN))
+    builder.WriteString(fmt.Sprintf("➤ PORTS : FastDNS UDP %d, V2Ray TCP %d\n", fastdnsPort, v2rayPort))
+    builder.WriteString(fmt.Sprintf("➤ UUID / Password : %s\n", u.UUID))
+    builder.WriteString(fmt.Sprintf("➤ Validité : %d jours (expire : %s)\n", duree, expire))
+    builder.WriteString(fmt.Sprintf("Clé publique FastDNS :\n%s\n", pubKey))
+    builder.WriteString(fmt.Sprintf("NameServer : %s\n", nameServer))
+    builder.WriteString(fmt.Sprintf("Lien VLESS : %s\n", lienVLESS))
+    builder.WriteString("====================================================\n")
 
-	return builder.String()
+    return builder.String()
 }
 
 // Supprimer utilisateur V2Ray + FastDNS
