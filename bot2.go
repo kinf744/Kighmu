@@ -972,27 +972,25 @@ SÉLECTIONNEZ UNE OPTION CI-DESSOUS !
             chatID := update.CallbackQuery.Message.Chat.ID
             data := update.CallbackQuery.Data
 
-            // Répond à Telegram pour débloquer le bouton
             bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
 
             switch data {
             case "voir_appareils":
                 msg := resumeAppareils()
-                bot.Send(tgbotapi.NewMessage(chatID, msg))
+                 bot.Send(tgbotapi.NewMessage(chatID, msg))
             }
 
             continue
         }
 
-        if update.Message == nil {
-            continue
-        }
+        if update.Message != nil {
+            chatID := update.Message.Chat.ID
+            text := update.Message.Text
 
-        text := update.Message.Text
-        chatID := update.Message.Chat.ID
-
-        // ici ton code pour gérer les messages texte
-    }
+       // ton code pour gérer les messages texte
+       } else {
+         continue
+       }
 
 		/* ===== INCONNU ===== */
 		bot.Send(tgbotapi.NewMessage(chatID, "❌ Commande ou format inconnu"))
