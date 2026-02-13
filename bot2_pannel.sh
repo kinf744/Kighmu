@@ -17,6 +17,9 @@ stop_and_uninstall_bot() {
     echo "✅ Bot arrêté et désinstallé"
 }
 
+sudo chmod 600 /etc/kighmu/bots.json
+sudo chown root:root /etc/kighmu/bots.json
+
 cat > "$BOTS_CLIENT" << 'EOF'
 {
   "bots": [
