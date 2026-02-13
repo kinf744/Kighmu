@@ -1370,9 +1370,9 @@ SÉLECTIONNEZ UNE OPTION !
 func main() {
 	initAdminID()
 	DOMAIN = loadDomain()
-	startExpirationWatcher()
 	chargerUtilisateursV2Ray() // <- ajouter cette ligne
-	fmt.Println("✅ Bot prêt à être lancé")
 	chargerUtilisateursSSH()
+	startExpirationWatcher()
+	fmt.Println("✅ Bot prêt à être lancé")
 	lancerBot()
 }
