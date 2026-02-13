@@ -485,80 +485,161 @@ func resumeAppareils() string {
     return builder.String()
 }
 
-func modifierUtilisateurSSH(chatID int64) {
-    if len(utilisateursSSH) == 0 {
+type UtilisateurSSH struct {
+    Nom    string
+    Pass   string
+    Limite int
+    Expire string
+    HostIP string
+    Domain string
+    SlowDNS string
+}
+
+// Map pour gérer l'état de modification par chat
+type EtatModification struct {
+    Etape   string // "attente_numero", "attente_type", "attente_valeur"
+    Indices []int
+    Type    string // "duree" ou "pass"
+}
+
+var etatsModifs = make(map[int64]*EtatModification)
+
+// Fonction pour charger les utilisateurs depuis le fichier
+func chargerUtilisateursSSH() ([]UtilisateurSSH, error) {
+    data, err := ioutil.ReadFile("/etc/kighmu/users.list")
+    if err != nil {
+        return nil, err
+    }
+    var utilisateurs []UtilisateurSSH
+    lines := strings.Split(string(data), "\n")
+    for _, line := range lines {
+        if line == "" {
+            continue
+        }
+        parts := strings.Split(line, "|")
+        if len(parts) < 7 {
+            continue
+        }
+        limite, _ := strconv.Atoi(parts[2])
+        utilisateurs = append(utilisateurs, UtilisateurSSH{
+            Nom:    parts[0],
+            Pass:   parts[1],
+            Limite: limite,
+            Expire: parts[3],
+            HostIP: parts[4],
+            Domain: parts[5],
+            SlowDNS: parts[6],
+        })
+    }
+    return utilisateurs, nil
+}
+
+// Fonction pour sauvegarder les utilisateurs dans le fichier
+func sauvegarderUtilisateursSSH(utilisateurs []UtilisateurSSH) error {
+    var lines []string
+    for _, u := range utilisateurs {
+        lines = append(lines, fmt.Sprintf("%s|%s|%d|%s|%s|%s|%s", u.Nom, u.Pass, u.Limite, u.Expire, u.HostIP, u.Domain, u.SlowDNS))
+    }
+    return ioutil.WriteFile("/etc/kighmu/users.list", []byte(strings.Join(lines, "\n")), 0600)
+}
+
+// Calcul de la nouvelle date en fonction du nombre de jours
+func calculerNouvelleDate(jours int) string {
+    if jours == 0 {
+        return "none"
+    }
+    return time.Now().AddDate(0, 0, jours).Format("2006-01-02")
+}
+
+// Fonction principale pour gérer la modification SSH
+func gererModificationSSH(bot *tgbotapi.BotAPI, chatID int64, text string) {
+    utilisateurs, err := chargerUtilisateursSSH()
+    if err != nil || len(utilisateurs) == 0 {
         bot.Send(tgbotapi.NewMessage(chatID, "❌ Aucun utilisateur SSH trouvé"))
         return
     }
 
-    // 📋 Afficher la liste des utilisateurs
-    msg := "📝   MODIFIER DUREE / MOT DE PASSE\n\nListe des utilisateurs :\n"
-    for i, u := range utilisateursSSH {
-        msg += fmt.Sprintf("[%02d] %s   (expire : %s)\n", i+1, u.Nom, u.Expire)
-    }
-    msg += "\nEntrez le(s) numéro(s) des utilisateurs à modifier (ex: 1,3) :"
-    bot.Send(tgbotapi.NewMessage(chatID, msg))
+    // Vérifier si on est en cours de modification
+    etat, ok := etatsModifs[chatID]
 
-    // Attente du message utilisateur pour choisir les numéros
-    update := <-updates
-    if update.Message == nil || int64(update.Message.From.ID) != adminID {
+    if !ok || etat.Etape == "" {
+        // Étape 1 : afficher liste et demander numéros
+        msg := "📝   MODIFIER DUREE / MOT DE PASSE\n\nListe des utilisateurs :\n"
+        for i, u := range utilisateurs {
+            msg += fmt.Sprintf("[%02d] %s   (expire : %s)\n", i+1, u.Nom, u.Expire)
+        }
+        msg += "\nEntrez le(s) numéro(s) des utilisateurs à modifier (ex: 1,3) :"
+        bot.Send(tgbotapi.NewMessage(chatID, msg))
+
+        // Initialiser état
+        etatsModifs[chatID] = &EtatModification{
+            Etape: "attente_numero",
+        }
         return
     }
 
-    input := strings.TrimSpace(update.Message.Text)
-    indicesStr := strings.Split(input, ",")
-    var indices []int
-    for _, s := range indicesStr {
-        n, err := strconv.Atoi(strings.TrimSpace(s))
-        if err != nil || n < 1 || n > len(utilisateursSSH) {
-            bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("❌ Numéro invalide : %s", s)))
-            return
+    switch etat.Etape {
+    case "attente_numero":
+        // Lire indices
+        indicesStr := strings.Split(text, ",")
+        var indices []int
+        for _, s := range indicesStr {
+            n, err := strconv.Atoi(strings.TrimSpace(s))
+            if err != nil || n < 1 || n > len(utilisateurs) {
+                bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("❌ Numéro invalide : %s", s)))
+                delete(etatsModifs, chatID)
+                return
+            }
+            indices = append(indices, n-1)
         }
-        indices = append(indices, n-1)
-    }
+        etat.Indices = indices
+        etat.Etape = "attente_type"
 
-    // 📌 Menu choix durée / mot de passe
-    menuMsg := "[01] Durée d'expiration du compte\n[02] Mot de passe\n[00] Retour au menu\nEntrez votre choix [00-02] :"
-    bot.Send(tgbotapi.NewMessage(chatID, menuMsg))
+        // Afficher menu durée / mot de passe
+        menuMsg := "[01] Durée d'expiration du compte\n[02] Mot de passe\n[00] Retour au menu\nEntrez votre choix [00-02] :"
+        bot.Send(tgbotapi.NewMessage(chatID, menuMsg))
 
-    // Attente du choix
-    update = <-updates
-    if update.Message == nil || int64(update.Message.From.ID) != adminID {
-        return
-    }
-
-    choix := strings.TrimSpace(update.Message.Text)
-
-    switch choix {
-    case "1", "01":
-        bot.Send(tgbotapi.NewMessage(chatID, "Entrez la nouvelle durée en jours (0 = pas d'expiration) :"))
-        update = <-updates
-        if update.Message == nil { return }
-        newLimit, err := strconv.Atoi(update.Message.Text)
-        if err != nil {
-            bot.Send(tgbotapi.NewMessage(chatID, "❌ Durée invalide"))
-            return
+    case "attente_type":
+        switch text {
+        case "1", "01":
+            etat.Type = "duree"
+            etat.Etape = "attente_valeur"
+            bot.Send(tgbotapi.NewMessage(chatID, "Entrez la nouvelle durée en jours (0 = pas d'expiration) :"))
+        case "2", "02":
+            etat.Type = "pass"
+            etat.Etape = "attente_valeur"
+            bot.Send(tgbotapi.NewMessage(chatID, "Entrez le nouveau mot de passe :"))
+        case "0", "00":
+            bot.Send(tgbotapi.NewMessage(chatID, "Retour au menu"))
+            delete(etatsModifs, chatID)
+        default:
+            bot.Send(tgbotapi.NewMessage(chatID, "❌ Choix invalide"))
+            delete(etatsModifs, chatID)
         }
-        for _, i := range indices {
-            utilisateursSSH[i].Expire = calculerNouvelleDate(newLimit) // fonction à créer
-            bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("✅ Durée modifiée pour %s", utilisateursSSH[i].Nom)))
+
+    case "attente_valeur":
+        if etat.Type == "duree" {
+            jours, err := strconv.Atoi(text)
+            if err != nil {
+                bot.Send(tgbotapi.NewMessage(chatID, "❌ Durée invalide"))
+                delete(etatsModifs, chatID)
+                return
+            }
+            for _, i := range etat.Indices {
+                utilisateurs[i].Expire = calculerNouvelleDate(jours)
+                bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("✅ Durée modifiée pour %s", utilisateurs[i].Nom)))
+            }
+        } else if etat.Type == "pass" {
+            for _, i := range etat.Indices {
+                cmd := exec.Command("bash", "-c", fmt.Sprintf("echo -e '%s\n%s' | passwd %s", text, text, utilisateurs[i].Nom))
+                cmd.Run()
+                bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("✅ Mot de passe modifié pour %s", utilisateurs[i].Nom)))
+            }
         }
-    case "2", "02":
-        bot.Send(tgbotapi.NewMessage(chatID, "Entrez le nouveau mot de passe :"))
-        update = <-updates
-        if update.Message == nil { return }
-        newPass := update.Message.Text
-        for _, i := range indices {
-            // Appliquer mot de passe système
-            cmd := exec.Command("bash", "-c", fmt.Sprintf("echo -e '%s\n%s' | passwd %s", newPass, newPass, utilisateursSSH[i].Nom))
-            cmd.Run()
-            bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("✅ Mot de passe modifié pour %s", utilisateursSSH[i].Nom)))
-        }
-    case "0", "00":
-        bot.Send(tgbotapi.NewMessage(chatID, "Retour au menu"))
-        return
-    default:
-        bot.Send(tgbotapi.NewMessage(chatID, "❌ Choix invalide"))
+
+        // Sauvegarder modifications
+        sauvegarderUtilisateursSSH(utilisateurs)
+        delete(etatsModifs, chatID)
     }
 }
 
