@@ -273,38 +273,27 @@ func supprimerUtilisateur(botIndex int, nom string) string {
 
 // Vérifie et supprime les utilisateurs SSH/V2Ray des bots expirés
 func checkExpiredClientBots() {
-	now := time.Now()
+    now := time.Now()
 
-	for i, bot := range BotsData.Bots {
-		// Vérifie seulement les clients
-		if bot.Role != "client" || bot.ExpireAt.IsZero() {
-			continue
-		}
+    for i := 0; i < len(BotsData.Bots); i++ {
+        client := &BotsData.Bots[i]
 
-		if now.After(bot.ExpireAt) {
-			fmt.Printf("⚠️ Bot client '%s' expiré, suppression des utilisateurs...\n", bot.NomBot)
+        // Vérifier que c'est un bot client avec date d'expiration
+        if client.Role == "client" && !client.ExpireAt.IsZero() && now.After(client.ExpireAt) {
+            
+            // Supprimer tous les utilisateurs associés à ce bot
+            for _, username := range client.Utilisateurs {
+                exec.Command("userdel", "-r", username).Run()  // Supprimer SSH Linux
+                deleteSSHUser(username)                        // Supprimer de ta DB
+                removeConnectedDevices(username)               // Supprimer appareils connectés
+            }
 
-			// Supprimer tous les utilisateurs associés à ce bot
-			for _, username := range bot.Utilisateurs {
-				// Supprimer SSH
-				exec.Command("userdel", "-r", username).Run()
-
-				// Supprimer de la base des utilisateurs
-				deleteSSHUser(username)
-
-				// Supprimer appareils connectés
-				removeConnectedDevices(username)
-			}
-
-			// Vider la liste des utilisateurs et marquer bot comme expiré
-			BotsData.Bots[i].Utilisateurs = []string{}
-			BotsData.Bots[i].Role = "expired"
-			fmt.Printf("✅ Bot client '%s' désactivé.\n", bot.NomBot)
-		}
-	}
-
-	// Sauvegarde les changements
-	sauvegarderBots()
+            // Supprimer le bot client de BotsData
+            BotsData.Bots = append(BotsData.Bots[:i], BotsData.Bots[i+1:]...)
+            i-- // Ajuster l'index après suppression
+            sauvegarderBots()
+        }
+    }
 }
 
 // Retourne le nombre d'appareils connectés par utilisateur visible pour ce bot
