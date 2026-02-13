@@ -94,8 +94,18 @@ show_status_block() {
   
   echo "${WHITE}Service file:${RESET} $SVC_FILE_OK"
   echo "${WHITE}Service actif:${RESET} $SVC_ACTIVE"
-  echo "${WHITE}Port 20000:${RESET} $PORT_OK"
-  
+  echo "${WHITE}Port 5667:${RESET} $PORT_OK"
+
+  # ----- NOUVEAU : nombre d'utilisateurs actifs -----
+  if [[ -f "$ZIVPN_USER_FILE" ]]; then
+    TODAY=$(date +%Y-%m-%d)
+    ACTIVE_USERS=$(awk -F'|' -v today="$TODAY" '$3>=today {count++} END{print count+0}' "$ZIVPN_USER_FILE")
+  else
+    ACTIVE_USERS=0
+  fi
+  echo "${WHITE}Utilisateurs actifs:${RESET} $ACTIVE_USERS"
+
+  # ----- Affichage général -----
   if [[ "$SVC_FILE_OK" == "✅" ]]; then
     if systemctl is-active --quiet "$ZIVPN_SERVICE" 2>/dev/null; then
       echo "${GREEN}✅ ZIVPN : INSTALLÉ et ACTIF${RESET}"
