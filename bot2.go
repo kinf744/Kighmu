@@ -366,16 +366,8 @@ func compterAppareils(user string) int {
 	return 0
 }
 
-func loadClientBots() {
-	fmt.Println("DEBUG: loadClientBots appelé")
-}
-
 func loadSSHUsers() {
 	fmt.Println("DEBUG: loadSSHUsers appelé")
-}
-
-func deleteSSHUser(user string) {
-	fmt.Println("DEBUG: deleteSSHUser:", user)
 }
 
 func removeConnectedDevices(user string) {
