@@ -968,37 +968,31 @@ SÉLECTIONNEZ UNE OPTION CI-DESSOUS !
 			continue
 		}
 
-    // ====================================
-// 🔘 CALLBACK BUTTONS (TOUJOURS AVANT)
-// ====================================
-if update.CallbackQuery != nil {
+        if update.CallbackQuery != nil {
+            chatID := update.CallbackQuery.Message.Chat.ID
+            data := update.CallbackQuery.Data
 
-    // Répond au callback (compatible anciennes versions)
-    callback := tgbotapi.NewCallback(update.CallbackQuery.ID, "")
-    bot.AnswerCallbackQuery(callback)
+            // Répond à Telegram pour débloquer le bouton
+            bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
 
-    data := update.CallbackQuery.Data
-    chatID := update.CallbackQuery.Message.Chat.ID
+            switch data {
+            case "voir_appareils":
+                msg := resumeAppareils()
+                bot.Send(tgbotapi.NewMessage(chatID, msg))
+            }
 
-    // Bouton APPAREILS
-    if data == "voir_appareils" {
-        msg := resumeAppareils()
-        bot.Send(tgbotapi.NewMessage(chatID, msg))
+            continue
+        }
+
+        if update.Message == nil {
+            continue
+        }
+
+        text := update.Message.Text
+        chatID := update.Message.Chat.ID
+
+        // ici ton code pour gérer les messages texte
     }
-
-    continue
-}
-
-// ====================================
-// 💬 MESSAGE TEXTE
-// ====================================
-if update.Message == nil {
-    continue
-}
-
-// Réutilisation des variables existantes (pas :=)
-text = update.Message.Text
-chatID = update.Message.Chat.ID
 
 		/* ===== INCONNU ===== */
 		bot.Send(tgbotapi.NewMessage(chatID, "❌ Commande ou format inconnu"))
