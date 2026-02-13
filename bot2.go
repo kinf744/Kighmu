@@ -486,6 +486,22 @@ func resumeAppareils() string {
 }
 
 // Slice global des utilisateurs SSH
+type UtilisateurSSH struct {
+    Nom     string
+    Pass    string
+    Limite  int
+    Expire  string
+    HostIP  string
+    Domain  string
+    SlowDNS string
+}
+
+type EtatModification struct {
+    Etape   string   // "attente_numero", "attente_type", "attente_valeur"
+    Indices []int
+    Type    string   // "duree" ou "pass"
+}
+
 var utilisateursSSH []UtilisateurSSH
 
 func chargerUtilisateursSSH() {
