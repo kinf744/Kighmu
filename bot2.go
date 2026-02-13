@@ -950,6 +950,10 @@ func lancerBot() {
 	modeSupprimerMultiple := make(map[int64]bool)
 
 	// Map pour gérer l'état des modifications SSH par chat
+	type EtatModification struct {
+		Etape    string
+		Indices  []int
+	}
 	etatsModifs := make(map[int64]*EtatModification)
 
 	for update := range updates {
@@ -1005,10 +1009,17 @@ func lancerBot() {
 				msg := resumeAppareils()
 				bot.Send(tgbotapi.NewMessage(chatID, msg))
 
-			case "modifier_ssh": // ✅ Nouveau bouton
+			case "modifier_ssh":
 				// Initialiser état pour ce chat
-				etatsModifs[chatID] = &EtatModification{Etape: ""}
-				bot.Send(tgbotapi.NewMessage(chatID, "📝 Modification SSH démarrée."))
+				etatsModifs[chatID] = &EtatModification{Etape: "choix"}
+				bot.Send(tgbotapi.NewMessage(chatID, "📝   MODIFIER DUREE / MOT DE PASSE\nListe des utilisateurs :"))
+				// Afficher la liste des utilisateurs
+				txt := ""
+				for i, u := range utilisateursSSH {
+					txt += fmt.Sprintf("[%02d] %s   (expire : %s)\n", i+1, u.Nom, u.Expire)
+				}
+				txt += "\nEntrez le(s) numéro(s) des utilisateurs à modifier (ex: 1,3) :"
+				bot.Send(tgbotapi.NewMessage(chatID, txt))
 			}
 			continue
 		}
@@ -1055,9 +1066,9 @@ func lancerBot() {
 			continue
 		}
 
-		// ===== GÉRER MODIFICATION SSH =====
-		if _, ok := etatsModifs[chatID]; ok {
-			gererModificationSSH(bot, chatID, text)
+		// ===== MODIFICATION SSH =====
+		if etat, ok := etatsModifs[chatID]; ok {
+			gererModificationSSH(bot, chatID, text) // ta fonction gère l'état et supprime etatsModifs[chatID] à la fin
 			continue
 		}
 
@@ -1085,7 +1096,7 @@ SÉLECTIONNEZ UNE OPTION CI-DESSOUS !
 				),
 				tgbotapi.NewInlineKeyboardRow(
 					tgbotapi.NewInlineKeyboardButtonData("📊 APPAREILS", "voir_appareils"),
-					tgbotapi.NewInlineKeyboardButtonData("📝 MODIFIER SSH", "modifier_ssh"), // Nouveau bouton
+					tgbotapi.NewInlineKeyboardButtonData("📝 MODIFIER SSH", "modifier_ssh"),
 				),
 			)
 			msg := tgbotapi.NewMessage(chatID, msgText)
