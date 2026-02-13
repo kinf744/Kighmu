@@ -966,26 +966,35 @@ SÉLECTIONNEZ UNE OPTION CI-DESSOUS !
 			continue
 		}
 
-		// ===== CALLBACK BUTTONS =====
-        if update.CallbackQuery != nil {
+		for update := range updates {
 
-	       data := update.CallbackQuery.Data
-	       chatID := update.CallbackQuery.Message.Chat.ID
+    // ====================================
+    // 🔘 CALLBACK BUTTONS (TOUJOURS AVANT)
+    // ====================================
+    if update.CallbackQuery != nil {
 
-		// ===== BOUTON APPAREILS =====
-	    if data == "voir_appareils" {
-		    msg := resumeAppareils()
-		    bot.Send(tgbotapi.NewMessage(chatID, msg))
-		    }
-			continue
-	    } 
+        bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
 
-		if update.Message == nil {
+        data := update.CallbackQuery.Data
+        chatID := update.CallbackQuery.Message.Chat.ID
+
+        if data == "voir_appareils" {
+            msg := resumeAppareils()
+            bot.Send(tgbotapi.NewMessage(chatID, msg))
+        }
+
         continue
-       }
+    }
 
-           text := update.Message.Text
-           chatID := update.Message.Chat.ID
+    // ====================================
+    // 💬 MESSAGE TEXTE
+    // ====================================
+    if update.Message == nil {
+        continue
+    }
+
+    text := update.Message.Text
+    chatID := update.Message.Chat.ID
 
 		/* ===== INCONNU ===== */
 		bot.Send(tgbotapi.NewMessage(chatID, "❌ Commande ou format inconnu"))
