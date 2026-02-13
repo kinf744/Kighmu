@@ -505,33 +505,25 @@ type EtatModification struct {
 var etatsModifs = make(map[int64]*EtatModification)
 
 // Fonction pour charger les utilisateurs depuis le fichier
-func chargerUtilisateursSSH() ([]UtilisateurSSH, error) {
+func chargerUtilisateursSSH() {
+    utilisateursSSH = []UtilisateurSSH{}
     data, err := ioutil.ReadFile("/etc/kighmu/users.list")
     if err != nil {
-        return nil, err
+        return
     }
-    var utilisateurs []UtilisateurSSH
-    lines := strings.Split(string(data), "\n")
-    for _, line := range lines {
-        if line == "" {
+    lignes := strings.Split(string(data), "\n")
+    for _, l := range lignes {
+        if l == "" {
             continue
         }
-        parts := strings.Split(line, "|")
-        if len(parts) < 7 {
-            continue
+        parts := strings.Split(l, "|")
+        if len(parts) >= 2 {
+            utilisateursSSH = append(utilisateursSSH, UtilisateurSSH{
+                Nom:    parts[0],
+                Expire: parts[1],
+            })
         }
-        limite, _ := strconv.Atoi(parts[2])
-        utilisateurs = append(utilisateurs, UtilisateurSSH{
-            Nom:    parts[0],
-            Pass:   parts[1],
-            Limite: limite,
-            Expire: parts[3],
-            HostIP: parts[4],
-            Domain: parts[5],
-            SlowDNS: parts[6],
-        })
     }
-    return utilisateurs, nil
 }
 
 // Fonction pour sauvegarder les utilisateurs dans le fichier
@@ -1153,5 +1145,6 @@ func main() {
 	DOMAIN = loadDomain()
 	chargerUtilisateursV2Ray() // <- ajouter cette ligne
 	fmt.Println("✅ Bot prêt à être lancé")
+	chargerUtilisateursSSH()
 	lancerBot()
 }
