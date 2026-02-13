@@ -1004,15 +1004,17 @@ func enregistrerUtilisateurV2Ray(u UtilisateurV2Ray) error {
 // Créer utilisateur V2Ray + FastDNS
 // ===============================
 func creerUtilisateurV2Ray(nom string, duree int) string {
-    // Générer UUID et date d'expiration
-    uuid := genererUUID()
-    expire := time.Now().AddDate(0, 0, duree).Format("2006-01-02")
+    // Créer l'utilisateur avec UUID et date d'expiration
+    u := UtilisateurV2Ray{
+        Nom:    nom,
+        UUID:   genererUUID(),
+        Expire: time.Now().AddDate(0, 0, duree).Format("2006-01-02"),
+    }
 
-    // Créer l'utilisateur et l'ajouter au slice
-    u := UtilisateurV2Ray{Nom: nom, UUID: uuid, Expire: expire}
+    // Ajouter au slice
     utilisateursV2Ray = append(utilisateursV2Ray, u)
 
-    // Sauvegarder
+    // Sauvegarder dans le fichier JSON
     if err := enregistrerUtilisateurV2Ray(u); err != nil {
         return fmt.Sprintf("❌ Erreur sauvegarde utilisateur : %v", err)
     }
@@ -1022,7 +1024,7 @@ func creerUtilisateurV2Ray(nom string, duree int) string {
         return fmt.Sprintf("❌ Erreur ajout UUID dans config.json : %v", err)
     }
 
-    // Ports et infos FastDNS / V2Ray (déclarer avant utilisation)
+    // Ports et infos FastDNS / V2Ray
     v2rayPort := 5401
     fastdnsPort := 5400
     pubKey := slowdnsPubKey()
@@ -1046,7 +1048,7 @@ func creerUtilisateurV2Ray(nom string, duree int) string {
     builder.WriteString(fmt.Sprintf("   FastDNS UDP : %d\n", fastdnsPort))
     builder.WriteString(fmt.Sprintf("   V2Ray TCP   : %d\n", v2rayPort))
     builder.WriteString(fmt.Sprintf("➤ UUID / Password : %s\n", u.UUID))
-    builder.WriteString(fmt.Sprintf("➤ Validité : %d jours (expire : %s)\n", duree, expire))
+    builder.WriteString(fmt.Sprintf("➤ Validité : %d jours (expire : %s)\n", duree, u.Expire))
     builder.WriteString("\n━━━━━━━━━━━━━  CONFIGS SLOWDNS PORT 5400 ━━━━━━━━━━━━━\n")
     builder.WriteString(fmt.Sprintf("Clé publique FastDNS :\n%s\n", pubKey))
     builder.WriteString(fmt.Sprintf("NameServer : %s\n", nameServer))
