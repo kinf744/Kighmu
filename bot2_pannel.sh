@@ -3,6 +3,7 @@
 SCRIPT_DIR="$HOME/Kighmu"
 BOT_BIN="$SCRIPT_DIR/bot2"
 SERVICE_FILE="/etc/systemd/system/bot2.service"
+BOTS_CLIENT="/etc/kighmu/bots.json"
 
 stop_and_uninstall_bot() {
     echo "🛑 Arrêt du bot (si actif)..."
@@ -15,6 +16,34 @@ stop_and_uninstall_bot() {
 
     echo "✅ Bot arrêté et désinstallé"
 }
+
+cat > "$BOTS_CLIENT" << 'EOF'
+{
+  "bots": [
+    {
+      "NomBot": "AdminBot",
+      "Token": "TOKEN_ADMIN",
+      "ID": 123456,
+      "Role": "admin",
+      "Utilisateurs": []
+    },
+    {
+      "NomBot": "ClientBot1",
+      "Token": "TOKEN_CLIENT1",
+      "ID": 654321,
+      "Role": "client",
+      "Utilisateurs": ["user1", "user2"]
+    },
+    {
+      "NomBot": "ClientBot2",
+      "Token": "TOKEN_CLIENT2",
+      "ID": 987654,
+      "Role": "client",
+      "Utilisateurs": ["user3"]
+    }
+  ]
+}
+EOF
 
 create_systemd_service() {
     read -p "🔑 Entrez votre BOT_TOKEN : " BOT_TOKEN
