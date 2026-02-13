@@ -949,6 +949,9 @@ func lancerBot() {
 	// Map pour gérer le mode suppression multiple par chat
 	modeSupprimerMultiple := make(map[int64]bool)
 
+	// Map pour gérer l'état des modifications SSH par chat
+	etatsModifs := make(map[int64]*EtatModification)
+
 	for update := range updates {
 
 		// 🔘 CALLBACK BUTTONS
@@ -1003,7 +1006,9 @@ func lancerBot() {
 				bot.Send(tgbotapi.NewMessage(chatID, msg))
 
 			case "modifier_ssh": // ✅ Nouveau bouton
-				go modifierUtilisateurSSH(bot, chatID)
+				// Initialiser état pour ce chat
+				etatsModifs[chatID] = &EtatModification{Etape: ""}
+				bot.Send(tgbotapi.NewMessage(chatID, "📝 Modification SSH démarrée."))
 			}
 			continue
 		}
@@ -1047,6 +1052,12 @@ func lancerBot() {
 			}
 			bot.Send(tgbotapi.NewMessage(chatID, strings.Join(results, "\n")))
 			delete(modeSupprimerMultiple, chatID)
+			continue
+		}
+
+		// ===== GÉRER MODIFICATION SSH =====
+		if _, ok := etatsModifs[chatID]; ok {
+			gererModificationSSH(bot, chatID, text)
 			continue
 		}
 
