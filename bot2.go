@@ -920,6 +920,10 @@ SÉLECTIONNEZ UNE OPTION CI-DESSOUS !
 				tgbotapi.NewInlineKeyboardRow(
 					tgbotapi.NewInlineKeyboardButtonData("❌ Supprimer_Compte_SSH(s)", "supprimer_multi"),
 				),
+				// 👉 AJOUTER CETTE LIGNE
+	            tgbotapi.NewInlineKeyboardRow(
+		            tgbotapi.NewInlineKeyboardButtonData("📊 APPAREILS", "voir_appareils"),
+				),
 			)
 			msg := tgbotapi.NewMessage(chatID, msgText)
 			msg.ReplyMarkup = keyboard
