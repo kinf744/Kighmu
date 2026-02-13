@@ -953,8 +953,8 @@ if update.Message == nil {
     continue
 }
 
-chatID := update.Message.Chat.ID
-text := update.Message.Text
+chatID = update.Message.Chat.ID
+text = update.Message.Text
 
 // Ici tu mets le code pour gérer SSH, V2Ray, suppression, etc.
 
