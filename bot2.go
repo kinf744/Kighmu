@@ -83,22 +83,31 @@ var utilisateursV2Ray []UtilisateurV2Ray
 // Initialisation ADMIN_ID
 // ===============================
 func initAdminID() {
+
+	// Si déjà initialisé → ne rien faire
 	if adminID != 0 {
 		return
 	}
 
-	idStr := os.Getenv("ADMIN_ID")
-	if idStr == "" {
-		fmt.Print("🆔 Entrez votre ADMIN_ID Telegram : ")
-		fmt.Scanln(&idStr)
-	}
+	// Lire depuis variable d'environnement (systemd)
+	idStr := strings.TrimSpace(os.Getenv("ADMIN_ID"))
 
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		fmt.Println("❌ ADMIN_ID invalide")
+	// ⚠️ En mode service systemd on ne doit PAS demander de saisie
+	if idStr == "" {
+		fmt.Println("❌ ADMIN_ID manquant dans les variables d'environnement")
+		fmt.Println("➡️ Ajoute Environment=ADMIN_ID=XXXXX dans bot2.service")
 		os.Exit(1)
 	}
+
+	// Conversion en int64
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 {
+		fmt.Println("❌ ADMIN_ID invalide :", idStr)
+		os.Exit(1)
+	}
+
 	adminID = id
+	fmt.Println("✅ ADMIN_ID chargé :", adminID)
 }
 
 // Charger DOMAIN depuis kighmu_info si non défini
