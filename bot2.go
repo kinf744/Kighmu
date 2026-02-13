@@ -334,6 +334,43 @@ func checkExpiredClientBots() {
     }
 }
 
+// ================== STUB FUNCTIONS ==================
+
+func sauvegarderBots() error {
+	fmt.Println("DEBUG: sauvegarderBots appelé")
+	return nil
+}
+
+func supprimerUtilisateurV2RayParNom(nom string) {
+	fmt.Println("DEBUG: supprimerUtilisateurV2RayParNom:", nom)
+}
+
+func getTousUtilisateurs() []string {
+	fmt.Println("DEBUG: getTousUtilisateurs appelé")
+	return []string{}
+}
+
+func compterAppareils(user string) int {
+	fmt.Println("DEBUG: compterAppareils:", user)
+	return 0
+}
+
+func loadClientBots() {
+	fmt.Println("DEBUG: loadClientBots appelé")
+}
+
+func loadSSHUsers() {
+	fmt.Println("DEBUG: loadSSHUsers appelé")
+}
+
+func deleteSSHUser(user string) {
+	fmt.Println("DEBUG: deleteSSHUser:", user)
+}
+
+func removeConnectedDevices(user string) {
+	fmt.Println("DEBUG: removeConnectedDevices:", user)
+}
+
 func creerUtilisateurNormal(username, password string, limite, days int) string {
 	// Vérifier existence
 	if _, err := user.Lookup(username); err == nil {
