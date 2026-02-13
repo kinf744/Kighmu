@@ -61,6 +61,19 @@ zivpn_running() {
   systemctl is-active --quiet "$ZIVPN_SERVICE" 2>/dev/null
 }
 
+cleanup_expired_users() {
+    TODAY=$(date +%Y-%m-%d)
+    tmp=$(mktemp)
+    awk -F'|' -v today="$TODAY" '$3>=today {print $0}' "$ZIVPN_USER_FILE" > "$tmp" || true
+    mv "$tmp" "$ZIVPN_USER_FILE"
+    chmod 600 "$ZIVPN_USER_FILE"
+
+    PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$ZIVPN_USER_FILE" | sort -u | paste -sd, -)
+    jq --arg passwords "$PASSWORDS" '.auth.config = ($passwords | split(","))' "$ZIVPN_CONFIG" > /tmp/config.json
+    mv /tmp/config.json "$ZIVPN_CONFIG"
+    systemctl restart "$ZIVPN_SERVICE"
+}
+
 print_title() {
   clear
   echo "${CYAN}${BOLD}╔═══════════════════════════════════════╗${RESET}"
