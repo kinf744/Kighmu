@@ -26,6 +26,20 @@ var (
 	v2rayFile = "/etc/kighmu/v2ray_users.list"
 )
 
+type Bot struct {
+    NomBot       string   `json:"NomBot"`
+    Token        string   `json:"Token"`
+    ID           int64    `json:"ID"`
+    Role         string   `json:"Role"`
+    Utilisateurs []string `json:"Utilisateurs"`
+}
+
+type BotsFile struct {
+    Bots []Bot `json:"bots"`
+}
+
+var BotsData BotsFile
+
 type UtilisateurSSH struct {
     Nom     string
     Pass    string
@@ -173,6 +187,92 @@ func fixHome(username string) {
     }
     exec.Command("chown", "-R", username+":"+username, home).Run()
     exec.Command("chmod", "755", home).Run()
+}
+
+// Vérifie si un bot peut modifier ou supprimer un utilisateur
+func peutModifier(bot Bot, utilisateur string) bool {
+    if bot.Role == "admin" {
+        return true
+    }
+    for _, u := range bot.Utilisateurs {
+        if u == utilisateur {
+            return true
+        }
+    }
+    return false
+}
+
+// Vérifie si un bot peut voir un utilisateur
+func peutVoir(bot Bot, utilisateur string) bool {
+    return peutModifier(bot, utilisateur) // même logique : clients voient seulement leurs créations
+}
+
+func creerUtilisateur(botIndex int, nom string, duree int) string {
+    bot := BotsData.Bots[botIndex]
+
+    uuid := genererUUID()
+    expire := time.Now().AddDate(0, 0, duree).Format("2006-01-02")
+
+    // Créer utilisateur sur V2Ray / SSH
+    msg := creerUtilisateurV2Ray(nom, duree) // ta fonction existante
+
+    // Ajouter à la liste du bot si c’est un client
+    if bot.Role == "client" {
+        BotsData.Bots[botIndex].Utilisateurs = append(BotsData.Bots[botIndex].Utilisateurs, nom)
+        sauvegarderBots()
+    }
+
+    return msg
+}
+
+func supprimerUtilisateur(botIndex int, nom string) string {
+    bot := BotsData.Bots[botIndex]
+
+    if !peutModifier(bot, nom) {
+        return "❌ Vous ne pouvez pas supprimer cet utilisateur"
+    }
+
+    // Supprimer sur V2Ray / SSH
+    supprimerUtilisateurV2RayParNom(nom) // fonction existante
+
+    // Retirer de la liste du bot si client
+    if bot.Role == "client" {
+        newList := []string{}
+        for _, u := range bot.Utilisateurs {
+            if u != nom {
+                newList = append(newList, u)
+            }
+        }
+        BotsData.Bots[botIndex].Utilisateurs = newList
+        sauvegarderBots()
+    }
+
+    return fmt.Sprintf("✅ Utilisateur %s supprimé.", nom)
+}
+
+func listerUtilisateurs(botIndex int) []string {
+    bot := BotsData.Bots[botIndex]
+    visibles := []string{}
+
+    for _, u := range getTousUtilisateurs() { // ta fonction existante
+        if peutVoir(bot, u.Nom) {
+            visibles = append(visibles, u.Nom)
+        }
+    }
+    return visibles
+}
+
+func appareilsConnectes(botIndex int) map[string]int {
+    bot := BotsData.Bots[botIndex]
+    result := make(map[string]int)
+
+    for _, u := range getTousUtilisateurs() {
+        if !peutVoir(bot, u.Nom) {
+            continue
+        }
+        result[u.Nom] = compterAppareils(u.Nom) // ta fonction existante
+    }
+    return result
 }
 
 func creerUtilisateurNormal(username, password string, limite, days int) string {
