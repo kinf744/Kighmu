@@ -65,34 +65,25 @@ echo -e "${CYAN}--------------------------------------------------------------${
 count_devices_per_user() {
   declare -A user_counts
 
-  # Comptage SSH sessions non-root (sshd)
-  while read -r pid user cmd; do
-    if [[ "$cmd" == *sshd* && "$user" != "root" ]]; then
-      ((user_counts[$user]++))
-    fi
-  done < <(ps -eo pid,user,comm)
+  # Comptage SSHD + DROPBEAR via process actifs (méthode stable)
+  while read -r user cmd; do
+    case "$cmd" in
+      sshd|dropbear)
+        if [[ "$user" != "root" && -n "$user" ]]; then
+          ((user_counts[$user]++))
+        fi
+      ;;
+    esac
+  done < <(ps -eo user=,comm=)
 
-  # Comptage Dropbear sessions par clients connectés via logs auth.log
-  if [[ -f $AUTH_LOG ]]; then
-    drop_pids=$(ps aux | grep '[d]ropbear' | awk '{print $2}')
-    for pid in $drop_pids; do
-      user=$(grep -a "sshd.*$pid" $AUTH_LOG | tail -1 | awk '{print $10}')
-      if [[ -n "$user" ]]; then
-        ((user_counts[$user]++))
-      fi
-    done
-  fi
-
-  # Comptage OpenVPN sessions par utilisateurs dans openvpn-status.log
+  # Comptage OpenVPN (si présent)
   if [[ -f /etc/openvpn/openvpn-status.log ]]; then
     while read -r line; do
       user=$(echo "$line" | cut -d',' -f2)
-      ((user_counts[$user]++))
+      [[ -n "$user" ]] && ((user_counts[$user]++))
     done < <(grep CLIENT_LIST /etc/openvpn/openvpn-status.log)
   fi
 
-  # Retourne tableau associatif avec compte par utilisateur
-  echo "${user_counts[@]}"
   declare -p user_counts
 }
 
