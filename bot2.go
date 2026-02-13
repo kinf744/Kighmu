@@ -427,60 +427,60 @@ func syncUDPTunnels(username, password, expireDate string) {
 
 func resumeAppareils() string {
 
-	file := "/etc/kighmu/users.list"
+    file := "/etc/kighmu/users.list"
 
-	data, err := os.ReadFile(file)
-	if err != nil {
-		return "❌ Impossible de lire users.list"
-	}
+    data, err := ioutil.ReadFile(file) // <-- ici
+    if err != nil {
+        return "❌ Impossible de lire users.list"
+    }
 
-	lines := strings.Split(string(data), "\n")
+    lines := strings.Split(string(data), "\n")
 
-	var builder strings.Builder
-	builder.WriteString("📊 APPAREILS CONNECTÉS PAR COMPTE\n\n")
+    var builder strings.Builder
+    builder.WriteString("📊 APPAREILS CONNECTÉS PAR COMPTE\n\n")
 
-	total := 0
+    total := 0
 
-	for _, line := range lines {
+    for _, line := range lines {
 
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
+        if strings.TrimSpace(line) == "" {
+            continue
+        }
 
-		// Format users.list :
-		// username|password|limite|expire|hostip|domain|slowdns
-		parts := strings.Split(line, "|")
-		if len(parts) < 3 {
-			continue
-		}
+        // Format users.list :
+        // username|password|limite|expire|hostip|domain|slowdns
+        parts := strings.Split(line, "|")
+        if len(parts) < 3 {
+            continue
+        }
 
-		username := parts[0]
-		limite := parts[2]
+        username := parts[0]
+        limite := parts[2]
 
-		// 👉 Appel de ton script monitoring (qui compte déjà les sessions)
-		cmd := exec.Command("/root/Kighmu/monitoring.sh", username)
-		out, _ := cmd.Output()
+        // Appel du script monitoring (qui compte déjà les sessions)
+        cmd := exec.Command("/root/Kighmu/monitoring.sh", username)
+        out, _ := cmd.Output()
 
-		nbStr := strings.TrimSpace(string(out))
-		nb := 0
-		fmt.Sscanf(nbStr, "%d", &nb)
+        nbStr := strings.TrimSpace(string(out))
+        nb := 0
+        fmt.Sscanf(nbStr, "%d", &nb)
 
-		total += nb
+        total += nb
 
-		status := "🔴 HORS LIGNE"
-		if nb > 0 {
-			status = "🟢 EN LIGNE"
-		}
+        status := "🔴 HORS LIGNE"
+        if nb > 0 {
+            status = "🟢 EN LIGNE"
+        }
 
-		builder.WriteString(
-			fmt.Sprintf("👤 %-10s : [ %d/%s ] %s\n", username, nb, limite, status),
-		)
-	}
+        builder.WriteString(
+            fmt.Sprintf("👤 %-10s : [ %d/%s ] %s\n", username, nb, limite, status),
+        )
+    }
 
-	builder.WriteString("━━━━━━━━━━━━━━\n")
-	builder.WriteString(fmt.Sprintf("📱 TOTAL      : %d\n", total))
+    builder.WriteString("━━━━━━━━━━━━━━\n")
+    builder.WriteString(fmt.Sprintf("📱 TOTAL      : %d\n", total))
 
-	return builder.String()
+    return builder.String()
 }
 
 // Charger utilisateurs V2Ray depuis fichier
