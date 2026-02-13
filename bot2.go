@@ -498,18 +498,25 @@ func resumeAppareils() string {
 
 	total := 0
 
-	// Compter toutes les sessions SSH/Dropbear en une seule passe
+	// Compter toutes les sessions SSH / Dropbear correctement
 	userCounts := make(map[string]int)
-	out, _ := exec.Command("ps", "-eo", "user,comm").Output()
-	for _, line := range strings.Split(string(out), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
-			continue
-		}
-		user := fields[0]
-		cmd := fields[1]
-		if (cmd == "sshd" || cmd == "dropbear") && user != "root" {
-			userCounts[user]++
+
+	out, err := exec.Command("ps", "-eo", "user,cmd").Output()
+	if err == nil {
+		for _, line := range strings.Split(string(out), "\n") {
+			fields := strings.Fields(line)
+			if len(fields) < 2 {
+				continue
+			}
+
+			user := fields[0]
+			cmd := strings.Join(fields[1:], " ")
+
+			// Detecter vraies sessions
+			if user != "root" &&
+				(strings.Contains(cmd, "sshd") || strings.Contains(cmd, "dropbear")) {
+				userCounts[user]++
+			}
 		}
 	}
 
@@ -517,13 +524,14 @@ func resumeAppareils() string {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
+
 		parts := strings.Split(line, "|")
-		if len(parts) < 4 {
+		if len(parts) < 3 {
 			continue
 		}
+
 		username := parts[0]
 		limite := parts[2]
-		expire := parts[3]
 
 		nb := userCounts[username]
 		total += nb
@@ -533,14 +541,8 @@ func resumeAppareils() string {
 			status = "🟢 EN LIGNE"
 		}
 
-		// Détecter si c’est un compte test
-		compteType := "NORMAL"
-		if len(parts) >= 7 && parts[6] == "test" {
-			compteType = "TEST"
-		}
-
 		builder.WriteString(
-			fmt.Sprintf("👤 %-10s [%s] : [ %d/%s ] %s | Expire : %s\n", username, compteType, nb, limite, status, expire),
+			fmt.Sprintf("👤 %-10s : [ %d/%s ] %s\n", username, nb, limite, status),
 		)
 	}
 
