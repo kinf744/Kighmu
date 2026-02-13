@@ -933,6 +933,26 @@ SÉLECTIONNEZ UNE OPTION CI-DESSOUS !
 			continue
 		}
 
+		if update.CallbackQuery != nil {
+            chatID := update.CallbackQuery.Message.Chat.ID
+            data := update.CallbackQuery.Data
+
+            bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
+
+            switch data {
+            case "voir_appareils":
+            msg := resumeAppareils()
+            bot.Send(tgbotapi.NewMessage(chatID, msg))
+            }
+
+            continue
+        }
+
+        // 💬 MESSAGE TEXTE
+        if update.Message != nil {
+            chatID := update.Message.Chat.ID
+            text := update.Message.Text
+
 		/* ===== SSH NORMAL / TEST ===== */
 		if strings.Count(text, ",") == 3 {
 			p := strings.Split(text, ",")
@@ -967,30 +987,6 @@ SÉLECTIONNEZ UNE OPTION CI-DESSOUS !
 			bot.Send(tgbotapi.NewMessage(chatID, supprimerUtilisateurV2Ray(num-1)))
 			continue
 		}
-
-        if update.CallbackQuery != nil {
-            chatID := update.CallbackQuery.Message.Chat.ID
-            data := update.CallbackQuery.Data
-
-            bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
-
-            switch data {
-            case "voir_appareils":
-                msg := resumeAppareils()
-                 bot.Send(tgbotapi.NewMessage(chatID, msg))
-            }
-
-            continue
-        }
-
-        if update.Message != nil {
-            chatID := update.Message.Chat.ID
-            text := update.Message.Text
-
-       // ton code pour gérer les messages texte
-       } else {
-         continue
-       }
 
 		/* ===== INCONNU ===== */
 		bot.Send(tgbotapi.NewMessage(chatID, "❌ Commande ou format inconnu"))
