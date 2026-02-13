@@ -1022,10 +1022,19 @@ func creerUtilisateurV2Ray(nom string, duree int) string {
         return fmt.Sprintf("❌ Erreur ajout UUID dans config.json : %v", err)
     }
 
-    // Construire le message final
-    lienVLESS := fmt.Sprintf("vless://%s@%s:5401?type=tcp&encryption=none&host=%s#%s-VLESS-TCP",
-        u.UUID, DOMAIN, DOMAIN, u.Nom)
+    // Ports et infos FastDNS / V2Ray (déclarer avant utilisation)
+    v2rayPort := 5401
+    fastdnsPort := 5400
+    pubKey := slowdnsPubKey()
+    nameServer := slowdnsNameServer()
 
+    // Lien VLESS TCP
+    lienVLESS := fmt.Sprintf(
+        "vless://%s@%s:%d?type=tcp&encryption=none&host=%s#%s-VLESS-TCP",
+        u.UUID, DOMAIN, v2rayPort, DOMAIN, u.Nom,
+    )
+
+    // Construire le message final
     var builder strings.Builder
     builder.WriteString("====================================================\n")
     builder.WriteString("🧩 VLESS TCP + FASTDNS\n")
@@ -1033,13 +1042,17 @@ func creerUtilisateurV2Ray(nom string, duree int) string {
     builder.WriteString(fmt.Sprintf("📄 Configuration pour : %s\n", u.Nom))
     builder.WriteString("----------------------------------------------------\n")
     builder.WriteString(fmt.Sprintf("➤ DOMAINE : %s\n", DOMAIN))
-    builder.WriteString(fmt.Sprintf("➤ PORTS : FastDNS UDP %d, V2Ray TCP %d\n", fastdnsPort, v2rayPort))
+    builder.WriteString("➤ PORTS :\n")
+    builder.WriteString(fmt.Sprintf("   FastDNS UDP : %d\n", fastdnsPort))
+    builder.WriteString(fmt.Sprintf("   V2Ray TCP   : %d\n", v2rayPort))
     builder.WriteString(fmt.Sprintf("➤ UUID / Password : %s\n", u.UUID))
     builder.WriteString(fmt.Sprintf("➤ Validité : %d jours (expire : %s)\n", duree, expire))
+    builder.WriteString("\n━━━━━━━━━━━━━  CONFIGS SLOWDNS PORT 5400 ━━━━━━━━━━━━━\n")
     builder.WriteString(fmt.Sprintf("Clé publique FastDNS :\n%s\n", pubKey))
     builder.WriteString(fmt.Sprintf("NameServer : %s\n", nameServer))
-    builder.WriteString(fmt.Sprintf("Lien VLESS : %s\n", lienVLESS))
-    builder.WriteString("====================================================\n")
+    builder.WriteString("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+    builder.WriteString(fmt.Sprintf("Lien VLESS  : %s\n", lienVLESS))
+    builder.WriteString("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
 
     return builder.String()
 }
