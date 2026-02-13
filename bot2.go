@@ -773,16 +773,25 @@ func ajouterClientV2Ray(uuid, nom string) error {
 // Enregistrer un utilisateur V2Ray dans le fichier
 // ===============================
 func enregistrerUtilisateurV2Ray(u UtilisateurV2Ray) error {
-	if err := os.MkdirAll("/etc/kighmu", 0755); err != nil {
-		return err
-	}
-	f, err := os.OpenFile(v2rayFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	file := "/etc/v2ray/utilisateurs.json"
+
+	data, _ := ioutil.ReadFile(file)
+
+	var users []map[string]string
+	json.Unmarshal(data, &users)
+
+	users = append(users, map[string]string{
+		"nom":    u.Nom,
+		"uuid":   u.UUID,
+		"expire": u.Expire,
+	})
+
+	newData, err := json.MarshalIndent(users, "", "  ")
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	_, err = f.WriteString(fmt.Sprintf("%s|%s|%s\n", u.Nom, u.UUID, u.Expire))
-	return err
+
+	return ioutil.WriteFile(file, newData, 0644)
 }
 
 // Créer utilisateur V2Ray + FastDNS
