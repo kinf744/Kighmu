@@ -966,7 +966,6 @@ SÉLECTIONNEZ UNE OPTION CI-DESSOUS !
 			continue
 		}
 
-    // ====================================
     // 🔘 CALLBACK BUTTONS (TOUJOURS AVANT)
     // ====================================
     if update.CallbackQuery != nil {
@@ -984,8 +983,6 @@ SÉLECTIONNEZ UNE OPTION CI-DESSOUS !
         continue
     }
 
-    // ====================================
-    // 💬 MESSAGE TEXTE
     // ====================================
     if update.Message == nil {
         continue
