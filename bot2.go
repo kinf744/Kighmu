@@ -26,6 +26,25 @@ var (
 	v2rayFile = "/etc/kighmu/v2ray_users.list"
 )
 
+type UtilisateurSSH struct {
+    Nom     string
+    Pass    string
+    Limite  int
+    Expire  string
+    HostIP  string
+    Domain  string
+    SlowDNS string
+}
+
+type EtatModification struct {
+    Etape   string   // "attente_numero", "attente_type", "attente_valeur"
+    Indices []int
+    Type    string   // "duree" ou "pass"
+}
+
+var utilisateursSSH []UtilisateurSSH
+var etatsModifs = make(map[int64]*EtatModification)
+
 // Structure pour V2Ray+FastDNS
 type UtilisateurV2Ray struct {
 	Nom    string
@@ -486,24 +505,6 @@ func resumeAppareils() string {
 }
 
 // Slice global des utilisateurs SSH
-type UtilisateurSSH struct {
-    Nom     string
-    Pass    string
-    Limite  int
-    Expire  string
-    HostIP  string
-    Domain  string
-    SlowDNS string
-}
-
-type EtatModification struct {
-    Etape   string   // "attente_numero", "attente_type", "attente_valeur"
-    Indices []int
-    Type    string   // "duree" ou "pass"
-}
-
-var utilisateursSSH []UtilisateurSSH
-
 func chargerUtilisateursSSH() {
     utilisateursSSH = []UtilisateurSSH{}
     data, err := ioutil.ReadFile("/etc/kighmu/users.list")
