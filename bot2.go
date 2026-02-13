@@ -782,7 +782,11 @@ func lancerBot() {
 
     u := tgbotapi.NewUpdate(0)
     u.Timeout = 60
-    updates := bot.GetUpdatesChan(u)
+    updates, err := bot.GetUpdatesChan(u)
+    if err != nil {
+        fmt.Println("❌ Impossible d'obtenir les updates:", err)
+        return
+    }
 
     // Map pour gérer le mode suppression multiple par chat
     modeSupprimerMultiple := make(map[int64]bool)
