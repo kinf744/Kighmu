@@ -933,26 +933,30 @@ SÉLECTIONNEZ UNE OPTION CI-DESSOUS !
 			continue
 		}
 
-		if update.CallbackQuery != nil {
-            chatID := update.CallbackQuery.Message.Chat.ID
-            data := update.CallbackQuery.Data
+		// 🔘 CALLBACK BUTTONS
+if update.CallbackQuery != nil {
+    chatID := update.CallbackQuery.Message.Chat.ID
+    data := update.CallbackQuery.Data
 
-            bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
+    bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
 
-            switch data {
-            case "voir_appareils":
-            msg := resumeAppareils()
-				
-            bot.Send(tgbotapi.NewMessage(chatID, msg))
-            }
+    if data == "voir_appareils" {
+        msg := resumeAppareils()
+        bot.Send(tgbotapi.NewMessage(chatID, msg))
+    }
 
-            continue
-        }
+    continue
+}
 
-        // 💬 MESSAGE TEXTE
-        if update.Message != nil {
-            chatID := update.Message.Chat.ID
-            text := update.Message.Text
+// 💬 MESSAGE TEXTE
+if update.Message == nil {
+    continue
+}
+
+chatID := update.Message.Chat.ID
+text := update.Message.Text
+
+// Ici tu mets le code pour gérer SSH, V2Ray, suppression, etc.
 
 		/* ===== SSH NORMAL / TEST ===== */
 		if strings.Count(text, ",") == 3 {
