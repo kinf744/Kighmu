@@ -991,6 +991,8 @@ SÉLECTIONNEZ UNE OPTION CI-DESSOUS !
 
 		/* ===== INCONNU ===== */
 		bot.Send(tgbotapi.NewMessage(chatID, "❌ Commande ou format inconnu"))
+       }
+	}
 }
 
 // ===============================
