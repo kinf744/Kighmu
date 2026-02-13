@@ -1026,12 +1026,6 @@ func creerUtilisateurV2Ray(nom string, duree int) string {
     lienVLESS := fmt.Sprintf("vless://%s@%s:5401?type=tcp&encryption=none&host=%s#%s-VLESS-TCP",
         u.UUID, DOMAIN, DOMAIN, u.Nom)
 
-    return fmt.Sprintf(
-        "Utilisateur : %s\nUUID : %s\nExpire : %s\nLien VLESS : %s",
-        u.Nom, u.UUID, u.Expire, lienVLESS,
-    )
-}
-
     var builder strings.Builder
     builder.WriteString("====================================================\n")
     builder.WriteString("🧩 VLESS TCP + FASTDNS\n")
