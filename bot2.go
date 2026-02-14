@@ -1185,186 +1185,220 @@ func supprimerClientV2Ray(uuid string) error {
 
 // Lancement Bot Telegram
 // ===============================
-func lancerBot() {
-    // 1️⃣ Charger tous les bots depuis le JSON
-    if err := loadBots(); err != nil {
-        fmt.Println("❌ Impossible de charger bots.json:", err)
+func lancerBot(botIndex int) {
+
+    botData := BotsData.Bots[botIndex]
+
+    bot, err := tgbotapi.NewBotAPI(botData.Token)
+    if err != nil {
+        fmt.Println("❌ Impossible de créer le bot:", err)
         return
     }
 
-    var wg sync.WaitGroup
+    fmt.Printf("🤖 Bot %s démarré (Role: %s)\n", bot.Self.UserName, botData.Role)
 
-    // 2️⃣ Lancer chaque bot dans une goroutine
-    for _, b := range BotsData.Bots {
-        wg.Add(1)
-        token := b.Token
-        botID := b.ID
-        role := b.Role
+    chargerUtilisateursSSH()
 
-        go func(token string, botID int64, role string) {
-            defer wg.Done()
+    u := tgbotapi.NewUpdate(0)
+    u.Timeout = 60
 
-            bot, err := tgbotapi.NewBotAPI(token)
-            if err != nil {
-                fmt.Printf("❌ Impossible de démarrer le bot %d: %v\n", botID, err)
-                return
+    updates, err := bot.GetUpdatesChan(u)
+    if err != nil {
+        fmt.Println("❌ Impossible d'obtenir les updates:", err)
+        return
+    }
+
+    modeSupprimerMultiple := make(map[int64]bool)
+
+    for update := range updates {
+
+        var chatID int64
+        if update.CallbackQuery != nil {
+            chatID = update.CallbackQuery.Message.Chat.ID
+        } else if update.Message != nil {
+            chatID = update.Message.Chat.ID
+        } else {
+            continue
+        }
+
+        // ================= CALLBACK =================
+        if update.CallbackQuery != nil {
+
+            data := update.CallbackQuery.Data
+            bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, "✅ Exécution..."))
+
+            switch data {
+
+            case "menu1":
+                bot.Send(tgbotapi.NewMessage(chatID,
+                    "Envoyez :\nusername,password,limite,jours"))
+
+            case "menu2":
+                bot.Send(tgbotapi.NewMessage(chatID,
+                    "Envoyez :\nusername,password,limite,minutes"))
+
+            case "v2ray_creer":
+                bot.Send(tgbotapi.NewMessage(chatID,
+                    "Envoyez :\nnom,duree"))
+
+            case "v2ray_supprimer":
+
+                liste := listerUtilisateurs(botIndex)
+                if len(liste) == 0 {
+                    bot.Send(tgbotapi.NewMessage(chatID,
+                        "❌ Aucun utilisateur à supprimer"))
+                    continue
+                }
+
+                txt := "Liste des utilisateurs :\n"
+                for i, u := range liste {
+                    txt += fmt.Sprintf("%d) %s\n", i+1, u)
+                }
+                txt += "\nEnvoyez le numéro à supprimer"
+
+                bot.Send(tgbotapi.NewMessage(chatID, txt))
+
+            case "supprimer_multi":
+                bot.Send(tgbotapi.NewMessage(chatID,
+                    "Envoyez les utilisateurs à supprimer :\nuser1,user2,user3"))
+                modeSupprimerMultiple[chatID] = true
+
+            case "voir_appareils":
+                appareils := appareilsConnectes(botIndex)
+                msg := "📊 Appareils connectés :\n"
+                for user, count := range appareils {
+                    msg += fmt.Sprintf("- %s : %d\n", user, count)
+                }
+                bot.Send(tgbotapi.NewMessage(chatID, msg))
+
+            case "modifier_ssh":
+                etatsModifs[chatID] = &EtatModification{Etape: ""}
+                gererModificationSSH(bot, chatID, "")
             }
 
-            fmt.Printf("🤖 Bot %s connecté (Role: %s)\n", bot.Self.UserName, role)
+            continue
+        }
 
-            // Charger les utilisateurs SSH pour ce bot
-            chargerUtilisateursSSH()
+        // ================= MESSAGE =================
 
-            u := tgbotapi.NewUpdate(0)
-            u.Timeout = 60
-            updates, _ := bot.GetUpdatesChan(u)
+        if update.Message == nil {
+            continue
+        }
 
-            modeSupprimerMultiple := make(map[int64]bool)
+        text := strings.TrimSpace(update.Message.Text)
 
-            // 3️⃣ Boucle principale de réception des updates
-            for update := range updates {
-                var chatID int64
-                if update.CallbackQuery != nil {
-                    chatID = update.CallbackQuery.Message.Chat.ID
-                } else if update.Message != nil {
-                    chatID = update.Message.Chat.ID
-                } else {
-                    continue
-                }
+        // ---- suppression multiple ----
+        if modeSupprimerMultiple[chatID] {
+            traiterSuppressionMultiple(bot, chatID, text)
+            delete(modeSupprimerMultiple, chatID)
+            continue
+        }
 
-                // ---------------- CALLBACK ----------------
-                if update.CallbackQuery != nil {
-                    data := update.CallbackQuery.Data
-                    bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, "✅ Exécution..."))
+        // ---- modification ssh ----
+        if _, ok := etatsModifs[chatID]; ok {
+            gererModificationSSH(bot, chatID, text)
+            continue
+        }
 
-                    switch data {
-                    case "menu1":
-                        bot.Send(tgbotapi.NewMessage(chatID, "Envoyez :\n`username,password,limite,jours`"))
-                    case "menu2":
-                        bot.Send(tgbotapi.NewMessage(chatID, "Envoyez :\n`username,password,limite,minutes`"))
-                    case "v2ray_creer":
-                        bot.Send(tgbotapi.NewMessage(chatID, "Envoyez :\n`nom,duree`"))
-                    case "v2ray_supprimer":
-                        if len(utilisateursV2Ray) == 0 {
-                            bot.Send(tgbotapi.NewMessage(chatID, "❌ Aucun utilisateur V2Ray à supprimer"))
-                            continue
-                        }
-                        txt := "Liste des utilisateurs V2Ray :\n"
-                        for i, u := range utilisateursV2Ray {
-                            txt += fmt.Sprintf("%d) %s | UUID: %s | Expire: %s\n", i+1, u.Nom, u.UUID, u.Expire)
-                        }
-                        txt += "\nEnvoyez le numéro à supprimer"
-                        bot.Send(tgbotapi.NewMessage(chatID, txt))
-                    case "supprimer_multi":
-                        bot.Send(tgbotapi.NewMessage(chatID, "Envoyez les utilisateurs à supprimer :\n`user1,user2,user3`"))
-                        modeSupprimerMultiple[chatID] = true
-                    case "voir_appareils":
-                        bot.Send(tgbotapi.NewMessage(chatID, resumeAppareils()))
-                    case "modifier_ssh":
-                        etatsModifs[chatID] = &EtatModification{Etape: ""}
-                        gererModificationSSH(bot, chatID, "")
-                    }
-                    continue
-                }
+        // ================= MENU =================
 
-                // ---------------- MESSAGE ----------------
-                if update.Message == nil {
-                    continue
-                }
+        if text == "/kighmu" {
 
-                text := strings.TrimSpace(update.Message.Text)
-
-                // ---- suppression multiple ----
-                if modeSupprimerMultiple[chatID] {
-                    traiterSuppressionMultiple(bot, chatID, text)
-                    delete(modeSupprimerMultiple, chatID)
-                    continue
-                }
-
-                // ---- modification SSH ----
-                if _, ok := etatsModifs[chatID]; ok {
-                    gererModificationSSH(bot, chatID, text)
-                    continue
-                }
-
-                // ---- menu principal ----
-                if text == "/kighmu" {
-                    msgText := `============================================
+            msgText := `============================================
 ⚡ KIGHMU MANAGER ⚡
 ============================================
 SÉLECTIONNEZ UNE OPTION !
 ============================================`
-                    keyboard := tgbotapi.NewInlineKeyboardMarkup(
-                        tgbotapi.NewInlineKeyboardRow(
-                            tgbotapi.NewInlineKeyboardButtonData("Compte_SSH (jours)", "menu1"),
-                            tgbotapi.NewInlineKeyboardButtonData("Compte_SSH test(minutes)", "menu2"),
-                        ),
-                        tgbotapi.NewInlineKeyboardRow(
-                            tgbotapi.NewInlineKeyboardButtonData("➕ V2Ray+FastDNS", "v2ray_creer"),
-                            tgbotapi.NewInlineKeyboardButtonData("➖ Supprimer V2Ray", "v2ray_supprimer"),
-                        ),
-                        tgbotapi.NewInlineKeyboardRow(
-                            tgbotapi.NewInlineKeyboardButtonData("❌ Supprimer SSH", "supprimer_multi"),
-                        ),
-                        tgbotapi.NewInlineKeyboardRow(
-                            tgbotapi.NewInlineKeyboardButtonData("📊 APPAREILS", "voir_appareils"),
-                            tgbotapi.NewInlineKeyboardButtonData("📝 MODIFIER SSH", "modifier_ssh"),
-                        ),
-                    )
 
-                    m := tgbotapi.NewMessage(chatID, msgText)
-                    m.ReplyMarkup = keyboard
-                    bot.Send(m)
-                    continue
-                }
+            keyboard := tgbotapi.NewInlineKeyboardMarkup(
+                tgbotapi.NewInlineKeyboardRow(
+                    tgbotapi.NewInlineKeyboardButtonData("Compte_SSH (jours)", "menu1"),
+                    tgbotapi.NewInlineKeyboardButtonData("Compte_SSH test(minutes)", "menu2"),
+                ),
+                tgbotapi.NewInlineKeyboardRow(
+                    tgbotapi.NewInlineKeyboardButtonData("➕ V2Ray+FastDNS", "v2ray_creer"),
+                    tgbotapi.NewInlineKeyboardButtonData("➖ Supprimer V2Ray", "v2ray_supprimer"),
+                ),
+                tgbotapi.NewInlineKeyboardRow(
+                    tgbotapi.NewInlineKeyboardButtonData("❌ Supprimer SSH", "supprimer_multi"),
+                ),
+                tgbotapi.NewInlineKeyboardRow(
+                    tgbotapi.NewInlineKeyboardButtonData("📊 APPAREILS", "voir_appareils"),
+                    tgbotapi.NewInlineKeyboardButtonData("📝 MODIFIER SSH", "modifier_ssh"),
+                ),
+            )
 
-                // ---- création SSH ----
-                if strings.Count(text, ",") == 3 {
-                    p := strings.Split(text, ",")
-                    limite, err1 := strconv.Atoi(strings.TrimSpace(p[2]))
-                    duree, err2 := strconv.Atoi(strings.TrimSpace(p[3]))
-                    if err1 != nil || err2 != nil {
-                        bot.Send(tgbotapi.NewMessage(chatID, "❌ Paramètres invalides"))
-                        continue
-                    }
-                    var result string
-                    if duree <= 1440 {
-                        result = creerUtilisateurTest(p[0], p[1], limite, duree)
-                    } else {
-                        result = creerUtilisateurNormal(p[0], p[1], limite, duree)
-                    }
-                    bot.Send(tgbotapi.NewMessage(chatID, result))
-                    chargerUtilisateursSSH()
-                    continue
-                }
+            msg := tgbotapi.NewMessage(chatID, msgText)
+            msg.ReplyMarkup = keyboard
+            bot.Send(msg)
+            continue
+        }
 
-                // ---- création V2Ray ----
-                if strings.Count(text, ",") == 1 {
-                    p := strings.Split(text, ",")
-                    duree, err := strconv.Atoi(strings.TrimSpace(p[1]))
-                    if err != nil {
-                        bot.Send(tgbotapi.NewMessage(chatID, "❌ Durée invalide"))
-                        continue
-                    }
-                    bot.Send(tgbotapi.NewMessage(chatID, creerUtilisateurV2Ray(p[0], duree)))
-                    continue
-                }
+        // ================= SSH CREATE =================
 
-                // ---- suppression V2Ray ----
-                if num, err := strconv.Atoi(text); err == nil && num > 0 && num <= len(utilisateursV2Ray) {
-                    bot.Send(tgbotapi.NewMessage(chatID, supprimerUtilisateurV2Ray(num-1)))
-                    continue
-                }
+        if strings.Count(text, ",") == 3 {
 
-                // ---- commande inconnue ----
-                bot.Send(tgbotapi.NewMessage(chatID, "❌ Commande ou format inconnu"))
+            p := strings.Split(text, ",")
+
+            limite, err1 := strconv.Atoi(strings.TrimSpace(p[2]))
+            duree, err2 := strconv.Atoi(strings.TrimSpace(p[3]))
+            if err1 != nil || err2 != nil {
+                bot.Send(tgbotapi.NewMessage(chatID,
+                    "❌ Paramètres invalides"))
+                continue
             }
 
-        }(token, botID, role)
-    }
+            var result string
 
-    // 4️⃣ Bloquer le thread principal pour garder tous les bots actifs
-    wg.Wait()
+            if duree <= 1440 {
+                result = creerUtilisateurTest(p[0], p[1], limite, duree)
+            } else {
+                result = creerUtilisateurNormal(p[0], p[1], limite, duree)
+            }
+
+            bot.Send(tgbotapi.NewMessage(chatID, result))
+            chargerUtilisateursSSH()
+            continue
+        }
+
+        // ================= V2RAY CREATE =================
+
+        if strings.Count(text, ",") == 1 {
+
+            p := strings.Split(text, ",")
+            username := strings.TrimSpace(p[0])
+
+            if !peutModifier(botData, username) && botData.Role != "admin" {
+                bot.Send(tgbotapi.NewMessage(chatID,
+                    "❌ Permission refusée"))
+                continue
+            }
+
+            duree, err := strconv.Atoi(strings.TrimSpace(p[1]))
+            if err != nil {
+                bot.Send(tgbotapi.NewMessage(chatID,
+                    "❌ Durée invalide"))
+                continue
+            }
+
+            msg := creerUtilisateur(botIndex, username, duree)
+            bot.Send(tgbotapi.NewMessage(chatID, msg))
+            continue
+        }
+
+        // ================= DELETE USER =================
+
+        if strings.HasPrefix(text, "del ") {
+
+            username := strings.TrimSpace(strings.TrimPrefix(text, "del "))
+            msg := supprimerUtilisateur(botIndex, username)
+            bot.Send(tgbotapi.NewMessage(chatID, msg))
+            continue
+        }
+
+        bot.Send(tgbotapi.NewMessage(chatID,
+            "❌ Commande ou format inconnu"))
+    }
 }
 
 // ===============================
