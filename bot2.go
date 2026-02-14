@@ -1424,8 +1424,14 @@ SÉLECTIONNEZ UNE OPTION !
 
 // -------------------------
 // Fonction utilitaire pour envoyer messages avec debug
-func sendMessage(bot *tgbotapi.BotAPI, chatID int64, text string) {
+func sendMessage(bot *tgbotapi.BotAPI, chatID int64, text string, keyboard ...tgbotapi.InlineKeyboardMarkup) {
     msg := tgbotapi.NewMessage(chatID, text)
+    
+    // Si un clavier est fourni, on l'assigne
+    if len(keyboard) > 0 {
+        msg.ReplyMarkup = keyboard[0]
+    }
+
     if _, err := bot.Send(msg); err != nil {
         fmt.Println("❌ Erreur lors de l'envoi du message à", chatID, ":", err)
     }
