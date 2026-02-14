@@ -985,14 +985,19 @@ func lancerBot() {
 
 	// ================== SET BOT COMMANDS ==================
 	commands := []tgbotapi.BotCommand{
-		{Command: "kighmu", Description: "Ouvrir le panneau principal"},
-		{Command: "help", Description: "Guide complet d'utilisation"},
+		{
+			Command:     "kighmu",
+			Description: "Ouvrir le panneau principal",
+		},
+		{
+			Command:     "help",
+			Description: "Guide complet d'utilisation",
+		},
 	}
 
-	scope := tgbotapi.NewBotCommandScopeDefault()
-	cfg := tgbotapi.NewSetMyCommandsWithScope(scope, commands...)
+	config := tgbotapi.NewSetMyCommands(commands...)
 
-	_, err = bot.Request(cfg)
+	_, err = bot.Request(config)
 	if err != nil {
 		fmt.Println("❌ Erreur setMyCommands:", err)
 	} else {
@@ -1000,7 +1005,7 @@ func lancerBot() {
 	}
 	// ======================================================
 
-	// Charger les utilisateurs SSH dès le démarrage
+	// Charger les utilisateurs SSH
 	chargerUtilisateursSSH()
 
 	u := tgbotapi.NewUpdate(0)
@@ -1040,13 +1045,13 @@ func lancerBot() {
 			switch data {
 
 			case "menu1":
-				bot.Send(tgbotapi.NewMessage(chatID, "Envoyez :\nusername,password,limite,jours"))
+				bot.Send(tgbotapi.NewMessage(chatID, "Envoyez : username,password,limite,jours"))
 
 			case "menu2":
-				bot.Send(tgbotapi.NewMessage(chatID, "Envoyez :\nusername,password,limite,minutes"))
+				bot.Send(tgbotapi.NewMessage(chatID, "Envoyez : username,password,limite,minutes"))
 
 			case "v2ray_creer":
-				bot.Send(tgbotapi.NewMessage(chatID, "Envoyez :\nnom,duree"))
+				bot.Send(tgbotapi.NewMessage(chatID, "Envoyez : nom,duree"))
 
 			case "v2ray_supprimer":
 				if len(utilisateursV2Ray) == 0 {
@@ -1062,7 +1067,7 @@ func lancerBot() {
 
 			case "supprimer_multi":
 				bot.Send(tgbotapi.NewMessage(chatID,
-					"Envoyez les noms séparés par virgules :\nuser1,user2,user3"))
+					"Envoyez les noms séparés par virgules : user1,user2,user3"))
 				modeSupprimerMultiple[chatID] = true
 
 			case "voir_appareils":
@@ -1088,15 +1093,13 @@ func lancerBot() {
 			msgText := `============================================
 ⚡ KIGHMU MANAGER 🇨🇲
 ============================================
-Gestion complète des comptes :
+Gestion complète :
 
 • SSH (jours / minutes)
 • V2Ray + FastDNS
 • Suppression multiple
 • Modification SSH
 • Statistiques appareils
-
-Sélectionnez une option ci-dessous.
 ============================================`
 
 			keyboard := tgbotapi.NewInlineKeyboardMarkup(
@@ -1106,10 +1109,10 @@ Sélectionnez une option ci-dessous.
 				),
 				tgbotapi.NewInlineKeyboardRow(
 					tgbotapi.NewInlineKeyboardButtonData("➕ Compte V2Ray+FastDNS", "v2ray_creer"),
-					tgbotapi.NewInlineKeyboardButtonData("➖ Supprimer_Compte V2Ray+FastDNS", "v2ray_supprimer"),
+					tgbotapi.NewInlineKeyboardButtonData("➖ Supprimer V2Ray+FastDNS", "v2ray_supprimer"),
 				),
 				tgbotapi.NewInlineKeyboardRow(
-					tgbotapi.NewInlineKeyboardButtonData("❌ Supprimer_Compte_SSH(s)", "supprimer_multi"),
+					tgbotapi.NewInlineKeyboardButtonData("❌ Supprimer SSH(s)", "supprimer_multi"),
 				),
 				tgbotapi.NewInlineKeyboardRow(
 					tgbotapi.NewInlineKeyboardButtonData("📊 APPAREILS", "voir_appareils"),
@@ -1128,31 +1131,29 @@ Sélectionnez une option ci-dessous.
 
 			helpText := `📘 GUIDE COMPLET - KIGHMU MANAGER
 
-1️⃣ Compte_SSH (jours)
-Format :
+1️⃣ SSH (jours)
 username,password,limite,jours
 
-2️⃣ Compte_SSH test (minutes)
+2️⃣ SSH test (minutes)
 username,password,limite,minutes
 
-3️⃣ ➕ Compte V2Ray+FastDNS
+3️⃣ V2Ray
 nom,duree (jours)
 
-4️⃣ ➖ Supprimer V2Ray
-Envoyer le numéro affiché.
+4️⃣ Suppression V2Ray
+Envoyer numéro affiché.
 
-5️⃣ ❌ Supprimer SSH multiple
+5️⃣ Suppression multiple SSH
 user1,user2,user3
 
-6️⃣ 📊 APPAREILS
+6️⃣ APPAREILS
 Affiche connexions actives.
 
-7️⃣ 📝 MODIFIER SSH
-Permet de modifier mot de passe, limite, expiration.
+7️⃣ MODIFIER SSH
+Modifier mot de passe / limite / expiration.
 
-⚠️ Respecter strictement les formats.
-Séparer par virgules.
-Aucun espace inutile.`
+⚠️ Respecter strictement le format.
+Séparer uniquement par virgules.`
 
 			bot.Send(tgbotapi.NewMessage(chatID, helpText))
 			continue
