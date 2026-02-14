@@ -1428,6 +1428,7 @@ SÉLECTIONNEZ UNE OPTION !
 // ===============================
 func main() {
 	initAdminID()
+	loadBots()
 	DOMAIN = loadDomain()
 	chargerUtilisateursV2Ray() // <- ajouter cette ligne
 	chargerUtilisateursSSH()
