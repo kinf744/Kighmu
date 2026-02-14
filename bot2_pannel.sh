@@ -12,11 +12,26 @@ cat > "$BOTS_CLIENT" << 'EOF'
 {
   "bots": [
     {
-      "NomBot": "AdminBot",
-      "Token": "TOKEN_ADMIN",
-      "ID": 123456,
-      "Role": "admin",
-      "Utilisateurs": []
+      "id": 1,
+      "nom": "ADMIN",
+      "token": "TOKEN_ADMIN",
+      "role": "admin",
+      "expire_le": "2099-01-01"
+    },
+    {
+      "id": 2,
+      "nom": "ClientA",
+      "token": "TOKEN_CLIENT_A",
+      "role": "client",
+      "expire_le": "2026-03-01"
+    }
+  ],
+  "users": [
+    {
+      "username": "user1",
+      "password": "1234",
+      "expire_le": "2026-02-20",
+      "owner_id": 2
     }
   ]
 }
