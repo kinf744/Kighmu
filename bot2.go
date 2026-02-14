@@ -1097,14 +1097,18 @@ func lancerBot() {
 		if text == "/kighmu" {
 
 			msgText := `============================================
-⚡ KIGHMU MANAGER 🇨🇲
+🚀 𝗞𝗜𝗚𝗛𝗠𝗨 𝗠𝗔𝗡𝗔𝗚𝗘𝗥 🇨🇲
 ============================================
-Gestion complète :
+👤 AUTEUR : @𝐊𝐈𝐆𝐇𝐌𝐔
+📢 CANAL TELEGRAM :
+𝗵𝘁𝘁𝗽𝘀://𝘁.𝗺𝗲/𝗹𝗸𝗴𝗰𝗱𝗱𝘁𝗼𝗼𝗴𝘃
+============================================
+𝔾𝕖𝕤𝕥𝕚𝕠𝕟 𝕔𝕠𝕞𝕡𝕝𝕖𝕥𝕖 :
 
 • SSH (jours / minutes)
 • V2Ray + FastDNS
 • Suppression multiple
-• Modification SSH
+• Modification SSH (durée/password) 
 • Statistiques appareils
 ============================================`
 
