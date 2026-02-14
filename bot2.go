@@ -64,6 +64,12 @@ type Bot struct {
     ExpireLe string `json:"expire_le"`
 }
 
+type BotDataStruct struct {
+	Bots []Bot `json:"bots"`
+}
+
+var BotData BotDataStruct
+
 type User struct {
     Username string `json:"username"`
     Password string `json:"password"`
