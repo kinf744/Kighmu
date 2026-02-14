@@ -1184,7 +1184,7 @@ func supprimerClientV2Ray(uuid string) error {
 
 // Lancement Bot Telegram
 // ===============================
-func lancerBot(botIndex int) {
+func lancerBot() {
 
     botData := BotsData.Bots[botIndex]
 
