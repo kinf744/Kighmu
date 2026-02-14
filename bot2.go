@@ -212,10 +212,47 @@ func fixHome(username string) {
 }
 
 // Vérifie si un bot peut modifier ou supprimer un utilisateur
-func peutModifier(bot Bot, utilisateur string) bool {
+func loadBots() error {
+    file, err := os.Open("/etc/kighmu/bots.json")
+    if err != nil {
+        return fmt.Errorf("❌ Impossible d'ouvrir /etc/kighmu/bots.json : %v", err)
+    }
+    defer file.Close()
+
+    decoder := json.NewDecoder(file)
+    if err := decoder.Decode(&BotsData); err != nil {
+        return fmt.Errorf("❌ Erreur lors du décodage de bots.json : %v", err)
+    }
+
+    // Vérifier qu'au moins un bot est présent
+    if len(BotsData.Bots) == 0 {
+        return fmt.Errorf("❌ Aucun bot trouvé dans bots.json")
+    }
+
+    // Vérifier qu'au moins un bot admin existe
+    adminExists := false
+    for _, b := range BotsData.Bots {
+        if b.Role == "admin" {
+            adminExists = true
+            break
+        }
+    }
+    if !adminExists {
+        return fmt.Errorf("❌ Aucun bot admin trouvé dans bots.json")
+    }
+
+    fmt.Println("✅ Bots chargés avec succès")
+    return nil
+}
+
+// Vérifie si un bot peut voir/modifier un utilisateur
+func peutVoir(bot Bot, utilisateur string) bool {
+    // Les admins voient tout
     if bot.Role == "admin" {
         return true
     }
+
+    // Les clients ne voient que leurs propres utilisateurs
     for _, u := range bot.Utilisateurs {
         if u == utilisateur {
             return true
@@ -224,24 +261,20 @@ func peutModifier(bot Bot, utilisateur string) bool {
     return false
 }
 
-func loadBots() error {
-    file, err := os.Open("/etc/kighmu/bots.json")
-    if err != nil {
-        return err
-    }
-    defer file.Close()
-
-    decoder := json.NewDecoder(file)
-    if err := decoder.Decode(&BotsData); err != nil {
-        return err
+// Vérifie si un bot peut modifier un utilisateur
+func peutModifier(bot Bot, utilisateur string) bool {
+    // Admin peut tout modifier
+    if bot.Role == "admin" {
+        return true
     }
 
-    return nil
-}
-
-// Vérifie si un bot peut voir un utilisateur
-func peutVoir(bot Bot, utilisateur string) bool {
-    return peutModifier(bot, utilisateur) // même logique : clients voient seulement leurs créations
+    // Client peut modifier uniquement ses propres utilisateurs
+    for _, u := range bot.Utilisateurs {
+        if u == utilisateur {
+            return true
+        }
+    }
+    return false
 }
 
 func creerUtilisateur(botIndex int, nom string, duree int) string {
