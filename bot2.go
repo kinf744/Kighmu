@@ -1161,29 +1161,37 @@ func supprimerClientV2Ray(uuid string) error {
 
 func lancerBot() {
 
+	// ================= TOKEN CHECK =================
+	botToken = os.Getenv("BOT_TOKEN")
+	if botToken == "" {
+		fmt.Println("❌ BOT_TOKEN non défini (export BOT_TOKEN=xxxx)")
+		return
+	}
+
 	bot, err := tgbotapi.NewBotAPI(botToken)
 	if err != nil {
 		fmt.Println("❌ Impossible de créer le bot:", err)
 		return
 	}
-	fmt.Println("🤖 Bot Telegram démarré")
 
-	// ================== SET BOT COMMANDS ==================
+	fmt.Println("🤖 Bot Telegram démarré :", bot.Self.UserName)
+
+	// ================= COMMANDES TELEGRAM =================
 	commands := []tgbotapi.BotCommand{
 		{Command: "kighmu", Description: "Ouvrir le panneau principal"},
 		{Command: "help", Description: "Guide complet d'utilisation"},
 	}
 
-	config := tgbotapi.NewSetMyCommands(commands...)
-	_, err = bot.Request(config)
+	_, err = bot.Request(tgbotapi.NewSetMyCommands(commands...))
 	if err != nil {
 		fmt.Println("❌ Erreur setMyCommands:", err)
 	} else {
 		fmt.Println("✅ Menu Telegram configuré")
 	}
-	// ======================================================
 
+	// ================= LOAD DATA =================
 	chargerUtilisateursSSH()
+	chargerUtilisateursV2Ray()
 
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
@@ -1195,38 +1203,37 @@ func lancerBot() {
 	for update := range updates {
 
 		var chatID int64
+		var userID int64
 
-		// ================= RÉCUPÉRATION CHAT =================
+		// ================= IDENTIFICATION =================
 		if update.CallbackQuery != nil && update.CallbackQuery.Message != nil {
 			chatID = update.CallbackQuery.Message.Chat.ID
+			userID = int64(update.CallbackQuery.From.ID)
 		} else if update.Message != nil {
 			chatID = update.Message.Chat.ID
+			userID = int64(update.Message.From.ID)
 		} else {
 			continue
 		}
 
-		// ================= ADMIN CHECK =================
-		if update.CallbackQuery != nil {
-			if int64(update.CallbackQuery.From.ID) != adminID {
+		// ================= ADMIN PROTECTION =================
+		if userID != adminID {
+
+			if update.CallbackQuery != nil {
 				callback := tgbotapi.NewCallback(update.CallbackQuery.ID, "⛔ Accès refusé")
 				bot.Request(callback)
-				continue
 			}
+			continue
 		}
 
-		if update.Message != nil {
-			if int64(update.Message.From.ID) != adminID {
-				continue
-			}
-		}
+		// ====================================================
+		// ================= CALLBACK ==========================
+		// ====================================================
 
-		// ================= CALLBACK =================
 		if update.CallbackQuery != nil {
 
 			data := update.CallbackQuery.Data
-
-			callback := tgbotapi.NewCallback(update.CallbackQuery.ID, "✅ Exécution...")
-			bot.Request(callback)
+			bot.Request(tgbotapi.NewCallback(update.CallbackQuery.ID, "✅"))
 
 			switch data {
 
@@ -1250,7 +1257,7 @@ func lancerBot() {
 					continue
 				}
 
-				txt := "Liste des utilisateurs V2Ray :\n"
+				txt := "📋 Liste des utilisateurs V2Ray :\n\n"
 				for i, u := range utilisateursV2Ray {
 					txt += fmt.Sprintf("%d) %s | UUID: %s | Expire: %s\n",
 						i+1, u.Nom, u.UUID, u.Expire)
@@ -1260,9 +1267,9 @@ func lancerBot() {
 				bot.Send(tgbotapi.NewMessage(chatID, txt))
 
 			case "supprimer_multi":
+				modeSupprimerMultiple[chatID] = true
 				bot.Send(tgbotapi.NewMessage(chatID,
 					"Envoyez les noms séparés par virgules : user1,user2,user3"))
-				modeSupprimerMultiple[chatID] = true
 
 			case "voir_appareils":
 				bot.Send(tgbotapi.NewMessage(chatID, resumeAppareils()))
@@ -1275,14 +1282,17 @@ func lancerBot() {
 			continue
 		}
 
-		// ================= MESSAGE =================
+		// ====================================================
+		// ================= MESSAGE ===========================
+		// ====================================================
+
 		if update.Message == nil || update.Message.Text == "" {
 			continue
 		}
 
 		text := strings.TrimSpace(update.Message.Text)
 
-		// ================= MENU =================
+		// ================= MENU PRINCIPAL =================
 		if text == "/kighmu" {
 
 			msgText := `============================================
@@ -1290,14 +1300,14 @@ func lancerBot() {
 ============================================
 👤 AUTEUR : @𝐊𝐈𝐆𝐇𝐌𝐔
 📢 CANAL TELEGRAM :
-𝗵𝘁𝘁𝗽𝘀://𝘁.𝗺𝗲/𝗹𝗸𝗴𝗰𝗱𝗱𝘁𝗼𝗼𝗴𝘃
+https://t.me/lkgcddtoogv
 ============================================
 𝔾𝕖𝕤𝕥𝕚𝕠𝕟 𝕔𝕠𝕞𝕡𝕝𝕖𝕥𝕖 :
 
 • SSH (jours / minutes)
 • V2Ray + FastDNS
 • Suppression multiple
-• Modification SSH (durée/password) 
+• Modification SSH (durée/password)
 • Statistiques appareils
 ============================================`
 
@@ -1325,7 +1335,7 @@ func lancerBot() {
 			continue
 		}
 
-		// ================= HELP =================
+		// ================= HELP COMPLET =================
 		if text == "/help" {
 
 			helpText := `📘 GUIDE COMPLET - KIGHMU MANAGER
@@ -1362,24 +1372,21 @@ Séparer uniquement par virgules.`
 		if modeSupprimerMultiple[chatID] {
 			traiterSuppressionMultiple(bot, chatID, text)
 			delete(modeSupprimerMultiple, chatID)
+			chargerUtilisateursSSH()
 			continue
 		}
 
 		// ================= MODIFICATION SSH =================
 		if _, ok := etatsModifs[chatID]; ok {
 			gererModificationSSH(bot, chatID, text)
+			chargerUtilisateursSSH()
 			continue
 		}
 
-		// ================= SSH =================
+		// ================= SSH CREATION =================
 		if strings.Count(text, ",") == 3 {
 
 			p := strings.Split(text, ",")
-			if len(p) != 4 {
-				bot.Send(tgbotapi.NewMessage(chatID, "❌ Format invalide"))
-				continue
-			}
-
 			username := strings.TrimSpace(p[0])
 			password := strings.TrimSpace(p[1])
 			limite, err1 := strconv.Atoi(strings.TrimSpace(p[2]))
@@ -1402,17 +1409,13 @@ Séparer uniquement par virgules.`
 			continue
 		}
 
-		// ================= V2RAY =================
+		// ================= V2RAY CREATION =================
 		if strings.Count(text, ",") == 1 {
 
 			p := strings.Split(text, ",")
-			if len(p) != 2 {
-				bot.Send(tgbotapi.NewMessage(chatID, "❌ Format invalide"))
-				continue
-			}
-
 			nom := strings.TrimSpace(p[0])
 			duree, err := strconv.Atoi(strings.TrimSpace(p[1]))
+
 			if err != nil {
 				bot.Send(tgbotapi.NewMessage(chatID, "❌ Durée invalide"))
 				continue
@@ -1420,6 +1423,8 @@ Séparer uniquement par virgules.`
 
 			bot.Send(tgbotapi.NewMessage(chatID,
 				creerUtilisateurV2Ray(nom, duree)))
+
+			chargerUtilisateursV2Ray()
 			continue
 		}
 
@@ -1429,6 +1434,8 @@ Séparer uniquement par virgules.`
 
 			bot.Send(tgbotapi.NewMessage(chatID,
 				supprimerUtilisateurV2Ray(num-1)))
+
+			chargerUtilisateursV2Ray()
 			continue
 		}
 
