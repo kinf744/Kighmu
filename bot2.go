@@ -14,6 +14,7 @@ import (
 	"os/user"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
@@ -222,6 +223,21 @@ func peutModifier(bot Bot, utilisateur string) bool {
         }
     }
     return false
+}
+
+func loadBots() error {
+    file, err := os.Open("/etc/kighmu/bots.json")
+    if err != nil {
+        return err
+    }
+    defer file.Close()
+
+    decoder := json.NewDecoder(file)
+    if err := decoder.Decode(&BotsData); err != nil {
+        return err
+    }
+
+    return nil
 }
 
 // Vérifie si un bot peut voir un utilisateur
