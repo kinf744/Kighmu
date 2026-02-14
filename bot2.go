@@ -54,6 +54,135 @@ type UtilisateurV2Ray struct {
 
 var utilisateursV2Ray []UtilisateurV2Ray
 
+type Bot struct {
+    ID       int    `json:"id"`
+    Nom      string `json:"nom"`
+    Token    string `json:"token"`
+    Role     string `json:"role"`
+    ExpireLe string `json:"expire_le"`
+}
+
+type User struct {
+    Username string `json:"username"`
+    Password string `json:"password"`
+    ExpireLe string `json:"expire_le"`
+    OwnerID  int    `json:"owner_id"`
+}
+
+type Data struct {
+    Bots  []Bot  `json:"bots"`
+    Users []User `json:"users"`
+}
+
+var data Data
+var mutex sync.Mutex
+
+func chargerData() error {
+    file, err := os.ReadFile("data.json")
+    if err != nil {
+        return err
+    }
+    return json.Unmarshal(file, &data)
+}
+
+func sauvegarderData() error {
+    mutex.Lock()
+    defer mutex.Unlock()
+
+    bytes, err := json.MarshalIndent(data, "", "  ")
+    if err != nil {
+        return err
+    }
+
+    return os.WriteFile("data.json", bytes, 0644)
+}
+
+func getUsersForBot(bot Bot) []User {
+    var result []User
+
+    for _, user := range data.Users {
+        if bot.Role == "admin" || user.OwnerID == bot.ID {
+            result = append(result, user)
+        }
+    }
+
+    return result
+}
+
+func ajouterUtilisateur(bot Bot, username, password, expire string) error {
+
+    newUser := User{
+        Username: username,
+        Password: password,
+        ExpireLe: expire,
+        OwnerID:  bot.ID, // 🔥 assignation automatique
+    }
+
+    data.Users = append(data.Users, newUser)
+
+    return sauvegarderData()
+}
+
+func supprimerUtilisateur(bot Bot, username string) error {
+
+    var newUsers []User
+
+    for _, user := range data.Users {
+
+        if user.Username == username {
+
+            if bot.Role != "admin" && user.OwnerID != bot.ID {
+                return fmt.Errorf("permission refusée")
+            }
+
+            continue // skip = suppression
+        }
+
+        newUsers = append(newUsers, user)
+    }
+
+    data.Users = newUsers
+
+    return sauvegarderData()
+}
+
+func verifierExpiration() {
+    for {
+        time.Sleep(1 * time.Hour)
+
+        now := time.Now()
+        var newUsers []User
+
+        for _, user := range data.Users {
+            expireDate, _ := time.Parse("2006-01-02", user.ExpireLe)
+
+            if now.Before(expireDate) {
+                newUsers = append(newUsers, user)
+            }
+        }
+
+        data.Users = newUsers
+        sauvegarderData()
+    }
+}
+
+func validerIntegrite() {
+    for _, user := range data.Users {
+        found := false
+
+        for _, bot := range data.Bots {
+            if bot.ID == user.OwnerID {
+                found = true
+                break
+            }
+        }
+
+        if !found {
+            log.Println("Utilisateur orphelin détecté:", user.Username)
+        }
+    }
+}
+
 // Initialisation ADMIN_ID
 // ===============================
 func initAdminID() {
@@ -63,16 +192,30 @@ func initAdminID() {
 
 	idStr := os.Getenv("ADMIN_ID")
 	if idStr == "" {
-		fmt.Print("🆔 Entrez votre ADMIN_ID Telegram : ")
-		fmt.Scanln(&idStr)
+		log.Fatal("ADMIN_ID non défini")
 	}
 
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		fmt.Println("❌ ADMIN_ID invalide")
-		os.Exit(1)
+		log.Fatal("ADMIN_ID invalide")
 	}
+
 	adminID = id
+}
+
+func hasAccess(userID int64, botData BotData) bool {
+
+	// Super admin peut tout voir
+	if userID == adminID {
+		return true
+	}
+
+	// Propriétaire du bot
+	if userID == botData.OwnerTelegramID {
+		return true
+	}
+
+	return false
 }
 
 // Charger DOMAIN depuis kighmu_info si non défini
