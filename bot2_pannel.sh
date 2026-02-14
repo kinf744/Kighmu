@@ -5,8 +5,10 @@ BOT_BIN="$SCRIPT_DIR/bot2"
 SERVICE_FILE="/etc/systemd/system/bot2.service"
 BOTS_CLIENT="/etc/kighmu/bots.json"
 
+# ─────────── Création dossier et fichier bots.json si absent ───────────
 mkdir -p /etc/kighmu
-[ ! -f "$BOTS_CLIENT" ] && cat > "$BOTS_CLIENT" << 'EOF'
+if [ ! -f "$BOTS_CLIENT" ]; then
+cat > "$BOTS_CLIENT" << 'EOF'
 {
   "bots": [
     {
@@ -19,23 +21,23 @@ mkdir -p /etc/kighmu
   ]
 }
 EOF
+fi
 
 sudo chmod 600 "$BOTS_CLIENT"
 sudo chown root:root "$BOTS_CLIENT"
+
+# ─────────── Fonctions ───────────
 
 stop_and_uninstall_bot() {
     echo "🛑 Arrêt du bot (si actif)..."
     sudo systemctl stop bot2 2>/dev/null || true
     sudo systemctl disable bot2 2>/dev/null || true
     sudo rm -f "$SERVICE_FILE"
-
     echo "🗑️ Suppression des fichiers..."
     rm -f "$BOT_BIN" "$SCRIPT_DIR/go.mod" "$SCRIPT_DIR/go.sum"
-
     echo "✅ Bot arrêté et désinstallé"
 }
 
-# Ajouter un client bot
 ajouter_client_bot() {
     echo "➤ Ajouter un client bot"
     read -p "Nom du bot : " NOM_BOT
@@ -53,9 +55,9 @@ ajouter_client_bot() {
 
     IFS=',' read -ra USERS <<< "$USERS_INPUT"
 
-    # Création de tableau d'utilisateurs avec expiration
     USERS_JSON="[]"
     for u in "${USERS[@]}"; do
+        [ -n "$u" ] || continue
         EXP_DATE=$(date -d "+$DAYS days" +%Y-%m-%d)
         USERS_JSON=$(echo "$USERS_JSON" | jq --arg name "$u" --arg expire "$EXP_DATE" '. += [{"nom": $name, "expire": $expire}]')
     done
@@ -74,19 +76,17 @@ ajouter_client_bot() {
     echo "✅ Client bot $NOM_BOT ajouté"
 }
 
-# Gérer utilisateurs avec expiration
 gerer_utilisateurs_client() {
     echo "➤ Gestion des utilisateurs client bot"
     jq -r '.bots[] | "\(.NomBot) (ID: \(.ID))"' "$BOTS_CLIENT"
     read -p "Nom du client bot à gérer : " NOM_CLIENT
 
     USERS=$(jq -r --arg nom "$NOM_CLIENT" '.bots[] | select(.NomBot == $nom) | .Utilisateurs[] | "\(.nom) | expire: \(.expire)"' "$BOTS_CLIENT")
-    if [ -z "$USERS" ]; then echo "Aucun utilisateur pour ce client bot"; return; fi
+    [ -z "$USERS" ] && { echo "Aucun utilisateur pour ce client bot"; return; }
 
     echo "Utilisateurs :"
     i=1
-    declare -a USER_ARR
-    declare -a EXPIRE_ARR
+    declare -a USER_ARR EXPIRE_ARR
     while IFS='|' read -r NAME EXPIRE; do
         NAME=$(echo "$NAME" | xargs)
         EXPIRE=$(echo "$EXPIRE" | xargs | cut -d' ' -f2)
@@ -160,13 +160,14 @@ EOF
     echo "✅ Service systemd créé et bot démarré"
 }
 
+# ─────────── Menu principal ───────────
 while true; do
     clear
     echo "======================================"
     echo "      🤖 PANNEAU DE CONTRÔLE BOT"
     echo "======================================"
     echo "1️⃣  Installer / Compiler le bot"
-    echo "2️⃣  Lancer le bot admin(systemd)"
+    echo "2️⃣  Lancer le bot admin (systemd)"
     echo "3️⃣  Ajouter un client bot"
     echo "4️⃣  Gérer les utilisateurs d'un client bot"
     echo "5️⃣  Arrêter / Désinstaller le bot"
@@ -175,7 +176,7 @@ while true; do
     read -p "👉 Choisissez une option [1-6] : " option
 
     case "$option" in
-        1) 
+        1)
             echo "⏳ Vérification de Go..."
             command -v go >/dev/null 2>&1 || { echo "❌ Go n'est pas installé"; read -p "Entrée pour continuer..."; continue; }
             cd "$SCRIPT_DIR" || continue
