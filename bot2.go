@@ -1373,5 +1373,5 @@ func main() {
 	chargerUtilisateursSSH()
 	startExpirationWatcher()
 	fmt.Println("✅ Bot prêt à être lancé")
-	lancerBot()
+	lancerBot(botIndex int)
 }
