@@ -1218,17 +1218,24 @@ func supprimerClientV2Ray(uuid string) error {
 // Lancement Bot Telegram
 // ===============================
 func lancerBot(botIndex int) {
+    // Vérifier que le botIndex est valide
+    if len(BotsData.Bots) == 0 {
+        log.Fatal("❌ Aucun bot chargé dans BotsData")
+    }
+    if botIndex < 0 || botIndex >= len(BotsData.Bots) {
+        log.Fatalf("❌ botIndex invalide : %d", botIndex)
+    }
+
     botData := BotsData.Bots[botIndex]
 
     bot, err := tgbotapi.NewBotAPI(botData.Token)
     if err != nil {
-        fmt.Println("❌ Impossible de créer le bot:", err)
-        return
+        log.Fatalf("❌ Impossible de créer le bot: %v", err)
     }
 
     fmt.Printf("🤖 Bot %s démarré (Role: %s)\n", bot.Self.UserName, botData.Role)
 
-    // Charger tous les utilisateurs SSH
+    // Charger tous les utilisateurs SSH depuis fichiers/config
     chargerUtilisateursSSH()
 
     u := tgbotapi.NewUpdate(0)
@@ -1236,8 +1243,7 @@ func lancerBot(botIndex int) {
 
     updates, err := bot.GetUpdatesChan(u)
     if err != nil {
-        fmt.Println("❌ Impossible d'obtenir les updates:", err)
-        return
+        log.Fatalf("❌ Impossible d'obtenir les updates: %v", err)
     }
 
     modeSupprimerMultiple := make(map[int64]bool)
@@ -1270,8 +1276,22 @@ func lancerBot(botIndex int) {
                     bot.Send(tgbotapi.NewMessage(chatID, "❌ Aucun utilisateur à supprimer"))
                     continue
                 }
+
+                // Filtrer selon les permissions
+                var filtered []string
+                for _, u := range liste {
+                    if peutVoir(botData, u) {
+                        filtered = append(filtered, u)
+                    }
+                }
+
+                if len(filtered) == 0 {
+                    bot.Send(tgbotapi.NewMessage(chatID, "❌ Aucun utilisateur visible pour vous"))
+                    continue
+                }
+
                 txt := "Liste des utilisateurs :\n"
-                for i, u := range liste {
+                for i, u := range filtered {
                     txt += fmt.Sprintf("%d) %s\n", i+1, u)
                 }
                 txt += "\nEnvoyez le numéro à supprimer"
@@ -1283,7 +1303,9 @@ func lancerBot(botIndex int) {
                 appareils := appareilsConnectes(botIndex)
                 msg := "📊 Appareils connectés :\n"
                 for user, count := range appareils {
-                    msg += fmt.Sprintf("- %s : %d\n", user, count)
+                    if peutVoir(botData, user) {
+                        msg += fmt.Sprintf("- %s : %d\n", user, count)
+                    }
                 }
                 bot.Send(tgbotapi.NewMessage(chatID, msg))
             case "modifier_ssh":
@@ -1387,6 +1409,10 @@ SÉLECTIONNEZ UNE OPTION !
         // ================= DELETE USER =================
         if strings.HasPrefix(text, "del ") {
             username := strings.TrimSpace(strings.TrimPrefix(text, "del "))
+            if !peutModifier(botData, username) && botData.Role != "admin" {
+                bot.Send(tgbotapi.NewMessage(chatID, "❌ Permission refusée"))
+                continue
+            }
             msg := supprimerUtilisateur(botIndex, username)
             bot.Send(tgbotapi.NewMessage(chatID, msg))
             continue
