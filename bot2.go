@@ -14,6 +14,8 @@ import (
 	"os/user"
 	"strconv"
 	"strings"
+	"sync"
+	"log"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
