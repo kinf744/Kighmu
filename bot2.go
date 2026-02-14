@@ -218,6 +218,47 @@ func hasAccess(userID int64, botData BotData) bool {
 	return false
 }
 
+func isSuperAdmin(userID int64) bool {
+	return userID == adminID
+}
+
+func isBotOwner(userID int64, botData BotData) bool {
+	return userID == botData.OwnerTelegramID
+}
+
+func hasBotAccess(userID int64, botData BotData) bool {
+	if isSuperAdmin(userID) {
+		return true
+	}
+	if isBotOwner(userID, botData) {
+		return true
+	}
+	return false
+}
+
+func utilisateurAppartientAuBot(username, botName string) bool {
+	for _, u := range utilisateursSSH {
+		if u.Username == username && u.CreatedByBot == botName {
+			return true
+		}
+	}
+	return false
+}
+
+func creerUtilisateurNormalAvecOwner(
+	username string,
+	password string,
+	limite int,
+	duree int,
+	botName string,
+	telegramID int64,
+) string {
+
+	// création système SSH ici
+
+	// sauvegarde JSON avec owner
+}
+
 // Charger DOMAIN depuis kighmu_info si non défini
 // ===============================
 func loadDomain() string {
