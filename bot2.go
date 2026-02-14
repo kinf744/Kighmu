@@ -1074,10 +1074,10 @@ func lancerBot() {
         // ------ Menu principal ------
         if text == "/kighmu" {
             msgText := `============================================
-⚡ KIGHMU MANAGER ⚡
+⚡ KIGHMU MANAGER 🇨🇲
 ============================================
 AUTEUR : @KIGHMU
-TELEGRAM : https://t.me/lkgcddtoog
+TELEGRAM : https://t.me/lkgcddtoogv
 ============================================
 SÉLECTIONNEZ UNE OPTION CI-DESSOUS !
 ============================================`
