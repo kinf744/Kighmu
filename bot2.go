@@ -1096,21 +1096,41 @@ func lancerBot() {
 		// ================= MENU =================
 		if text == "/kighmu" {
 
-			msgText := `============================================
-🚀 𝗞𝗜𝗚𝗛𝗠𝗨 𝗠𝗔𝗡𝗔𝗚𝗘𝗥 🇨🇲
-============================================
-👤 AUTEUR : @𝐊𝐈𝐆𝐇𝐌𝐔
-📢 CANAL TELEGRAM :
-𝗵𝘁𝘁𝗽𝘀://𝘁.𝗺𝗲/𝗹𝗸𝗴𝗰𝗱𝗱𝘁𝗼𝗼𝗴𝘃
-============================================
-𝔾𝕖𝕤𝕥𝕚𝕠𝕟 𝕔𝕠𝕞𝕡𝕝𝕖𝕥𝕖 :
+			msgText :`══════════════════════════════════════════
+            🚀 KIGHMU MANAGER 🇨🇲           
+        Solution Professionnelle VPS       
+══════════════════════════════════════════
 
-• SSH (jours / minutes)
-• V2Ray + FastDNS
-• Suppression multiple
-• Modification SSH (durée/password) 
-• Statistiques appareils
-============================================`
+👤 Développeur Officiel :
+   @KIGHMU
+
+📢 Canal Telegram :
+   https://t.me/lkgcddtoogv
+
+──────────────────────────────────────────
+⚙️  MODULES DISPONIBLES
+──────────────────────────────────────────
+
+🔐 Gestion SSH Avancée
+   ├─ Création (jours / minutes)
+   ├─ Modification (durée / mot de passe)
+   ├─ Suppression multiple intelligente
+   └─ Gestion automatique des expirations
+
+🌐 Tunnels Xray / V2Ray
+   ├─ VLESS
+   ├─ VMESS
+   ├─ TROJAN
+   └─ Intégration FastDNS
+
+📊 Système de Surveillance
+   ├─ Statistiques appareils connectés
+   ├─ Sessions actives en temps réel
+   └─ Analyse d’utilisation
+
+──────────────────────────────────────────
+💎 Performance • Sécurité • Automatisation
+──────────────────────────────────────────`
 
 			keyboard := tgbotapi.NewInlineKeyboardMarkup(
 				tgbotapi.NewInlineKeyboardRow(
