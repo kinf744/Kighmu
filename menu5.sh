@@ -168,13 +168,13 @@ install_dropbear() {
 
     cat <<EOF > "$SERVICE_FILE"
 [Unit]
-Description=KIGHMU Dropbear Service
+Description=Dropbear SSH-Kighmu Server
 After=network.target
 
 [Service]
-ExecStart=$BIN_PATH
+ExecStart=/usr/sbin/dropbear -F -E -p 109 -w -g -b /etc/dropbear/banner.txt
 Restart=always
-RestartSec=3
+RestartSec=2
 
 [Install]
 WantedBy=multi-user.target
