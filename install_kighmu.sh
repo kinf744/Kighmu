@@ -175,11 +175,6 @@ FILES=(
   "KIGHMUPROXY.py"
   "udp_custom.sh"
   "dropbear.sh"
-  "ssl.sh"
-  "badvpn-udpgw"
-  "badvpn.sh"
-  "ws-stunnel"
-  "ws-dropbear"
   "proxy3.js"
   "ws_tt_ssl.sh"
   "system_dns.sh"
@@ -206,6 +201,8 @@ FILES=(
   "install_v2ray.sh"
   "zivpn.sh"
   "Hysteria1.sh"
+  "badvpn-udpgw"
+  "badvpn.sh"
 )
 
 BASE_URL="https://raw.githubusercontent.com/kinf744/Kighmu/main"
