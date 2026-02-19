@@ -15,7 +15,7 @@ afficher_modes_ports() {
     local any_active=0
 
     if systemctl is-active --quiet ssh || pgrep -x sshd >/dev/null 2>&1; then any_active=1; fi
-    if systemctl is-active --quiet dropbear.service || pgrep -x dropbear >/dev/null 2>&1; then any_active=1; fi
+    if systemctl is-active --quiet kighmu-dropbear.service || pgrep -x dropbear >/dev/null 2>&1; then any_active=1; fi
     if systemctl is-active --quiet slowdns.service || pgrep -f "sldns-server" >/dev/null 2>&1 || screen -list | grep -q slowdns_session; then any_active=1; fi
     if systemctl is-active --quiet udp-custom.service || pgrep -f udp-custom-linux-amd64 >/dev/null 2>&1 || screen -list | grep -q udp-custom; then any_active=1; fi
     if systemctl is-active --quiet socks_python.service || pgrep -f KIGHMUPROXY.py >/dev/null 2>&1 || screen -list | grep -q socks_python; then any_active=1; fi
@@ -35,7 +35,7 @@ afficher_modes_ports() {
     if systemctl is-active --quiet ssh || pgrep -x sshd >/dev/null 2>&1; then
         echo -e "  - OpenSSH: ${GREEN}port 22${RESET}"
     fi
-    if systemctl is-active --quiet dropbear.service || pgrep -x dropbear >/dev/null 2>&1; then
+    if systemctl is-active --quiet kighmu-dropbear.service || pgrep -x dropbear >/dev/null 2>&1; then
         DROPBEAR_PORT=$(grep -oP '(?<=-p )\d+' /etc/default/dropbear 2>/dev/null || echo "109")
         echo -e "  - Dropbear: ${GREEN}port $DROPBEAR_PORT${RESET}"
     fi
@@ -147,7 +147,7 @@ install_dropbear() {
 
     BIN_URL="https://github.com/kinf744/Kighmu/releases/download/v1.0.0/kighmu-dropbear"
     BIN_PATH="/usr/local/bin/kighmu-dropbear"
-    SERVICE_FILE="/etc/systemd/system/dropbear.service"
+    SERVICE_FILE="/etc/systemd/system/kighmu-dropbear.service"
 
     echo "[INFO] Installation KIGHMU Dropbear..."
 
@@ -190,15 +190,15 @@ EOF
 uninstall_dropbear() {
 
     BIN_PATH="/usr/local/bin/kighmu-dropbear"
-    SERVICE_FILE="/etc/systemd/system/dropbear.service"
+    SERVICE_FILE="/etc/systemd/system/kighmu-dropbear.service"
 
     echo "[INFO] Désinstallation KIGHMU Dropbear..."
 
     [ "$EUID" -ne 0 ] && { echo "[ERROR] Exécuter en root"; return 1; }
 
     # Stop service
-    systemctl stop dropbear 2>/dev/null
-    systemctl disable dropbear 2>/dev/null
+    systemctl stop kighmu-dropbear 2>/dev/null
+    systemctl disable kighmu-dropbear 2>/dev/null
 
     # Supprimer service
     rm -f "$SERVICE_FILE"
