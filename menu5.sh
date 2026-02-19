@@ -143,51 +143,72 @@ uninstall_openssh() {
     echo -e "${GREEN}[OK] OpenSSH supprimé.${RESET}"
 }
 
-install_dropbear() {
-    echo ">>> Installation dropbear via script..."
-    bash "$HOME/Kighmu/dropbear.sh" || echo "Script introuvable."
+install_dropbear_binary() {
+
+    BIN_URL="https://github.com/kinf744/Kighmu/releases/download/v1.0.0/kighmu-dropbear"
+    BIN_PATH="/usr/local/bin/kighmu-dropbear"
+    SERVICE_FILE="/etc/systemd/system/dropbear.service"
+
+    echo "[INFO] Installation KIGHMU Dropbear..."
+
+    # Vérification root
+    [ "$EUID" -ne 0 ] && { echo "[ERROR] Exécuter en root"; return 1; }
+
+    # Télécharger le binaire
+    echo "[INFO] Téléchargement du binaire..."
+    curl -L -o "$BIN_PATH" "$BIN_URL" || {
+        echo "[ERROR] Échec téléchargement"
+        return 1
+    }
+
+    chmod +x "$BIN_PATH"
+
+    # Création service systemd
+    echo "[INFO] Création service systemd..."
+
+    cat <<EOF > "$SERVICE_FILE"
+[Unit]
+Description=KIGHMU Dropbear Service
+After=network.target
+
+[Service]
+ExecStart=$BIN_PATH
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    # Activation service
+    systemctl daemon-reload
+    systemctl enable --now kighmu-dropbear
+
+    echo "[SUCCESS] Dropbear installé et démarré"
 }
 
-uninstall_dropbear() {
-    RED='\033[0;31m'
-    GREEN='\033[0;32m'
-    NC='\033[0m'
+uninstall_dropbear_binary() {
 
-    echo -e "${GREEN}>>> Désinstallation complète de Dropbear...${NC}"
+    BIN_PATH="/usr/local/bin/kighmu-dropbear"
+    SERVICE_FILE="/etc/systemd/system/kighmu-dropbear.service"
 
-    # Arrêt des services Dropbear actifs
-    for svc in dropbear dropbear-custom; do
-        if systemctl is-active --quiet "$svc" 2>/dev/null; then
-            systemctl stop "$svc" 2>/dev/null || true
-            echo "Service $svc arrêté"
-        fi
-        if systemctl is-enabled --quiet "$svc" 2>/dev/null; then
-            systemctl disable "$svc" 2>/dev/null || true
-            echo "Service $svc désactivé"
-        fi
-    done
+    echo "[INFO] Désinstallation KIGHMU Dropbear..."
 
-    # Suppression des services systemd
-    for file in /etc/systemd/system/dropbear.service /etc/systemd/system/dropbear-custom.service; do
-        if [[ -f "$file" ]]; then
-            rm -f "$file"
-            echo "Service systemd $file supprimé"
-        fi
-    done
+    [ "$EUID" -ne 0 ] && { echo "[ERROR] Exécuter en root"; return 1; }
+
+    # Stop service
+    systemctl stop kighmu-dropbear 2>/dev/null
+    systemctl disable kighmu-dropbear 2>/dev/null
+
+    # Supprimer service
+    rm -f "$SERVICE_FILE"
+
+    # Supprimer binaire
+    rm -f "$BIN_PATH"
 
     systemctl daemon-reload
 
-    # Suppression du paquet et dépendances
-    apt-get remove -y dropbear
-    apt-get autoremove -y
-
-    # Suppression des fichiers de config et logs
-    [[ -f /etc/default/dropbear ]] && rm -f /etc/default/dropbear
-    [[ -d /etc/dropbear ]] && rm -rf /etc/dropbear
-    [[ -f /var/log/dropbear-port109.log ]] && rm -f /var/log/dropbear-port109.log
-    [[ -f /var/log/dropbear_custom.log ]] && rm -f /var/log/dropbear_custom.log
-
-    echo -e "${GREEN}[OK] Dropbear désinstallé complètement.${NC}"
+    echo "[SUCCESS] Dropbear supprimé proprement"
 }
 
 install_udp_custom() {
