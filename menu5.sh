@@ -143,7 +143,7 @@ uninstall_openssh() {
     echo -e "${GREEN}[OK] OpenSSH supprimé.${RESET}"
 }
 
-install_dropbear_binary() {
+install_dropbear() {
 
     BIN_URL="https://github.com/kinf744/Kighmu/releases/download/v1.0.0/kighmu-dropbear"
     BIN_PATH="/usr/local/bin/kighmu-dropbear"
@@ -187,18 +187,18 @@ EOF
     echo "[SUCCESS] Dropbear installé et démarré"
 }
 
-uninstall_dropbear_binary() {
+uninstall_dropbear() {
 
     BIN_PATH="/usr/local/bin/kighmu-dropbear"
-    SERVICE_FILE="/etc/systemd/system/kighmu-dropbear.service"
+    SERVICE_FILE="/etc/systemd/system/dropbear.service"
 
     echo "[INFO] Désinstallation KIGHMU Dropbear..."
 
     [ "$EUID" -ne 0 ] && { echo "[ERROR] Exécuter en root"; return 1; }
 
     # Stop service
-    systemctl stop kighmu-dropbear 2>/dev/null
-    systemctl disable kighmu-dropbear 2>/dev/null
+    systemctl stop dropbear 2>/dev/null
+    systemctl disable dropbear 2>/dev/null
 
     # Supprimer service
     rm -f "$SERVICE_FILE"
