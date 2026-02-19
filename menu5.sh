@@ -15,7 +15,7 @@ afficher_modes_ports() {
     local any_active=0
 
     if systemctl is-active --quiet ssh || pgrep -x sshd >/dev/null 2>&1; then any_active=1; fi
-    if systemctl is-active --quiet kighmu-dropbear.service || pgrep -x dropbear >/dev/null 2>&1; then any_active=1; fi
+    if systemctl is-active --quiet dropbear.service.d || pgrep -x dropbear >/dev/null 2>&1; then any_active=1; fi
     if systemctl is-active --quiet slowdns.service || pgrep -f "sldns-server" >/dev/null 2>&1 || screen -list | grep -q slowdns_session; then any_active=1; fi
     if systemctl is-active --quiet udp-custom.service || pgrep -f udp-custom-linux-amd64 >/dev/null 2>&1 || screen -list | grep -q udp-custom; then any_active=1; fi
     if systemctl is-active --quiet socks_python.service || pgrep -f KIGHMUPROXY.py >/dev/null 2>&1 || screen -list | grep -q socks_python; then any_active=1; fi
@@ -35,7 +35,7 @@ afficher_modes_ports() {
     if systemctl is-active --quiet ssh || pgrep -x sshd >/dev/null 2>&1; then
         echo -e "  - OpenSSH: ${GREEN}port 22${RESET}"
     fi
-    if systemctl is-active --quiet kighmu-dropbear.service || pgrep -x dropbear >/dev/null 2>&1; then
+    if systemctl is-active --quiet dropbear.service.d || pgrep -x dropbear >/dev/null 2>&1; then
         DROPBEAR_PORT=$(grep -oP '(?<=-p )\d+' /etc/default/dropbear 2>/dev/null || echo "109")
         echo -e "  - Dropbear: ${GREEN}port $DROPBEAR_PORT${RESET}"
     fi
@@ -144,71 +144,56 @@ uninstall_openssh() {
 }
 
 install_dropbear() {
-
     BIN_URL="https://github.com/kinf744/Kighmu/releases/download/v1.0.0/kighmu-dropbear"
     BIN_PATH="/usr/local/bin/kighmu-dropbear"
-    SERVICE_FILE="/etc/systemd/system/kighmu-dropbear.service"
+    OVERRIDE_DIR="/etc/systemd/system/dropbear.service.d"
+    OVERRIDE_FILE="$OVERRIDE_DIR/override.conf"
 
     echo "[INFO] Installation KIGHMU Dropbear..."
 
-    # Vérification root
     [ "$EUID" -ne 0 ] && { echo "[ERROR] Exécuter en root"; return 1; }
 
     # Télécharger le binaire
     echo "[INFO] Téléchargement du binaire..."
-    curl -L -o "$BIN_PATH" "$BIN_URL" || {
-        echo "[ERROR] Échec téléchargement"
-        return 1
-    }
-
+    curl -L -o "$BIN_PATH" "$BIN_URL" || { echo "[ERROR] Échec téléchargement"; return 1; }
     chmod +x "$BIN_PATH"
 
-    # Création service systemd
-    echo "[INFO] Création service systemd..."
-
-    cat <<EOF > "$SERVICE_FILE"
-[Unit]
-Description=Dropbear SSH-Kighmu Server
-After=network.target
-
+    # Création de l'override systemd
+    mkdir -p "$OVERRIDE_DIR"
+    cat <<EOF > "$OVERRIDE_FILE"
 [Service]
-ExecStart=/usr/sbin/dropbear -F -E -p 109 -w -g -b /etc/dropbear/banner.txt
+ExecStart=
+ExecStart=$BIN_PATH
 Restart=always
 RestartSec=2
-
-[Install]
-WantedBy=multi-user.target
 EOF
 
-    # Activation service
+    # Activer service officiel dropbear
     systemctl daemon-reload
-    systemctl enable --now kighmu-dropbear
+    systemctl restart dropbear
+    systemctl enable dropbear
 
-    echo "[SUCCESS] Dropbear installé et démarré"
+    echo "[SUCCESS] Dropbear actif via KIGHMU binaire"
 }
 
 uninstall_dropbear() {
-
     BIN_PATH="/usr/local/bin/kighmu-dropbear"
-    SERVICE_FILE="/etc/systemd/system/kighmu-dropbear.service"
+    OVERRIDE_FILE="/etc/systemd/system/dropbear.service.d/override.conf"
 
     echo "[INFO] Désinstallation KIGHMU Dropbear..."
 
     [ "$EUID" -ne 0 ] && { echo "[ERROR] Exécuter en root"; return 1; }
 
-    # Stop service
-    systemctl stop kighmu-dropbear 2>/dev/null
-    systemctl disable kighmu-dropbear 2>/dev/null
-
-    # Supprimer service
-    rm -f "$SERVICE_FILE"
-
     # Supprimer binaire
     rm -f "$BIN_PATH"
 
-    systemctl daemon-reload
+    # Supprimer override systemd
+    rm -f "$OVERRIDE_FILE"
 
-    echo "[SUCCESS] Dropbear supprimé proprement"
+    systemctl daemon-reload
+    systemctl restart dropbear
+
+    echo "[SUCCESS] KIGHMU Dropbear désinstallé proprement"
 }
 
 install_udp_custom() {
