@@ -8,9 +8,9 @@ DROPBEAR_DIR="/etc/dropbear"
 DROPBEAR_PORT=109
 DROPBEAR_BANNER="/etc/dropbear/banner.txt"
 SYSTEMD_FILE="/etc/systemd/system/dropbear-custom.service"
-DROPBEAR_VERSION_MIN="2019.78"
+DROPBEAR_VERSION_MIN="2022.83"
 
-# ==============================
+# ============================== 2019.78
 # DETECTION VERSION OS
 # ==============================
 source /etc/os-release
