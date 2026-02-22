@@ -62,18 +62,28 @@ chown -R root:root /var/log/xray
 chmod 644 /var/log/xray/access.log /var/log/xray/error.log
 
 # Installation ACME et certificat
-cd /root/
-wget -q https://raw.githubusercontent.com/NevermoreSSH/hop/main/acme.sh
-bash acme.sh --install
-rm acme.sh
-cd ~/.acme.sh || exit
-bash acme.sh --register-account -m "$EMAIL"
-bash acme.sh --issue --standalone -d "$DOMAIN" --force
-bash acme.sh --installcert -d "$DOMAIN" --fullchainpath /etc/xray/xray.crt --keypath /etc/xray/xray.key
+ACME_CERT="/etc/xray/xray.crt"
+ACME_KEY="/etc/xray/xray.key"
 
-if [[ ! -f "/etc/xray/xray.crt" || ! -f "/etc/xray/xray.key" ]]; then
-  echo -e "${RED}Erreur : certificats TLS non trouvés.${NC}"
-  exit 1
+if [[ -f "$ACME_CERT" && -f "$ACME_KEY" ]]; then
+    echo -e "${GREEN}✅ Certificat TLS existant trouvé. Réutilisation.${NC}"
+else
+    echo "🔑 Aucun certificat TLS trouvé. Génération d'un nouveau certificat..."
+
+    cd /root/ || exit
+    wget -q https://raw.githubusercontent.com/NevermoreSSH/hop/main/acme.sh
+    bash acme.sh --install
+    rm acme.sh
+    cd ~/.acme.sh || exit
+    bash acme.sh --register-account -m "$EMAIL"
+    bash acme.sh --issue --standalone -d "$DOMAIN" --force
+    bash acme.sh --installcert -d "$DOMAIN" --fullchainpath "$ACME_CERT" --keypath "$ACME_KEY"
+
+    if [[ ! -f "$ACME_CERT" || ! -f "$ACME_KEY" ]]; then
+        echo -e "${RED}Erreur : certificats TLS non trouvés après création.${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✅ Certificat TLS créé avec succès.${NC}"
 fi
 
 uuid=$(cat /proc/sys/kernel/random/uuid)
