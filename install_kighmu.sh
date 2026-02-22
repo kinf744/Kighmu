@@ -230,9 +230,10 @@ if [[ -f "$CLEAN_SCRIPT" ]]; then
   chmod +x "$CLEAN_SCRIPT"
 
   # Ajouter cron seulement si non existant
-  (crontab -l 2>/dev/null | grep -q "$CLEAN_SCRIPT") || \
-  (crontab -l 2>/dev/null; echo "0 0 * * * $CLEAN_SCRIPT >/dev/null 2>&1") | crontab -
+  CRON_JOB="0 0 * * * $CLEAN_SCRIPT >/dev/null 2>&1"
 
+  ( crontab -l 2>/dev/null | grep -Fv "$CLEAN_SCRIPT" ; echo "$CRON_JOB" ) | crontab -
+  
   systemctl enable cron >/dev/null 2>&1
   systemctl restart cron >/dev/null 2>&1
 
