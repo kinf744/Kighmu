@@ -62,11 +62,12 @@ chown -R root:root /var/log/xray
 chmod 644 /var/log/xray/access.log /var/log/xray/error.log
 
 # ========================================
-# Installation ACME et génération certificat TLS
+# Installation ACME et génération certificat TLS (idempotent)
 # ========================================
 ACME_CERT="/etc/xray/xray.crt"
 ACME_KEY="/etc/xray/xray.key"
 GENERATE_TLS=false
+SSHWS_STOPPED=false
 
 # Vérification de l'existence et validité du certificat
 if [[ -f "$ACME_CERT" && -f "$ACME_KEY" ]]; then
@@ -90,14 +91,26 @@ if [[ "$GENERATE_TLS" == true ]]; then
         SSHWS_STOPPED=true
     fi
 
-    # Installer acme.sh et générer le certificat
-    cd /root/ || exit
-    wget -q https://raw.githubusercontent.com/NevermoreSSH/hop/main/acme.sh
-    bash acme.sh --install
-    rm acme.sh
+    # Installer acme.sh si non présent
+    if [ ! -f ~/.acme.sh/acme.sh ]; then
+        cd /root/ || exit
+        wget -q https://raw.githubusercontent.com/NevermoreSSH/hop/main/acme.sh
+        bash acme.sh --install
+        rm acme.sh
+    fi
+
     cd ~/.acme.sh || exit
-    bash acme.sh --register-account -m "$EMAIL"
-    bash acme.sh --issue --standalone -d "$DOMAIN" --force
+    bash acme.sh --register-account -m "$EMAIL" || true
+
+    # Émettre certificat uniquement si non existant pour ce domaine
+    if ! bash acme.sh --list | grep -q "$DOMAIN"; then
+        echo "⏳ Génération du certificat pour $DOMAIN..."
+        bash acme.sh --issue --standalone -d "$DOMAIN"
+    else
+        echo "ℹ️ Certificat déjà émis par acme.sh pour $DOMAIN, réutilisation."
+    fi
+
+    # Installer le certificat dans /etc/xray
     bash acme.sh --installcert -d "$DOMAIN" \
         --fullchainpath "$ACME_CERT" \
         --keypath "$ACME_KEY"
@@ -105,12 +118,11 @@ if [[ "$GENERATE_TLS" == true ]]; then
     # Vérification finale
     if [[ ! -f "$ACME_CERT" || ! -f "$ACME_KEY" ]]; then
         echo -e "${RED}❌ Erreur : certificats TLS non générés.${NC}"
-        # Relancer SSHWS si arrêté
         [[ "$SSHWS_STOPPED" == true ]] && systemctl start sshws
         exit 1
     fi
 
-    echo -e "${GREEN}✅ Certificat TLS créé avec succès.${NC}"
+    echo -e "${GREEN}✅ Certificat TLS créé ou réutilisé avec succès.${NC}"
 
     # Relancer SSHWS si arrêté
     if [[ "$SSHWS_STOPPED" == true ]]; then
