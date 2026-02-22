@@ -218,6 +218,29 @@ for file in "${FILES[@]}"; do
   fi
 done
 
+# ==========================================
+# Configuration du nettoyage automatique
+# ==========================================
+
+echo "Configuration du nettoyage automatique des utilisateurs expirés..."
+
+CLEAN_SCRIPT="$INSTALL_DIR/Auto-clean.sh"
+
+if [[ -f "$CLEAN_SCRIPT" ]]; then
+  chmod +x "$CLEAN_SCRIPT"
+
+  # Ajouter cron seulement si non existant
+  (crontab -l 2>/dev/null | grep -q "$CLEAN_SCRIPT") || \
+  (crontab -l 2>/dev/null; echo "0 0 * * * $CLEAN_SCRIPT >/dev/null 2>&1") | crontab -
+
+  systemctl enable cron >/dev/null 2>&1
+  systemctl restart cron >/dev/null 2>&1
+
+  echo "Nettoyage automatique activé (exécution quotidienne à minuit)."
+else
+  echo "⚠️ Auto-clean.sh introuvable, cron non configuré."
+fi
+
 # Création du fichier ~/.kighmu_info avec les infos globales nécessaires
 : "${NS:=}"
 : "${PUBLIC_KEY:=}"
