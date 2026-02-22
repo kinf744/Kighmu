@@ -202,7 +202,6 @@ FILES=(
   "zivpn.sh"
   "Hysteria1.sh"
   "Auto-clean.sh"
-  "badvpn-udpgw"
   "badvpn.sh"
 )
 
