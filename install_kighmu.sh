@@ -228,15 +228,20 @@ CLEAN_SCRIPT="$INSTALL_DIR/Auto-clean.sh"
 if [[ -f "$CLEAN_SCRIPT" ]]; then
   chmod +x "$CLEAN_SCRIPT"
 
-  # Ajouter cron seulement si non existant
   CRON_JOB="0 0 * * * $CLEAN_SCRIPT >/dev/null 2>&1"
 
-  ( crontab -l 2>/dev/null | grep -Fv "$CLEAN_SCRIPT" ; echo "$CRON_JOB" ) | crontab -
-  
+  # Vérifie si le cron existe déjà
+  if crontab -l 2>/dev/null | grep -Fq "$CLEAN_SCRIPT"; then
+      echo "Cron déjà configuré pour le nettoyage automatique."
+  else
+      # Ajoute le cron même si crontab est vide
+      ( crontab -l 2>/dev/null; echo "$CRON_JOB" ) | crontab -
+      echo "Cron ajouté pour le nettoyage automatique (exécution quotidienne à minuit)."
+  fi
+
+  # Active et redémarre le service cron
   systemctl enable cron >/dev/null 2>&1
   systemctl restart cron >/dev/null 2>&1
-
-  echo "Nettoyage automatique activé (exécution quotidienne à minuit)."
 else
   echo "⚠️ Auto-clean.sh introuvable, cron non configuré."
 fi
