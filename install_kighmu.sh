@@ -201,6 +201,7 @@ FILES=(
   "install_v2ray.sh"
   "zivpn.sh"
   "Hysteria1.sh"
+  "Auto-clean.sh"
   "badvpn-udpgw"
   "badvpn.sh"
 )
