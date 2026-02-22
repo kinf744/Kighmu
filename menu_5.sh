@@ -113,45 +113,6 @@ ajouter_client_v2ray() {
     fi
 }
 
-nettoyer_utilisateurs_expires() {
-    charger_utilisateurs
-
-    TODAY=$(date +%Y-%m-%d)
-
-    # UUID expirés
-    uuids_expire=$(echo "$utilisateurs" | jq -r --arg today "$TODAY" '.[] | select(.expire < $today) | .uuid')
-
-    if [[ -z "$uuids_expire" ]]; then
-        return
-    fi
-
-    echo "🔄 Nettoyage des utilisateurs expirés..."
-
-    tmpfile=$(mktemp)
-
-    jq --argjson uuids "$(echo "$uuids_expire" | jq -R -s -c 'split("\n")[:-1]')" '
-        .inbounds |= map(
-            if .protocol=="vless" then
-                .settings.clients |= map(select(.id as $id | $uuids | index($id) | not))
-            else .
-            end
-        )
-    ' /etc/v2ray/config.json > "$tmpfile"
-
-    if jq empty "$tmpfile" >/dev/null 2>&1; then
-        mv "$tmpfile" /etc/v2ray/config.json
-        systemctl restart v2ray
-        echo "✅ UUID expirés supprimés de V2Ray"
-    else
-        rm -f "$tmpfile"
-        echo "❌ Erreur nettoyage JSON"
-    fi
-
-    # Garder seulement utilisateurs valides
-    utilisateurs=$(echo "$utilisateurs" | jq --arg today "$TODAY" '[.[] | select(.expire >= $today)]')
-    sauvegarder_utilisateurs
-}
-
 # Affiche le menu avec titre dans cadre
 afficher_menu() {
     clear
@@ -505,7 +466,6 @@ while true; do
     afficher_menu
     afficher_mode_v2ray_ws
     show_menu
-    nettoyer_utilisateurs_expires
     read -p "Choisissez une option : " option
 
     SCRIPT_DIR="$HOME/Kighmu"  # Définition du chemin vers ton dossier Kighmu
