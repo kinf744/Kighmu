@@ -135,8 +135,60 @@ clean_xray_users() {
     echo "✅ Xray nettoyé et redémarré"
 }
 
+# ===============================
+# 1️⃣ Nettoyage Hysteria udp
+# ===============================
+clean_hysteria_users() {
+    HYSTERIA_USER_FILE="/etc/hysteria/users.txt"
+    HYSTERIA_CONFIG="/etc/hysteria/config.json"
+    HYSTERIA_SERVICE="hysteria.service"
+    LOG_FILE="/var/log/hysteria-auto-clean.log"
+    TODAY=$(date +%Y-%m-%d)
+
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🔹 Début du nettoyage Hysteria" >> "$LOG_FILE"
+
+    # Vérifier que le fichier users existe
+    if [[ ! -f "$HYSTERIA_USER_FILE" ]]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️ users.txt introuvable, nettoyage ignoré" >> "$LOG_FILE"
+        return
+    fi
+
+    # Extraire les utilisateurs expirés
+    EXPIRED=$(awk -F'|' -v today="$TODAY" '$3<today {print $0}' "$HYSTERIA_USER_FILE")
+    if [[ -z "$EXPIRED" ]]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ℹ️ Aucun utilisateur Hysteria expiré" >> "$LOG_FILE"
+        return
+    fi
+
+    # Logger les utilisateurs supprimés
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🔹 Utilisateurs expirés détectés" >> "$LOG_FILE"
+    while IFS='|' read -r PHONE PASS EXPIRE; do
+        echo "🗑️ Supprimé: Téléphone=$PHONE, Password=$PASS, Expire=$EXPIRE" >> "$LOG_FILE"
+    done <<< "$EXPIRED"
+
+    # Supprimer les utilisateurs expirés
+    awk -F'|' -v today="$TODAY" '$3>=today {print $0}' "$HYSTERIA_USER_FILE" > "$HYSTERIA_USER_FILE.tmp"
+    mv "$HYSTERIA_USER_FILE.tmp" "$HYSTERIA_USER_FILE"
+    chmod 600 "$HYSTERIA_USER_FILE"
+
+    # Mettre à jour config.json
+    PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$HYSTERIA_USER_FILE" | sort -u | paste -sd, -)
+    if jq --arg passwords "$PASSWORDS" '.auth.config = ($passwords | split(","))' "$HYSTERIA_CONFIG" > /tmp/config.json &&
+       jq empty /tmp/config.json >/dev/null 2>&1; then
+        mv /tmp/config.json "$HYSTERIA_CONFIG"
+        systemctl restart "$HYSTERIA_SERVICE"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ Hysteria mis à jour et service redémarré" >> "$LOG_FILE"
+    else
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️ Erreur JSON, config inchangée" >> "$LOG_FILE"
+        rm -f /tmp/config.json
+    fi
+
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🔹 Fin du nettoyage Hysteria" >> "$LOG_FILE"
+}
+
 # Appel de la fonction de nettoyage ZIVPN
 clean_zivpn_users
 clean_xray_users
+clean_hysteria_users
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🔹 Fin du nettoyage automatique" >> "$LOG_FILE"
