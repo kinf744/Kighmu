@@ -1,5 +1,5 @@
 #!/bin/bash
-# zivpn-panel-v2.sh - Aligné sur arivpnstores/udp-zivpn
+# zivpn.sh - Aligné sur arivpnstores/udp-zivpn
 set -euo pipefail
 
 ZIVPN_BIN="/usr/local/bin/zivpn"
