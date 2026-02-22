@@ -78,7 +78,7 @@ EOF
       "protocol": "dokodemo-door",
       "settings": {
         "address": "0.0.0.0",
-        "port": 109,
+        "port": 22,
         "network": "tcp"
       },
       "tag": "ssh"
