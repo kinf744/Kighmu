@@ -61,17 +61,19 @@ touch /var/log/xray/access.log /var/log/xray/error.log
 chown -R root:root /var/log/xray
 chmod 644 /var/log/xray/access.log /var/log/xray/error.log
 
-# Installation ACME et certificat
+# ========================================
+# Installation ACME et génération certificat TLS
+# ========================================
 ACME_CERT="/etc/xray/xray.crt"
 ACME_KEY="/etc/xray/xray.key"
 GENERATE_TLS=false
 
+# Vérification de l'existence et validité du certificat
 if [[ -f "$ACME_CERT" && -f "$ACME_KEY" ]]; then
-    # Vérifie si le certificat est valide encore 24h
     if openssl x509 -checkend 86400 -noout -in "$ACME_CERT" > /dev/null; then
         echo -e "${GREEN}✅ Certificat TLS valide trouvé. Réutilisation.${NC}"
     else
-        echo "🔑 Certificat expiré ou bientôt expiré. Régénération..."
+        echo "🔑 Certificat expiré ou bientôt expiré. Régénération nécessaire..."
         GENERATE_TLS=true
     fi
 else
@@ -79,7 +81,16 @@ else
     GENERATE_TLS=true
 fi
 
+# Génération du certificat si nécessaire
 if [[ "$GENERATE_TLS" == true ]]; then
+    # Arrêter SSHWS si présent pour libérer le port 80
+    if systemctl list-units --full -all | grep -q sshws; then
+        echo "⏸️ Arrêt temporaire de SSHWS pour ACME..."
+        systemctl stop sshws
+        SSHWS_STOPPED=true
+    fi
+
+    # Installer acme.sh et générer le certificat
     cd /root/ || exit
     wget -q https://raw.githubusercontent.com/NevermoreSSH/hop/main/acme.sh
     bash acme.sh --install
@@ -91,12 +102,21 @@ if [[ "$GENERATE_TLS" == true ]]; then
         --fullchainpath "$ACME_CERT" \
         --keypath "$ACME_KEY"
 
+    # Vérification finale
     if [[ ! -f "$ACME_CERT" || ! -f "$ACME_KEY" ]]; then
-        echo -e "${RED}Erreur : certificats TLS non trouvés.${NC}"
+        echo -e "${RED}❌ Erreur : certificats TLS non générés.${NC}"
+        # Relancer SSHWS si arrêté
+        [[ "$SSHWS_STOPPED" == true ]] && systemctl start sshws
         exit 1
     fi
 
     echo -e "${GREEN}✅ Certificat TLS créé avec succès.${NC}"
+
+    # Relancer SSHWS si arrêté
+    if [[ "$SSHWS_STOPPED" == true ]]; then
+        echo "▶️ Redémarrage de SSHWS..."
+        systemctl start sshws
+    fi
 fi
 
 uuid=$(cat /proc/sys/kernel/random/uuid)
