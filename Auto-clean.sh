@@ -143,7 +143,6 @@ clean_hysteria_users() {
     HYSTERIA_CONFIG="/etc/hysteria/config.json"
     HYSTERIA_SERVICE="hysteria.service"
     LOG_FILE="/var/log/hysteria-auto-clean.log"
-    TODAY=$(date +%Y-%m-%d)
 
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🔹 Début du nettoyage Hysteria" >> "$LOG_FILE"
 
