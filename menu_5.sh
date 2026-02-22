@@ -466,6 +466,7 @@ while true; do
     afficher_menu
     afficher_mode_v2ray_ws
     show_menu
+    nettoyer_utilisateurs_expires
     read -p "Choisissez une option : " option
 
     SCRIPT_DIR="$HOME/Kighmu"  # Définition du chemin vers ton dossier Kighmu
