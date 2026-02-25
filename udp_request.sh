@@ -1,144 +1,72 @@
 #!/bin/bash
-# ==========================================================
-# udp_request.sh
-# UDP Request Server MAÎTRE (udpServer)
-# MODE STABLE — FIX TTY
-# Compatible SlowDNS / UDP Custom / Xray
-# OS : Ubuntu 20.04+ / Debian 10+
-# ==========================================================
+# UDP Request v1.8 - CORRIGÉ pour udp_request )
+set -euo pipefail
 
-set -e
+UDP_PORT=4466
+BIN_PATH="/usr/local/bin/udp_request"
+CONFIG_FILE="/etc/udp_request/config.json"
+SERVICE_NAME="udp_request.service"
 
-# ================= COULEURS =================
-RED="\033[31m"
-GREEN="\033[32m"
-YELLOW="\033[33m"
-CYAN="\033[36m"
-RESET="\033[0m"
+# 1️⃣ CLEAN TOTAL
+systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+rm -f "/etc/systemd/system/$SERVICE_NAME"
+rm -rf /opt/udp_request /var/log/udp_request
+userdel udpuser 2>/dev/null || true
 
-log()  { echo -e "${GREEN}[+]${RESET} $*"; }
-warn() { echo -e "${YELLOW}[!]${RESET} $*"; }
-err()  { echo -e "${RED}[ERREUR]${RESET} $*"; exit 1; }
+# 2️⃣ BINAIRE (nom correct = udp_request PAS udp_request-linux-amd64)
+wget -q "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp_request" -O "$BIN_PATH"
+chmod +x "$BIN_PATH"
 
-# ================= ROOT =================
-[[ "$EUID" -ne 0 ]] && err "Exécuter ce script en root"
-
-clear
-echo -e "${CYAN}============================================${RESET}"
-echo -e "${GREEN}     UDP REQUEST — MODE STABLE${RESET}"
-echo -e "${YELLOW} Compatible SlowDNS / UDP Custom / Xray${RESET}"
-echo -e "${CYAN}============================================${RESET}"
-echo
-
-# ================= VARIABLES =================
-UDP_BIN="/usr/bin/udp_request"
-WRAPPER="/usr/bin/udp_requestd"
-SERVICE="/etc/systemd/system/udp-request.service"
-LOG_FILE="/var/log/udp-request.log"
-
-# Ports UDP exclus (anti conflits)
-EXCLUDED_PORTS=(
-53 80 81 5400 36712 5667
-5300 54000 5401
-36712 25432
-30300 30310
-)
-
-# ================= DEPENDANCES =================
-log "Installation des dépendances..."
-apt update -y >/dev/null 2>&1 || true
-apt install -y wget iproute2 net-tools util-linux >/dev/null 2>&1
-
-# ================= IP / IFACE =================
-SERVER_IP=$(ip -4 route get 1 | awk '{print $7; exit}')
-SERVER_IFACE=$(ip -4 route get 1 | awk '{print $5; exit}')
-
-[[ -z "$SERVER_IP" || -z "$SERVER_IFACE" ]] && err "IP ou interface non détectée"
-
-log "Interface réseau : $SERVER_IFACE"
-log "IP détectée      : $SERVER_IP"
-
-# ================= NETTOYAGE SAFE =================
-log "Arrêt et nettoyage des anciennes instances..."
-systemctl stop udp-request 2>/dev/null || true
-pkill -x udp_request 2>/dev/null || true
-rm -f "$UDP_BIN" "$WRAPPER" "$SERVICE"
-
-# ================= TELECHARGEMENT =================
-log "Téléchargement du binaire udp_request..."
-wget -q -O "$UDP_BIN" \
-  "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp_request" \
-  || err "Échec du téléchargement du binaire"
-
-chmod +x "$UDP_BIN"
-
-# ================= OPTIONS =================
-EXCLUDE_OPT=$(IFS=,; echo "${EXCLUDED_PORTS[*]}")
-log "Ports UDP exclus : ${EXCLUDED_PORTS[*]}"
-
-# ================= WRAPPER TTY (CORRECTION) =================
-log "Création du wrapper TTY (correctif définitif)..."
-
-cat > "$WRAPPER" <<EOF
-#!/bin/bash
-exec >> "$LOG_FILE" 2>&1
-
-while true; do
-  script -q -c "$UDP_BIN \
-    -ip=$SERVER_IP \
-    -net=$SERVER_IFACE \
-    -exclude=$EXCLUDE_OPT \
-    -mode=system" /dev/null
-
-  sleep 2
-done
+# 3️⃣ CONFIG (syntaxe ZIVPN-compatible)
+mkdir -p /etc/udp_request
+cat > "$CONFIG_FILE" << 'EOF'
+{
+  "listen": ":4466",
+  "exclude_port": [53,5300,5667,20000,36712],
+  "timeout": 600
+}
 EOF
 
-chmod +x "$WRAPPER"
+# 4️⃣ IPTABLES INTELLIGENT 
+iptables -C INPUT -p udp --dport 4466 -j ACCEPT 2>/dev/null || \
+iptables -A INPUT -p udp --dport 4466 -j ACCEPT
 
-# ================= SYSTEMD =================
-log "Création du service systemd..."
+# SAVE IPTABLES 
+netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
 
-cat > "$SERVICE" <<EOF
+# 5️⃣ SYSTEMD CORRIGÉ (**CLÉ : `server` comme ZIVPN**)
+cat > "/etc/systemd/system/$SERVICE_NAME" << EOF
 [Unit]
-Description=UDP Request (Stable / TTY)
+Description=UDP socksip Service
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=$WRAPPER
+ExecStart=$BIN_PATH server -c $CONFIG_FILE
 Restart=always
-RestartSec=2
-NoNewPrivileges=true
+RestartSec=5
 LimitNOFILE=1048576
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=udp-custom
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-systemctl daemon-reexec
 systemctl daemon-reload
-systemctl enable udp-request
-systemctl restart udp-request
+systemctl enable "$SERVICE_NAME"
+systemctl restart "$SERVICE_NAME"
 
+# 6️⃣ TEST
 sleep 3
-
-# ================= VERIFICATION =================
-if systemctl is-active --quiet udp-request; then
-  log "UDP Request actif et STABLE"
+if systemctl is-active --quiet "$SERVICE_NAME"; then
+    IP=$(hostname -I | awk '{print $1}')
+    echo "✅ UDP socksip OK → $IP:4466"
+    echo "📱 UDP socksip: udp://$IP:4466"
+    ss -ulnp | grep 4466
 else
-  err "UDP Request ne démarre pas"
+    echo "❌ ÉCHEC → Logs:"
+    journalctl -u udpudp_request.service -n 20
 fi
-
-# ================= RESUME =================
-echo
-echo -e "${CYAN}============================================${RESET}"
-echo -e "${GREEN} INSTALLATION TERMINÉE${RESET}"
-echo -e "${CYAN}============================================${RESET}"
-echo -e "Service      : udp-request"
-echo -e "Interface    : $SERVER_IFACE"
-echo -e "IP serveur   : $SERVER_IP"
-echo -e "Ports exclus : ${EXCLUDED_PORTS[*]}"
-echo -e "Logs         : $LOG_FILE"
-echo -e "${CYAN}============================================${RESET}"
