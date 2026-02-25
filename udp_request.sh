@@ -1,55 +1,71 @@
 #!/bin/bash
-# UDP Request v1.8 - CORRIGÉ pour udp_request )
+# UDP Request Installer v2.5 (Optimisé & Stable)
+
 set -euo pipefail
 
-UDP_PORT=4466
-BIN_PATH="/usr/local/bin/udp_request"
-CONFIG_FILE="/etc/udp_request/config.json"
 SERVICE_NAME="udp_request.service"
+BIN_PATH="/usr/local/bin/udp_request"
 
-# 1️⃣ CLEAN TOTAL
+echo "🔄 Nettoyage ancien service..."
 systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+systemctl disable "$SERVICE_NAME" 2>/dev/null || true
 rm -f "/etc/systemd/system/$SERVICE_NAME"
-rm -rf /opt/udp_request /var/log/udp_request
-userdel udpuser 2>/dev/null || true
 
-# 2️⃣ BINAIRE (nom correct = udp_request PAS udp_request-linux-amd64)
+# -------------------------------
+# Vérification architecture
+# -------------------------------
+ARCH=$(uname -m)
+if [[ "$ARCH" != "x86_64" ]]; then
+    echo "❌ Architecture non supportée: $ARCH"
+    exit 1
+fi
+
+# -------------------------------
+# Détection interface réseau
+# -------------------------------
+NET_IFACE=$(ip route | grep default | awk '{print $5}' | head -n1)
+SERVER_IP=$(hostname -I | awk '{print $1}')
+
+if [[ -z "$NET_IFACE" || -z "$SERVER_IP" ]]; then
+    echo "❌ Impossible de détecter l'interface ou l'IP"
+    exit 1
+fi
+
+echo "🌐 Interface détectée: $NET_IFACE"
+echo "🌍 IP détectée: $SERVER_IP"
+
+# -------------------------------
+# Téléchargement binaire
+# -------------------------------
+echo "📥 Téléchargement udp_request..."
 wget -q "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp_request" -O "$BIN_PATH"
-chmod +x "$BIN_PATH"
 
-# 3️⃣ CONFIG (syntaxe ZIVPN-compatible)
-mkdir -p /etc/udp_request
-cat > "$CONFIG_FILE" << 'EOF'
-{
-  "listen": ":4466",
-  "exclude_port": [53,5300,5667,20000,36712],
-  "timeout": 600
-}
-EOF
+if [[ ! -f "$BIN_PATH" ]]; then
+    echo "❌ Échec téléchargement"
+    exit 1
+fi
 
-# 4️⃣ IPTABLES INTELLIGENT 
-iptables -C INPUT -p udp --dport 4466 -j ACCEPT 2>/dev/null || \
-iptables -A INPUT -p udp --dport 4466 -j ACCEPT
+chmod 755 "$BIN_PATH"
 
-# SAVE IPTABLES 
-netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
+# -------------------------------
+# Création service systemd
+# -------------------------------
+echo "🛠 Création service..."
 
-# 5️⃣ SYSTEMD CORRIGÉ (**CLÉ : `server` comme ZIVPN**)
 cat > "/etc/systemd/system/$SERVICE_NAME" << EOF
 [Unit]
-Description=UDP socksip Service
+Description=UDP Request Service (Optimized)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=$BIN_PATH server -c $CONFIG_FILE
+ExecStart=$BIN_PATH -mode system -net $NET_IFACE -ip $SERVER_IP
 Restart=always
-RestartSec=5
+RestartSec=3
 LimitNOFILE=1048576
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=udp-custom
 
 [Install]
 WantedBy=multi-user.target
@@ -59,14 +75,18 @@ systemctl daemon-reload
 systemctl enable "$SERVICE_NAME"
 systemctl restart "$SERVICE_NAME"
 
-# 6️⃣ TEST
-sleep 3
+sleep 2
+
+# -------------------------------
+# Vérification
+# -------------------------------
 if systemctl is-active --quiet "$SERVICE_NAME"; then
-    IP=$(hostname -I | awk '{print $1}')
-    echo "✅ UDP socksip OK → $IP:4466"
-    echo "📱 UDP socksip: udp://$IP:4466"
-    ss -ulnp | grep 4466
+    echo ""
+    echo "✅ UDP Request installé et actif"
+    echo "🖥 Interface: $NET_IFACE"
+    echo "🌍 IP: $SERVER_IP"
+    systemctl status "$SERVICE_NAME" --no-pager | head -n 10
 else
-    echo "❌ ÉCHEC → Logs:"
-    journalctl -u udpudp_request.service -n 20
+    echo "❌ Échec démarrage → Logs:"
+    journalctl -u "$SERVICE_NAME" -n 20 --no-pager
 fi
