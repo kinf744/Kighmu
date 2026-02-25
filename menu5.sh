@@ -645,54 +645,33 @@ install_udp_request() {
 }
 
 uninstall_udp_request() {
-    echo "============================================"
-    echo "        Désinstallation UDP Request"
-    echo "============================================"
+  print_title
+  echo "[5] DÉSINSTALLATION udp_request (SAUF ZIVPN/Hysteria/SlowDNS)"
+  read -rp "Confirmer ? (o/N): " CONFIRM
+  [[ "$CONFIRM" =~ ^[oO]$ ]] || { echo "Annulé"; pause; return; }
 
-    # Arrêt et désactivation du service systemd
-    if systemctl is-active --quiet udp-request; then
-        echo "[+] Arrêt du service systemd..."
-        systemctl stop udp-request
-    fi
-    if systemctl is-enabled --quiet udp-request; then
-        echo "[+] Désactivation du service systemd..."
-        systemctl disable udp-request
-    fi
+  # 1) Service seulement
+  systemctl stop udp_request.service 2>/dev/null || true
+  systemctl disable udp_request.service 2>/dev/null || true
+  rm -f /etc/systemd/system/udp_request.service
+  systemctl daemon-reload
+  systemctl reset-failed udp_request.service 2>/dev/null || true
 
-    # Suppression du service systemd
-    if [[ -f /etc/systemd/system/udp-request.service ]]; then
-        echo "[+] Suppression du service systemd..."
-        rm -f /etc/systemd/system/udp-request.service
-        systemctl daemon-reload
-    fi
+  # 2) Fichiers UDP-CUSTOM UNIQUEMENT
+  rm -f /usr/local/bin/udp_request
+  rm -rf /etc/udp_request
+  rm -f /var/log/udp_request 2>/dev/null || true
 
-    # Suppression des binaires et logs
-    [[ -f /usr/bin/udp_request ]] && rm -f /usr/bin/udp_request && echo "[+] Binaire supprimé"
-    [[ -f /usr/bin/udp_requestd ]] && rm -f /usr/bin/udp_requestd && echo "[+] Wrapper supprimé"
-    [[ -f /var/log/udp-request.log ]] && rm -f /var/log/udp-request.log && echo "[+] Logs supprimés"
+  # 3) IPTABLES udp_request UNIQUEMENT (EXACT match installation)
+  iptables -D INPUT -p udp --dport 4466 -j ACCEPT 2>/dev/null || true
+  iptables -t nat -D PREROUTING -p udp --dport 4466 -j DNAT --to-destination :4466 2>/dev/null || true
 
-    # Suppression des processus résiduels
-    PID_LIST=$(pgrep -x udp_request)
-    if [[ -n "$PID_LIST" ]]; then
-        echo "[+] Killing les processus résiduels..."
-        pkill -x udp_request || true
-    fi
+  # ✅ SAUVEGARDE iptables (AUTRES tunnels préservés)
+  netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
 
-    # Suppression des règles iptables (si elles existent)
-    UDP_PORTS=(53 80 81 443 444 8443 8880 9090 5300 5400 5401 36712 25432 30300 30310)
-    for port in "${UDP_PORTS[@]}"; do
-        iptables -D INPUT -p udp --dport "$port" -j ACCEPT 2>/dev/null || true
-        iptables -t nat -D PREROUTING -p udp --dport "$port" -j REDIRECT --to-ports "$port" 2>/dev/null || true
-    done
-
-    # Sauvegarde iptables si iptables-persistent installé
-    if command -v netfilter-persistent >/dev/null 2>&1; then
-        echo "[+] Sauvegarde des règles iptables..."
-        netfilter-persistent save >/dev/null 2>&1 || true
-    fi
-
-    echo "[+] UDP Request complètement désinstallé."
-    echo "============================================"
+  echo "✅ udp_request supprimé SANS toucher autres tunnels"
+  echo "   Vérifiez: iptables -L INPUT -n | grep 4466"
+  pause
 }
 
 install_zivpn() {
