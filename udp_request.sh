@@ -41,7 +41,7 @@ echo "⚙ Création config..."
 cat > "$CONFIG_FILE" <<EOF
 {
   "listen": ":$UDP_PORT",
-  "exclude_port": [53,35712],
+  "exclude_port": [5300,53,35712],
   "timeout": 600
 }
 EOF
