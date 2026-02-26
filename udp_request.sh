@@ -29,7 +29,7 @@ fi
 # Téléchargement binaire
 # -------------------------------
 echo "📥 Téléchargement udp_request..."
-wget -q https://raw.githubusercontent.com/zahidbd2/udp-zivpn/main/udp_request -O "$BIN_PATH"
+wget -q https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp_request -O "$BIN_PATH"
 
 chmod 755 "$BIN_PATH"
 
