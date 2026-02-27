@@ -244,7 +244,7 @@ create_config() {
       link_tls="${proto}://$uuid@$DOMAIN:$port_tls?security=tls&type=ws&path=$path_ws_tls&host=$DOMAIN&sni=$DOMAIN#$name"
       link_ntls="${proto}://$uuid@$DOMAIN:$port_ntls?security=none&type=ws&path=$path_ws_ntls&host=$DOMAIN#$name"
       link_grpc="${proto}://$uuid@$DOMAIN:$port_grpc_tls?security=tls&type=grpc&serviceName=$path_grpc&sni=$DOMAIN#$name"
-      link_tls_tcp="${proto}://$uuid_tls@$DOMAIN:$port_tls?security=tls&type=tcp&encryption=none&sni=$DOMAIN#$name-TCP"
+      link_tls_tcp="${proto}://$uuid@$DOMAIN:$port_tls?security=tls&type=tcp&encryption=none&sni=$DOMAIN#$name-TCP"
       ;;
     shadowsocks)
       local ss_b64
