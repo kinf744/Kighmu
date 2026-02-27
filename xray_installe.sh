@@ -323,7 +323,59 @@ cat > /etc/xray/config.json << EOF
         "network": "grpc",
         "grpcSettings": { "serviceName": "ss-grpc" }
       }
+    },
+
+    {
+      "listen": "127.0.0.1",
+      "port": 19999,
+      "protocol": "vless",
+      "settings": {
+        "decryption": "none",
+        "clients": [
+          { "id": "$uuid", "email": "$username" }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "none"
+      }
+    },
+
+    {
+      "listen": "127.0.0.1",
+      "port": 20000,
+      "protocol": "vmess",
+      "settings": {
+        "clients": [
+          {
+            "id": "$uuid",
+            "alterId": 0,
+            "email": "$username"
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "none"
+      }
+    },
+
+    {
+      "listen": "127.0.0.1",
+      "port": 20001,
+      "protocol": "trojan",
+      "settings": {
+        "clients": [
+          { "password": "$uuid", "email": "$username" }
+        ],
+        "udp": true
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "none"
+      }
     }
+
   ],
 
   "outbounds": [
