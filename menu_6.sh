@@ -243,7 +243,7 @@ create_config() {
     vless|trojan)
       link_tls="${proto}://$uuid@$DOMAIN:$port_tls?security=tls&type=ws&path=$path_ws_tls&host=$DOMAIN&sni=$DOMAIN#$name"
       link_ntls="${proto}://$uuid@$DOMAIN:$port_ntls?security=none&type=ws&path=$path_ws_ntls&host=$DOMAIN#$name"
-      link_grpc="${proto}://$uuid@$DOMAIN:$port_grpc_tls?mode=grpc&security=tls&serviceName=$path_grpc#$name"
+      link_grpc="${proto}://$uuid@$DOMAIN:$port_grpc_tls?security=tls&type=grpc&serviceName=$path_grpc&sni=$DOMAIN#$name"
       link_tcp_tls="${proto}://$uuid@$DOMAIN:$port_tls?security=tls&type=tcp&headerType=http&path=/${proto}-tcp&host=$DOMAIN&sni=$DOMAIN#$name-TCP"
       ;;
     shadowsocks)
