@@ -238,13 +238,13 @@ create_config() {
       link_tls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"$path_ws_tls\",\"tls\":\"tls\",\"sni\":\"$DOMAIN\"}" | base64 -w0)"
       link_ntls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_ntls\",\"id\":\"$uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"$path_ws_ntls\",\"tls\":\"none\"}" | base64 -w0)"
       link_grpc="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$uuid\",\"aid\":0,\"net\":\"grpc\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"vmess-grpc\",\"tls\":\"tls\",\"sni\":\"$DOMAIN\"}" | base64 -w0)"
-      link_tcp_tls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name-TCP\",\"add\":\"$DOMAIN\",\"port\":$port_tls,\"id\":\"$uuid\",\"aid\":0,\"net\":\"tcp\",\"type\":\"\",\"host\":\"\",\"path\":\"\",\"tls\":\"tls\",\"sni\":\"$DOMAIN\"}" | base64 -w0)"
+      link_tcp_tls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name-TCP\",\"add\":\"$DOMAIN\",\"port\":$port_tls,\"id\":\"$uuid\",\"aid\":0,\"net\":\"tcp\",\"type\":\"\",\"host\":\"\",\"path\":\"\",\"tls\":\"tls\",\"sni\":\"$DOMAIN\"}" | base64 -w0)#$name-TCP"
       ;;
     vless|trojan)
       link_tls="${proto}://$uuid@$DOMAIN:$port_tls?security=tls&type=ws&path=$path_ws_tls&host=$DOMAIN&sni=$DOMAIN#$name"
       link_ntls="${proto}://$uuid@$DOMAIN:$port_ntls?security=none&type=ws&path=$path_ws_ntls&host=$DOMAIN#$name"
       link_grpc="${proto}://$uuid@$DOMAIN:$port_grpc_tls?security=tls&type=grpc&serviceName=$path_grpc&sni=$DOMAIN#$name"
-      link_tcp_tls="${proto}://${uuid}@$DOMAIN:$port_tls?security=tls&type=tcp&sni=$DOMAIN#$name-TCP"
+      link_tcp_tls="${proto}://${uuid}@${DOMAIN}:${port_tls}?security=tls&type=tcp&sni=${DOMAIN}#${name}-TCP"
       ;;
     shadowsocks)
       local ss_b64
