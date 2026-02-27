@@ -562,6 +562,30 @@ server {
         grpc_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         grpc_set_header Host \$http_host;
     }
+
+    # =============================
+    # TCP TLS via HTTP camouflage
+    # =============================
+    location /vless-tcp {
+        proxy_pass http://127.0.0.1:19999;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    location /vmess-tcp {
+        proxy_pass http://127.0.0.1:20000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    location /trojan-tcp {
+        proxy_pass http://127.0.0.1:20001;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
 }
 
 # ========================================
