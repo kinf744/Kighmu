@@ -170,16 +170,17 @@ cat > /etc/xray/config.json << EOF
   "log": {
     "access": "/var/log/xray/access.log",
     "error": "/var/log/xray/error.log",
-    "loglevel": "warning"
+    "loglevel": "info"
   },
 
   "inbounds": [
-
     {
       "listen": "127.0.0.1",
       "port": 10085,
       "protocol": "dokodemo-door",
-      "settings": { "address": "127.0.0.1" },
+      "settings": {
+        "address": "127.0.0.1"
+      },
       "tag": "api"
     },
 
@@ -189,7 +190,9 @@ cat > /etc/xray/config.json << EOF
       "protocol": "vless",
       "settings": {
         "decryption": "none",
-        "clients": [{ "id": "$uuid", "email": "$username" }]
+        "clients": [
+          { "id": "$uuid", "email": "$username" }
+        ]
       },
       "streamSettings": {
         "network": "ws",
@@ -202,7 +205,13 @@ cat > /etc/xray/config.json << EOF
       "port": 23456,
       "protocol": "vmess",
       "settings": {
-        "clients": [{ "id": "$uuid", "alterId": 0, "email": "$username" }]
+        "clients": [
+          {
+            "id": "$uuid",
+            "alterId": 0,
+            "email": "$username"
+          }
+        ]
       },
       "streamSettings": {
         "network": "ws",
@@ -215,7 +224,9 @@ cat > /etc/xray/config.json << EOF
       "port": 25432,
       "protocol": "trojan",
       "settings": {
-        "clients": [{ "password": "$uuid", "email": "$username" }],
+        "clients": [
+          { "password": "$uuid", "email": "$username" }
+        ],
         "udp": true
       },
       "streamSettings": {
@@ -226,11 +237,33 @@ cat > /etc/xray/config.json << EOF
 
     {
       "listen": "127.0.0.1",
+      "port": 30300,
+      "protocol": "shadowsocks",
+      "settings": {
+        "clients": [
+          {
+            "method": "aes-128-gcm",
+            "password": "$uuid",
+            "email": "$username"
+          }
+        ],
+        "network": "tcp,udp"
+      },
+      "streamSettings": {
+        "network": "ws",
+        "wsSettings": { "path": "/ss-ws" }
+      }
+    },
+
+    {
+      "listen": "127.0.0.1",
       "port": 24456,
       "protocol": "vless",
       "settings": {
         "decryption": "none",
-        "clients": [{ "id": "$uuid", "email": "$username" }]
+        "clients": [
+          { "id": "$uuid", "email": "$username" }
+        ]
       },
       "streamSettings": {
         "network": "grpc",
@@ -243,7 +276,13 @@ cat > /etc/xray/config.json << EOF
       "port": 31234,
       "protocol": "vmess",
       "settings": {
-        "clients": [{ "id": "$uuid", "alterId": 0, "email": "$username" }]
+        "clients": [
+          {
+            "id": "$uuid",
+            "alterId": 0,
+            "email": "$username"
+          }
+        ]
       },
       "streamSettings": {
         "network": "grpc",
@@ -256,7 +295,9 @@ cat > /etc/xray/config.json << EOF
       "port": 33456,
       "protocol": "trojan",
       "settings": {
-        "clients": [{ "password": "$uuid", "email": "$username" }]
+        "clients": [
+          { "password": "$uuid", "email": "$username" }
+        ]
       },
       "streamSettings": {
         "network": "grpc",
@@ -266,42 +307,23 @@ cat > /etc/xray/config.json << EOF
 
     {
       "listen": "127.0.0.1",
-      "port": 19999,
-      "protocol": "vless",
+      "port": 30310,
+      "protocol": "shadowsocks",
       "settings": {
-        "decryption": "none",
-        "clients": [{ "id": "$uuid", "email": "$username" }]
+        "clients": [
+          {
+            "method": "aes-128-gcm",
+            "password": "$uuid",
+            "email": "$username"
+          }
+        ],
+        "network": "tcp,udp"
       },
       "streamSettings": {
-        "network": "tcp"
-      }
-    },
-
-    {
-      "listen": "127.0.0.1",
-      "port": 20000,
-      "protocol": "vmess",
-      "settings": {
-        "clients": [{ "id": "$uuid", "alterId": 0, "email": "$username" }]
-      },
-      "streamSettings": {
-        "network": "tcp"
-      }
-    },
-
-    {
-      "listen": "127.0.0.1",
-      "port": 20001,
-      "protocol": "trojan",
-      "settings": {
-        "clients": [{ "password": "$uuid", "email": "$username" }],
-        "udp": true
-      },
-      "streamSettings": {
-        "network": "tcp"
+        "network": "grpc",
+        "grpcSettings": { "serviceName": "ss-grpc" }
       }
     }
-
   ],
 
   "outbounds": [
@@ -325,8 +347,40 @@ cat > /etc/xray/config.json << EOF
           "fe80::/10"
         ],
         "outboundTag": "blocked"
+      },
+      {
+        "type": "field",
+        "inboundTag": ["api"],
+        "outboundTag": "api"
+      },
+      {
+        "type": "field",
+        "protocol": ["bittorrent"],
+        "outboundTag": "blocked"
       }
     ]
+  },
+
+  "stats": {},
+
+  "api": {
+    "services": ["StatsService"],
+    "tag": "api"
+  },
+
+  "policy": {
+    "levels": {
+      "0": {
+        "statsUserDownlink": true,
+        "statsUserUplink": true
+      }
+    },
+    "system": {
+      "statsInboundUplink": true,
+      "statsInboundDownlink": true,
+      "statsOutboundUplink": true,
+      "statsOutboundDownlink": true
+    }
   }
 }
 EOF
@@ -374,32 +428,13 @@ server {
 }
 EOF
 
-cat > /etc/nginx/stream.conf << EOF
-# ========================================
-# TCP TLS via SNI (port 8443)
-# ========================================
-map $ssl_preread_server_name $backend {
-    vless.$DOMAIN    127.0.0.1:19999;
-    vmess.$DOMAIN    127.0.0.1:20000;
-    trojan.$DOMAIN   127.0.0.1:20001;
-
-    $DOMAIN          127.0.0.1:9443;
-    default          127.0.0.1:9443;
-}
-
-server {
-    listen 8443;
-    proxy_pass $backend;
-    ssl_preread on;
-}
-EOF
-
 cat > /etc/nginx/conf.d/xray.conf << EOF
 # ========================================
-# WS + gRPC TLS (HTTP) (port interne 9443)
+# WS + gRPC TLS (port 8443)
 # ========================================
 server {
-    listen 127.0.0.1:9443 ssl http2;
+    listen 8443 ssl http2;
+    listen [::]:8443 ssl http2;
     server_name $DOMAIN;
 
     ssl_certificate /etc/xray/xray.crt;
@@ -415,55 +450,65 @@ server {
     location /vless {
         proxy_pass http://127.0.0.1:14016;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Host \$http_host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     }
 
     location /vmess {
         proxy_pass http://127.0.0.1:23456;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Host \$http_host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     }
 
     location /trojan-ws {
         proxy_pass http://127.0.0.1:25432;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Host \$http_host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    }
+
+    location /ss-ws {
+        proxy_pass http://127.0.0.1:30300;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$http_host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     }
 
     # ----------------------------
-    # gRPC locations
+    # gRPC locations (TLS uniquement)
     # ----------------------------
     location /vless-grpc {
         grpc_pass grpc://127.0.0.1:24456;
-        grpc_set_header X-Real-IP $remote_addr;
-        grpc_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        grpc_set_header Host $host;
+        grpc_set_header X-Real-IP \$remote_addr;
+        grpc_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        grpc_set_header Host \$http_host;
     }
 
     location /vmess-grpc {
         grpc_pass grpc://127.0.0.1:31234;
-        grpc_set_header X-Real-IP $remote_addr;
-        grpc_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        grpc_set_header Host $host;
+        grpc_set_header X-Real-IP \$remote_addr;
+        grpc_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        grpc_set_header Host \$http_host;
     }
 
     location /trojan-grpc {
         grpc_pass grpc://127.0.0.1:33456;
-        grpc_set_header X-Real-IP $remote_addr;
-        grpc_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        grpc_set_header Host $host;
+        grpc_set_header X-Real-IP \$remote_addr;
+        grpc_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        grpc_set_header Host \$http_host;
     }
 }
 
@@ -483,41 +528,41 @@ server {
     location /vless {
         proxy_pass http://127.0.0.1:14016;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Host \$http_host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     }
 
     location /vmess {
         proxy_pass http://127.0.0.1:23456;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Host \$http_host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     }
 
     location /trojan-ws {
         proxy_pass http://127.0.0.1:25432;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Host \$http_host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     }
 
     location /ss-ws {
         proxy_pass http://127.0.0.1:30300;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Host \$http_host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     }
 }
 EOF
