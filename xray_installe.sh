@@ -170,17 +170,16 @@ cat > /etc/xray/config.json << EOF
   "log": {
     "access": "/var/log/xray/access.log",
     "error": "/var/log/xray/error.log",
-    "loglevel": "info"
+    "loglevel": "warning"
   },
 
   "inbounds": [
+
     {
       "listen": "127.0.0.1",
       "port": 10085,
       "protocol": "dokodemo-door",
-      "settings": {
-        "address": "127.0.0.1"
-      },
+      "settings": { "address": "127.0.0.1" },
       "tag": "api"
     },
 
@@ -190,9 +189,7 @@ cat > /etc/xray/config.json << EOF
       "protocol": "vless",
       "settings": {
         "decryption": "none",
-        "clients": [
-          { "id": "$uuid", "email": "$username" }
-        ]
+        "clients": [{ "id": "$uuid", "email": "$username" }]
       },
       "streamSettings": {
         "network": "ws",
@@ -205,13 +202,7 @@ cat > /etc/xray/config.json << EOF
       "port": 23456,
       "protocol": "vmess",
       "settings": {
-        "clients": [
-          {
-            "id": "$uuid",
-            "alterId": 0,
-            "email": "$username"
-          }
-        ]
+        "clients": [{ "id": "$uuid", "alterId": 0, "email": "$username" }]
       },
       "streamSettings": {
         "network": "ws",
@@ -224,9 +215,7 @@ cat > /etc/xray/config.json << EOF
       "port": 25432,
       "protocol": "trojan",
       "settings": {
-        "clients": [
-          { "password": "$uuid", "email": "$username" }
-        ],
+        "clients": [{ "password": "$uuid", "email": "$username" }],
         "udp": true
       },
       "streamSettings": {
@@ -237,33 +226,11 @@ cat > /etc/xray/config.json << EOF
 
     {
       "listen": "127.0.0.1",
-      "port": 30300,
-      "protocol": "shadowsocks",
-      "settings": {
-        "clients": [
-          {
-            "method": "aes-128-gcm",
-            "password": "$uuid",
-            "email": "$username"
-          }
-        ],
-        "network": "tcp,udp"
-      },
-      "streamSettings": {
-        "network": "ws",
-        "wsSettings": { "path": "/ss-ws" }
-      }
-    },
-
-    {
-      "listen": "127.0.0.1",
       "port": 24456,
       "protocol": "vless",
       "settings": {
         "decryption": "none",
-        "clients": [
-          { "id": "$uuid", "email": "$username" }
-        ]
+        "clients": [{ "id": "$uuid", "email": "$username" }]
       },
       "streamSettings": {
         "network": "grpc",
@@ -276,13 +243,7 @@ cat > /etc/xray/config.json << EOF
       "port": 31234,
       "protocol": "vmess",
       "settings": {
-        "clients": [
-          {
-            "id": "$uuid",
-            "alterId": 0,
-            "email": "$username"
-          }
-        ]
+        "clients": [{ "id": "$uuid", "alterId": 0, "email": "$username" }]
       },
       "streamSettings": {
         "network": "grpc",
@@ -295,9 +256,7 @@ cat > /etc/xray/config.json << EOF
       "port": 33456,
       "protocol": "trojan",
       "settings": {
-        "clients": [
-          { "password": "$uuid", "email": "$username" }
-        ]
+        "clients": [{ "password": "$uuid", "email": "$username" }]
       },
       "streamSettings": {
         "network": "grpc",
@@ -307,37 +266,14 @@ cat > /etc/xray/config.json << EOF
 
     {
       "listen": "127.0.0.1",
-      "port": 30310,
-      "protocol": "shadowsocks",
-      "settings": {
-        "clients": [
-          {
-            "method": "aes-128-gcm",
-            "password": "$uuid",
-            "email": "$username"
-          }
-        ],
-        "network": "tcp,udp"
-      },
-      "streamSettings": {
-        "network": "grpc",
-        "grpcSettings": { "serviceName": "ss-grpc" }
-      }
-    },
-
-    {
-      "listen": "127.0.0.1",
       "port": 19999,
       "protocol": "vless",
       "settings": {
         "decryption": "none",
-        "clients": [
-          { "id": "$uuid", "email": "$username" }
-        ]
+        "clients": [{ "id": "$uuid", "email": "$username" }]
       },
       "streamSettings": {
-        "network": "tcp",
-        "security": "none"
+        "network": "tcp"
       }
     },
 
@@ -346,17 +282,10 @@ cat > /etc/xray/config.json << EOF
       "port": 20000,
       "protocol": "vmess",
       "settings": {
-        "clients": [
-          {
-            "id": "$uuid",
-            "alterId": 0,
-            "email": "$username"
-          }
-        ]
+        "clients": [{ "id": "$uuid", "alterId": 0, "email": "$username" }]
       },
       "streamSettings": {
-        "network": "tcp",
-        "security": "none"
+        "network": "tcp"
       }
     },
 
@@ -365,14 +294,11 @@ cat > /etc/xray/config.json << EOF
       "port": 20001,
       "protocol": "trojan",
       "settings": {
-        "clients": [
-          { "password": "$uuid", "email": "$username" }
-        ],
+        "clients": [{ "password": "$uuid", "email": "$username" }],
         "udp": true
       },
       "streamSettings": {
-        "network": "tcp",
-        "security": "none"
+        "network": "tcp"
       }
     }
 
@@ -399,40 +325,8 @@ cat > /etc/xray/config.json << EOF
           "fe80::/10"
         ],
         "outboundTag": "blocked"
-      },
-      {
-        "type": "field",
-        "inboundTag": ["api"],
-        "outboundTag": "api"
-      },
-      {
-        "type": "field",
-        "protocol": ["bittorrent"],
-        "outboundTag": "blocked"
       }
     ]
-  },
-
-  "stats": {},
-
-  "api": {
-    "services": ["StatsService"],
-    "tag": "api"
-  },
-
-  "policy": {
-    "levels": {
-      "0": {
-        "statsUserDownlink": true,
-        "statsUserUplink": true
-      }
-    },
-    "system": {
-      "statsInboundUplink": true,
-      "statsInboundDownlink": true,
-      "statsOutboundUplink": true,
-      "statsOutboundDownlink": true
-    }
   }
 }
 EOF
