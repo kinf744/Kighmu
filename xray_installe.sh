@@ -483,7 +483,26 @@ EOF
 cat > /etc/nginx/conf.d/xray.conf << EOF
 # ========================================
 # WS + gRPC TLS (port 8443)
-# ========================================
+# ======================================== # TCP TLS 
+stream {
+
+    map $ssl_preread_server_name $backend {
+
+        vless.$DOMAIN    127.0.0.1:19999;
+        vmess.$DOMAIN    127.0.0.1:20000;
+        trojan.$DOMAIN   127.0.0.1:20001;
+
+        $DOMAIN          127.0.0.1:9443;
+
+        default          127.0.0.1:9443;
+    }
+
+    server {
+        listen 8443;
+        proxy_pass $backend;
+        ssl_preread on;
+    }
+
 server {
     listen 127.0.0.1:9443 ssl http2;
     server_name $DOMAIN;
@@ -560,26 +579,6 @@ server {
         grpc_set_header X-Real-IP \$remote_addr;
         grpc_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         grpc_set_header Host \$http_host;
-    }
-
-  # TCP TLS 
-stream {
-
-    map $ssl_preread_server_name $backend {
-
-        vless.$DOMAIN    127.0.0.1:19999;
-        vmess.$DOMAIN    127.0.0.1:20000;
-        trojan.$DOMAIN   127.0.0.1:20001;
-
-        $DOMAIN          127.0.0.1:9443;
-
-        default          127.0.0.1:9443;
-    }
-
-    server {
-        listen 8443;
-        proxy_pass $backend;
-        ssl_preread on;
     }
 }
 
