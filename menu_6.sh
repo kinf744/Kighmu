@@ -238,13 +238,11 @@ create_config() {
       link_tls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"$path_ws_tls\",\"tls\":\"tls\",\"sni\":\"$DOMAIN\"}" | base64 -w0)"
       link_ntls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_ntls\",\"id\":\"$uuid\",\"aid\":0,\"net\":\"ws\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"$path_ws_ntls\",\"tls\":\"none\"}" | base64 -w0)"
       link_grpc="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name\",\"add\":\"$DOMAIN\",\"port\":\"$port_tls\",\"id\":\"$uuid\",\"aid\":0,\"net\":\"grpc\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"vmess-grpc\",\"tls\":\"tls\",\"sni\":\"$DOMAIN\"}" | base64 -w0)"
-      link_tcp_tls="vmess://$(echo -n "{\"v\":\"2\",\"ps\":\"$name-TCP\",\"add\":\"$DOMAIN\",\"port\":$port_tls,\"id\":\"$uuid\",\"aid\":0,\"net\":\"tcp\",\"type\":\"\",\"host\":\"\",\"path\":\"\",\"tls\":\"tls\",\"sni\":\"$DOMAIN\"}" | base64 -w0)#$name-TCP"
       ;;
     vless|trojan)
       link_tls="${proto}://$uuid@$DOMAIN:$port_tls?security=tls&type=ws&path=$path_ws_tls&host=$DOMAIN&sni=$DOMAIN#$name"
       link_ntls="${proto}://$uuid@$DOMAIN:$port_ntls?security=none&type=ws&path=$path_ws_ntls&host=$DOMAIN#$name"
-      link_grpc="${proto}://$uuid@$DOMAIN:$port_grpc_tls?security=tls&type=grpc&serviceName=$path_grpc&sni=$DOMAIN#$name"
-      link_tcp_tls="${proto}://${uuid}@${DOMAIN}:${port_tls}?security=tls&type=tcp&sni=${DOMAIN}#${name}-TCP"
+      link_grpc="${proto}://$uuid@$DOMAIN:$port_grpc_tls?mode=grpc&security=tls&serviceName=$path_grpc#$name"
       ;;
     shadowsocks)
       local ss_b64
@@ -275,7 +273,6 @@ create_config() {
   [[ -n "$link_tls" ]] && echo -e "${CYAN}┃ TLS WS      : ${GREEN}$link_tls${RESET}"
   [[ -n "$link_ntls" ]] && echo -e "${CYAN}┃ Non-TLS WS  : ${GREEN}$link_ntls${RESET}"
   [[ -n "$link_grpc" ]] && echo -e "${CYAN}┃ gRPC TLS    : ${GREEN}$link_grpc${RESET}"
-  [[ -n "$link_grpc" ]] && echo -e "${CYAN}┃ TCP TLS    : ${GREEN}$link_tcp_tls${RESET}"
   [[ -n "$link_ss_tls" ]] && echo -e "${CYAN}┃ SS TLS WS   : ${GREEN}$link_ss_tls${RESET}"
   [[ -n "$link_ss_ntls" ]] && echo -e "${CYAN}┃ SS Non-TLS  : ${GREEN}$link_ss_ntls${RESET}"
   echo -e "${CYAN}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●${RESET}"
