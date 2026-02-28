@@ -482,7 +482,7 @@ EOF
 
 cat > /etc/nginx/conf.d/xray.conf << EOF
 # ========================================
-# WS + gRPC TLS (port 8443)
+# TCP + WS + gRPC TLS (port 8443)
 # ======================================== # TCP TLS 
 stream {
 
