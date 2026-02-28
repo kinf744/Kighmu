@@ -374,7 +374,7 @@ server {
 }
 EOF
 
-cat > /etc/nginx/conf.d/xray-http.conf << EOF
+cat > /etc/nginx/stream.conf << EOF
 # ========================================
 # TCP TLS via SNI (port 8443)
 # ========================================
