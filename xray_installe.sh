@@ -485,8 +485,7 @@ cat > /etc/nginx/conf.d/xray.conf << EOF
 # WS + gRPC TLS (port 8443)
 # ========================================
 server {
-    listen 8443 ssl http2;
-    listen [::]:8443 ssl http2;
+    listen 127.0.0.1:9443 ssl http2;
     server_name $DOMAIN;
 
     ssl_certificate /etc/xray/xray.crt;
@@ -563,29 +562,25 @@ server {
         grpc_set_header Host \$http_host;
     }
 
- # =============================
-# TCP TLS via HTTP camouflage
-# =============================
-location /vless-tcp {
-    proxy_pass http://127.0.0.1:19999;
-    proxy_http_version 1.1;
-    proxy_set_header Host \$host;
-    proxy_set_header X-Real-IP \$remote_addr;
-}
+  # TCP TLS 
+stream {
 
-location /vmess-tcp {
-    proxy_pass http://127.0.0.1:20000;
-    proxy_http_version 1.1;
-    proxy_set_header Host \$host;
-    proxy_set_header X-Real-IP \$remote_addr;
-}
+    map $ssl_preread_server_name $backend {
 
-location /trojan-tcp {
-    proxy_pass http://127.0.0.1:20001;
-    proxy_http_version 1.1;
-    proxy_set_header Host \$host;
-    proxy_set_header X-Real-IP \$remote_addr;
-}
+        vless.$DOMAIN    127.0.0.1:19999;
+        vmess.$DOMAIN    127.0.0.1:20000;
+        trojan.$DOMAIN   127.0.0.1:20001;
+
+        $DOMAIN          127.0.0.1:9443;
+
+        default          127.0.0.1:9443;
+    }
+
+    server {
+        listen 8443;
+        proxy_pass $backend;
+        ssl_preread on;
+    }
 }
 
 # ========================================
