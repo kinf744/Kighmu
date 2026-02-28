@@ -378,23 +378,19 @@ cat > /etc/nginx/stream.conf << EOF
 # ========================================
 # TCP TLS via SNI (port 8443)
 # ========================================
-stream {
+map $ssl_preread_server_name $backend {
+    vless.$DOMAIN    127.0.0.1:19999;
+    vmess.$DOMAIN    127.0.0.1:20000;
+    trojan.$DOMAIN   127.0.0.1:20001;
 
-    map $ssl_preread_server_name $backend {
+    $DOMAIN          127.0.0.1:9443;
+    default          127.0.0.1:9443;
+}
 
-        vless.$DOMAIN    127.0.0.1:19999;
-        vmess.$DOMAIN    127.0.0.1:20000;
-        trojan.$DOMAIN   127.0.0.1:20001;
-
-        $DOMAIN          127.0.0.1:9443;
-        default          127.0.0.1:9443;
-    }
-
-    server {
-        listen 8443;
-        proxy_pass $backend;
-        ssl_preread on;
-    }
+server {
+    listen 8443;
+    proxy_pass $backend;
+    ssl_preread on;
 }
 EOF
 
@@ -413,9 +409,7 @@ server {
 
     root /home/vps/public_html;
 
-    # ----------------------------
     # WebSocket locations
-    # ----------------------------
     location /vless {
         proxy_pass http://127.0.0.1:14016;
         proxy_http_version 1.1;
@@ -446,19 +440,7 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     }
 
-    location /ss-ws {
-        proxy_pass http://127.0.0.1:30300;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $http_host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-
-    # ----------------------------
-    # gRPC locations (TLS uniquement)
-    # ----------------------------
+    # gRPC locations
     location /vless-grpc {
         grpc_pass grpc://127.0.0.1:24456;
         grpc_set_header X-Real-IP $remote_addr;
