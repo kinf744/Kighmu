@@ -374,7 +374,7 @@ server {
 }
 EOF
 
-cat > /etc/nginx/conf.d/xray.conf << EOF
+mv /etc/nginx/conf.d/xray.conf /etc/nginx/conf.d/xray-http.conf
 # ========================================
 # TCP TLS via SNI (port 8443)
 # ========================================
@@ -397,6 +397,7 @@ stream {
     }
 }
 
+cat > /etc/nginx/conf.d/xray.conf << EOF
 # ========================================
 # WS + gRPC TLS (HTTP) (port interne 9443)
 # ========================================
