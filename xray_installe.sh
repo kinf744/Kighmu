@@ -409,7 +409,9 @@ server {
 
     root /home/vps/public_html;
 
+    # ----------------------------
     # WebSocket locations
+    # ----------------------------
     location /vless {
         proxy_pass http://127.0.0.1:14016;
         proxy_http_version 1.1;
@@ -440,7 +442,9 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     }
 
+    # ----------------------------
     # gRPC locations
+    # ----------------------------
     location /vless-grpc {
         grpc_pass grpc://127.0.0.1:24456;
         grpc_set_header X-Real-IP $remote_addr;
