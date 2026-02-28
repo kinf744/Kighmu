@@ -477,7 +477,9 @@ server {
 
     root /home/vps/public_html;
 
+    # ----------------------------
     # WebSocket locations
+    # ----------------------------
     location /vless {
         proxy_pass http://127.0.0.1:14016;
         proxy_http_version 1.1;
