@@ -203,6 +203,11 @@ FILES=(
   "Hysteria1.sh"
   "udp_request.sh"
   "Auto-clean.sh"
+  "install-1.sh"
+  "schema.sql"
+  "admin.html"
+  "reseller.html"
+  "server.js"
   "badvpn.sh"
 )
 
