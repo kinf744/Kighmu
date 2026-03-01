@@ -12,7 +12,7 @@ C='\033[0;36m'; B='\033[1m'; P='\033[0;35m'; NC='\033[0m'
 # --- Constantes ---
 INSTALL_DIR="/opt/kighmu-panel"
 NODE_PORT="3000"          # Port interne Node.js (jamais exposé directement)
-NGINX_PORT="81"           # Port public Nginx → compatible Xray qui utilise le 80
+NGINX_PORT="8585"           # Port public Nginx → compatible Xray qui utilise le 81
 DB_NAME="kighmu_panel"
 DB_USER="kighmu_user"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -34,7 +34,7 @@ EOF
   echo -e "${NC}"
   echo -e "  ${C}Panel v2${NC} — Gestionnaire de tunnels VPN"
   echo -e "  ${P}Compatible Xray / V2Ray / SSH / UDP${NC}"
-  echo -e "  ${Y}Nginx panel : port ${NGINX_PORT} (Xray utilise le port 80)${NC}"
+  echo -e "  ${Y}Nginx panel : port ${NGINX_PORT} (Xray utilise le port 81)${NC}"
   echo ""
   echo -e "  ${B}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 }
@@ -391,7 +391,7 @@ PKG
   fi
   ok "Panel démarré avec PM2"
 
-  # ── 9. Nginx ── PORT 81 (Xray utilise le 80) ────────────────
+  # ── 9. Nginx ── PORT 8585 (Xray utilise le 87) ────────────────
   info "Installation et configuration Nginx (port ${NGINX_PORT})..."
   apt-get install -y -qq nginx 2>/dev/null
 
@@ -438,17 +438,17 @@ NGINXHTTP
     fi
 
     info "Obtention du certificat TLS pour ${DOMAIN}..."
-    warn "Assurez-vous que le port 80 est accessible depuis internet pour la validation ACME"
+    warn "Assurez-vous que le port 87 est accessible depuis internet pour la validation ACME"
     echo ""
 
-    # Ouvrir temporairement le port 80 pour Certbot
-    ufw allow 80/tcp >/dev/null 2>&1 || true
+    # Ouvrir temporairement le port 87 pour Certbot
+    ufw allow 87/tcp >/dev/null 2>&1 || true
 
     if certbot --nginx -d "${DOMAIN}" --non-interactive --agree-tos \
         --register-unsafely-without-email \
         --redirect 2>/dev/null; then
 
-      # Après Certbot : forcer le port 81 pour HTTPS aussi
+      # Après Certbot : forcer le port 8585 pour HTTPS aussi
       cat > /etc/nginx/sites-available/kighmu << NGINXHTTPS
 server {
     listen ${NGINX_PORT} ssl;
@@ -480,8 +480,8 @@ server {
 
 # Redirection HTTP → HTTPS (port 80 → port 81)
 server {
-    listen 80;
-    listen [::]:80;
+    listen 87;
+    listen [::]:87;
     server_name ${DOMAIN};
     return 301 https://\$host:${NGINX_PORT}\$request_uri;
 }
@@ -491,10 +491,10 @@ NGINXHTTPS
       nginx -t 2>/dev/null && systemctl reload nginx
       ok "TLS activé → ${ACCESS_URL}"
       # Refermer le port 80 (Xray en a besoin)
-      ufw delete allow 80/tcp >/dev/null 2>&1 || true
+      ufw delete allow 87/tcp >/dev/null 2>&1 || true
     else
       warn "Certbot a échoué — le panel fonctionne en HTTP sur le port ${NGINX_PORT}"
-      warn "Vérifiez que ${DOMAIN} pointe bien vers ce serveur et que le port 80 est ouvert."
+      warn "Vérifiez que ${DOMAIN} pointe bien vers ce serveur et que le port 87 est ouvert."
       ACCESS_URL="http://${DOMAIN}:${NGINX_PORT}"
     fi
 
