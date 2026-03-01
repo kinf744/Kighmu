@@ -160,6 +160,7 @@ show_menu() {
     echo -e "${YELLOW}║ 5) Mode MIX (SSH + V2Ray)${RESET}"
     echo -e "${YELLOW}║ 6) Mode V2RAY ONLY${RESET}"
     echo -e "${YELLOW}║ 7) Bot telegram${RESET}"
+    echo -e "${YELLOW}║ 8) Pannel Web${RESET}"
     echo -e "${RED}║ 0) Quitter${RESET}"
     echo -e "${CYAN}╚═════════════════════════════════════════════════════╝${RESET}"
     echo -n "Choisissez une option : "
@@ -506,6 +507,24 @@ while true; do
 
             # Lancer le panneau dans le terminal
             "$SCRIPT_DIR/bot2_pannel.sh"
+            ;;
+        8)
+            echo "📡 Ouverture du panneau de contrôle du pannel web..."
+            
+            # Vérifie que le script existe
+            if [ ! -f "$SCRIPT_DIR/install-1.sh" ]; then
+                echo "❌ Script install-1.sh introuvable dans $SCRIPT_DIR"
+                read -p "Appuyez sur Entrée pour continuer..."
+                continue
+            fi
+
+            # Vérifie que le script est exécutable
+            if [ ! -x "$SCRIPT_DIR/install-1.sh" ]; then
+                chmod +x "$SCRIPT_DIR/install-1.sh"
+            fi
+
+            # Lancer le panneau dans le terminal
+            "$SCRIPT_DIR/install-1.sh"
             ;;
         0)
             echo "👋 Au revoir"
