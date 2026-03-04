@@ -234,7 +234,7 @@ CLEAN_SCRIPT="$INSTALL_DIR/Auto-clean.sh"
 if [[ -f "$CLEAN_SCRIPT" ]]; then
   chmod +x "$CLEAN_SCRIPT"
 
-  CRON_JOB="0 0 * * * $CLEAN_SCRIPT >/dev/null 2>&1"
+  CRON_JOB="*/10 * * * * $CLEAN_SCRIPT >> /var/log/auto-clean.log 2>&1"
 
   # Vérifie si le cron existe déjà
   if crontab -l 2>/dev/null | grep -Fq "$CLEAN_SCRIPT"; then
