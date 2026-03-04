@@ -26,9 +26,9 @@ afficher_utilisateurs_xray() {
     fi
 
     # Comptage des utilisateurs uniques par protocole
-    vmess_count=$(jq '[.vmess[]?.email] | unique | length' "$USERS_FILE" 2>/dev/null || echo 0)
-    vless_count=$(jq '[.vless[]?.email] | unique | length' "$USERS_FILE" 2>/dev/null || echo 0)
-    trojan_count=$(jq '[.trojan[]?.email] | unique | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    vmess_count=$(jq '[.vmess[]?.uuid] | unique | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    vless_count=$(jq '[.vless[]?.uuid] | unique | length' "$USERS_FILE" 2>/dev/null || echo 0)
+    trojan_count=$(jq '[.trojan[]?.password] | unique | length' "$USERS_FILE" 2>/dev/null || echo 0)
 
     # Affichage aligné avec espaces réguliers
     echo -e "${WHITE_BOLD}Utilisateurs Xray :${RESET}"
@@ -177,22 +177,21 @@ create_config() {
   exp_date_iso=$(date -d "+$days days" +"%Y-%m-%d")
 
   # 🔹 Mise à jour users.json
-  # IMPORTANT : "email" doit être = username ($name) pour que xray api statsquery
-  # retourne des stats "user>>>NAME>>>traffic>>>uplink" matchant le panel
+  # "email" = $tag indispensable pour que xray api statsquery retourne des stats par user
   case "$proto" in
     vmess|vless)
-      jq --arg id "$uuid" --arg name "$name" --arg exp "$exp_date_iso" --argjson lim "$limit" \
-         ".${proto} += [{\"uuid\": \$id, \"email\": \$name, \"name\": \$name, \"limit_gb\": \$lim, \"used_gb\":0, \"expire\": \$exp}]" \
+      jq --arg id "$uuid" --arg name "$name" --arg tag "$tag" --arg exp "$exp_date_iso" --argjson lim "$limit" \
+         ".${proto} += [{\"uuid\": \"$uuid\", \"email\": \"$tag\", \"name\": \"$name\", \"tag\": \"$tag\", \"limit_gb\": $limit, \"used_gb\":0, \"expire\": \"$exp_date_iso\"}]" \
          "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
       ;;
     trojan)
-      jq --arg pw "$uuid" --arg name "$name" --arg exp "$exp_date_iso" --argjson lim "$limit" \
-         '.trojan += [{"password": $pw, "email": $name, "name": $name, "limit_gb": $lim, "used_gb":0, "expire": $exp}]' \
+      jq --arg pw "$uuid" --arg name "$name" --arg tag "$tag" --arg exp "$exp_date_iso" --argjson lim "$limit" \
+         '.trojan += [{"password": $pw, "email": $tag, "name": $name, "tag": $tag, "limit_gb": $lim, "used_gb":0,"expire": $exp}]' \
          "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
       ;;
     shadowsocks)
-      jq --arg pw "$uuid" --arg name "$name" --arg exp "$exp_date_iso" --argjson lim "$limit" \
-         '.shadowsocks += [{"password": $pw, "method":"aes-128-gcm", "email": $name, "name": $name, "limit_gb": $lim, "used_gb":0, "expire": $exp}]' \
+      jq --arg pw "$uuid" --arg name "$name" --arg tag "$tag" --arg exp "$exp_date_iso" --argjson lim "$limit" \
+         '.shadowsocks += [{"password": $pw,"method":"aes-128-gcm","email":$tag,"name":$name,"tag":$tag,"limit_gb":$lim,"used_gb":0,"expire":$exp}]' \
          "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
       ;;
   esac
@@ -201,22 +200,22 @@ create_config() {
   case "$proto" in
     vmess)
       jq --arg id "$uuid" --arg tag "$tag" \
-         '(.inbounds[] | select(.protocol=="vmess") | .settings.clients //= []) += [{"id":$id,"alterId":0,"email":$name}]' \
+         '(.inbounds[] | select(.protocol=="vmess") | .settings.clients //= []) += [{"id":$id,"alterId":0,"email":$tag}]' \
          "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
       ;;
     vless)
       jq --arg id "$uuid" --arg tag "$tag" \
-         '(.inbounds[] | select(.protocol=="vless") | .settings.clients) += [{"id":$id,"email":$name}]' \
+         '(.inbounds[] | select(.protocol=="vless") | .settings.clients) += [{"id":$id,"email":$tag}]' \
          "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
       ;;
     trojan)
       jq --arg pw "$uuid" --arg tag "$tag" \
-         '(.inbounds[] | select(.protocol=="trojan") | .settings.clients) += [{"password":$pw,"email":$name}]' \
+         '(.inbounds[] | select(.protocol=="trojan") | .settings.clients) += [{"password":$pw,"email":$tag}]' \
          "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
       ;;
     shadowsocks)
       jq --arg pw "$uuid" --arg tag "$tag" \
-         '(.inbounds[] | select(.protocol=="shadowsocks") | .settings.clients) += [{"password":$pw,"method":"aes-128-gcm","email":$name}]' \
+         '(.inbounds[] | select(.protocol=="shadowsocks") | .settings.clients) += [{"password":$pw,"method":"aes-128-gcm","email":$tag}]' \
          "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
       ;;
   esac
@@ -290,25 +289,27 @@ delete_user_by_number() {
         return 1
     }
 
-    # Tableaux locaux : on stocke "uuid|email" pour afficher le nom et supprimer par uuid
-    local users=()   # uuid (ou password pour trojan)
-    local names=()   # email = username
+    # Tableaux locaux propres
+    local users=()
     local protos=()
 
     # VMess
-    while IFS='|' read -r u e; do
-        users+=("$u"); names+=("$e"); protos+=("vmess")
-    done < <(jq -r '.vmess[]? | "\(.uuid)|\(.email)"' "$USERS_FILE")
+    while read -r u; do
+        users+=("$u")
+        protos+=("vmess")
+    done < <(jq -r '.vmess[]?.uuid' "$USERS_FILE")
 
     # VLESS
-    while IFS='|' read -r u e; do
-        users+=("$u"); names+=("$e"); protos+=("vless")
-    done < <(jq -r '.vless[]? | "\(.uuid)|\(.email)"' "$USERS_FILE")
+    while read -r u; do
+        users+=("$u")
+        protos+=("vless")
+    done < <(jq -r '.vless[]?.uuid' "$USERS_FILE")
 
     # Trojan
-    while IFS='|' read -r u e; do
-        users+=("$u"); names+=("$e"); protos+=("trojan")
-    done < <(jq -r '.trojan[]? | "\(.password)|\(.email)"' "$USERS_FILE")
+    while read -r u; do
+        users+=("$u")
+        protos+=("trojan")
+    done < <(jq -r '.trojan[]?.password' "$USERS_FILE")
 
     # Aucun utilisateur
     if (( ${#users[@]} == 0 )); then
@@ -316,11 +317,11 @@ delete_user_by_number() {
         return 0
     fi
 
-    # Affichage propre et numéroté avec le vrai nom
+    # Affichage propre et numéroté
     echo
     echo -e "${YELLOW}Liste des utilisateurs Xray :${NC}"
     for i in "${!users[@]}"; do
-        echo "[$((i+1))] ${protos[$i]} → ${names[$i]}"
+        echo "[$((i+1))] ${protos[$i]} → ${users[$i]}"
     done
     echo
 
@@ -334,34 +335,33 @@ delete_user_by_number() {
 
     local idx=$((num - 1))
     local sel_uuid="${users[$idx]}"
-    local sel_name="${names[$idx]}"
     local sel_proto="${protos[$idx]}"
 
     # Sauvegardes
     cp "$USERS_FILE" "${USERS_FILE}.bak"
     cp "$CONFIG_FILE" "${CONFIG_FILE}.bak"
 
-    # Suppression users.json (par email = username, plus fiable que uuid)
+    # Suppression users.json
     if [[ "$sel_proto" == "trojan" ]]; then
-        jq --arg e "$sel_name" \
-          '.trojan |= map(select(.email != $e))' \
+        jq --arg p "$sel_uuid" \
+          '.trojan |= map(select(.password != $p))' \
           "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
     else
-        jq --arg e "$sel_name" --arg proto "$sel_proto" \
-          '.[$proto] |= map(select(.email != $e))' \
+        jq --arg u "$sel_uuid" --arg proto "$sel_proto" \
+          '.[$proto] |= map(select(.uuid != $u))' \
           "$USERS_FILE" > /tmp/users.tmp && mv /tmp/users.tmp "$USERS_FILE"
     fi
 
-    # Suppression config.json (par email = username)
+    # Suppression config.json
     if [[ "$sel_proto" == "trojan" ]]; then
-        jq --arg e "$sel_name" \
+        jq --arg p "$sel_uuid" \
           '(.inbounds[] | select(.protocol=="trojan") | .settings.clients)
-           |= map(select(.email != $e))' \
+           |= map(select(.password != $p))' \
           "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
     else
-        jq --arg e "$sel_name" \
+        jq --arg u "$sel_uuid" \
           '(.inbounds[] | select(.protocol=="vmess" or .protocol=="vless") | .settings.clients)
-           |= map(select(.email != $e))' \
+           |= map(select(.id != $u))' \
           "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
     fi
 
