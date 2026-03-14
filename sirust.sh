@@ -1,5 +1,5 @@
 #!/bin/bash
-# zivpn.sh - Aligné sur arivpnstores/udp-zivpn
+# sirust.sh - Aligné sur arivpnstores/udp-zivpn
 set -euo pipefail
 
 ZIVPN_BIN="/usr/local/bin/zivpn"
