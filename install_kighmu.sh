@@ -199,7 +199,7 @@ FILES=(
   "xray-quota.go"
   "xray-quota-panel.sh"
   "install_v2ray.sh"
-  "zivpn.sh"
+  "sirust.sh"
   "Hysteria1.sh"
   "udp_request.sh"
   "Auto-clean.sh"
