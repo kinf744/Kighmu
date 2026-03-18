@@ -1118,9 +1118,9 @@ setup_traffic_cron() {
 
   local panel_url="http://127.0.0.1:${NODE_PORT}"
 
-  # Créer le répertoire kighmu
+  # Créer les répertoires nécessaires
   mkdir -p /etc/kighmu
-  mkdir -p /var/lib/kighmu/ssh-counters
+  mkdir -p /var/lib/kighmu/bandwidth/pidtrack
 
   # ── Écrire le script traffic-collect.sh ──────────────────
   cat > "$TRAFFIC_SCRIPT" << TRAFFIC_EOF
@@ -1128,6 +1128,7 @@ setup_traffic_cron() {
 # =============================================================
 # KIGHMU PANEL v2 — Collecte des statistiques de trafic VPN
 # Généré par install.sh
+# Méthode SSH : /proc/[pid]/io (même principe que FirewallFalcon)
 # =============================================================
 PANEL_URL="${panel_url}"
 SECRET="${secret}"
@@ -1135,11 +1136,12 @@ XRAY_BIN="\${XRAY_BIN:-/usr/local/bin/xray}"
 XRAY_API="\${XRAY_API:-127.0.0.1:10085}"
 V2RAY_BIN="\${V2RAY_BIN:-/usr/local/bin/v2ray}"
 V2RAY_API="\${V2RAY_API:-127.0.0.1:10086}"
-DELTA_DIR="/var/lib/kighmu/ssh-counters"
+BW_DIR="/var/lib/kighmu/bandwidth"
+PID_DIR="\$BW_DIR/pidtrack"
 USER_FILE="/etc/kighmu/users.list"
 TS="\$(date '+%Y-%m-%d %H:%M:%S')"
 
-mkdir -p "\$DELTA_DIR"
+mkdir -p "\$BW_DIR" "\$PID_DIR"
 
 send_stats() {
   local resp
@@ -1204,67 +1206,110 @@ collect_v2ray() {
   [ \$first -eq 0 ] && send_stats "\$json" || echo "[\${TS}] [V2RAY] Aucune stat"
 }
 
-# ── SSH : delta via KIGHMU_SSH + CONNMARK ────────────────────
-# Les règles iptables sont créées par server.js (sshIptablesAdd)
-# à chaque création d'un user SSH, et par auto-clean.sh au démarrage.
-# Ici on lit uniquement le delta depuis la dernière exécution.
+# ── SSH : lecture /proc/[pid]/io ─────────────────────────────
+# Même mécanisme que FirewallFalcon/menu.sh :
+#   1. Trouver les PIDs sshd actifs (pgrep + scan /proc/*/loginuid)
+#   2. Lire rchar+wchar depuis /proc/[pid]/io
+#   3. Delta = valeur_actuelle - valeur_précédente (pidtrack/)
+#   4. Cumul dans BW_DIR/username.usage (bytes bruts)
+#   5. Envoyer uniquement le delta de ce cycle au panel
+# Couvre tous les protocoles SSH : direct, WS, SSL, SlowDNS, UDP
 collect_ssh() {
   [ ! -f "\$USER_FILE" ] && return
-  command -v iptables &>/dev/null || return
-
-  # Vérifier que la chaîne KIGHMU_SSH existe
-  if ! iptables -L KIGHMU_SSH 2>/dev/null | grep -q "Chain KIGHMU_SSH"; then
-    echo "[\${TS}] [SSH] Chaine KIGHMU_SSH absente — en attente init par auto-clean.sh"
-    return
-  fi
-
   local json='{"stats":[' first=1 has_data=0
 
   while IFS='|' read -r username _rest; do
     [ -z "\$username" ] && continue
-    local uid
-    uid=\$(id -u "\$username" 2>/dev/null) || continue
 
-    # Lire compteur OUTPUT actuel (download client)
-    local cur_out=0
-    cur_out=\$(iptables -nvx -L KIGHMU_SSH 2>/dev/null \\
-      | awk -v uid="\$uid" '
-          /uid-owner/ && (\$0 ~ "uid-owner " uid " " || \$0 ~ "uid-owner " uid "\$") {sum+=\$2}
-          END {print sum+0}')
+    local user_uid
+    user_uid=\$(id -u "\$username" 2>/dev/null) || continue
 
-    # Lire compteur INPUT actuel (upload client via CONNMARK)
-    local hex_mark cur_in=0
-    hex_mark=\$(printf '0x%x' "\$uid")
-    cur_in=\$(iptables -nvx -L INPUT 2>/dev/null \\
-      | awk -v mark="\$hex_mark" '/connmark/ && \$0 ~ "mark match " mark {sum+=\$2} END{print sum+0}')
+    # --- Trouver les PIDs sshd de cet user ---
+    local pids=""
+    pids=\$(pgrep -u "\$username" sshd 2>/dev/null | tr '\n' ' ')
 
-    # Lire valeurs précédentes
-    local prev_out=0 prev_in=0
-    [ -f "\${DELTA_DIR}/\${username}.out" ] && prev_out=\$(< "\${DELTA_DIR}/\${username}.out")
-    [ -f "\${DELTA_DIR}/\${username}.in"  ] && prev_in=\$(<  "\${DELTA_DIR}/\${username}.in")
+    # Scan /proc via loginuid (capture sessions tunnelées WS/SSL/SlowDNS)
+    for p in /proc/[0-9]*/loginuid; do
+      [ ! -f "\$p" ] && continue
+      local luid; luid=\$(cat "\$p" 2>/dev/null)
+      [ -z "\$luid" ] || [ "\$luid" = "4294967295" ] && continue
+      [ "\$luid" != "\$user_uid" ] && continue
+      local pid_dir pid_num cname ppid_val
+      pid_dir=\$(dirname "\$p")
+      pid_num=\$(basename "\$pid_dir")
+      cname=\$(cat "\$pid_dir/comm" 2>/dev/null)
+      [ "\$cname" != "sshd" ] && continue
+      ppid_val=\$(awk '/^PPid:/{print \$2}' "\$pid_dir/status" 2>/dev/null)
+      [ "\$ppid_val" = "1" ] && continue
+      pids="\$pids \$pid_num"
+    done
 
-    # Calcul delta (protection reset compteur au reboot)
-    local delta_out delta_in
-    (( cur_out >= prev_out )) && delta_out=\$(( cur_out - prev_out )) || delta_out=\$cur_out
-    (( cur_in  >= prev_in  )) && delta_in=\$((  cur_in  - prev_in  )) || delta_in=\$cur_in
+    # Dédupliquer
+    pids=\$(echo "\$pids" | tr ' ' '\n' | sort -u | grep -v '^\$' | tr '\n' ' ')
 
-    # Sauvegarder les valeurs actuelles pour la prochaine fois
-    echo "\$cur_out" > "\${DELTA_DIR}/\${username}.out"
-    echo "\$cur_in"  > "\${DELTA_DIR}/\${username}.in"
+    # Lire le cumul stocké
+    local usagefile="\$BW_DIR/\${username}.usage"
+    local accumulated=0
+    if [ -f "\$usagefile" ]; then
+      accumulated=\$(cat "\$usagefile" 2>/dev/null)
+      [[ ! "\$accumulated" =~ ^[0-9]+\$ ]] && accumulated=0
+    fi
 
-    (( delta_out + delta_in == 0 )) && continue
+    if [ -z "\$pids" ]; then
+      rm -f "\$PID_DIR/\${username}__"*.last 2>/dev/null
+      continue
+    fi
 
-    # upload_bytes  = données envoyées par client = INPUT serveur  (delta_in)
-    # download_bytes = données reçues par client  = OUTPUT serveur (delta_out)
+    # --- Calculer le delta I/O de ce cycle ---
+    local delta_total=0
+    for pid in \$pids; do
+      [ -z "\$pid" ] && continue
+      local io_file="/proc/\$pid/io" cur=0
+      if [ -r "\$io_file" ]; then
+        local rchar wchar
+        rchar=\$(awk '/^rchar:/{print \$2}' "\$io_file" 2>/dev/null); rchar=\${rchar:-0}
+        wchar=\$(awk '/^wchar:/{print \$2}' "\$io_file" 2>/dev/null); wchar=\${wchar:-0}
+        cur=\$(( rchar + wchar ))
+      fi
+      local pidfile="\$PID_DIR/\${username}__\${pid}.last"
+      if [ -f "\$pidfile" ]; then
+        local prev; prev=\$(cat "\$pidfile" 2>/dev/null)
+        [[ ! "\$prev" =~ ^[0-9]+\$ ]] && prev=0
+        if [ "\$cur" -ge "\$prev" ]; then
+          delta_total=\$(( delta_total + cur - prev ))
+        else
+          delta_total=\$(( delta_total + cur ))
+        fi
+      fi
+      echo "\$cur" > "\$pidfile"
+    done
+
+    # Nettoyer les fichiers de PIDs morts
+    for f in "\$PID_DIR/\${username}__"*.last; do
+      [ ! -f "\$f" ] && continue
+      local fpid; fpid=\$(basename "\$f" .last); fpid=\${fpid#\${username}__}
+      [ ! -d "/proc/\$fpid" ] && rm -f "\$f"
+    done
+
+    # Mettre à jour le cumul total
+    local new_total=\$(( accumulated + delta_total ))
+    echo "\$new_total" > "\$usagefile"
+
+    (( delta_total == 0 )) && continue
+
+    # Split 50/50 upload/download (SSH ne distingue pas nativement)
+    local half=\$(( delta_total / 2 ))
+    local other=\$(( delta_total - half ))
+
     [ \$first -eq 0 ] && json+=","
-    json+="{\"username\":\"\${username}\",\"upload_bytes\":\${delta_in},\"download_bytes\":\${delta_out}}"
-    first=0
-    has_data=1
-    echo "[\${TS}] [SSH-DELTA] \$username up:\${delta_in}B down:\${delta_out}B"
+    json+="{\"username\":\"\${username}\",\"upload_bytes\":\${half},\"download_bytes\":\${other}}"
+    first=0; has_data=1
+    echo "[\${TS}] [SSH] \$username +\$(( delta_total / 1048576 ))MB (cumul: \$(( new_total / 1048576 ))MB)"
+
   done < "\$USER_FILE"
 
   json+=']}' 
-  [ \$has_data -eq 1 ] && send_stats "\$json" || echo "[\${TS}] [SSH] Aucun trafic SSH"
+  [ \$has_data -eq 1 ] && send_stats "\$json" || echo "[\${TS}] [SSH] Aucun trafic SSH actif"
 }
 
 echo "[\${TS}] === Collecte trafic KIGHMU démarrée ==="

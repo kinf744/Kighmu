@@ -58,9 +58,10 @@ echo "[$(TS)] Debut nettoyage + collecte trafic + quota"   >> "$LOG_FILE"
 # ============================================================
 # VARIABLES GLOBALES SSH
 # ============================================================
-DELTA_DIR="/var/lib/kighmu/ssh-counters"
+BW_DIR="/var/lib/kighmu/bandwidth"
+PID_DIR="$BW_DIR/pidtrack"
 USER_FILE="/etc/kighmu/users.list"
-mkdir -p "$DELTA_DIR"
+mkdir -p "$BW_DIR" "$PID_DIR"
 
 # ==========================================
 # SECTION 0 : Collecte trafic -> panel
@@ -337,114 +338,127 @@ collect_v2ray_traffic() {
     fi
 }
 
-# ── 0c. SSH : comptage iptables par IP source ────────────────
-# Utilisé pour les connexions SSH directes (port 22, sshws port 80)
-# qui ne passent PAS par V2Ray.
-# Méthode : chaînes KIGHMU_IN/OUT par IP, mapping via auth.log + who.
+# ── 0c. SSH : lecture /proc/[pid]/io — même mécanisme que FirewallFalcon ──
+# Principe :
+#   1. Trouver tous les PIDs sshd actifs pour l'user (pgrep + scan loginuid)
+#   2. Lire rchar+wchar depuis /proc/[pid]/io
+#   3. Delta = valeur_actuelle - valeur_précédente (stockée dans pidtrack/)
+#   4. Cumuler le delta dans BW_DIR/username.usage (en bytes bruts)
+#   5. Envoyer uniquement le delta de ce cycle au panel
+# Avantage : fonctionne pour SSH direct, WS, SSL, SlowDNS, UDP — sans iptables.
 collect_ssh_traffic() {
     [[ ! -f "$USER_FILE" ]] && return
-    command -v iptables &>/dev/null || return
-
-    # Créer les chaînes de comptage si absentes
-    for chain in KIGHMU_IN KIGHMU_OUT; do
-        iptables -N "$chain" 2>/dev/null || true
-    done
-    iptables -C INPUT  -j KIGHMU_IN  2>/dev/null || iptables -I INPUT  1 -j KIGHMU_IN
-    iptables -C OUTPUT -j KIGHMU_OUT 2>/dev/null || iptables -I OUTPUT 1 -j KIGHMU_OUT
-
-    # Construire map IP → username
-    declare -A ip_user_map=()
-    declare -A user_up=()
-    declare -A user_down=()
-
-    # Source 1 : auth.log — connexions SSH récentes (hors root)
-    local authlog="/var/log/auth.log"
-    if [[ -f "$authlog" ]]; then
-        while IFS= read -r line; do
-            if [[ "$line" =~ Accepted.*for[[:space:]]([^[:space:]]+)[[:space:]]from[[:space:]]([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+) ]]; then
-                local auser="${BASH_REMATCH[1]}" aip="${BASH_REMATCH[2]}"
-                [[ "$auser" == "root" ]] && continue
-                # Ignorer 127.0.0.1 (connexions via V2Ray dokodemo — déjà comptées)
-                [[ "$aip" == "127.0.0.1" ]] && continue
-                grep -q "^${auser}|" "$USER_FILE" 2>/dev/null \
-                    && ip_user_map["$aip"]="$auser"
-            fi
-        done < <(grep "Accepted" "$authlog" 2>/dev/null | tail -500)
-    fi
-
-    # Source 2 : who — sessions interactives actives
-    while IFS= read -r line; do
-        local wuser wip
-        wuser=$(echo "$line" | awk '{print $1}')
-        wip=$(echo "$line" | grep -oE '\([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\)' | tr -d '()')
-        [[ -z "$wuser" || -z "$wip" || "$wuser" == "root" ]] && continue
-        [[ "$wip" == "127.0.0.1" ]] && continue
-        grep -q "^${wuser}|" "$USER_FILE" 2>/dev/null \
-            && ip_user_map["$wip"]="$wuser"
-    done < <(who 2>/dev/null)
-
-    if [[ ${#ip_user_map[@]} -eq 0 ]]; then
-        echo "[$(TS)] [SSH] Aucune session SSH directe detectee" >> "$LOG_FILE"
-        return
-    fi
-
-    # Initialiser compteurs par username
-    declare -A user_up=()
-    declare -A user_down=()
-    while IFS='|' read -r username _rest; do
-        [[ -z "$username" ]] && continue
-        user_up["$username"]=0
-        user_down["$username"]=0
-    done < "$USER_FILE"
-
-    for ip in "${!ip_user_map[@]}"; do
-        local uname="${ip_user_map[$ip]}"
-        [[ -z "${user_up[$uname]+x}" ]] && continue
-
-        # Ajouter règles pour cette IP si absentes
-        iptables -C KIGHMU_IN  -s "$ip" 2>/dev/null || iptables -A KIGHMU_IN  -s "$ip"
-        iptables -C KIGHMU_OUT -d "$ip" 2>/dev/null || iptables -A KIGHMU_OUT -d "$ip"
-
-        local fin="${DELTA_DIR}/ip_${ip//\./_}.in"
-        local fout="${DELTA_DIR}/ip_${ip//\./_}.out"
-
-        local cur_in cur_out prev_in=0 prev_out=0
-        cur_in=$(iptables  -nvx -L KIGHMU_IN  2>/dev/null \
-            | awk -v ip="$ip" '$0 ~ ip {sum+=$2} END{print sum+0}')
-        cur_out=$(iptables -nvx -L KIGHMU_OUT 2>/dev/null \
-            | awk -v ip="$ip" '$0 ~ ip {sum+=$2} END{print sum+0}')
-        [[ -f "$fin"  ]] && prev_in=$(< "$fin")
-        [[ -f "$fout" ]] && prev_out=$(< "$fout")
-
-        local delta_in delta_out
-        (( cur_in  >= prev_in  )) && delta_in=$(( cur_in   - prev_in  )) || delta_in=$cur_in
-        (( cur_out >= prev_out )) && delta_out=$(( cur_out  - prev_out )) || delta_out=$cur_out
-
-        echo "$cur_in"  > "$fin"
-        echo "$cur_out" > "$fout"
-
-        (( delta_in + delta_out == 0 )) && continue
-
-        user_up["$uname"]=$(( ${user_up[$uname]:-0}   + delta_in  ))
-        user_down["$uname"]=$(( ${user_down[$uname]:-0} + delta_out ))
-        echo "[$(TS)] [SSH] $uname ($ip) ↑${delta_in}B ↓${delta_out}B" >> "$LOG_FILE"
-    done
 
     local json='{"stats":[' first=1 has_data=0
-    for uname in "${!user_up[@]}"; do
-        local up="${user_up[$uname]:-0}" dn="${user_down[$uname]:-0}"
-        (( up + dn == 0 )) && continue
-        [[ $first -eq 0 ]] && json+=","
-        json+="{\"username\":\"${uname}\",\"upload_bytes\":${up},\"download_bytes\":${dn}}"
-        first=0; has_data=1
-    done
-    json+="]}"
 
+    while IFS='|' read -r username _rest; do
+        [[ -z "$username" ]] && continue
+
+        local user_uid
+        user_uid=$(id -u "$username" 2>/dev/null) || continue
+
+        # --- Trouver tous les PIDs sshd de cet user ---
+        local pids=""
+
+        # Méthode 1 : pgrep direct
+        local m1
+        m1=$(pgrep -u "$username" sshd 2>/dev/null | tr '\n' ' ')
+        pids="$m1"
+
+        # Méthode 2 : scan /proc via loginuid (capture les sessions tunnelées)
+        for p in /proc/[0-9]*/loginuid; do
+            [[ ! -f "$p" ]] && continue
+            local luid
+            luid=$(cat "$p" 2>/dev/null)
+            [[ -z "$luid" || "$luid" == "4294967295" ]] && continue
+            [[ "$luid" != "$user_uid" ]] && continue
+            local pid_dir pid_num cname ppid_val
+            pid_dir=$(dirname "$p")
+            pid_num=$(basename "$pid_dir")
+            cname=$(cat "$pid_dir/comm" 2>/dev/null)
+            [[ "$cname" != "sshd" ]] && continue
+            ppid_val=$(awk '/^PPid:/{print $2}' "$pid_dir/status" 2>/dev/null)
+            [[ "$ppid_val" == "1" ]] && continue  # Ignorer le sshd maître
+            pids="$pids $pid_num"
+        done
+
+        # Dédupliquer
+        pids=$(echo "$pids" | tr ' ' '\n' | sort -u | grep -v '^$' | tr '\n' ' ')
+
+        # Lire le cumul stocké
+        local usagefile="$BW_DIR/${username}.usage"
+        local accumulated=0
+        if [[ -f "$usagefile" ]]; then
+            accumulated=$(cat "$usagefile" 2>/dev/null)
+            [[ ! "$accumulated" =~ ^[0-9]+$ ]] && accumulated=0
+        fi
+
+        if [[ -z "$pids" ]]; then
+            rm -f "$PID_DIR/${username}__"*.last 2>/dev/null
+            continue
+        fi
+
+        # --- Calculer le delta I/O de ce cycle ---
+        local delta_total=0
+
+        for pid in $pids; do
+            [[ -z "$pid" ]] && continue
+            local io_file="/proc/$pid/io"
+            local cur=0
+            if [[ -r "$io_file" ]]; then
+                local rchar wchar
+                rchar=$(awk '/^rchar:/{print $2}' "$io_file" 2>/dev/null || echo 0)
+                wchar=$(awk '/^wchar:/{print $2}' "$io_file" 2>/dev/null || echo 0)
+                [[ -z "$rchar" ]] && rchar=0
+                [[ -z "$wchar" ]] && wchar=0
+                cur=$((rchar + wchar))
+            fi
+            local pidfile="$PID_DIR/${username}__${pid}.last"
+            if [[ -f "$pidfile" ]]; then
+                local prev
+                prev=$(cat "$pidfile" 2>/dev/null)
+                [[ ! "$prev" =~ ^[0-9]+$ ]] && prev=0
+                if [[ "$cur" -ge "$prev" ]]; then
+                    delta_total=$((delta_total + cur - prev))
+                else
+                    delta_total=$((delta_total + cur))
+                fi
+            fi
+            echo "$cur" > "$pidfile"
+        done
+
+        # Nettoyer les fichiers de PIDs morts
+        for f in "$PID_DIR/${username}__"*.last; do
+            [[ ! -f "$f" ]] && continue
+            local fpid
+            fpid=$(basename "$f" .last)
+            fpid=${fpid#${username}__}
+            [[ ! -d "/proc/$fpid" ]] && rm -f "$f"
+        done
+
+        # Mettre à jour le cumul total
+        local new_total=$((accumulated + delta_total))
+        echo "$new_total" > "$usagefile"
+
+        (( delta_total == 0 )) && continue
+
+        # Split 50/50 upload/download (SSH ne distingue pas nativement)
+        local half=$(( delta_total / 2 ))
+        local other=$(( delta_total - half ))
+
+        [[ $first -eq 0 ]] && json+=","
+        json+="{\"username\":\"${username}\",\"upload_bytes\":${half},\"download_bytes\":${other}}"
+        first=0; has_data=1
+        echo "[$(TS)] [SSH] $username +$(( delta_total / 1048576 ))MB (cumul: $(( new_total / 1048576 ))MB)" >> "$LOG_FILE"
+
+    done < "$USER_FILE"
+
+    json+="]}"
     if [[ $has_data -eq 1 ]]; then
         echo "[$(TS)] [SSH] Envoi stats..." >> "$LOG_FILE"
         send_stats "$json"
     else
-        echo "[$(TS)] [SSH] Aucun trafic SSH direct" >> "$LOG_FILE"
+        echo "[$(TS)] [SSH] Aucun trafic SSH actif" >> "$LOG_FILE"
     fi
 }
 
