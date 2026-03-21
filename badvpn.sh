@@ -5,10 +5,10 @@
 set -euo pipefail
 
 # Couleurs
-RED="e[1;31m"
-GREEN="e[1;32m"
-CYAN="e[1;36m"
-RESET="e[0m"
+RED="\e[1;31m"
+GREEN="\e[1;32m"
+CYAN="\e[1;36m"
+RESET="\e[0m"
 
 # Vérification privilèges root
 if [[ $EUID -ne 0 ]]; then
@@ -20,6 +20,7 @@ fi
 BIN_PATH="/root/Kighmu/badvpn-udpgw"
 BINARY_URL="https://raw.githubusercontent.com/kinf744/binaries/main/badvpn-udpgw"
 PORT="7300"
+LISTEN_ADDR="127.0.0.1"
 LOG_DIR="/var/log/badvpn"
 LOG_FILE="$LOG_DIR/install.log"
 SYSTEMD_UNIT="/etc/systemd/system/badvpn.service"
@@ -51,28 +52,11 @@ else
   echo -e "${GREEN}BadVPN déjà installé sur $BIN_PATH.${RESET}"
 fi
 
-# ==== Détection IPv4/IPv6 et vérification port libre ====
-IPV4_LOOPBACK="127.0.0.1"
-IPV6_LOOPBACK="::1"
+# Arrêter instance existante si elle tourne
+pkill badvpn-udpgw 2>/dev/null || true
+sleep 1
 
-LISTEN_ADDR="$IPV4_LOOPBACK"  # IPv4 par défaut
-
-# Vérif IPv6 disponible
-if ip -6 addr show lo | grep -q "inet6 $IPV6_LOOPBACK"; then
-  LISTEN_ADDR="[$IPV6_LOOPBACK]"
-  echo "IPv6 détecté → Vérification port sur [$IPV6_LOOPBACK]:$PORT"
-elif ip addr show lo | grep -q "inet $IPV4_LOOPBACK"; then
-  echo "IPv4 détecté → Vérification port sur $IPV4_LOOPBACK:$PORT"
-else
-  echo -e "${RED}Erreur : aucune boucle locale IPv4/IPv6.${RESET}"
-  exit 1
-fi
-
-# Vérification port libre IPv4 et IPv6
-if ss -lun | grep -q ":$PORT " || ss -tuln | grep -q ":$PORT "; then
-  echo -e "${RED}Le port UDP $PORT est déjà utilisé. Abandon.${RESET}"
-  exit 1
-fi
+echo "Écoute sur $LISTEN_ADDR:$PORT"
 
 # Création du service systemd
 cat > "$SYSTEMD_UNIT" <<EOF
@@ -84,7 +68,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 ExecStart=$BIN_PATH --listen-addr $LISTEN_ADDR:$PORT --max-clients 1000 --max-connections-for-client 10
-Restart=on-failure
+Restart=always
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
@@ -103,19 +87,12 @@ if ! systemctl restart badvpn.service; then
   exit 1
 fi
 
-# ==== Ouverture du port UDP via iptables/ip6tables persistantes ====
+# ==== Ouverture du port UDP via iptables persistantes ====
 iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
 iptables -C OUTPUT -p udp --sport "$PORT" -j ACCEPT 2>/dev/null || iptables -I OUTPUT -p udp --sport "$PORT" -j ACCEPT
 
-# IPv6 si disponible
-if ip -6 addr | grep -q "inet6 "; then
-  ip6tables -C INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || ip6tables -I INPUT -p udp --dport "$PORT" -j ACCEPT
-  ip6tables -C OUTPUT -p udp --sport "$PORT" -j ACCEPT 2>/dev/null || ip6tables -I OUTPUT -p udp --sport "$PORT" -j ACCEPT
-  ip6tables-save | tee /etc/iptables/rules.v6
-fi
-
-iptables-save | tee /etc/iptables/rules.v4
-systemctl restart netfilter-persistent || true
+iptables-save | tee /etc/iptables/rules.v4 >/dev/null
+systemctl restart netfilter-persistent 2>/dev/null || true
 
 # Vérification finale
 if systemctl is-active --quiet badvpn.service; then
@@ -130,13 +107,9 @@ else
 fi
 
 # Résumé final
-echo -e "
-${CYAN}Résumé d'installation :${RESET}"
+echo -e "\n${CYAN}Résumé d'installation :${RESET}"
 echo "  ➤ Port UDP    : $PORT"
 echo "  ➤ Écoute sur  : $LISTEN_ADDR:$PORT"
 echo "  ➤ Service     : badvpn.service"
 echo "  ➤ Logs        : $LOG_FILE"
-
-echo -e "
-Installation terminée avec succès."
-read -r -p "Appuyez sur Entrée pour quitter..."
+echo -e "\nInstallation terminée avec succès."
