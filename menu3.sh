@@ -1,156 +1,91 @@
 #!/bin/bash
-
 # ==============================================
-# Monitoring VPS Manager - Version Dynamique & SSH Fix + Mode Debug
+# menu3.sh - Utilisateurs en ligne
 # ==============================================
 
-_DEBUG="off"
-
-DEBUG() {
-  if [ "$_DEBUG" = "on" ]; then
-    echo -e "${YELLOW}[DEBUG] $*${RESET}"
-  fi
-}
-
-# Prérequis et variables globales
-# Détection portable des couleurs
 setup_colors() {
-  RED=""
-  GREEN=""
-  YELLOW=""
-  BLUE=""
-  MAGENTA=""
-  MAGENTA_VIF=""
-  CYAN=""
-  CYAN_VIF=""
-  WHITE=""
-  WHITE_BOLD=""
-  BOLD=""
-  RESET=""
-
-  if [ -t 1 ]; then
-    if [ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]; then
-      RED="$(tput setaf 1)"; GREEN="$(tput setaf 2)"; YELLOW="$(tput setaf 3)"
-      BLUE="$(tput setaf 4)"; MAGENTA="$(tput setaf 5)"; MAGENTA_VIF="$(tput setaf 5; tput bold)"
-      CYAN="$(tput setaf 6)"; CYAN_VIF="$(tput setaf 6; tput bold)"
-      WHITE="$(tput setaf 7)"; WHITE_BOLD="$(tput setaf 7; tput bold)"
-      BOLD="$(tput bold)"; RESET="$(tput sgr0)"
-    fi
+  RED=""; GREEN=""; YELLOW=""; BLUE=""
+  MAGENTA=""; MAGENTA_VIF=""; CYAN=""; CYAN_VIF=""
+  WHITE=""; WHITE_BOLD=""; BOLD=""; RESET=""
+  if [ -t 1 ] && [ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]; then
+    RED="$(tput setaf 1)"; GREEN="$(tput setaf 2)"; YELLOW="$(tput setaf 3)"
+    BLUE="$(tput setaf 4)"; MAGENTA="$(tput setaf 5)"
+    MAGENTA_VIF="$(tput setaf 5; tput bold)"
+    CYAN="$(tput setaf 6)"; CYAN_VIF="$(tput setaf 6; tput bold)"
+    WHITE="$(tput setaf 7)"; WHITE_BOLD="$(tput setaf 7; tput bold)"
+    BOLD="$(tput bold)"; RESET="$(tput sgr0)"
   fi
-  # Si non-interactif ou pas de couleur, laisser vides et tout sera en texte neutre
 }
-
-# Appel de la config couleur
 setup_colors
 
-_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 USER_FILE="/etc/kighmu/users.list"
-AUTH_LOG="/var/log/auth.log"
 
 clear
 echo -e "${CYAN}+============================================================+${RESET}"
-echo -e "${BOLD}${MAGENTA}|            GESTION DES UTILISATEURS EN LIGNE               |${RESET}"
+echo -e "${BOLD}${MAGENTA_VIF}|         GESTION DES UTILISATEURS EN LIGNE                  |${RESET}"
 echo -e "${CYAN}+============================================================+${RESET}"
 
-if [ ! -f "$USER_FILE" ]; then
-    echo -e "${RED}Fichier utilisateur introuvable.${RESET}"
-    exit 1
+if [ ! -f "$USER_FILE" ] || [ ! -s "$USER_FILE" ]; then
+  echo -e "${YELLOW}Aucun utilisateur enregistré.${RESET}"
+  read -rp "Appuyez sur Entrée pour revenir au menu..."
+  exit 0
 fi
 
-printf "${BOLD}%-20s %-10s %-15s %-15s${RESET}
-" "${WHITE_BOLD}UTILISATEUR${RESET}" "  ${WHITE_BOLD}     LIMITÉ${RESET}" "  ${WHITE_BOLD}   CONNECTÉS${RESET}" "  ${WHITE_BOLD}    TRAFIC TOTAL${RESET}"
-echo -e "${CYAN}--------------------------------------------------------------${RESET}"
+# ── Comptage appareils connectés par user via PIDs sshd ──────
+# Méthode fiable : lit les PIDs des processus sshd sur port 22
+# et remonte le user propriétaire du processus (fonctionne avec
+# SSH-SSL, SSH-WS, SSH-SlowDNS, SSH-Direct, Dropbear, etc.)
+declare -A USER_DEVICES
+while read -r pid; do
+  user=$(ps -o user= -p "$pid" 2>/dev/null | tr -d ' ')
+  if [[ -n "$user" && "$user" != "root" && "$user" != "sshd" ]]; then
+    USER_DEVICES["$user"]=$(( ${USER_DEVICES["$user"]:-0} + 1 ))
+  fi
+done < <(ss -tnp | grep ':22 ' | grep ESTAB | grep -oP 'pid=\K[0-9]+' | sort -u)
 
-# Fonction pour compter appareils connectés par utilisateur
-count_devices_per_user() {
-  declare -A user_counts
+# ── En-tête tableau ──────────────────────────────────────────
+printf "\n${BOLD}${WHITE_BOLD}%-4s  %-20s %-12s %-12s %-12s${RESET}\n" \
+  "N°" "UTILISATEUR" "EXPIRE" "LIMITE(j)" "APPAREILS"
+echo -e "${CYAN}------------------------------------------------------------${RESET}"
 
-  # Comptage SSHD + DROPBEAR via process actifs (méthode stable)
-  while read -r user cmd; do
-    case "$cmd" in
-      sshd|dropbear)
-        if [[ "$user" != "root" && -n "$user" ]]; then
-          ((user_counts[$user]++))
-        fi
-      ;;
-    esac
-  done < <(ps -eo user=,comm=)
+# ── Affichage de tous les utilisateurs du fichier ────────────
+TODAY=$(date +%Y-%m-%d)
+index=0
+total_devices=0
+total_users=0
+online_users=0
 
-  # Comptage OpenVPN (si présent)
-  if [[ -f /etc/openvpn/openvpn-status.log ]]; then
-    while read -r line; do
-      user=$(echo "$line" | cut -d',' -f2)
-      [[ -n "$user" ]] && ((user_counts[$user]++))
-    done < <(grep CLIENT_LIST /etc/openvpn/openvpn-status.log)
+while IFS="|" read -r username password limite expire_date hostip domain slowdns_ns; do
+  [[ -z "$username" ]] && continue
+  index=$(( index + 1 ))
+  total_users=$(( total_users + 1 ))
+
+  devices=${USER_DEVICES["$username"]:-0}
+  total_devices=$(( total_devices + devices ))
+
+  # Statut expiration
+  if [[ "$expire_date" < "$TODAY" ]]; then
+    status="${RED}[EXPIRÉ]${RESET}"
+  else
+    status="${GREEN}[ACTIF]${RESET}"
   fi
 
-  declare -p user_counts
-}
+  # Couleur appareils
+  if (( devices > 0 )); then
+    online_users=$(( online_users + 1 ))
+    dev_color="${GREEN}${devices}${RESET}"
+  else
+    dev_color="${YELLOW}0${RESET}"
+  fi
 
-# Récupération des comptes d'appareils par utilisateur
-eval "$(count_devices_per_user | tail -n +2)"  # Cette ligne importe le tableau user_counts
+  printf "${BOLD}%-4s${RESET}  ${CYAN_VIF}%-20s${RESET} %-12s %-12s " \
+    "[$index]" "$username" "$expire_date" "$limite"
+  echo -e "${dev_color}  ${status}"
 
-# Helpers pour trafic per-interface et per-user
-octets_to_go() {
-  local bytes=$1
-  printf "%.2f" "$(awk -v b="$bytes" 'BEGIN { printf (b/1024/1024/1024) }')"
-}
+done < "$USER_FILE"
 
-read_proc_net_dev() {
-  local -n rx_out=$1
-  local -n tx_out=$2
-  rx_out=()
-  tx_out=()
-  while read -r line; do
-    if [[ "$line" =~ ^[[:space:]]*([a-zA-Z0-9._-]+): ]]; then
-      iface="${BASH_REMATCH[1]}"
-      rx=$(echo "$line" | awk '{print $2}')
-      tx=$(echo "$line" | awk '{print $10}')
-      rx_out["$iface"]="$rx"
-      tx_out["$iface"]="$tx"
-    fi
-  done < <(grep -E "^[[:space:]]*[a-zA-Z0-9._-]+:" /proc/net/dev)
-}
+echo -e "${CYAN}------------------------------------------------------------${RESET}"
+echo -e " ${WHITE_BOLD}Total utilisateurs :${RESET} ${GREEN}${total_users}${RESET}  |  ${WHITE_BOLD}En ligne :${RESET} ${GREEN}${online_users}${RESET}  |  ${WHITE_BOLD}Appareils connectés :${RESET} ${MAGENTA_VIF}${total_devices}${RESET}"
+echo -e "${CYAN}+============================================================+${RESET}"
 
-# Calcul et affichage sur une seule ligne par utilisateur
-display_all_users_with_traffic_on_one_line() {
-  # Lire trafic par interface
-  declare -A IF_RX IF_TX
-  read_proc_net_dev IF_RX IF_TX
-
-  # Préparer la liste des utilisateurs actifs (ordre tel que dans USER_FILE)
-  local users_order=()
-  for u in "${!user_counts[@]}"; do
-    if [[ -n "${user_counts[$u]}" ]]; then
-      users_order+=("$u")
-    fi
-  done
-
-  # Déterminer le nombre d’utilisateurs actifs
-  local n_users=${#users_order[@]}
-
-  # Imprimer chaque utilisateur sur une ligne avec trafic total calculé
-  while IFS="|" read -r username password limite expire_date hostip domain slowdns_ns; do
-    app_connecte=${user_counts[$username]:-0}
-
-    # Calcul trafic total estimé pour cet utilisateur
-    local total_bytes=0
-    for iface in "${!IF_RX[@]}"; do
-      local iface_total=$(( IF_RX[$iface] + IF_TX[$iface] ))
-      if (( n_users > 0 )); then
-        total_bytes=$(( total_bytes + (iface_total / n_users) ))
-      fi
-    done
-    local total_go
-    total_go=$(octets_to_go "$total_bytes")
-
-    printf "%-20s %-10s %-15d %-15s
-" "$username" "$limite" "$app_connecte" "${total_go} Go total"
-  done < "$USER_FILE"
-}
-
-# Exécution: ligne par ligne sur une seule commande imprimant tout
-display_all_users_with_traffic_on_one_line
-
-echo -e "${CYAN}+=============================================================+${RESET}"
-read -p "Appuyez sur Entrée pour revenir au menu..."
+read -rp "Appuyez sur Entrée pour revenir au menu..."
