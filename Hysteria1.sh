@@ -52,13 +52,21 @@ print_title() {
 }
 
 show_status_block() {
-  echo "${CYAN}----------- STATUT HYSTERIA -----------${RESET}"
+  echo "${CYAN}-------------- STATUT HYSTERIA --------------${RESET}"
+  local SVC_FILE_OK SVC_ACTIVE PORT_OK ACTIVE_USERS TODAY
   SVC_FILE_OK=$([[ -f "/etc/systemd/system/$HYSTERIA_SERVICE" ]] && echo "✅" || echo "❌")
   SVC_ACTIVE=$(systemctl is-active "$HYSTERIA_SERVICE" 2>/dev/null || echo "inactif")
-  PORT_OK=$(ss -ludp 2>/dev/null | grep -q 20000 && echo "✅" || echo "❌")
+  PORT_OK=$(ss -lunp 2>/dev/null | grep -q ":20000" && echo "✅" || echo "❌")
   echo "${WHITE}Service file:${RESET} $SVC_FILE_OK"
   echo "${WHITE}Service actif:${RESET} $SVC_ACTIVE"
   echo "${WHITE}Port 20000:${RESET} $PORT_OK"
+  if [[ -f "$HYSTERIA_USER_FILE" ]]; then
+    TODAY=$(date +%Y-%m-%d)
+    ACTIVE_USERS=$(awk -F'|' -v today="$TODAY" '$3>=today {count++} END{print count+0}' "$HYSTERIA_USER_FILE")
+  else
+    ACTIVE_USERS=0
+  fi
+  echo "${CYAN}Utilisateurs actifs:${RESET} $ACTIVE_USERS"
   if [[ "$SVC_FILE_OK" == "✅" ]]; then
     if systemctl is-active --quiet "$HYSTERIA_SERVICE" 2>/dev/null; then
       echo "${GREEN}✅ HYSTERIA : INSTALLÉ et ACTIF${RESET}"
@@ -68,7 +76,7 @@ show_status_block() {
   else
     echo "${RED}❌ HYSTERIA : NON INSTALLÉ${RESET}"
   fi
-  echo "${CYAN}----------------------------------------${RESET}"
+  echo "${CYAN}------------------------------------------${RESET}"
   echo
 }
 
