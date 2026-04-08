@@ -153,7 +153,7 @@ while true; do
     for iface in "${NET_INTERFACES[@]}"; do
       ONELINE=$(vnstat -i "$iface" --oneline 2>/dev/null)
       DAY_RAW=$(echo "$ONELINE"   | cut -d';' -f6  2>/dev/null)
-      MONTH_RAW=$(echo "$ONELINE" | cut -d';' -f15 2>/dev/null)
+      MONTH_RAW=$(echo "$ONELINE" | cut -d';' -f11 2>/dev/null)
       day_gb=$(convert_to_gb "$DAY_RAW")
       month_gb=$(convert_to_gb "$MONTH_RAW")
       DATA_DAY_GB=$(echo "$DATA_DAY_GB + $day_gb"     | bc 2>/dev/null || echo 0)
