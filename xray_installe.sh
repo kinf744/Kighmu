@@ -99,8 +99,40 @@ if [[ "$GENERATE_TLS" == true ]]; then
   cd ~/.acme.sh
   bash acme.sh --register-account -m "$EMAIL" || true
 
+  # ── Mode webroot via Nginx (évite le conflit sur le port 80) ──────────
+  # Nginx est déjà actif sur le port 80. On utilise webroot plutôt que
+  # standalone afin qu'acme.sh dépose son challenge dans /var/www/html
+  # et que Nginx le serve, sans avoir à libérer le port 80.
+  WEBROOT="/var/www/html"
+  mkdir -p "${WEBROOT}/.well-known/acme-challenge"
+
+  # Configurer Nginx pour servir le challenge ACME sur ce domaine
+  cat > /etc/nginx/conf.d/acme-challenge.conf << ACMEOF
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${DOMAIN};
+    root ${WEBROOT};
+    location /.well-known/acme-challenge/ {
+        allow all;
+    }
+}
+ACMEOF
+  nginx -t && systemctl reload nginx || true
+
+  # Supprimer tout ancien cert ECC/RSA incomplet pour ce domaine
+  # (évite l'erreur "seems to have ECC cert" avec fichier .key manquant)
+  for cert_dir in \
+      "${HOME}/.acme.sh/${DOMAIN}" \
+      "${HOME}/.acme.sh/${DOMAIN}_ecc"; do
+    if [[ -d "$cert_dir" ]] && [[ ! -f "$cert_dir/${DOMAIN}.key" ]]; then
+      echo "WARNING: Cert incomplet détecté dans $cert_dir — suppression."
+      rm -rf "$cert_dir"
+    fi
+  done
+
   if ! bash acme.sh --list | grep -q "$DOMAIN"; then
-    bash acme.sh --issue --standalone -d "$DOMAIN"
+    bash acme.sh --issue --webroot "$WEBROOT" -d "$DOMAIN" --keylength ec-256
   fi
 
   # ── Créer le service systemd Xray AVANT le --reloadcmd ──────────────────
@@ -132,7 +164,12 @@ SVCEOF
   bash acme.sh --installcert -d "$DOMAIN" \
     --fullchainpath "$ACME_CERT" \
     --keypath "$ACME_KEY" \
+    --ecc \
     --reloadcmd "systemctl restart xray nginx"
+
+  # Supprimer la conf ACME temporaire — elle n'est plus nécessaire
+  rm -f /etc/nginx/conf.d/acme-challenge.conf
+  nginx -t && systemctl reload nginx || true
 
   if [[ ! -f "$ACME_CERT" || ! -f "$ACME_KEY" ]]; then
     echo -e "${RED}❌ Certificats TLS non générés.${NC}"
