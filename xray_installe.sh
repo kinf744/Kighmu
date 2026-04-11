@@ -118,7 +118,12 @@ server {
     }
 }
 ACMEOF
-  nginx -t && systemctl reload nginx || true
+  # Démarrer Nginx s'il n'est pas encore actif (nécessaire pour le webroot challenge)
+  if ! systemctl is-active --quiet nginx; then
+    systemctl start nginx || true
+  else
+    nginx -t && systemctl reload nginx || true
+  fi
 
   # Supprimer tout ancien cert ECC/RSA incomplet pour ce domaine
   # (évite l'erreur "seems to have ECC cert" avec fichier .key manquant)
@@ -143,6 +148,7 @@ ACMEOF
 Description=Xray Service
 After=network-online.target nss-lookup.target
 Wants=network-online.target
+StartLimitIntervalSec=0
 
 [Service]
 User=root
@@ -152,7 +158,6 @@ NoNewPrivileges=true
 ExecStart=/usr/local/bin/xray -config /etc/xray/config.json
 Restart=always
 RestartSec=5s
-StartLimitIntervalSec=0
 
 [Install]
 WantedBy=multi-user.target
@@ -404,6 +409,7 @@ cat > /etc/systemd/system/xray.service << 'SVCEOF'
 Description=Xray Service
 After=network-online.target nss-lookup.target
 Wants=network-online.target
+StartLimitIntervalSec=0
 
 [Service]
 User=root
@@ -413,7 +419,6 @@ NoNewPrivileges=true
 ExecStart=/usr/local/bin/xray -config /etc/xray/config.json
 Restart=always
 RestartSec=5s
-StartLimitIntervalSec=0
 
 [Install]
 WantedBy=multi-user.target
@@ -450,7 +455,7 @@ server {
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers EECDH+CHACHA20:EECDH+AES128:EECDH+AES256:!MD5;
 
-    root /home/vps/public_html;
+    root /var/www/html;
 
     location /vmess-tls { proxy_pass http://127.0.0.1:23456; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; proxy_set_header Host \$http_host; proxy_set_header X-Real-IP \$remote_addr; }
     location /vless-tls { proxy_pass http://127.0.0.1:14016; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; proxy_set_header Host \$http_host; proxy_set_header X-Real-IP \$remote_addr; }
@@ -468,7 +473,7 @@ server {
     listen 8880;
     listen [::]:8880;
     server_name $DOMAIN;
-    root /home/vps/public_html;
+    root /var/www/html;
 
     location /vmess-ntls { proxy_pass http://127.0.0.1:23457; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; proxy_set_header Host \$http_host; proxy_set_header X-Real-IP \$remote_addr; }
     location /vless-ntls { proxy_pass http://127.0.0.1:14017; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; proxy_set_header Host \$http_host; proxy_set_header X-Real-IP \$remote_addr; }
