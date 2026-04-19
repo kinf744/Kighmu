@@ -208,6 +208,8 @@ FILES=(
   "admin.html"
   "reseller.html"
   "server.js"
+  "vless_bot.py"
+  "install-vless.sh"
   "badvpn.sh"
 )
 
