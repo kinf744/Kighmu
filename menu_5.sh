@@ -161,6 +161,7 @@ show_menu() {
     echo -e "${YELLOW}║ 6) Mode V2RAY ONLY${RESET}"
     echo -e "${YELLOW}║ 7) Bot telegram${RESET}"
     echo -e "${YELLOW}║ 8) Pannel Web${RESET}"
+    echo -e "${YELLOW}║ 9) vless GC${RESET}"
     echo -e "${RED}║ 0) Quitter${RESET}"
     echo -e "${CYAN}╚═════════════════════════════════════════════════════╝${RESET}"
     echo -n "Choisissez une option : "
@@ -525,6 +526,24 @@ while true; do
 
             # Lancer le panneau dans le terminal
             "$SCRIPT_DIR/install-1.sh"
+            ;;
+        9)
+            echo "📡 Ouverture du bot vless Gc web..."
+            
+            # Vérifie que le script existe
+            if [ ! -f "$SCRIPT_DIR/install-vless.sh" ]; then
+                echo "❌ Script install-vless.sh introuvable dans $SCRIPT_DIR"
+                read -p "Appuyez sur Entrée pour continuer..."
+                continue
+            fi
+
+            # Vérifie que le script est exécutable
+            if [ ! -x "$SCRIPT_DIR/install-vless.sh" ]; then
+                chmod +x "$SCRIPT_DIR/install-vless.sh"
+            fi
+
+            # Lancer le panneau dans le terminal
+            "$SCRIPT_DIR/install-vless.sh"
             ;;
         0)
             echo "👋 Au revoir"
