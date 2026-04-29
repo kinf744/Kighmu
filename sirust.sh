@@ -1,6 +1,6 @@
 #!/bin/bash
-# sirust.sh - Aligné sur arivpnstores/udp-zivpn
-# CORRIGÉ: set -e supprimé, StartLimitIntervalSec ajouté, cleanup sécurisé
+# sirust.sh - ZIVPN Control Panel
+# Optimisé: BBR, buffers UDP larges, fenêtres QUIC, ulimits, QoS
 
 ZIVPN_BIN="/usr/local/bin/zivpn"
 ZIVPN_SERVICE="zivpn.service"
@@ -42,7 +42,127 @@ zivpn_running() {
   systemctl is-active --quiet "$ZIVPN_SERVICE" 2>/dev/null
 }
 
-# CORRECTION: cleanup sécurisé - ne casse pas la config si aucun utilisateur actif
+# ==========================================================
+# NOUVEAU: Optimisations kernel/réseau complètes pour haut débit
+# ==========================================================
+apply_network_optimizations() {
+    echo "${CYAN}⚙️  Application des optimisations réseau...${RESET}"
+
+    # Charger les modules BBR et FQ (indispensable pour haut débit)
+    modprobe tcp_bbr 2>/dev/null || true
+    modprobe sch_fq 2>/dev/null || true
+
+    # Supprimer les anciennes entrées pour éviter les doublons
+    local KEYS=(
+        "net.core.rmem_default" "net.core.wmem_default"
+        "net.core.rmem_max" "net.core.wmem_max"
+        "net.core.netdev_max_backlog" "net.core.optmem_max"
+        "net.core.default_qdisc" "net.ipv4.tcp_congestion_control"
+        "net.ipv4.ip_forward" "net.ipv4.udp_mem"
+        "fs.file-max" "net.ipv4.tcp_fastopen"
+        "net.ipv4.tcp_mtu_probing"
+    )
+    for KEY in "${KEYS[@]}"; do
+        sed -i "/^${KEY}=/d" /etc/sysctl.conf 2>/dev/null || true
+    done
+
+    # Écrire toutes les optimisations
+    cat >> /etc/sysctl.conf << 'SYSEOF'
+
+# === ZIVPN High-Speed Optimizations ===
+# Buffers UDP larges (67 Mo)
+net.core.rmem_default=26214400
+net.core.wmem_default=26214400
+net.core.rmem_max=67108864
+net.core.wmem_max=67108864
+net.core.optmem_max=25165824
+# File descriptor limits
+fs.file-max=1000000
+# Queue réseau
+net.core.netdev_max_backlog=250000
+# BBR congestion control (haut débit sur réseau congestionné)
+net.core.default_qdisc=fq
+net.ipv4.tcp_congestion_control=bbr
+# IP forwarding
+net.ipv4.ip_forward=1
+# UDP memory pages (min/pressure/max)
+net.ipv4.udp_mem=102400 873800 16777216
+# TCP Fast Open
+net.ipv4.tcp_fastopen=3
+# MTU probing
+net.ipv4.tcp_mtu_probing=1
+# === FIN ZIVPN ===
+SYSEOF
+
+    # Appliquer immédiatement
+    sysctl -p >/dev/null 2>&1 || true
+
+    # QoS: priorité FQ sur l'interface principale
+    local IFACE
+    IFACE=$(ip route show default 2>/dev/null | awk '/default/ {print $5}' | head -1)
+    if [[ -n "$IFACE" ]]; then
+        tc qdisc del dev "$IFACE" root 2>/dev/null || true
+        tc qdisc add dev "$IFACE" root fq 2>/dev/null || true
+        echo "${GREEN}✅ FQ qdisc appliqué sur $IFACE${RESET}"
+    fi
+
+    echo "${GREEN}✅ Optimisations réseau appliquées (BBR + buffers 67Mo + FQ)${RESET}"
+}
+
+# ==========================================================
+# NOUVEAU: Générer config.json optimisée (fenêtres QUIC larges)
+# ==========================================================
+write_optimized_config() {
+    cat > "$ZIVPN_CONFIG" << 'EOF'
+{
+  "listen": ":5667",
+  "cert": "/etc/zivpn/zivpn.crt",
+  "key": "/etc/zivpn/zivpn.key",
+  "obfs": "zivpn",
+  "recv_window_conn": 15728640,
+  "recv_window_client": 67108864,
+  "disable_mtu_discovery": false,
+  "max_conn_client": 4096,
+  "exclude_port": [53,5300,4466,36712,20000],
+  "auth": {
+    "mode": "passwords",
+    "config": ["zi"]
+  }
+}
+EOF
+}
+
+# ==========================================================
+# NOUVEAU: Générer le service systemd optimisé
+# ==========================================================
+write_optimized_service() {
+    cat > "/etc/systemd/system/$ZIVPN_SERVICE" << EOF
+[Unit]
+Description=ZIVPN UDP Server (High-Speed)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=$ZIVPN_BIN server -c $ZIVPN_CONFIG
+WorkingDirectory=/etc/zivpn
+Restart=always
+RestartSec=5
+StartLimitBurst=0
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
+LimitNOFILE=1048576
+LimitNPROC=infinity
+LimitMEMLOCK=infinity
+StandardOutput=append:/var/log/zivpn.log
+StandardError=append:/var/log/zivpn.log
+
+[Install]
+WantedBy=multi-user.target
+EOF
+}
+
+# ==========================================================
 cleanup_expired_users() {
     [[ ! -f "$ZIVPN_USER_FILE" ]] && return 0
     local TODAY
@@ -55,14 +175,12 @@ cleanup_expired_users() {
     update_zivpn_config_passwords
 }
 
-# CORRECTION: Mise à jour sécurisée - garder config si aucun utilisateur actif
 update_zivpn_config_passwords() {
     local TODAY
     TODAY=$(date +%Y-%m-%d)
     local PASSWORDS
     PASSWORDS=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$ZIVPN_USER_FILE" 2>/dev/null | sort -u | paste -sd, -)
 
-    # Si aucun mot de passe actif, ne pas casser le service
     if [[ -z "$PASSWORDS" ]]; then
         echo "⚠️  Aucun utilisateur actif - config inchangée"
         return 0
@@ -95,13 +213,16 @@ print_title() {
 
 show_status_block() {
   echo "${CYAN}-------------- STATUT ZIVPN --------------${RESET}"
-  local SVC_FILE_OK SVC_ACTIVE PORT_OK ACTIVE_USERS TODAY
+  local SVC_FILE_OK SVC_ACTIVE PORT_OK ACTIVE_USERS TODAY BBR_STATUS
   SVC_FILE_OK=$([[ -f "/etc/systemd/system/$ZIVPN_SERVICE" ]] && echo "✅" || echo "❌")
   SVC_ACTIVE=$(systemctl is-active "$ZIVPN_SERVICE" 2>/dev/null || echo "inactif")
   PORT_OK=$(ss -lunp 2>/dev/null | grep -q ":5667" && echo "✅" || echo "❌")
+  # Vérifier si BBR est actif
+  BBR_STATUS=$(sysctl net.ipv4.tcp_congestion_control 2>/dev/null | grep -q "bbr" && echo "✅ BBR" || echo "⚠️  non-BBR")
   echo "${WHITE}Service file:${RESET} $SVC_FILE_OK"
   echo "${WHITE}Service actif:${RESET} $SVC_ACTIVE"
   echo "${WHITE}Port 5667:${RESET} $PORT_OK"
+  echo "${WHITE}Congestion ctrl:${RESET} $BBR_STATUS"
   if [[ -f "$ZIVPN_USER_FILE" ]]; then
     TODAY=$(date +%Y-%m-%d)
     ACTIVE_USERS=$(awk -F'|' -v today="$TODAY" '$3>=today {count++} END{print count+0}' "$ZIVPN_USER_FILE")
@@ -137,7 +258,7 @@ install_zivpn() {
   systemctl stop ufw 2>/dev/null || true
   ufw disable 2>/dev/null || true
   apt purge ufw -y 2>/dev/null || true
-  apt update -y && apt install -y wget curl jq openssl iptables-persistent netfilter-persistent
+  apt update -y && apt install -y wget curl jq openssl iptables-persistent netfilter-persistent iproute2
 
   wget -q "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp-zivpn-linux-amd64" -O "$ZIVPN_BIN"
   chmod +x "$ZIVPN_BIN"
@@ -150,46 +271,15 @@ install_zivpn() {
   openssl req -x509 -newkey rsa:2048 -keyout "$KEY" -out "$CERT" -nodes -days 3650 -subj "/CN=$DOMAIN"
   chmod 600 "$KEY"; chmod 644 "$CERT"
 
-  cat > "$ZIVPN_CONFIG" << 'EOF'
-{
-  "listen": ":5667",
-  "exclude_port": [53,5300,4466,36712,20000],
-  "cert": "/etc/zivpn/zivpn.crt",
-  "key": "/etc/zivpn/zivpn.key",
-  "obfs": "zivpn",
-  "auth": {
-    "mode": "passwords",
-    "config": ["zi"]
-  }
-}
-EOF
+  # Config optimisée (fenêtres QUIC larges)
+  write_optimized_config
 
-  # CORRECTION: StartLimitIntervalSec=0 pour éviter start-limit-hit
-  cat > "/etc/systemd/system/$ZIVPN_SERVICE" << EOF
-[Unit]
-Description=ZIVPN UDP Server
-After=network-online.target
-Wants=network-online.target
-StartLimitIntervalSec=0
-
-[Service]
-Type=simple
-ExecStart=$ZIVPN_BIN server -c $ZIVPN_CONFIG
-WorkingDirectory=/etc/zivpn
-Restart=always
-RestartSec=5
-StartLimitBurst=0
-AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
-LimitNOFILE=1048576
-StandardOutput=append:/var/log/zivpn.log
-StandardError=append:/var/log/zivpn.log
-
-[Install]
-WantedBy=multi-user.target
-EOF
+  # Service systemd optimisé (LimitNPROC + LimitMEMLOCK)
+  write_optimized_service
 
   systemctl daemon-reload && systemctl enable "$ZIVPN_SERVICE"
 
+  # Firewall / NAT
   iptables -C INPUT -p udp --dport 5667 -j ACCEPT 2>/dev/null || \
     iptables -A INPUT -p udp --dport 5667 -j ACCEPT
   iptables -C INPUT -p udp --dport 6000:19999 -j ACCEPT 2>/dev/null || \
@@ -199,10 +289,8 @@ EOF
 
   netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
 
-  sysctl -w net.core.rmem_max=16777216 2>/dev/null || true
-  sysctl -w net.core.wmem_max=16777216 2>/dev/null || true
-  grep -q "rmem_max=16777216" /etc/sysctl.conf || echo "net.core.rmem_max=16777216" >> /etc/sysctl.conf
-  grep -q "wmem_max=16777216" /etc/sysctl.conf || echo "net.core.wmem_max=16777216" >> /etc/sysctl.conf
+  # Optimisations réseau complètes (BBR + buffers 67Mo + FQ qdisc)
+  apply_network_optimizations
 
   systemctl start "$ZIVPN_SERVICE" || true
   sleep 3
@@ -210,11 +298,15 @@ EOF
   if systemctl is-active --quiet "$ZIVPN_SERVICE"; then
     local IP
     IP=$(hostname -I | awk '{print $1}')
-    echo "✅ ZIVPN installé et actif !"
+    echo
+    echo "${GREEN}✅ ZIVPN installé et actif !${RESET}"
     echo "📱 Config:"
     echo "   Serveur: $IP"
     echo "   Port: 6000-19999"
     echo "   Password: zi"
+    echo "   Obfs: zivpn"
+    echo "   recv_window_conn: 15728640 (15 Mo)"
+    echo "   recv_window_client: 67108864 (64 Mo)"
   else
     echo "❌ ZIVPN ne démarre pas"
     journalctl -u zivpn.service -n 20 --no-pager
@@ -243,11 +335,9 @@ create_zivpn_user() {
   EXPIRE=$(date -d "+${DAYS} days" '+%Y-%m-%d')
   TODAY=$(date +%Y-%m-%d)
 
-  # Nettoyer expirés
   local TMP
   TMP=$(mktemp)
   awk -F'|' -v today="$TODAY" '$3>=today {print $0}' "$ZIVPN_USER_FILE" > "$TMP" 2>/dev/null || true
-  # Supprimer doublon et ajouter
   grep -v "^$USER_ID|" "$TMP" > "${TMP}.2" 2>/dev/null || true
   echo "$USER_ID|$PASS|$EXPIRE" >> "${TMP}.2"
   mv "${TMP}.2" "$ZIVPN_USER_FILE"
@@ -326,7 +416,7 @@ delete_zivpn_user() {
 # ---------- 4) Fix ----------
 fix_zivpn() {
   print_title
-  echo "[4] FIX ZIVPN (iptables + service)"
+  echo "[4] FIX ZIVPN (iptables + service + optimisations)"
 
   systemctl reset-failed zivpn.service 2>/dev/null || true
   update-alternatives --set iptables /usr/sbin/iptables-legacy 2>/dev/null || true
@@ -340,21 +430,87 @@ fix_zivpn() {
 
   netfilter-persistent save 2>/dev/null || true
 
+  # Réappliquer les optimisations réseau
+  apply_network_optimizations
+
+  # Réécrire le service avec les limites correctes
+  write_optimized_service
+  systemctl daemon-reload
+
   systemctl restart zivpn.service || true
   sleep 2
 
   if systemctl is-active --quiet zivpn.service; then
     echo "✅ ZIVPN actif (6000-19999→5667)"
+    echo "✅ BBR + buffers + FQ réappliqués"
   else
     echo "❌ ZIVPN toujours inactif - voir: journalctl -u zivpn.service -n 30"
   fi
   pause
 }
 
-# ---------- 5) Désinstallation ----------
+# ---------- 5) Appliquer optimisations seules (NOUVEAU) ----------
+optimize_only() {
+  print_title
+  echo "[5] APPLIQUER OPTIMISATIONS VITESSE"
+  echo
+  echo "Cette option applique uniquement les optimisations réseau"
+  echo "sans réinstaller ZIVPN (utile si déjà installé)."
+  echo
+
+  apply_network_optimizations
+
+  # Mettre à jour la config JSON si elle existe
+  if [[ -f "$ZIVPN_CONFIG" ]]; then
+    # Vérifier si les champs QUIC sont déjà présents
+    if ! jq -e '.recv_window_conn' "$ZIVPN_CONFIG" >/dev/null 2>&1; then
+      echo "${CYAN}⚙️  Mise à jour config.json (fenêtres QUIC)...${RESET}"
+      local TMP
+      TMP=$(mktemp)
+      if jq '. + {
+        "recv_window_conn": 15728640,
+        "recv_window_client": 67108864,
+        "disable_mtu_discovery": false,
+        "max_conn_client": 4096
+      }' "$ZIVPN_CONFIG" > "$TMP" 2>/dev/null && jq empty "$TMP" >/dev/null 2>&1; then
+        mv "$TMP" "$ZIVPN_CONFIG"
+        echo "${GREEN}✅ config.json mis à jour (fenêtres QUIC 64 Mo)${RESET}"
+        systemctl restart "$ZIVPN_SERVICE" || true
+      else
+        echo "${RED}❌ Erreur mise à jour config.json${RESET}"
+        rm -f "$TMP"
+      fi
+    else
+      echo "${GREEN}✅ config.json déjà optimisé${RESET}"
+    fi
+  fi
+
+  # Mettre à jour le service si LimitNPROC manque
+  if [[ -f "/etc/systemd/system/$ZIVPN_SERVICE" ]]; then
+    if ! grep -q "LimitNPROC" "/etc/systemd/system/$ZIVPN_SERVICE"; then
+      echo "${CYAN}⚙️  Mise à jour service systemd (LimitNPROC/MEMLOCK)...${RESET}"
+      write_optimized_service
+      systemctl daemon-reload
+      systemctl restart "$ZIVPN_SERVICE" || true
+      echo "${GREEN}✅ Service systemd mis à jour${RESET}"
+    fi
+  fi
+
+  echo
+  echo "${GREEN}${BOLD}✅ Optimisations complètes appliquées !${RESET}"
+  echo "  • BBR congestion control"
+  echo "  • Buffers UDP: 67 Mo"
+  echo "  • FQ qdisc (priorité paquets)"
+  echo "  • recv_window_conn: 15 Mo"
+  echo "  • recv_window_client: 64 Mo"
+  echo "  • LimitNPROC/MEMLOCK: infinity"
+  pause
+}
+
+# ---------- 6) Désinstallation ----------
 uninstall_zivpn() {
   print_title
-  echo "[5] DÉSINSTALLATION ZIVPN"
+  echo "[6] DÉSINSTALLATION ZIVPN"
   read -rp "Confirmer ? (o/N): " CONFIRM
   [[ "$CONFIRM" =~ ^[oO]$ ]] || { echo "Annulé"; pause; return; }
 
@@ -385,11 +541,12 @@ while true; do
   echo "${GREEN}${BOLD}[01]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Installation de ZIVPN${RESET}"
   echo "${GREEN}${BOLD}[02]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Créer un utilisateur ZIVPN${RESET}"
   echo "${GREEN}${BOLD}[03]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Supprimer utilisateur${RESET}"
-  echo "${GREEN}${BOLD}[04]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Fix ZIVPN (reset firewall/NAT)${RESET}"
-  echo "${GREEN}${BOLD}[05]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Désinstaller ZIVPN${RESET}"
+  echo "${GREEN}${BOLD}[04]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Fix ZIVPN (reset firewall/NAT + optimisations)${RESET}"
+  echo "${GREEN}${BOLD}[05]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Appliquer optimisations vitesse (BBR/buffers/QUIC)${RESET}"
+  echo "${GREEN}${BOLD}[06]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Désinstaller ZIVPN${RESET}"
   echo "${RED}[00] ➜ Quitter${RESET}"
   echo
-  echo -n "${BOLD}${YELLOW} Entrez votre choix [0-5]: ${RESET}"
+  echo -n "${BOLD}${YELLOW} Entrez votre choix [0-6]: ${RESET}"
   read -r CHOIX
 
   case $CHOIX in
@@ -397,7 +554,8 @@ while true; do
     2) create_zivpn_user ;;
     3) delete_zivpn_user ;;
     4) fix_zivpn ;;
-    5) uninstall_zivpn ;;
+    5) optimize_only ;;
+    6) uninstall_zivpn ;;
     0) exit 0 ;;
     *) echo "${RED}❌ Choix invalide${RESET}"; sleep 1 ;;
   esac
