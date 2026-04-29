@@ -43,8 +43,6 @@ zivpn_running() {
 }
 
 # ==========================================================
-# NOUVEAU: Optimisations kernel/réseau complètes pour haut débit
-# ==========================================================
 apply_network_optimizations() {
     echo "${CYAN}⚙️  Application des optimisations réseau...${RESET}"
 
@@ -110,8 +108,6 @@ SYSEOF
 }
 
 # ==========================================================
-# NOUVEAU: Générer config.json optimisée (fenêtres QUIC larges)
-# ==========================================================
 write_optimized_config() {
     cat > "$ZIVPN_CONFIG" << 'EOF'
 {
@@ -132,8 +128,6 @@ write_optimized_config() {
 EOF
 }
 
-# ==========================================================
-# NOUVEAU: Générer le service systemd optimisé
 # ==========================================================
 write_optimized_service() {
     cat > "/etc/systemd/system/$ZIVPN_SERVICE" << EOF
