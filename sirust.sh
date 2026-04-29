@@ -1,6 +1,6 @@
 #!/bin/bash
 # sirust.sh - ZIVPN Control Panel
-# Optimisé: BBR, buffers UDP larges, fenêtres QUIC, ulimits, QoS
+# Optimisé: BBR, buffers UDP larges, fenêtres QUIC, ulimits, QoS, DSCP, up/down_mbps
 
 ZIVPN_BIN="/usr/local/bin/zivpn"
 ZIVPN_SERVICE="zivpn.service"
@@ -43,10 +43,12 @@ zivpn_running() {
 }
 
 # ==========================================================
+# Optimisations kernel/réseau complètes pour très haut débit
+# ==========================================================
 apply_network_optimizations() {
     echo "${CYAN}⚙️  Application des optimisations réseau...${RESET}"
 
-    # Charger les modules BBR et FQ (indispensable pour haut débit)
+    # Charger les modules BBR et FQ
     modprobe tcp_bbr 2>/dev/null || true
     modprobe sch_fq 2>/dev/null || true
 
@@ -59,6 +61,7 @@ apply_network_optimizations() {
         "net.ipv4.ip_forward" "net.ipv4.udp_mem"
         "fs.file-max" "net.ipv4.tcp_fastopen"
         "net.ipv4.tcp_mtu_probing"
+        "net.core.somaxconn" "net.ipv4.tcp_max_syn_backlog"
     )
     for KEY in "${KEYS[@]}"; do
         sed -i "/^${KEY}=/d" /etc/sysctl.conf 2>/dev/null || true
@@ -68,24 +71,26 @@ apply_network_optimizations() {
     cat >> /etc/sysctl.conf << 'SYSEOF'
 
 # === ZIVPN High-Speed Optimizations ===
-# Buffers UDP larges (67 Mo)
-net.core.rmem_default=26214400
-net.core.wmem_default=26214400
-net.core.rmem_max=67108864
-net.core.wmem_max=67108864
-net.core.optmem_max=25165824
+# Buffers UDP larges (256 Mo)
+net.core.rmem_default=67108864
+net.core.wmem_default=67108864
+net.core.rmem_max=268435456
+net.core.wmem_max=268435456
+net.core.optmem_max=67108864
 # File descriptor limits
 fs.file-max=1000000
 # Queue réseau
 net.core.netdev_max_backlog=250000
+net.core.somaxconn=65535
+net.ipv4.tcp_max_syn_backlog=65535
 # BBR congestion control (haut débit sur réseau congestionné)
 net.core.default_qdisc=fq
 net.ipv4.tcp_congestion_control=bbr
 # IP forwarding
 net.ipv4.ip_forward=1
-# UDP memory pages (min/pressure/max)
-net.ipv4.udp_mem=102400 873800 16777216
-# TCP Fast Open
+# UDP memory pages corrigés (min/pressure/max en pages de 4Ko)
+net.ipv4.udp_mem=8388608 12582912 16777216
+# TCP Fast Open (client + serveur)
 net.ipv4.tcp_fastopen=3
 # MTU probing
 net.ipv4.tcp_mtu_probing=1
@@ -95,7 +100,7 @@ SYSEOF
     # Appliquer immédiatement
     sysctl -p >/dev/null 2>&1 || true
 
-    # QoS: priorité FQ sur l'interface principale
+    # QoS: FQ qdisc sur l'interface principale
     local IFACE
     IFACE=$(ip route show default 2>/dev/null | awk '/default/ {print $5}' | head -1)
     if [[ -n "$IFACE" ]]; then
@@ -104,9 +109,22 @@ SYSEOF
         echo "${GREEN}✅ FQ qdisc appliqué sur $IFACE${RESET}"
     fi
 
-    echo "${GREEN}✅ Optimisations réseau appliquées (BBR + buffers 67Mo + FQ)${RESET}"
+    # DSCP Expedited Forwarding (EF/46) sur le port ZIVPN
+    # Marque les paquets UDP du tunnel comme prioritaires sur les routeurs de transit
+    # Supprime les anciennes règles pour éviter les doublons
+    iptables -t mangle -D OUTPUT -p udp --sport 5667 -j DSCP --set-dscp-class EF 2>/dev/null || true
+    iptables -t mangle -D OUTPUT -p udp --dport 5667 -j DSCP --set-dscp-class EF 2>/dev/null || true
+    iptables -t mangle -D PREROUTING -p udp --dport 5667 -j DSCP --set-dscp-class EF 2>/dev/null || true
+    iptables -t mangle -A OUTPUT    -p udp --sport 5667 -j DSCP --set-dscp-class EF 2>/dev/null || true
+    iptables -t mangle -A OUTPUT    -p udp --dport 5667 -j DSCP --set-dscp-class EF 2>/dev/null || true
+    iptables -t mangle -A PREROUTING -p udp --dport 5667 -j DSCP --set-dscp-class EF 2>/dev/null || true
+
+    echo "${GREEN}✅ DSCP EF (priorité maximale) appliqué sur port 5667${RESET}"
+    echo "${GREEN}✅ Optimisations réseau appliquées (BBR + buffers 256Mo + FQ + DSCP)${RESET}"
 }
 
+# ==========================================================
+# Générer config.json optimisée avec up/down_mbps + grandes fenêtres QUIC
 # ==========================================================
 write_optimized_config() {
     cat > "$ZIVPN_CONFIG" << 'EOF'
@@ -115,8 +133,10 @@ write_optimized_config() {
   "cert": "/etc/zivpn/zivpn.crt",
   "key": "/etc/zivpn/zivpn.key",
   "obfs": "zivpn",
-  "recv_window_conn": 15728640,
-  "recv_window_client": 67108864,
+  "up_mbps": 1000,
+  "down_mbps": 1000,
+  "recv_window_conn": 67108864,
+  "recv_window_client": 268435456,
   "disable_mtu_discovery": false,
   "max_conn_client": 4096,
   "exclude_port": [53,5300,4466,36712,20000],
@@ -129,6 +149,8 @@ EOF
 }
 
 # ==========================================================
+# Générer le service systemd optimisé avec persistance iptables NAT
+# ==========================================================
 write_optimized_service() {
     cat > "/etc/systemd/system/$ZIVPN_SERVICE" << EOF
 [Unit]
@@ -140,6 +162,8 @@ StartLimitIntervalSec=0
 [Service]
 Type=simple
 ExecStart=$ZIVPN_BIN server -c $ZIVPN_CONFIG
+ExecStartPost=/bin/bash -c "iptables -t nat -C PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667 2>/dev/null || iptables -t nat -A PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667"
+ExecStartPost=/bin/bash -c "iptables -C INPUT -p udp --dport 5667 -j ACCEPT 2>/dev/null || iptables -A INPUT -p udp --dport 5667 -j ACCEPT"
 WorkingDirectory=/etc/zivpn
 Restart=always
 RestartSec=5
@@ -148,6 +172,8 @@ AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
 LimitNOFILE=1048576
 LimitNPROC=infinity
 LimitMEMLOCK=infinity
+CPUSchedulingPolicy=rr
+CPUSchedulingPriority=50
 StandardOutput=append:/var/log/zivpn.log
 StandardError=append:/var/log/zivpn.log
 
@@ -199,7 +225,7 @@ update_zivpn_config_passwords() {
 print_title() {
   clear
   echo "${CYAN}${BOLD}╔═══════════════════════════════════════╗${RESET}"
-  echo "${CYAN}║        ZIVPN CONTROL PANEL v2         ║${RESET}"
+  echo "${CYAN}║        ZIVPN CONTROL PANEL v3         ║${RESET}"
   echo "${CYAN}║     (Compatible @kighmu 🇨🇲)           ║${RESET}"
   echo "${CYAN}${BOLD}╚═══════════════════════════════════════╝${RESET}"
   echo
@@ -207,16 +233,18 @@ print_title() {
 
 show_status_block() {
   echo "${CYAN}-------------- STATUT ZIVPN --------------${RESET}"
-  local SVC_FILE_OK SVC_ACTIVE PORT_OK ACTIVE_USERS TODAY BBR_STATUS
+  local SVC_FILE_OK SVC_ACTIVE PORT_OK ACTIVE_USERS TODAY BBR_STATUS UPMBPS
   SVC_FILE_OK=$([[ -f "/etc/systemd/system/$ZIVPN_SERVICE" ]] && echo "✅" || echo "❌")
   SVC_ACTIVE=$(systemctl is-active "$ZIVPN_SERVICE" 2>/dev/null || echo "inactif")
   PORT_OK=$(ss -lunp 2>/dev/null | grep -q ":5667" && echo "✅" || echo "❌")
-  # Vérifier si BBR est actif
   BBR_STATUS=$(sysctl net.ipv4.tcp_congestion_control 2>/dev/null | grep -q "bbr" && echo "✅ BBR" || echo "⚠️  non-BBR")
+  # Afficher up/down_mbps depuis config
+  UPMBPS=$(jq -r '.up_mbps // "non défini"' "$ZIVPN_CONFIG" 2>/dev/null || echo "N/A")
   echo "${WHITE}Service file:${RESET} $SVC_FILE_OK"
   echo "${WHITE}Service actif:${RESET} $SVC_ACTIVE"
   echo "${WHITE}Port 5667:${RESET} $PORT_OK"
   echo "${WHITE}Congestion ctrl:${RESET} $BBR_STATUS"
+  echo "${WHITE}Bande passante déclarée:${RESET} ↑↓ ${UPMBPS} Mbps"
   if [[ -f "$ZIVPN_USER_FILE" ]]; then
     TODAY=$(date +%Y-%m-%d)
     ACTIVE_USERS=$(awk -F'|' -v today="$TODAY" '$3>=today {count++} END{print count+0}' "$ZIVPN_USER_FILE")
@@ -265,10 +293,10 @@ install_zivpn() {
   openssl req -x509 -newkey rsa:2048 -keyout "$KEY" -out "$CERT" -nodes -days 3650 -subj "/CN=$DOMAIN"
   chmod 600 "$KEY"; chmod 644 "$CERT"
 
-  # Config optimisée (fenêtres QUIC larges)
+  # Config optimisée (up/down_mbps 1000 + fenêtres QUIC 64Mo/256Mo)
   write_optimized_config
 
-  # Service systemd optimisé (LimitNPROC + LimitMEMLOCK)
+  # Service systemd optimisé avec ExecStartPost pour persistance NAT
   write_optimized_service
 
   systemctl daemon-reload && systemctl enable "$ZIVPN_SERVICE"
@@ -283,7 +311,7 @@ install_zivpn() {
 
   netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
 
-  # Optimisations réseau complètes (BBR + buffers 67Mo + FQ qdisc)
+  # Optimisations réseau complètes (BBR + buffers 256Mo + FQ + DSCP EF)
   apply_network_optimizations
 
   systemctl start "$ZIVPN_SERVICE" || true
@@ -299,8 +327,9 @@ install_zivpn() {
     echo "   Port: 6000-19999"
     echo "   Password: zi"
     echo "   Obfs: zivpn"
-    echo "   recv_window_conn: 15728640 (15 Mo)"
-    echo "   recv_window_client: 67108864 (64 Mo)"
+    echo "   up/down_mbps: 1000"
+    echo "   recv_window_conn: 67108864 (64 Mo)"
+    echo "   recv_window_client: 268435456 (256 Mo)"
   else
     echo "❌ ZIVPN ne démarre pas"
     journalctl -u zivpn.service -n 20 --no-pager
@@ -424,26 +453,50 @@ fix_zivpn() {
 
   netfilter-persistent save 2>/dev/null || true
 
-  # Réappliquer les optimisations réseau
+  # Réappliquer toutes les optimisations réseau
   apply_network_optimizations
 
-  # Réécrire le service avec les limites correctes
+  # Réécrire le service avec ExecStartPost + limites correctes
   write_optimized_service
   systemctl daemon-reload
+
+  # Mettre à jour config.json si up_mbps manque
+  if [[ -f "$ZIVPN_CONFIG" ]]; then
+    if ! jq -e '.up_mbps' "$ZIVPN_CONFIG" >/dev/null 2>&1; then
+      echo "${CYAN}⚙️  Mise à jour config.json (up/down_mbps + fenêtres)...${RESET}"
+      local TMP
+      TMP=$(mktemp)
+      if jq '. + {
+        "up_mbps": 1000,
+        "down_mbps": 1000,
+        "recv_window_conn": 67108864,
+        "recv_window_client": 268435456,
+        "disable_mtu_discovery": false,
+        "max_conn_client": 4096
+      }' "$ZIVPN_CONFIG" > "$TMP" 2>/dev/null && jq empty "$TMP" >/dev/null 2>&1; then
+        mv "$TMP" "$ZIVPN_CONFIG"
+        echo "${GREEN}✅ config.json mis à jour${RESET}"
+      else
+        echo "${RED}❌ Erreur mise à jour config.json${RESET}"
+        rm -f "$TMP"
+      fi
+    fi
+  fi
 
   systemctl restart zivpn.service || true
   sleep 2
 
   if systemctl is-active --quiet zivpn.service; then
     echo "✅ ZIVPN actif (6000-19999→5667)"
-    echo "✅ BBR + buffers + FQ réappliqués"
+    echo "✅ BBR + buffers 256Mo + FQ + DSCP EF réappliqués"
+    echo "✅ up/down_mbps: 1000 | recv_window: 64Mo/256Mo"
   else
     echo "❌ ZIVPN toujours inactif - voir: journalctl -u zivpn.service -n 30"
   fi
   pause
 }
 
-# ---------- 5) Appliquer optimisations seules (NOUVEAU) ----------
+# ---------- 5) Appliquer optimisations seules ----------
 optimize_only() {
   print_title
   echo "[5] APPLIQUER OPTIMISATIONS VITESSE"
@@ -454,21 +507,26 @@ optimize_only() {
 
   apply_network_optimizations
 
-  # Mettre à jour la config JSON si elle existe
+  # Mettre à jour la config JSON si les champs manquent
   if [[ -f "$ZIVPN_CONFIG" ]]; then
-    # Vérifier si les champs QUIC sont déjà présents
-    if ! jq -e '.recv_window_conn' "$ZIVPN_CONFIG" >/dev/null 2>&1; then
-      echo "${CYAN}⚙️  Mise à jour config.json (fenêtres QUIC)...${RESET}"
+    local NEEDS_UPDATE=0
+    jq -e '.up_mbps' "$ZIVPN_CONFIG" >/dev/null 2>&1       || NEEDS_UPDATE=1
+    jq -e '.recv_window_conn' "$ZIVPN_CONFIG" >/dev/null 2>&1 || NEEDS_UPDATE=1
+
+    if [[ "$NEEDS_UPDATE" -eq 1 ]]; then
+      echo "${CYAN}⚙️  Mise à jour config.json (up/down_mbps + fenêtres QUIC)...${RESET}"
       local TMP
       TMP=$(mktemp)
       if jq '. + {
-        "recv_window_conn": 15728640,
-        "recv_window_client": 67108864,
+        "up_mbps": 1000,
+        "down_mbps": 1000,
+        "recv_window_conn": 67108864,
+        "recv_window_client": 268435456,
         "disable_mtu_discovery": false,
         "max_conn_client": 4096
       }' "$ZIVPN_CONFIG" > "$TMP" 2>/dev/null && jq empty "$TMP" >/dev/null 2>&1; then
         mv "$TMP" "$ZIVPN_CONFIG"
-        echo "${GREEN}✅ config.json mis à jour (fenêtres QUIC 64 Mo)${RESET}"
+        echo "${GREEN}✅ config.json mis à jour (up/down 1000 Mbps + fenêtres 256Mo)${RESET}"
         systemctl restart "$ZIVPN_SERVICE" || true
       else
         echo "${RED}❌ Erreur mise à jour config.json${RESET}"
@@ -479,10 +537,11 @@ optimize_only() {
     fi
   fi
 
-  # Mettre à jour le service si LimitNPROC manque
+  # Mettre à jour le service si ExecStartPost ou LimitNPROC manque
   if [[ -f "/etc/systemd/system/$ZIVPN_SERVICE" ]]; then
-    if ! grep -q "LimitNPROC" "/etc/systemd/system/$ZIVPN_SERVICE"; then
-      echo "${CYAN}⚙️  Mise à jour service systemd (LimitNPROC/MEMLOCK)...${RESET}"
+    if ! grep -q "ExecStartPost" "/etc/systemd/system/$ZIVPN_SERVICE" || \
+       ! grep -q "LimitNPROC" "/etc/systemd/system/$ZIVPN_SERVICE"; then
+      echo "${CYAN}⚙️  Mise à jour service systemd (ExecStartPost + CPUScheduling)...${RESET}"
       write_optimized_service
       systemctl daemon-reload
       systemctl restart "$ZIVPN_SERVICE" || true
@@ -491,13 +550,18 @@ optimize_only() {
   fi
 
   echo
-  echo "${GREEN}${BOLD}✅ Optimisations complètes appliquées !${RESET}"
+  echo "${GREEN}${BOLD}✅ Toutes les optimisations haut débit appliquées !${RESET}"
   echo "  • BBR congestion control"
-  echo "  • Buffers UDP: 67 Mo"
+  echo "  • Buffers UDP: 256 Mo (rmem/wmem)"
   echo "  • FQ qdisc (priorité paquets)"
-  echo "  • recv_window_conn: 15 Mo"
-  echo "  • recv_window_client: 64 Mo"
-  echo "  • LimitNPROC/MEMLOCK: infinity"
+  echo "  • DSCP EF (Expedited Forwarding) sur port 5667"
+  echo "  • up_mbps / down_mbps: 1000"
+  echo "  • recv_window_conn: 64 Mo"
+  echo "  • recv_window_client: 256 Mo"
+  echo "  • somaxconn / tcp_max_syn_backlog: 65535"
+  echo "  • LimitNPROC / MEMLOCK: infinity"
+  echo "  • CPUSchedulingPolicy: rr (temps réel)"
+  echo "  • ExecStartPost: persistance NAT au reboot"
   pause
 }
 
@@ -519,6 +583,9 @@ uninstall_zivpn() {
   iptables -t nat -D PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667 2>/dev/null || true
   iptables -D INPUT -p udp --dport 5667 -j ACCEPT 2>/dev/null || true
   iptables -D INPUT -p udp --dport 6000:19999 -j ACCEPT 2>/dev/null || true
+  iptables -t mangle -D OUTPUT    -p udp --sport 5667 -j DSCP --set-dscp-class EF 2>/dev/null || true
+  iptables -t mangle -D OUTPUT    -p udp --dport 5667 -j DSCP --set-dscp-class EF 2>/dev/null || true
+  iptables -t mangle -D PREROUTING -p udp --dport 5667 -j DSCP --set-dscp-class EF 2>/dev/null || true
 
   netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
 
@@ -536,7 +603,7 @@ while true; do
   echo "${GREEN}${BOLD}[02]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Créer un utilisateur ZIVPN${RESET}"
   echo "${GREEN}${BOLD}[03]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Supprimer utilisateur${RESET}"
   echo "${GREEN}${BOLD}[04]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Fix ZIVPN (reset firewall/NAT + optimisations)${RESET}"
-  echo "${GREEN}${BOLD}[05]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Appliquer optimisations vitesse (BBR/buffers/QUIC)${RESET}"
+  echo "${GREEN}${BOLD}[05]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Appliquer optimisations vitesse (BBR/buffers/QUIC/DSCP)${RESET}"
   echo "${GREEN}${BOLD}[06]${RESET} ${BOLD}${MAGENTA}➜${RESET} ${YELLOW}Désinstaller ZIVPN${RESET}"
   echo "${RED}[00] ➜ Quitter${RESET}"
   echo
