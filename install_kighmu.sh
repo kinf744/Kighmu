@@ -209,7 +209,7 @@ FILES=(
   "reseller.html"
   "server.js"
   "kighmu-server.sh"
-  "index-1.html"
+  "index.html"
   "vless_bot.py"
   "install-vless.sh"
   "badvpn.sh"
