@@ -531,19 +531,19 @@ while true; do
             echo "📡 Ouverture du bot vless Gc web..."
             
             # Vérifie que le script existe
-            if [ ! -f "$SCRIPT_DIR/install-vless.sh" ]; then
-                echo "❌ Script install-vless.sh introuvable dans $SCRIPT_DIR"
+            if [ ! -f "$SCRIPT_DIR/kighmu-server.sh" ]; then
+                echo "❌ Script kighmu-server.sh introuvable dans $SCRIPT_DIR"
                 read -p "Appuyez sur Entrée pour continuer..."
                 continue
             fi
 
             # Vérifie que le script est exécutable
-            if [ ! -x "$SCRIPT_DIR/install-vless.sh" ]; then
-                chmod +x "$SCRIPT_DIR/install-vless.sh"
+            if [ ! -x "$SCRIPT_DIR/kighmu-server.sh" ]; then
+                chmod +x "$SCRIPT_DIR/kighmu-server.sh"
             fi
 
             # Lancer le panneau dans le terminal
-            "$SCRIPT_DIR/install-vless.sh"
+            "$SCRIPT_DIR/kighmu-server.sh"
             ;;
         0)
             echo "👋 Au revoir"
