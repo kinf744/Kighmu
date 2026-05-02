@@ -517,7 +517,7 @@ SVCLRT
   log "Configuration Nginx..."
   cat > "$NGINX_CONF" << 'NGINXCFG'
 server {
-    listen 80;
+    listen 86;
     server_name _;
 
     # Interface HTML VOANH
