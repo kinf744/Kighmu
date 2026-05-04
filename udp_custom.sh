@@ -17,23 +17,15 @@ userdel udpuser 2>/dev/null || true
 wget -q "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp-custom" -O "$BIN_PATH"
 chmod +x "$BIN_PATH"
 
-# 3️⃣ CONFIG (avec auth activée - liste vide au départ, remplie par menu1.sh)
+# 3️⃣ CONFIG (syntaxe ZIVPN-compatible)
 mkdir -p /etc/udp-custom
 cat > "$CONFIG_FILE" << 'EOF'
 {
   "listen": ":36712",
   "exclude_port": [53,5300,5667,20000,4466],
-  "timeout": 600,
-  "auth": {
-    "mode": "passwords",
-    "config": []
-  }
+  "timeout": 600
 }
 EOF
-
-# Créer le fichier users.list vide
-touch /etc/udp-custom/users.list
-chmod 600 /etc/udp-custom/users.list
 
 # 4️⃣ IPTABLES INTELLIGENT 
 iptables -C INPUT -p udp --dport 36712 -j ACCEPT 2>/dev/null || \
@@ -73,7 +65,6 @@ if systemctl is-active --quiet "$SERVICE_NAME"; then
     IP=$(hostname -I | awk '{print $1}')
     echo "✅ UDP Custom OK → $IP:36712"
     echo "📱 HTTP Custom: udp://$IP:36712"
-    echo "🔐 Authentification activée (liste vide - ajoutez des utilisateurs via menu1.sh)"
     ss -ulnp | grep 36712
 else
     echo "❌ ÉCHEC → Logs:"
