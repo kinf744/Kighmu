@@ -149,6 +149,38 @@ if [[ -f "$HYSTERIA_CONFIG" && -f "$HYSTERIA_USER_FILE" ]]; then
     echo -e "${GREEN}✅ HYSTERIA SYNCHRONISÉ !${RESET}"
 fi
 
+# ================== UDP CUSTOM SYNC ==================
+UDP_CONFIG="/etc/udp-custom/config.json"
+UDP_USER_FILE="/etc/udp-custom/users.list"
+
+if [[ -f "$UDP_CONFIG" ]]; then
+    command -v jq >/dev/null 2>&1 || { echo "jq manquant"; exit 0; }
+
+    mkdir -p /etc/udp-custom
+    touch "$UDP_USER_FILE"
+    chmod 600 "$UDP_USER_FILE"
+
+    # Ajout/remplace utilisateur
+    tmp=$(mktemp)
+    grep -v "^$username|" "$UDP_USER_FILE" > "$tmp" 2>/dev/null || true
+    echo "$username|$password|$expire_date" >> "$tmp"
+    mv "$tmp" "$UDP_USER_FILE"
+    chmod 600 "$UDP_USER_FILE"
+
+    # Rebuild passwords actifs en tableau JSON natif
+    TODAY=$(date +%Y-%m-%d)
+    PASSWORDS_JSON=$(awk -F'|' -v today="$TODAY" '$3>=today {print $2}' "$UDP_USER_FILE" | \
+                     sort -u | jq -R . | jq -s .)
+
+    jq --argjson passwords "$PASSWORDS_JSON" \
+       '.auth.config = $passwords' \
+       "$UDP_CONFIG" > /tmp/udp.json && \
+    mv /tmp/udp.json "$UDP_CONFIG" && \
+    systemctl restart udp-custom.service
+
+    echo -e "${GREEN}✅ UDP CUSTOM SYNCHRONISÉ !${RESET}"
+fi
+
 # Ajout automatique de l'affichage du banner personnalisé au login shell
 BANNER_PATH="/etc/ssh/sshd_banner"
 
@@ -212,7 +244,7 @@ echo -e "${GREEN}🔐 𝗣𝗮𝘀𝘀𝘄𝗼𝗿𝗱: ${YELLOW}$password${RESE
 echo -e "${GREEN}🔌 𝐏𝐨𝐫𝐭 : ${YELLOW}5667${RESET}"
 echo ""
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo -e "🚀 𝘾𝙊𝙉𝙁𝙄𝙂 𝙁𝘼𝙎𝙏𝘿𝙉𝙎 (5300)" 
+echo -e "🚀 𝘾𝙊𝙉𝙁𝙄𝙂 𝙁𝘼𝙎𝙏𝘿𝙉𝙎 (5300)" 
 echo -e "${YELLOW}🔐Pub KEY:${RESET}"
 echo -e "$SLOWDNS_KEY"
 echo -e "NameServer:"
