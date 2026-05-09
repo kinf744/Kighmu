@@ -1,6 +1,7 @@
 #!/bin/bash
 # sirust.sh - ZIVPN Control Panel
-# Optimisé: BBR, buffers UDP larges, fenêtres QUIC, ulimits, QoS, DSCP, up/down_mbps
+# Corrigé: up/down_mbps réalistes, recv_window réduit, CPUScheduling safe,
+#           udp_mem adapté RAM, MTU discovery désactivé, watchdog cron
 
 ZIVPN_BIN="/usr/local/bin/zivpn"
 ZIVPN_SERVICE="zivpn.service"
@@ -8,7 +9,7 @@ ZIVPN_CONFIG="/etc/zivpn/config.json"
 ZIVPN_USER_FILE="/etc/zivpn/users.list"
 ZIVPN_DOMAIN_FILE="/etc/zivpn/domain.txt"
 
-# ==========================================================
+# ========================
 setup_colors() {
     RED=""; GREEN=""; YELLOW=""; CYAN=""; WHITE=""
     MAGENTA=""; MAGENTA_VIF=""; BOLD=""; RESET=""
@@ -42,15 +43,41 @@ zivpn_running() {
   systemctl is-active --quiet "$ZIVPN_SERVICE" 2>/dev/null
 }
 
-# ==========================================================
-# Optimisations kernel/réseau complètes pour très haut débit
-# ==========================================================
+# =========
+# Calcul dynamique de udp_mem selon la RAM disponible
+# =========
+get_udp_mem_values() {
+    local TOTAL_RAM_KB
+    TOTAL_RAM_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+    local TOTAL_RAM_MB=$(( TOTAL_RAM_KB / 1024 ))
+
+    # Allouer ~12% de la RAM pour UDP, en pages de 4Ko
+    local PAGE_SIZE=4  # Ko par page
+    local ALLOC_KB=$(( TOTAL_RAM_KB * 12 / 100 ))
+    local MAX_PAGES=$(( ALLOC_KB / PAGE_SIZE ))
+    local PRESSURE_PAGES=$(( MAX_PAGES * 3 / 4 ))
+    local MIN_PAGES=$(( MAX_PAGES / 4 ))
+
+    # Plancher minimum raisonnable
+    [[ $MIN_PAGES -lt 65536 ]] && MIN_PAGES=65536
+    [[ $PRESSURE_PAGES -lt 131072 ]] && PRESSURE_PAGES=131072
+    [[ $MAX_PAGES -lt 262144 ]] && MAX_PAGES=262144
+
+    echo "${MIN_PAGES} ${PRESSURE_PAGES} ${MAX_PAGES}"
+}
+
+# ==========
+# Optimisations kernel/réseau adaptées aux réseaux instables
+# ==========
 apply_network_optimizations() {
     echo "${CYAN}⚙️  Application des optimisations réseau...${RESET}"
 
     # Charger les modules BBR et FQ
     modprobe tcp_bbr 2>/dev/null || true
     modprobe sch_fq 2>/dev/null || true
+
+    # Calculer udp_mem adapté à la RAM réelle
+    read -r UDP_MIN UDP_PRESSURE UDP_MAX <<< "$(get_udp_mem_values)"
 
     # Supprimer les anciennes entrées pour éviter les doublons
     local KEYS=(
@@ -68,32 +95,32 @@ apply_network_optimizations() {
     done
 
     # Écrire toutes les optimisations
-    cat >> /etc/sysctl.conf << 'SYSEOF'
+    cat >> /etc/sysctl.conf << SYSEOF
 
-# === ZIVPN High-Speed Optimizations ===
-# Buffers UDP larges (256 Mo)
-net.core.rmem_default=67108864
-net.core.wmem_default=67108864
-net.core.rmem_max=268435456
-net.core.wmem_max=268435456
-net.core.optmem_max=67108864
+# === ZIVPN High-Speed Optimizations (réseaux instables) ===
+# Buffers UDP 64 Mo (adapté réseau mobile instable)
+net.core.rmem_default=16777216
+net.core.wmem_default=16777216
+net.core.rmem_max=67108864
+net.core.wmem_max=67108864
+net.core.optmem_max=16777216
 # File descriptor limits
 fs.file-max=1000000
 # Queue réseau
 net.core.netdev_max_backlog=250000
 net.core.somaxconn=65535
 net.ipv4.tcp_max_syn_backlog=65535
-# BBR congestion control (haut débit sur réseau congestionné)
+# BBR congestion control
 net.core.default_qdisc=fq
 net.ipv4.tcp_congestion_control=bbr
 # IP forwarding
 net.ipv4.ip_forward=1
-# UDP memory pages corrigés (min/pressure/max en pages de 4Ko)
-net.ipv4.udp_mem=8388608 12582912 16777216
+# UDP memory adapté à la RAM réelle (pages 4Ko)
+net.ipv4.udp_mem=${UDP_MIN} ${UDP_PRESSURE} ${UDP_MAX}
 # TCP Fast Open (client + serveur)
 net.ipv4.tcp_fastopen=3
-# MTU probing
-net.ipv4.tcp_mtu_probing=1
+# MTU probing désactivé (évite black hole sur réseaux mobiles qui bloquent ICMP)
+net.ipv4.tcp_mtu_probing=0
 # === FIN ZIVPN ===
 SYSEOF
 
@@ -110,27 +137,57 @@ SYSEOF
     fi
 
     # DSCP Expedited Forwarding (EF/46) sur la plage client 6000:19999
-    # C'est cette plage que voient les routeurs de transit (pas le port interne 5667)
-    # Supprime les anciennes règles pour éviter les doublons
-    iptables -t mangle -D OUTPUT    -p udp --sport 6000:19999 -j DSCP --set-dscp-class EF 2>/dev/null || true
-    iptables -t mangle -D OUTPUT    -p udp --dport 6000:19999 -j DSCP --set-dscp-class EF 2>/dev/null || true
+    iptables -t mangle -D OUTPUT     -p udp --sport 6000:19999 -j DSCP --set-dscp-class EF 2>/dev/null || true
+    iptables -t mangle -D OUTPUT     -p udp --dport 6000:19999 -j DSCP --set-dscp-class EF 2>/dev/null || true
     iptables -t mangle -D PREROUTING -p udp --dport 6000:19999 -j DSCP --set-dscp-class EF 2>/dev/null || true
-    # Nettoyer aussi les anciennes règles sur 5667 si elles existaient
-    iptables -t mangle -D OUTPUT    -p udp --sport 5667 -j DSCP --set-dscp-class EF 2>/dev/null || true
-    iptables -t mangle -D OUTPUT    -p udp --dport 5667 -j DSCP --set-dscp-class EF 2>/dev/null || true
+    # Nettoyer aussi les anciennes règles sur 5667
+    iptables -t mangle -D OUTPUT     -p udp --sport 5667 -j DSCP --set-dscp-class EF 2>/dev/null || true
+    iptables -t mangle -D OUTPUT     -p udp --dport 5667 -j DSCP --set-dscp-class EF 2>/dev/null || true
     iptables -t mangle -D PREROUTING -p udp --dport 5667 -j DSCP --set-dscp-class EF 2>/dev/null || true
-    # Appliquer sur la plage client
-    iptables -t mangle -A OUTPUT    -p udp --sport 6000:19999 -j DSCP --set-dscp-class EF 2>/dev/null || true
-    iptables -t mangle -A OUTPUT    -p udp --dport 6000:19999 -j DSCP --set-dscp-class EF 2>/dev/null || true
+    # Appliquer
+    iptables -t mangle -A OUTPUT     -p udp --sport 6000:19999 -j DSCP --set-dscp-class EF 2>/dev/null || true
+    iptables -t mangle -A OUTPUT     -p udp --dport 6000:19999 -j DSCP --set-dscp-class EF 2>/dev/null || true
     iptables -t mangle -A PREROUTING -p udp --dport 6000:19999 -j DSCP --set-dscp-class EF 2>/dev/null || true
 
-    echo "${GREEN}✅ DSCP EF (priorité maximale) appliqué sur plage 6000:19999${RESET}"
-    echo "${GREEN}✅ Optimisations réseau appliquées (BBR + buffers 256Mo + FQ + DSCP)${RESET}"
+    echo "${GREEN}✅ DSCP EF appliqué sur plage 6000:19999${RESET}"
+    echo "${GREEN}✅ udp_mem adapté RAM: min=${UDP_MIN} pressure=${UDP_PRESSURE} max=${UDP_MAX} pages${RESET}"
+    echo "${GREEN}✅ Optimisations réseau appliquées (BBR + FQ + DSCP + buffers adaptés)${RESET}"
 }
 
-# ==========================================================
-# Générer config.json optimisée avec up/down_mbps + grandes fenêtres QUIC
-# ==========================================================
+# ============
+# Installer le watchdog cron (vérifie et redémarre si mort)
+# ============
+install_watchdog() {
+    local WATCHDOG_SCRIPT="/usr/local/bin/zivpn_watchdog.sh"
+    cat > "$WATCHDOG_SCRIPT" << 'WEOF'
+#!/bin/bash
+SERVICE="zivpn.service"
+LOG="/var/log/zivpn_watchdog.log"
+if ! systemctl is-active --quiet "$SERVICE"; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️  ZIVPN inactif → redémarrage..." >> "$LOG"
+    systemctl restart "$SERVICE"
+    sleep 3
+    if systemctl is-active --quiet "$SERVICE"; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ ZIVPN redémarré avec succès" >> "$LOG"
+    else
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ❌ Échec redémarrage ZIVPN" >> "$LOG"
+    fi
+fi
+WEOF
+    chmod +x "$WATCHDOG_SCRIPT"
+
+    # Ajouter au cron toutes les 3 minutes si pas déjà présent
+    if ! crontab -l 2>/dev/null | grep -q "zivpn_watchdog"; then
+        (crontab -l 2>/dev/null; echo "*/3 * * * * $WATCHDOG_SCRIPT") | crontab -
+        echo "${GREEN}✅ Watchdog cron installé (vérification toutes les 3 min)${RESET}"
+    else
+        echo "${GREEN}✅ Watchdog cron déjà présent${RESET}"
+    fi
+}
+
+# ==================
+# Config optimisée 
+# ==================
 write_optimized_config() {
     cat > "$ZIVPN_CONFIG" << 'EOF'
 {
@@ -138,11 +195,11 @@ write_optimized_config() {
   "cert": "/etc/zivpn/zivpn.crt",
   "key": "/etc/zivpn/zivpn.key",
   "obfs": "zivpn",
-  "up_mbps": 1000,
-  "down_mbps": 1000,
-  "recv_window_conn": 67108864,
-  "recv_window_client": 268435456,
-  "disable_mtu_discovery": false,
+  "up_mbps": 100,
+  "down_mbps": 100,
+  "recv_window_conn": 8388608,
+  "recv_window_client": 16777216,
+  "disable_mtu_discovery": true,
   "max_conn_client": 4096,
   "exclude_port": [53,5300,4466,36712,20000],
   "auth": {
@@ -153,13 +210,13 @@ write_optimized_config() {
 EOF
 }
 
-# ==========================================================
-# Générer le service systemd optimisé avec persistance iptables NAT
-# ==========================================================
+# ==============
+# Service systemd corrigé
+# ==============
 write_optimized_service() {
     cat > "/etc/systemd/system/$ZIVPN_SERVICE" << EOF
 [Unit]
-Description=ZIVPN UDP Server (High-Speed)
+Description=ZIVPN UDP Server (Optimisé réseaux instables)
 After=network-online.target
 Wants=network-online.target
 StartLimitIntervalSec=0
@@ -177,8 +234,8 @@ AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
 LimitNOFILE=1048576
 LimitNPROC=infinity
 LimitMEMLOCK=infinity
-CPUSchedulingPolicy=rr
-CPUSchedulingPriority=50
+# Nice=-10 au lieu de CPUSchedulingPolicy=rr (évite le gel système)
+Nice=-10
 StandardOutput=append:/var/log/zivpn.log
 StandardError=append:/var/log/zivpn.log
 
@@ -187,7 +244,7 @@ WantedBy=multi-user.target
 EOF
 }
 
-# ==========================================================
+# ======================
 cleanup_expired_users() {
     [[ ! -f "$ZIVPN_USER_FILE" ]] && return 0
     local TODAY
@@ -230,26 +287,27 @@ update_zivpn_config_passwords() {
 print_title() {
   clear
   echo "${CYAN}${BOLD}╔═══════════════════════════════════════╗${RESET}"
-  echo "${CYAN}║        ZIVPN CONTROL PANEL v3         ║${RESET}"
-  echo "${CYAN}║     (Compatible @kighmu 🇨🇲)           ║${RESET}"
+  echo "${CYAN}║        ZIVPN CONTROL PANEL v3.1       ║${RESET}"
+  echo "${CYAN}║   Optimisé réseaux instables @kighmu  ║${RESET}"
   echo "${CYAN}${BOLD}╚═══════════════════════════════════════╝${RESET}"
   echo
 }
 
 show_status_block() {
   echo "${CYAN}-------------- STATUT ZIVPN --------------${RESET}"
-  local SVC_FILE_OK SVC_ACTIVE PORT_OK ACTIVE_USERS TODAY BBR_STATUS UPMBPS
+  local SVC_FILE_OK SVC_ACTIVE PORT_OK ACTIVE_USERS TODAY BBR_STATUS UPMBPS WATCHDOG_OK
   SVC_FILE_OK=$([[ -f "/etc/systemd/system/$ZIVPN_SERVICE" ]] && echo "✅" || echo "❌")
   SVC_ACTIVE=$(systemctl is-active "$ZIVPN_SERVICE" 2>/dev/null || echo "inactif")
   PORT_OK=$(ss -lunp 2>/dev/null | grep -q ":5667" && echo "✅" || echo "❌")
   BBR_STATUS=$(sysctl net.ipv4.tcp_congestion_control 2>/dev/null | grep -q "bbr" && echo "✅ BBR" || echo "⚠️  non-BBR")
-  # Afficher up/down_mbps depuis config
   UPMBPS=$(jq -r '.up_mbps // "non défini"' "$ZIVPN_CONFIG" 2>/dev/null || echo "N/A")
-  echo "${WHITE}Service file:${RESET} $SVC_FILE_OK"
-  echo "${WHITE}Service actif:${RESET} $SVC_ACTIVE"
-  echo "${WHITE}Port 5667:${RESET} $PORT_OK"
-  echo "${WHITE}Congestion ctrl:${RESET} $BBR_STATUS"
-  echo "${WHITE}Bande passante déclarée:${RESET} ↑↓ ${UPMBPS} Mbps"
+  WATCHDOG_OK=$(crontab -l 2>/dev/null | grep -q "zivpn_watchdog" && echo "✅ actif" || echo "❌ absent")
+  echo "${WHITE}Service file:${RESET}       $SVC_FILE_OK"
+  echo "${WHITE}Service actif:${RESET}      $SVC_ACTIVE"
+  echo "${WHITE}Port 5667:${RESET}          $PORT_OK"
+  echo "${WHITE}Congestion ctrl:${RESET}    $BBR_STATUS"
+  echo "${WHITE}Bande passante:${RESET}     ↑↓ ${UPMBPS} Mbps"
+  echo "${WHITE}Watchdog cron:${RESET}      $WATCHDOG_OK"
   if [[ -f "$ZIVPN_USER_FILE" ]]; then
     TODAY=$(date +%Y-%m-%d)
     ACTIVE_USERS=$(awk -F'|' -v today="$TODAY" '$3>=today {count++} END{print count+0}' "$ZIVPN_USER_FILE")
@@ -298,10 +356,10 @@ install_zivpn() {
   openssl req -x509 -newkey rsa:2048 -keyout "$KEY" -out "$CERT" -nodes -days 3650 -subj "/CN=$DOMAIN"
   chmod 600 "$KEY"; chmod 644 "$CERT"
 
-  # Config optimisée (up/down_mbps 1000 + fenêtres QUIC 64Mo/256Mo)
+  # Config optimisée réseaux instables
   write_optimized_config
 
-  # Service systemd optimisé avec ExecStartPost pour persistance NAT
+  # Service systemd corrigé (Nice=-10, ExecStartPost NAT)
   write_optimized_service
 
   systemctl daemon-reload && systemctl enable "$ZIVPN_SERVICE"
@@ -316,8 +374,11 @@ install_zivpn() {
 
   netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
 
-  # Optimisations réseau complètes (BBR + buffers 256Mo + FQ + DSCP EF)
+  # Optimisations réseau adaptées
   apply_network_optimizations
+
+  # Watchdog cron
+  install_watchdog
 
   systemctl start "$ZIVPN_SERVICE" || true
   sleep 3
@@ -327,14 +388,16 @@ install_zivpn() {
     IP=$(hostname -I | awk '{print $1}')
     echo
     echo "${GREEN}✅ ZIVPN installé et actif !${RESET}"
-    echo "📱 Config:"
-    echo "   Serveur: $IP"
-    echo "   Port: 6000-19999"
-    echo "   Password: zi"
-    echo "   Obfs: zivpn"
-    echo "   up/down_mbps: 1000"
-    echo "   recv_window_conn: 67108864 (64 Mo)"
-    echo "   recv_window_client: 268435456 (256 Mo)"
+    echo "📱 Config client:"
+    echo "   Serveur         : $IP"
+    echo "   Port            : 6000-19999"
+    echo "   Password        : zi"
+    echo "   Obfs            : zivpn"
+    echo "   up/down_mbps    : 100 (adapté réseaux instables)"
+    echo "   recv_window_conn: 8388608  (8 Mo)"
+    echo "   recv_window_cli : 16777216 (16 Mo)"
+    echo "   MTU discovery   : désactivé (stable sur mobile)"
+    echo "   Watchdog        : actif (cron toutes les 3 min)"
   else
     echo "❌ ZIVPN ne démarre pas"
     journalctl -u zivpn.service -n 20 --no-pager
@@ -461,26 +524,33 @@ fix_zivpn() {
   # Réappliquer toutes les optimisations réseau
   apply_network_optimizations
 
-  # Réécrire le service avec ExecStartPost + limites correctes
+  # Réécrire le service corrigé
   write_optimized_service
   systemctl daemon-reload
 
-  # Mettre à jour config.json si up_mbps manque
+  # Mettre à jour config.json si les champs sont obsolètes
   if [[ -f "$ZIVPN_CONFIG" ]]; then
-    if ! jq -e '.up_mbps' "$ZIVPN_CONFIG" >/dev/null 2>&1; then
-      echo "${CYAN}⚙️  Mise à jour config.json (up/down_mbps + fenêtres)...${RESET}"
+    local NEEDS_UPDATE=0
+    # Vérifier si up_mbps est toujours à 1000 (valeur dangereuse)
+    local CURRENT_UP
+    CURRENT_UP=$(jq -r '.up_mbps // 0' "$ZIVPN_CONFIG" 2>/dev/null)
+    [[ "$CURRENT_UP" -gt 100 ]] && NEEDS_UPDATE=1
+    jq -e '.recv_window_conn' "$ZIVPN_CONFIG" >/dev/null 2>&1 || NEEDS_UPDATE=1
+
+    if [[ "$NEEDS_UPDATE" -eq 1 ]]; then
+      echo "${CYAN}⚙️  Mise à jour config.json (paramètres réseaux instables)...${RESET}"
       local TMP
       TMP=$(mktemp)
       if jq '. + {
-        "up_mbps": 1000,
-        "down_mbps": 1000,
-        "recv_window_conn": 67108864,
-        "recv_window_client": 268435456,
-        "disable_mtu_discovery": false,
+        "up_mbps": 100,
+        "down_mbps": 100,
+        "recv_window_conn": 8388608,
+        "recv_window_client": 16777216,
+        "disable_mtu_discovery": true,
         "max_conn_client": 4096
       }' "$ZIVPN_CONFIG" > "$TMP" 2>/dev/null && jq empty "$TMP" >/dev/null 2>&1; then
         mv "$TMP" "$ZIVPN_CONFIG"
-        echo "${GREEN}✅ config.json mis à jour${RESET}"
+        echo "${GREEN}✅ config.json mis à jour (100 Mbps + fenêtres 16Mo)${RESET}"
       else
         echo "${RED}❌ Erreur mise à jour config.json${RESET}"
         rm -f "$TMP"
@@ -488,13 +558,18 @@ fix_zivpn() {
     fi
   fi
 
+  # Watchdog cron
+  install_watchdog
+
   systemctl restart zivpn.service || true
   sleep 2
 
   if systemctl is-active --quiet zivpn.service; then
     echo "✅ ZIVPN actif (6000-19999→5667)"
-    echo "✅ BBR + buffers 256Mo + FQ + DSCP EF réappliqués"
-    echo "✅ up/down_mbps: 1000 | recv_window: 64Mo/256Mo"
+    echo "✅ BBR + buffers adaptés + FQ + DSCP EF réappliqués"
+    echo "✅ up/down_mbps: 100 | recv_window: 8Mo/16Mo"
+    echo "✅ Nice=-10 (scheduling sûr)"
+    echo "✅ Watchdog cron actif"
   else
     echo "❌ ZIVPN toujours inactif - voir: journalctl -u zivpn.service -n 30"
   fi
@@ -512,26 +587,31 @@ optimize_only() {
 
   apply_network_optimizations
 
-  # Mettre à jour la config JSON si les champs manquent
+  # Mettre à jour la config JSON
   if [[ -f "$ZIVPN_CONFIG" ]]; then
     local NEEDS_UPDATE=0
-    jq -e '.up_mbps' "$ZIVPN_CONFIG" >/dev/null 2>&1       || NEEDS_UPDATE=1
+    local CURRENT_UP
+    CURRENT_UP=$(jq -r '.up_mbps // 0' "$ZIVPN_CONFIG" 2>/dev/null)
+    [[ "$CURRENT_UP" -gt 100 ]] && NEEDS_UPDATE=1
     jq -e '.recv_window_conn' "$ZIVPN_CONFIG" >/dev/null 2>&1 || NEEDS_UPDATE=1
+    local MTU_DISC
+    MTU_DISC=$(jq -r '.disable_mtu_discovery // false' "$ZIVPN_CONFIG" 2>/dev/null)
+    [[ "$MTU_DISC" == "false" ]] && NEEDS_UPDATE=1
 
     if [[ "$NEEDS_UPDATE" -eq 1 ]]; then
-      echo "${CYAN}⚙️  Mise à jour config.json (up/down_mbps + fenêtres QUIC)...${RESET}"
+      echo "${CYAN}⚙️  Mise à jour config.json (paramètres réseaux instables)...${RESET}"
       local TMP
       TMP=$(mktemp)
       if jq '. + {
-        "up_mbps": 1000,
-        "down_mbps": 1000,
-        "recv_window_conn": 67108864,
-        "recv_window_client": 268435456,
-        "disable_mtu_discovery": false,
+        "up_mbps": 100,
+        "down_mbps": 100,
+        "recv_window_conn": 8388608,
+        "recv_window_client": 16777216,
+        "disable_mtu_discovery": true,
         "max_conn_client": 4096
       }' "$ZIVPN_CONFIG" > "$TMP" 2>/dev/null && jq empty "$TMP" >/dev/null 2>&1; then
         mv "$TMP" "$ZIVPN_CONFIG"
-        echo "${GREEN}✅ config.json mis à jour (up/down 1000 Mbps + fenêtres 256Mo)${RESET}"
+        echo "${GREEN}✅ config.json mis à jour (100 Mbps + 16Mo fenêtres + MTU fixe)${RESET}"
         systemctl restart "$ZIVPN_SERVICE" || true
       else
         echo "${RED}❌ Erreur mise à jour config.json${RESET}"
@@ -542,11 +622,11 @@ optimize_only() {
     fi
   fi
 
-  # Mettre à jour le service si ExecStartPost ou LimitNPROC manque
+  # Mettre à jour le service si nécessaire
   if [[ -f "/etc/systemd/system/$ZIVPN_SERVICE" ]]; then
-    if ! grep -q "ExecStartPost" "/etc/systemd/system/$ZIVPN_SERVICE" || \
-       ! grep -q "LimitNPROC" "/etc/systemd/system/$ZIVPN_SERVICE"; then
-      echo "${CYAN}⚙️  Mise à jour service systemd (ExecStartPost + CPUScheduling)...${RESET}"
+    if ! grep -q "Nice=" "/etc/systemd/system/$ZIVPN_SERVICE" || \
+       grep -q "CPUSchedulingPolicy=rr" "/etc/systemd/system/$ZIVPN_SERVICE"; then
+      echo "${CYAN}⚙️  Mise à jour service systemd (Nice=-10 / suppression rr)...${RESET}"
       write_optimized_service
       systemctl daemon-reload
       systemctl restart "$ZIVPN_SERVICE" || true
@@ -554,19 +634,23 @@ optimize_only() {
     fi
   fi
 
+  # Watchdog cron
+  install_watchdog
+
   echo
-  echo "${GREEN}${BOLD}✅ Toutes les optimisations haut débit appliquées !${RESET}"
+  echo "${GREEN}${BOLD}✅ Toutes les optimisations appliquées (réseaux instables) !${RESET}"
   echo "  • BBR congestion control"
-  echo "  • Buffers UDP: 256 Mo (rmem/wmem)"
+  echo "  • Buffers UDP adaptés à la RAM réelle"
   echo "  • FQ qdisc (priorité paquets)"
-  echo "  • DSCP EF (Expedited Forwarding) sur port 5667"
-  echo "  • up_mbps / down_mbps: 1000"
-  echo "  • recv_window_conn: 64 Mo"
-  echo "  • recv_window_client: 256 Mo"
+  echo "  • DSCP EF sur port 6000-19999"
+  echo "  • up_mbps / down_mbps : 100 (réaliste réseau mobile)"
+  echo "  • recv_window_conn    : 8 Mo"
+  echo "  • recv_window_client  : 16 Mo"
+  echo "  • disable_mtu_discovery: true (évite black hole mobile)"
   echo "  • somaxconn / tcp_max_syn_backlog: 65535"
-  echo "  • LimitNPROC / MEMLOCK: infinity"
-  echo "  • CPUSchedulingPolicy: rr (temps réel)"
+  echo "  • Nice=-10 (priorité haute sans risque de gel)"
   echo "  • ExecStartPost: persistance NAT au reboot"
+  echo "  • Watchdog cron: redémarrage auto toutes les 3 min"
   pause
 }
 
@@ -583,18 +667,22 @@ uninstall_zivpn() {
   systemctl daemon-reload
 
   rm -f "$ZIVPN_BIN"
+  rm -f "/usr/local/bin/zivpn_watchdog.sh"
   rm -rf /etc/zivpn
+
+  # Supprimer le watchdog du cron
+  crontab -l 2>/dev/null | grep -v "zivpn_watchdog" | crontab - 2>/dev/null || true
 
   iptables -t nat -D PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667 2>/dev/null || true
   iptables -D INPUT -p udp --dport 5667 -j ACCEPT 2>/dev/null || true
   iptables -D INPUT -p udp --dport 6000:19999 -j ACCEPT 2>/dev/null || true
-  iptables -t mangle -D OUTPUT    -p udp --sport 6000:19999 -j DSCP --set-dscp-class EF 2>/dev/null || true
-  iptables -t mangle -D OUTPUT    -p udp --dport 6000:19999 -j DSCP --set-dscp-class EF 2>/dev/null || true
+  iptables -t mangle -D OUTPUT     -p udp --sport 6000:19999 -j DSCP --set-dscp-class EF 2>/dev/null || true
+  iptables -t mangle -D OUTPUT     -p udp --dport 6000:19999 -j DSCP --set-dscp-class EF 2>/dev/null || true
   iptables -t mangle -D PREROUTING -p udp --dport 6000:19999 -j DSCP --set-dscp-class EF 2>/dev/null || true
 
   netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
 
-  echo "✅ ZIVPN supprimé"
+  echo "✅ ZIVPN supprimé (service + binaire + config + watchdog)"
   pause
 }
 
