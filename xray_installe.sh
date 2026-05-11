@@ -457,9 +457,9 @@ server {
 
     root /var/www/html;
 
-    location /vmess-tls { proxy_pass http://127.0.0.1:23456; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; proxy_set_header Host \$http_host; proxy_set_header X-Real-IP \$remote_addr; }
-    location /vless-tls { proxy_pass http://127.0.0.1:14016; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; proxy_set_header Host \$http_host; proxy_set_header X-Real-IP \$remote_addr; }
-    location /trojan-tls { proxy_pass http://127.0.0.1:13001; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; proxy_set_header Host \$http_host; proxy_set_header X-Real-IP \$remote_addr; }
+    location /vmess { proxy_pass http://127.0.0.1:23456; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; proxy_set_header Host \$http_host; proxy_set_header X-Real-IP \$remote_addr; }
+    location /vless { proxy_pass http://127.0.0.1:14016; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; proxy_set_header Host \$http_host; proxy_set_header X-Real-IP \$remote_addr; }
+    location /trojan { proxy_pass http://127.0.0.1:13001; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; proxy_set_header Host \$http_host; proxy_set_header X-Real-IP \$remote_addr; }
 
     location /vless-grpc { grpc_pass grpc://127.0.0.1:24456; grpc_set_header X-Real-IP \$remote_addr; grpc_set_header Host \$http_host; }
     location /vmess-grpc { grpc_pass grpc://127.0.0.1:31234; grpc_set_header X-Real-IP \$remote_addr; grpc_set_header Host \$http_host; }
@@ -475,9 +475,9 @@ server {
     server_name $DOMAIN;
     root /var/www/html;
 
-    location /vmess-ntls { proxy_pass http://127.0.0.1:23457; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; proxy_set_header Host \$http_host; proxy_set_header X-Real-IP \$remote_addr; }
-    location /vless-ntls { proxy_pass http://127.0.0.1:14017; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; proxy_set_header Host \$http_host; proxy_set_header X-Real-IP \$remote_addr; }
-    location /trojan-ntls { proxy_pass http://127.0.0.1:13003; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; proxy_set_header Host \$http_host; proxy_set_header X-Real-IP \$remote_addr; }
+    location /vmess { proxy_pass http://127.0.0.1:23457; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; proxy_set_header Host \$http_host; proxy_set_header X-Real-IP \$remote_addr; }
+    location /vless { proxy_pass http://127.0.0.1:14017; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; proxy_set_header Host \$http_host; proxy_set_header X-Real-IP \$remote_addr; }
+    location /trojan { proxy_pass http://127.0.0.1:13003; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; proxy_set_header Host \$http_host; proxy_set_header X-Real-IP \$remote_addr; }
 }
 NGINXEOF
 
