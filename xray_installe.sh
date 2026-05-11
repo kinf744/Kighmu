@@ -203,17 +203,17 @@ USERSEOF
 # Architecture des inbounds :
 #
 # Via Nginx (127.0.0.1) — port public 8443 TLS :
-#   VMess  WS  TLS  → 127.0.0.1:23456  path /vmess-tls
-#   VLESS  WS  TLS  → 127.0.0.1:14016  path /vless-tls
-#   Trojan WS  TLS  → 127.0.0.1:13001  path /trojan-tls
+#   VMess  WS  TLS  → 127.0.0.1:23456  path /vmess
+#   VLESS  WS  TLS  → 127.0.0.1:14016  path /vless
+#   Trojan WS  TLS  → 127.0.0.1:13001  path /trojan
 #   VMess  gRPC TLS → 127.0.0.1:31234  serviceName vmess-grpc
 #   VLESS  gRPC TLS → 127.0.0.1:24456  serviceName vless-grpc
 #   Trojan gRPC TLS → 127.0.0.1:13002  serviceName trojan-grpc
 #
 # Via Nginx (127.0.0.1) — port public 8880 NTLS :
-#   VMess  WS  NTLS → 127.0.0.1:23457  path /vmess-ntls
-#   VLESS  WS  NTLS → 127.0.0.1:14017  path /vless-ntls
-#   Trojan WS  NTLS → 127.0.0.1:13003  path /trojan-ntls
+#   VMess  WS  NTLS → 127.0.0.1:23457  path /vmess
+#   VLESS  WS  NTLS → 127.0.0.1:14017  path /vless
+#   Trojan WS  NTLS → 127.0.0.1:13003  path /trojan
 # ============
 DOMAIN=$(cat /etc/xray/domain)
 
@@ -243,7 +243,7 @@ cat > /etc/xray/config.json << CONFIGEOF
       "settings": { "clients": [] },
       "streamSettings": {
         "network": "ws",
-        "wsSettings": { "path": "/vmess-tls", "host": "$DOMAIN" }
+        "wsSettings": { "path": "/vmess", "host": "$DOMAIN" }
       }
     },
 
@@ -255,7 +255,7 @@ cat > /etc/xray/config.json << CONFIGEOF
       "settings": { "decryption": "none", "clients": [] },
       "streamSettings": {
         "network": "ws",
-        "wsSettings": { "path": "/vless-tls", "host": "$DOMAIN" }
+        "wsSettings": { "path": "/vless", "host": "$DOMAIN" }
       }
     },
 
@@ -291,7 +291,7 @@ cat > /etc/xray/config.json << CONFIGEOF
       "settings": { "clients": [] },
       "streamSettings": {
         "network": "ws",
-        "wsSettings": { "path": "/vmess-ntls", "host": "$DOMAIN" }
+        "wsSettings": { "path": "/vmess", "host": "$DOMAIN" }
       }
     },
 
@@ -303,7 +303,7 @@ cat > /etc/xray/config.json << CONFIGEOF
       "settings": { "decryption": "none", "clients": [] },
       "streamSettings": {
         "network": "ws",
-        "wsSettings": { "path": "/vless-ntls", "host": "$DOMAIN" }
+        "wsSettings": { "path": "/vless", "host": "$DOMAIN" }
       }
     },
 
@@ -315,7 +315,7 @@ cat > /etc/xray/config.json << CONFIGEOF
       "settings": { "clients": [] },
       "streamSettings": {
         "network": "ws",
-        "wsSettings": { "path": "/trojan-tls", "host": "$DOMAIN" }
+        "wsSettings": { "path": "/trojan", "host": "$DOMAIN" }
       }
     },
 
@@ -339,7 +339,7 @@ cat > /etc/xray/config.json << CONFIGEOF
       "settings": { "clients": [] },
       "streamSettings": {
         "network": "ws",
-        "wsSettings": { "path": "/trojan-ntls", "host": "$DOMAIN" }
+        "wsSettings": { "path": "/trojan", "host": "$DOMAIN" }
       }
     }
 
