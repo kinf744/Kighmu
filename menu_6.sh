@@ -190,9 +190,9 @@ create_config() {
   local path_ws_tls path_ws_ntls path_grpc
 
   case "$proto" in
-    vmess)  path_ws_tls="/vmess-tls";  path_ws_ntls="/vmess-ntls";  path_grpc="vmess-grpc"  ;;
-    vless)  path_ws_tls="/vless-tls";  path_ws_ntls="/vless-ntls";  path_grpc="vless-grpc"  ;;
-    trojan) path_ws_tls="/trojan-tls"; path_ws_ntls="/trojan-ntls"; path_grpc="trojan-grpc" ;;
+    vmess)  path_ws_tls="/vmess";  path_ws_ntls="/vmess";  path_grpc="vmess-grpc"  ;;
+    vless)  path_ws_tls="/vless";  path_ws_ntls="/vless";  path_grpc="vless-grpc"  ;;
+    trojan) path_ws_tls="/trojan"; path_ws_ntls="/trojan"; path_grpc="trojan-grpc" ;;
     *) echo -e "${RED}Protocole inconnu : $proto${RESET}"; return 1 ;;
   esac
 
