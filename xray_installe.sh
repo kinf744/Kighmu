@@ -2,9 +2,9 @@
 # xray_installe.sh — Installation complète Xray + Nginx
 # Protocoles : WS-TLS, WS-NTLS, gRPC-TLS (via Nginx 8443/8880)
 # Architecture :
-#   Nginx port 8443 TLS  → WS  /vmess-tls /vless-tls
+#   Nginx port 8443 TLS  → WS  /vmess /vless
 #                        → gRPC vmess-grpc vless-grpc
-#   Nginx port 8880 NTLS → WS  /vmess-ntls /vless-ntls
+#   Nginx port 8880 NTLS → WS  /vmess /vless
 # ============================================================================
 
 RED='\033[0;31m'
