@@ -637,7 +637,7 @@ function renderTunnelResult(res) {
   if (['vmess','vless','trojan'].includes(t)) {
     const proto    = t.toUpperCase();
     const portTls  = 8443, portNtls = 8880;
-    const pathMap  = {vmess:'/vmess', vless:'/vless', trojan:'/trojan-ws'};
+    const pathMap  = {vmess:'/vmess', vless:'/vless', trojan:'/trojan'};
     const grpcMap  = {vmess:'vmess-grpc', vless:'vless-grpc', trojan:'trojan-grpc'};
     const wsPath   = pathMap[t] || `/${t}`;
     const grpcName = grpcMap[t] || `${t}-grpc`;
